@@ -1,11 +1,11 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
+	"id": "zig-holding",
+	"name": "Zig Holding",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"description": "Package my frequently used tools, highly personal plugins.",
+	"author": "ZigHolding",
+	"authorUrl": "https://www.zigholding.com",
+	"fundingUrl": "https://www.zigholding.com",
 	"isDesktopOnly": false
 }
