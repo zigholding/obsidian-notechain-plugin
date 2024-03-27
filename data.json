@@ -1,0 +1,13 @@
+{
+  "newTab": true,
+  "withSelf": false,
+  "reverse": true,
+  "field": "NID",
+  "PrevChain": "10",
+  "NextChain": "10",
+  "showLink": false,
+  "openLink": true,
+  "allFiles": true,
+  "sameFolder": true,
+  "popFirst": false
+}
