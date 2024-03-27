@@ -24,11 +24,335 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 	openLink : true
 }
 
+class NoteChain{
+	app:App;
+	prev:string;
+	next:string;
+
+	constructor(app:App,prev="PrevNote",next="NextNote") {
+		this.app = app;
+		this.prev = prev;
+		this.next = next;
+
+		this.dv_api = this.app.plugins.getPlugin(
+			"dataview"
+		);
+	}
+
+	get_tfile(path,files){
+		// this.app.vault.getMarkdownFiles();
+		if(!path){
+			return null;
+		}
+		if(files.includes(path)){
+			return files[path]
+		}
+		for(let file of files){
+			if(file.name.toLowerCase().localeCompare(path.toLowerCase())==0){
+				return file;
+			}
+			if(file.basename.toLowerCase().localeCompare(path.toLowerCase())==0){
+				return file;
+			}
+			if(`[[${file.basename.toLowerCase()}]]`.localeCompare(path.toLowerCase())==0){
+				return file;
+			}
+			if(file.basename.toLowerCase().localeCompare(`[[${path.toLowerCase()}]]`)==0){
+				return file;
+			}
+		}
+		return null;
+	}
+
+	get MDFiles(){
+		return app.vault.getMarkdownFiles();
+	}
+
+	get current_note(){
+		return this.app.workspace.getActiveFile();
+	}
+
+	get_inlinks(tfile){
+		let res = new Array();
+
+		let inlinks = this.dv_api.index.links.invMap.get(tfile.path);
+		if(inlinks==undefined){
+			return [];
+		}else{
+			return Array.from(inlinks).map(
+				(path)=>(this.app.vault.fileMap[path])
+			).filter(
+				(item)=>(item)
+			)
+		}
+	}
+
+	get_outlinks(tfile){
+		let res = new Array();
+		let inlinks = this.dv_api.index.links.map.get(tfile.path);
+		if(inlinks==undefined){
+			return [];
+		}else{
+			return Array.from(inlinks).map(
+				(path)=>(this.app.vault.fileMap[path])
+			).filter(
+				(item)=>(item)
+			)
+		}
+	}
+
+
+	get_links(tfile){
+		let inlinks = this.get_inlinks(tfile);
+		let outlinks = this.get_outlinks(tfile);
+		for(let link of inlinks){
+			if(!outlinks.includes(link)){
+				outlinks.push(link)
+			}
+		}
+		return outlinks;
+	}
+
+	get_first_note(tfile){
+		let res = new Array();
+		res.push(tfile);
+		
+		let tmp = tfile;
+		while(true){
+			let prev = this.get_prev_notes(tmp,this.prev,this.next,true);
+			if(prev[0] && !res.includes(prev[1][0])){
+				res.unshift(prev[1][0]);
+				tmp = prev[1][0]
+			}else{
+				break;
+			}
+		}
+		return tmp;
+	}
+
+	get_last_note(tfile){
+		let res = new Array();
+		res.push(tfile);
+		let tmp = tfile;
+		while(true){
+			let next = this.get_next_notes(tmp,this.prev,this.next,true);
+			if(next[0] && !res.includes(next[1][0])){
+				res.push(next[1][0]);
+				tmp = next[1][0];
+				console.log(tmp);
+			}else{
+				break;
+			}
+		}
+		return tmp;
+	}
+
+	get_file_chain(tfile,prev=10,next=10){
+		let res = Array();
+		res.push(tfile);
+		
+		let tmp = tfile;
+		for(let i=prev;i!=0;i--){
+			console.log(i);
+			let meta = this.app.metadataCache.getFileCache(tmp);
+			
+			if(!meta){break}
+	
+			let name = meta.frontmatter?.PrevNote;
+			if(!name){break}
+	
+			let note = this.get_tfile(name);
+			if(!note){
+				break;
+			}else if(res.includes(note)){
+				this.set_frontmatter(note,this.next,"");
+				this.set_frontmatter(tmp,this.prev,"");
+				break;
+			}else{
+				res.unshift(note);
+				tmp = note;
+			}
+		}
+	
+		tmp = tfile;
+		for(let i=next;i!=0;i--){
+			let meta = this.app.metadataCache.getFileCache(tmp);
+			
+			if(!meta){break}
+	
+			let name = meta.frontmatter?.NextNote;
+			if(!name){break}
+	
+			let note = this.get_tfile(name);
+			if(!note){
+				break;
+			}else if(res.includes(note)){
+				this.set_frontmatter(note,this.prev,"");
+				this.set_frontmatter(tmp,this.next,"");
+				break;
+			}else{
+				res.push(note);
+				tmp = note;
+			}
+		}
+	}
+
+	get_prev_notes(tfile,prev="PrevNote",next="NextNote",onlyFrontmatter=true){
+		// onlyFrontmatter，只搜索 frontmatter 中的链接
+		let res = new Array();
+		let notes = this.get_links(tfile);
+		
+		let meta = this.app.metadataCache.getFileCache(tfile);
+		let flag = false;
+		if(meta?.frontmatter){
+			let name = meta.frontmatter[prev];
+			if(name){
+				let note = this.get_tfile(name,notes);
+				res.push(note);
+				flag = true;
+			}
+		}
+		if(onlyFrontmatter){
+			return [flag,res];
+		}
+		
+		for(let note of notes){
+			if(res.includes(note)){continue}
+			if(!note){continue}
+
+			let meta = this.app.metadataCache.getFileCache(note);
+			if(meta?.frontmatter){
+				let name = meta.frontmatter[next];
+				if(this.get_tfile(name,[tfile])){
+					res.push(note);
+				}
+			}
+		}
+		return [flag,res];
+	}
+
+	get_next_notes(tfile,prev="PrevNote",next="NextNote",onlyFrontmatter=true){
+		return this.get_prev_notes(tfile,next,prev,onlyFrontmatter);
+	}
+
+	get_neighbors(tfile){
+		let tmp = this.get_prev_notes(tfile,this.prev,this.next,true);
+		let pflag = tmp[0];
+		let prev = tmp[1];
+		let tmp2 = this.get_next_notes(tfile,this.prev,this.next,true);
+		let nflag = tmp2[0];
+		let next = tmp2[1];
+
+		if(pflag && nflag){
+			return [prev[0],next[0]];
+		}else if(pflag){
+			return [prev[0],undefined];
+		}else if(nflag){
+			return [undefined,next[0]];
+		}else{
+			return [undefined,undefined];
+		}
+	}
+	
+
+	async set_frontmatter(tfile,key,value){
+		await this.app.fileManager.processFrontMatter(tfile,fm =>{
+			console.log(`${tfile.basename}---${key}---${value}`);
+			fm[key] = value;
+		});
+	}
+
+	get_frontmatter(tfile,key){
+		let meta = this.app.metadataCache.getFileCache(tfile);
+		if(meta?.frontmatter){
+			return meta.frontmatter[key];
+		}
+	}
+
+	pop_node(tfile){
+		// 移除 tfile，关联前后
+		let neighbor = this.get_neighbors(tfile);
+		if(neighbor[0]!=null && neighbor[1]!=null){
+			this.set_frontmatter(neighbor[0],this.next,`[[${neighbor[1].basename}]]`);
+			this.set_frontmatter(neighbor[1],this.prev,`[[${neighbor[0].basename}]]`);
+		}else if(neighbor[0]!=null){
+			this.set_frontmatter(neighbor[0],this.next,``);
+		}else if(neighbor[1]!=null){
+			this.set_frontmatter(neighbor[1],this.prev,``);
+		}
+	}
+
+	insert_node_as_head(tfile,anchor){
+		// 将tfile 插到 anchor 所在链的头
+		if(head==tfile){
+			return;
+		}
+		let head = this.get_first_note(anchor);
+		this.set_frontmatter(tfile,this.next,`[[${head.basename}]]`);
+		this.set_frontmatter(head,this.prev,`[[${tfile.basename}]]`);
+	}
+
+	insert_node_as_tail(tfile,anchor){
+		// 将tfile 插到 anchor 所在链的尾
+		let tail = this.get_last_note(anchor);
+		if(tfile==tail){
+			return;
+		}
+		this.set_frontmatter(tfile,this.prev,`[[${tail.basename}]]`);
+		this.set_frontmatter(tail,this.next,`[[${tfile.basename}]]`);
+	}
+
+	insert_node_after(tfile,anchor){
+		let next = this.get_next_notes(anchor,this.prev,this.next,true);
+		if(next[0] && next[1][0]!=tfile && next[1][0]!=anchor){
+			this.set_frontmatter(next[1][0],this.prev,`[[${tfile.basename}]]`);
+			this.set_frontmatter(tfile,this.next,`[[${next[1][0].basename}]]`);
+		}
+
+		this.set_frontmatter(tfile,this.prev,`[[${anchor.basename}]]`);
+		this.set_frontmatter(anchor,this.next,`[[${tfile.basename}]]`);
+	}
+
+	insert_node_before(tfile,anchor){
+		let prev = this.get_prev_notes(anchor,this.prev,this.next,true);
+		if(prev[0] && prev[1][0]!=tfile && prev[1][0]!=anchor){
+			this.set_frontmatter(prev[1][0],this.next,`[[${tfile.basename}]]`);
+			this.set_frontmatter(tfile,this.prev,`[[${prev[1][0].basename}]]`);
+		}
+
+		this.set_frontmatter(tfile,this.next,`[[${anchor.basename}]]`);
+		this.set_frontmatter(anchor,this.prev,`[[${tfile.basename}]]`);
+	}
+	
+
+}
+
+class SampleModal extends Modal {
+	constructor(app: App) {
+		super(app);
+	}
+
+	onOpen() {
+		const {contentEl} = this;
+		console.log("afa",this);
+		
+		contentEl.setText("[[set_seq_notes_config]]");
+	}
+
+	onClose() {
+		const {contentEl} = this;
+		contentEl.empty();
+	}
+}
+
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
 	templaterPlugin: TemplaterPlugin;
 
 	async onload() {
+		
+		this.chain = new NoteChain(this.app);
+
 
 		await this.loadSettings();
 		
@@ -40,68 +364,11 @@ export default class MyPlugin extends Plugin {
 			"templater-obsidian"
 		)
 
-		// // This creates an icon in the left ribbon.
-		// const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-		// 	// Called when the user clicks the icon.
-		// 	new Notice('This is a notice!');
-		// });
-		// // Perform additional things with the ribbon
-		// ribbonIconEl.addClass('my-plugin-ribbon-class');
-
-		// // This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		// const statusBarItemEl = this.addStatusBarItem();
-		// statusBarItemEl.setText('Status Bar Text');
-
-		// // This adds a simple command that can be triggered anywhere
-		// this.addCommand({
-		// 	id: 'open-sample-modal-simple',
-		// 	name: 'Open sample modal (simple)',
-		// 	callback: () => {
-		// 		new SampleModal(this.app).open();
-		// 	}
-		// });
-		// // This adds an editor command that can perform some operation on the current editor instance
-		// this.addCommand({
-		// 	id: 'sample-editor-command',
-		// 	name: 'Sample editor command',
-			// editorCallback: (editor: Editor, view: MarkdownView) => {
-			// 	console.log(editor.getSelection());
-			// 	editor.replaceSelection('Sample Editor Command');
-			// }
-		// });
-		// // This adds a complex command that can check whether the current state of the app allows execution of the command
-		// this.addCommand({
-		// 	id: 'open-sample-modal-complex',
-		// 	name: 'Open sample modal (complex)',
-		// 	checkCallback: (checking: boolean) => {
-		// 		// Conditions to check
-		// 		const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-		// 		if (markdownView) {
-		// 			// If checking is true, we're simply "checking" if the command can be run.
-		// 			// If checking is false, then we want to actually perform the operation.
-		// 			if (!checking) {
-		// 				new SampleModal(this.app).open();
-		// 			}
-
-		// 			// This command will only show up in Command Palette when the check function returns true
-		// 			return true;
-		// 		}
-		// 	}
-		// });
-
 		this.addCommand({
-			id: 'chain_select_prev_note',
-			name: 'Chain-->Select Prev Note',
+			id: 'chain_insert_node',
+			name: 'Chain-->chain_insert_node',
 			callback: () => {
-				this.yaml_select_prev_note();
-			}
-		});
-		
-		this.addCommand({
-			id: 'chain_select_next_note',
-			name: 'Chain-->Select Next Note',
-			callback: () => {
-				this.yaml_select_next_note();
+				this.chain_insert_node();
 			}
 		});
 		
@@ -129,23 +396,59 @@ export default class MyPlugin extends Plugin {
 			}
 		});
 
+		this.addCommand({
+			id: 'open-sample-modal-simple',
+			name: 'Open sample modal (simple)',
+			callback: () => {
+				this.showNoteContent();
+			}
+		})
+
+		this.addCommand({
+			id: 'open-sample-modal-complex',
+			name: 'Open sample modal (complex)',
+			checkCallback: (checking: boolean) => {
+				// Conditions to check
+				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (markdownView) {
+					// If checking is true, we're simply "checking" if the command can be run.
+					// If checking is false, then we want to actually perform the operation.
+					if (!checking) {
+						new SampleModal(this.app).open();
+					}
+
+					// This command will only show up in Command Palette when the check function returns true
+					return true;
+				}
+			}
+		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// // If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// // Using this function will automatically remove the event listener when this plugin is disabled.
-		// this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-		// 	console.log(this.app);
-		// });
-
-		// // When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		// this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
 
 	onunload() {
 
 	}
+
+	async showNoteContent() {
+		const activeFile = this.app.workspace.getActiveFile();
+		if (!activeFile) return;
+	
+		const noteContent = await this.app.vault.read(activeFile);
+	
+		const modal = new Modal(this.app);
+		const markdownView = new MarkdownView(this.app.workspace);
+		modal.setContent(markdownView.containerEl);
+		console.log(noteContent);
+		markdownView.sourceMode.cmEditor.setValue(noteContent);
+		this.app.xmodal = modal;
+		this.app.xview = markdownView;
+		this.app.xmdv = app.workspace.getActiveViewOfType(MarkdownView)
+		// markdownView.renderMarkdown();
+	
+		modal.open();
+	  }
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -169,7 +472,6 @@ export default class MyPlugin extends Plugin {
 		if(modules.length==0){return undefined}
 		
 		return modules[0].static_functions.get(items[2]);
-
 	}
 	
 	get_tfile(path:string){
@@ -197,21 +499,15 @@ export default class MyPlugin extends Plugin {
 		return this.get_tfile(tfile.basename+suffix);
 	}
 
-	yaml_set_prev_and_next_notes(pre,nxt){
-		// pre的后置设为nxt，nxt的前置设为pre
-		if(!pre){return;}
-		if(!nxt){return;}
-		
-		this.app.fileManager.processFrontMatter(nxt,fm =>{
-			fm["PrevNote"] = `[[${pre.basename}]]`;
-		});
-		
-		this.app.fileManager.processFrontMatter(pre,fm =>{
-			fm["NextNote"] = `[[${nxt.basename}]]`;
-		});
+	async select_value_of_list(targets,prompt=null){
+		let func = this.get_tp_func("tp.system.suggester");
+		const target = await func(
+			targets,targets,false,prompt
+		); 
+		return target;
 	}
 
-	async yaml_select_next_note(){
+	async chain_insert_node(){
 		// 选择笔记的后置笔记
 		let curr = app.workspace.getActiveFile();
 
@@ -221,19 +517,51 @@ export default class MyPlugin extends Plugin {
 
 		if(!this.settings.allFiles){
 			filteredFiles = filteredFiles.filter(
-				(file)=>file!=curr & file.parent==curr.parent
+				(file)=>file!=curr && file.parent==curr.parent
+			);
+		}else{
+			filteredFiles = filteredFiles.filter(
+				(file)=>file!=curr
 			);
 		}
 		let func = this.get_tp_func("tp.system.suggester");
 		const note = await func(
 			(file) => this.tfile_to_strint(
 					file,
-					this.settings.showLink ? ["PrevNote"] :[],
+					this.settings.showLink ? ["PrevNote","NextNote"] :[],
 					"\t\t\t⚡  "
 				), 
 			filteredFiles
 		); 
-		this.yaml_set_prev_and_next_notes(curr,note);
+		
+		if(!note){return;}
+
+		let mode = await this.select_value_of_list([
+			"insert_node_as_head",
+			"insert_node_as_tail",
+			"insert_node_before",
+			"insert_node_after",
+		],prompt="Select Node Insert Mode.");
+		
+		if(!mode){return;}
+
+		console.log(typeof(mode),mode);
+		if(this.settings.popFirst){
+			this.chain.pop_node(curr);
+		}
+
+		if(mode.localeCompare("insert_node_as_head")==0){
+			this.chain.insert_node_as_head(curr,note);
+		}else if(mode.localeCompare("insert_node_as_tail")==0){
+			this.chain.insert_node_as_tail(curr,note);
+		}else if(mode.localeCompare("insert_node_before")==0){
+			this.chain.insert_node_before(curr,note);
+		}else if(mode.localeCompare("insert_node_after")==0){
+			this.chain.insert_node_after(curr,note);
+		}else{
+			return;
+		}
+
 		if(this.settings.openLink){
 			if(note){
 				if(this.settings.newTab){
@@ -260,64 +588,32 @@ export default class MyPlugin extends Plugin {
 		return items.join(seq);
 	}
 
-	async yaml_select_prev_note(){
-		// 选择笔记的后置笔记
-		let curr = this.app.workspace.getActiveFile();
-
-		let filteredFiles = app.vault.getMarkdownFiles().sort(
-			(a,b)=>(b.stat.mtime-a.stat.mtime)
-		);
-
-		if(!this.settings.allFiles){
-			filteredFiles = filteredFiles.filter(
-				(file)=>file!=curr & file.parent==curr.parent
-			);
-		}
-
-		let func = this.get_tp_func("tp.system.suggester");
-
-		if(this.settings.showLink){
-			["NextNote"]
-		}else{[]}
-
-		const note = await func(
-				(file) => this.tfile_to_strint(
-					file,
-					this.settings.showLink ? ["NextNote"] :[],
-					"\t\t\t⚡  "
-				), 
-				filteredFiles
-		); 
-		this.yaml_set_prev_and_next_notes(note,curr);
-		if(this.settings.openLink){
-			if(note){
-				if(this.settings.newTab){
-					this.app.workspace.getLeaf(true).openFile(note);
-				}else{
-					this.app.workspace.activeLeaf.openFile(note);
-				}
-			 }
-		 }
-	}
-
 	yaml_set_seq_notes(){
 		let curr = this.app.workspace.getActiveFile();
-		const files = this.app.vault.getMarkdownFiles().filter(
+		const xfiles = this.app.vault.getMarkdownFiles().filter(
 			file=>{
 				return file.parent==curr.parent;
 			}
-		).sort(
-			(a,b)=>(a.stat.ctime-b.stat.ctime)
 		);
 
+		let mode = this.select_value_of_list(
+			['name','ctime','mtime'],
+			prompt="选择排序模型"
+		);
+		let files = this.sort_tfiles(xfiles,mode);
+
 		for(let i=0;i<files.length-1;i++){
+			let neighbor = this.chain.get_neighbors(files[i]);
+			if(neighbor[0]==undefined && neighbor[1]==undefined){
+				
+			}
 			let meta = this.app.metadataCache.getFileCache(files[i]);
-			if(!meta | (!meta.frontmatter?.PrevNote & !meta.frontmatter?.NextNote)){
+			if(!meta | (!meta.frontmatter?.PrevNote && !meta.frontmatter?.NextNote)){
 				this.yaml_set_prev_and_next_notes(files[i],files[i+1]);
 			}
 		}
 		let meta = app.metadataCache.getFileCache(files[files.length-1]);
-		if(!meta | (!meta.frontmatter?.PrevNote & !meta.frontmatter?.NextNote)){
+		if(!meta | (!meta.frontmatter?.PrevNote && !meta.frontmatter?.NextNote)){
 			this.yaml_set_prev_and_next_notes(files[files.length-2],files[files.length-1]);
 		}
 	}
@@ -327,7 +623,7 @@ export default class MyPlugin extends Plugin {
 		const filteredFiles_ = this.app.vault.getMarkdownFiles().filter(
 			(file)=>(
 				(file!=curr) | (this.settings?.withSelf)
-			)&(
+			)&&(
 				file.path.startsWith(curr.parent.path)
 			)
 		); 
@@ -345,13 +641,13 @@ export default class MyPlugin extends Plugin {
 				(file) => file.path.slice(curr.parent.path.length+1).slice(0,-3), filteredFiles
 			)
 		); 
-		 if(note){
-			 if(this.settings.newTab){
+		if(note){
+			if(this.settings.newTab){
 				app.workspace.getLeaf(true).openFile(note);
 			}else{
 				app.workspace.activeLeaf.openFile(note);
 			}
-		 }
+		}
 	}
 
 
@@ -382,7 +678,7 @@ export default class MyPlugin extends Plugin {
 				(a,b)=>{
 					let ameta = this.app.metadataCache.getFileCache(a).frontmatter;
 					let bmeta = this.app.metadataCache.getFileCache(b).frontmatter;
-					if(!ameta & !bmeta){
+					if(!ameta && !bmeta){
 						return 0;
 					}else if(!ameta){
 						return bmeta[field];
@@ -398,7 +694,7 @@ export default class MyPlugin extends Plugin {
 				(a,b)=>{
 					let ameta = this.app.metadataCache.getFileCache(a).frontmatter;
 					let bmeta = this.app.metadataCache.getFileCache(b).frontmatter;
-					if(!ameta & !bmeta){
+					if(!ameta && !bmeta){
 						return 0;
 					}else if(!ameta){
 						return bmeta[field];
@@ -411,8 +707,6 @@ export default class MyPlugin extends Plugin {
 			)
 		}
 		return this.xreverse(res,reverse);
-	
-		
 	}
 
 	get_file_chain(curr=null,prev=10,next=10,sameFolder=false){
@@ -425,7 +719,6 @@ export default class MyPlugin extends Plugin {
 		
 		let tmp = curr;
 		for(let i=prev;i!=0;i--){
-			console.log(i);
 			let meta = this.app.metadataCache.getFileCache(tmp);
 			
 			if(!meta){break}
@@ -487,7 +780,6 @@ export default class MyPlugin extends Plugin {
 			Number(this.settings.NextChain),
 			this.settings.sameFolder,
 		);
-		console.log(files);
 
 		let func = this.get_tp_func("tp.system.suggester");
 
@@ -515,22 +807,6 @@ export default class MyPlugin extends Plugin {
 	}
 
 }
-
-// class SampleModal extends Modal {
-// 	constructor(app: App) {
-// 		super(app);
-// 	}
-
-// 	onOpen() {
-// 		const {contentEl} = this;
-// 		contentEl.setText('Woah!');
-// 	}
-
-// 	onClose() {
-// 		const {contentEl} = this;
-// 		contentEl.empty();
-// 	}
-// }
 
 class SampleSettingTab extends PluginSettingTab {
 	plugin: MyPlugin;
@@ -634,6 +910,17 @@ class SampleSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.showLink)
 					.onChange(async (value) => {
 						this.plugin.settings.showLink = value;
+						await this.plugin.saveSettings();
+					})
+				);
+
+		new Setting(containerEl)
+				.setName('popFirst')
+				.setDesc('插入前链接当前笔记前后置笔记')
+				.addToggle(text => text
+					.setValue(this.plugin.settings.popFirst)
+					.onChange(async (value) => {
+						this.plugin.settings.popFirst = value;
 						await this.plugin.saveSettings();
 					})
 				);
