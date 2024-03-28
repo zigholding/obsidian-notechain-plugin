@@ -544,6 +544,14 @@ export default class ZigHolding extends Plugin {
 			}
 		});
 
+		this.addCommand({
+			id: 'clean_clear_inlinks',
+			name: '整理-->清理入链',
+			callback: () => {
+				this.clear_inlinks();
+			}
+		});
+
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
