@@ -490,24 +490,6 @@ class NoteChain{
 
 }
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		console.log("afa",this);
-		
-		contentEl.setText("[[set_seq_notes_config]]");
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
 export default class ZigHolding extends Plugin {
 	settings: ZigSettings;
 	chain : NoteChain;
@@ -562,32 +544,6 @@ export default class ZigHolding extends Plugin {
 			}
 		});
 
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				this.showNoteContent();
-			}
-		})
-
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
-		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
@@ -615,26 +571,6 @@ export default class ZigHolding extends Plugin {
 		}
 	}
 	
-
-	async showNoteContent() {
-		const activeFile = this.app.workspace.getActiveFile();
-		if (!activeFile) return;
-	
-		const noteContent = await this.app.vault.read(activeFile);
-	
-		const modal = new Modal(this.app);
-		const markdownView = new MarkdownView(this.app.workspace);
-		modal.setContent(markdownView.containerEl);
-		console.log(noteContent);
-		markdownView.sourceMode.cmEditor.setValue(noteContent);
-		this.app.xmodal = modal;
-		this.app.xview = markdownView;
-		this.app.xmdv = app.workspace.getActiveViewOfType(MarkdownView)
-		// markdownView.renderMarkdown();
-	
-		modal.open();
-	  }
-
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 	}
@@ -642,7 +578,6 @@ export default class ZigHolding extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
-	
 	
 	async clear_inlinks(tfile=this.chain.current_note,mode='suggester'){
 		let notes = this.chain.get_inlinks(tfile);
@@ -713,7 +648,7 @@ export default class ZigHolding extends Plugin {
 			);
 		}
 		const note = await this.suggester(
-			(file) => this.tfile_to_strint(
+			(file) => this.tfile_to_string(
 					file,
 					this.settings.showLink ? ["PrevNote","NextNote"] :[],
 					"\t\t\t⚡  "
@@ -760,7 +695,7 @@ export default class ZigHolding extends Plugin {
 		 }
 	}
 	
-	tfile_to_strint(tfile,fields,seq){
+	tfile_to_string(tfile,fields,seq){
 		let meta = this.app.metadataCache.getFileCache(tfile);
 		let items = new Array();
 		items.push(tfile.basename)
