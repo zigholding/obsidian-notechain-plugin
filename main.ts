@@ -514,7 +514,7 @@ export default class ZigHolding extends Plugin {
 
 		this.addCommand({
 			id: 'chain_insert_node',
-			name: 'Chain-->chain_insert_node',
+			name: 'Chain-->插入节点',
 			callback: () => {
 				this.chain_insert_node();
 			}
@@ -522,15 +522,15 @@ export default class ZigHolding extends Plugin {
 		
 		this.addCommand({
 			id: 'chain_set_seq_note',
-			name: 'Chian-->Auto Set Chain by ctime',
+			name: 'Chian-->重置当前笔记所在目录链条，会清除你的设置，慎用！',
 			callback: () => {
-				this.yaml_set_seq_notes();
+				this.chain.rechain_folder();
 			}
 		});
 
 		this.addCommand({
 			id: 'open_notes_in_same_folder',
-			name: 'Open notes in same folder',
+			name: 'Open-->打开目录笔记',
 			callback: () => {
 				this.open_notes_in_same_folder();
 			}
@@ -538,7 +538,7 @@ export default class ZigHolding extends Plugin {
 
 		this.addCommand({
 			id: 'open_note_chain',
-			name: 'Chain-->Open note chain',
+			name: 'Chain-->打开笔记链条',
 			callback: () => {
 				this.open_note_chain();
 			}
@@ -659,10 +659,10 @@ export default class ZigHolding extends Plugin {
 		if(!note){return;}
 
 		let mode = await this.select_value_of_list([
+			"insert_node_after",
+			"insert_node_before",
 			"insert_node_as_head",
 			"insert_node_as_tail",
-			"insert_node_before",
-			"insert_node_after",
 		],prompt="Select Node Insert Mode.");
 		
 		if(!mode){return;}
@@ -672,13 +672,13 @@ export default class ZigHolding extends Plugin {
 			this.chain.pop_node(curr);
 		}
 
-		if(mode.localeCompare("insert_node_as_head")==0){
+		if(mode==='insert_node_as_head'){
 			this.chain.insert_node_as_head(curr,note);
-		}else if(mode.localeCompare("insert_node_as_tail")==0){
+		}else if(mode==='insert_node_as_tail'){
 			this.chain.insert_node_as_tail(curr,note);
-		}else if(mode.localeCompare("insert_node_before")==0){
+		}else if(mode==='insert_node_before'){
 			this.chain.insert_node_before(curr,note);
-		}else if(mode.localeCompare("insert_node_after")==0){
+		}else if(mode==='insert_node_after'){
 			this.chain.insert_node_after(curr,note);
 		}else{
 			return;
@@ -708,27 +708,6 @@ export default class ZigHolding extends Plugin {
 			
 		}
 		return items.join(seq);
-	}
-
-	yaml_set_seq_notes(){
-		let curr = this.app.workspace.getActiveFile();
-		let notes = this.chain.get_same_parent();
-		let files = this.chain.suggester_sort(notes);
-
-		for(let i=0;i<files.length-1;i++){
-			let neighbor = this.chain.get_neighbors(files[i]);
-			if(neighbor[0]==undefined && neighbor[1]==undefined){
-				
-			}
-			let meta = this.app.metadataCache.getFileCache(files[i]);
-			if(!meta | (!meta.frontmatter?.PrevNote && !meta.frontmatter?.NextNote)){
-				this.yaml_set_prev_and_next_notes(files[i],files[i+1]);
-			}
-		}
-		let meta = app.metadataCache.getFileCache(files[files.length-1]);
-		if(!meta | (!meta.frontmatter?.PrevNote && !meta.frontmatter?.NextNote)){
-			this.yaml_set_prev_and_next_notes(files[files.length-2],files[files.length-1]);
-		}
 	}
 
 	async open_notes_in_same_folder(){
