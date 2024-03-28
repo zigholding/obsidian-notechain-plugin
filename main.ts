@@ -1,8 +1,13 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { 
+	App, Editor, MarkdownView, Modal, Notice, 
+	Plugin, PluginSettingTab, Setting,
+	DataviewPlugin,
+	TFile,TFolder
+} from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
-interface MyPluginSettings {
+interface ZigSettings {
 	newTab: boolean;
 	withSelf:boolean;
 	reverse:boolean;
@@ -11,9 +16,11 @@ interface MyPluginSettings {
 	NextChain:string;
 	showLink:boolean;
 	openLink:boolean;
+	refreshDataView:boolean;
+	refreshTasks:boolean,
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
+const DEFAULT_SETTINGS: ZigSettings = {
 	newTab : true,
 	withSelf : true,
 	reverse : true,
@@ -21,7 +28,58 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 	PrevChain : "10",
 	NextChain : "10",
 	showLink : true,
-	openLink : true
+	openLink : true,
+	refreshDataView : true,
+	refreshTasks : true
+}
+
+function get_tp_func(app:App,target:string) {
+	// 获取  templater 函数
+	// get_tp_func("tp.system.prompt")
+
+	let templater = app.plugins.getPlugin(
+		"templater-obsidian"
+	);
+
+	let items = target.split(".");
+	if(items[0].localeCompare("tp")!=0 || items.length!=3){return undefined;}
+	
+	let modules = templater.templater.functions_generator.
+		internal_functions.modules_array.filter(
+			(item)=>(item.name.localeCompare(items[1])==0)
+		);
+
+	if(modules.length==0){return undefined}
+	
+	return modules[0].static_functions.get(items[2]);
+}
+
+
+
+class ZigEditor{
+	app:App;
+
+	constructor(app:App){
+		this.app = app;
+	}
+
+	regexp_link(tfile:TFile,mode:string){
+		//[[note||alias]]
+		if(mode==='link'){
+			return new RegExp(`\\[\\[${tfile.basename}\\|?.*\\]\\]`,'g');
+		}
+		
+		//paragraph
+		if(mode==='para'){
+			return new RegExp(`.*\\[\\[${tfile.basename}\\|?.*\\]\\].*`,'g');
+		}
+	}
+
+	replace(tfile:TFile,regex:RegExp,target:string){
+		this.app.vault.process(tfile,(data)=>{
+			return data.replace(regex, target);
+		})
+	}
 }
 
 class NoteChain{
@@ -39,29 +97,19 @@ class NoteChain{
 		);
 	}
 
-	get_tfile(path,files){
-		// this.app.vault.getMarkdownFiles();
-		if(!path){
-			return null;
-		}
-		if(files.includes(path)){
-			return files[path]
-		}
-		for(let file of files){
-			if(file.name.toLowerCase().localeCompare(path.toLowerCase())==0){
-				return file;
-			}
-			if(file.basename.toLowerCase().localeCompare(path.toLowerCase())==0){
-				return file;
-			}
-			if(`[[${file.basename.toLowerCase()}]]`.localeCompare(path.toLowerCase())==0){
-				return file;
-			}
-			if(file.basename.toLowerCase().localeCompare(`[[${path.toLowerCase()}]]`)==0){
-				return file;
-			}
-		}
-		return null;
+	get find_tfile(){
+		return get_tp_func(this.app,'tp.file.find_tfile');
+
+	}
+
+	get suggester(){
+		return get_tp_func(this.app,'tp.system.suggester');
+	}
+
+
+	get_tfile(path){
+		let name = path.split('|')[0].replace('[[','').replace(']]','');
+		return this.find_tfile(name);
 	}
 
 	get MDFiles(){
@@ -72,7 +120,7 @@ class NoteChain{
 		return this.app.workspace.getActiveFile();
 	}
 
-	get_inlinks(tfile){
+	get_inlinks(tfile=this.current_note){
 		let res = new Array();
 
 		let inlinks = this.dv_api.index.links.invMap.get(tfile.path);
@@ -87,7 +135,7 @@ class NoteChain{
 		}
 	}
 
-	get_outlinks(tfile){
+	get_outlinks(tfile=this.current_note){
 		let res = new Array();
 		let inlinks = this.dv_api.index.links.map.get(tfile.path);
 		if(inlinks==undefined){
@@ -101,8 +149,7 @@ class NoteChain{
 		}
 	}
 
-
-	get_links(tfile){
+	get_links(tfile=this.current_note){
 		let inlinks = this.get_inlinks(tfile);
 		let outlinks = this.get_outlinks(tfile);
 		for(let link of inlinks){
@@ -112,6 +159,40 @@ class NoteChain{
 		}
 		return outlinks;
 	}
+
+	get_same_parent(tfile=this.current_note){
+		let notes = tfile?.parent?.children.filter(
+		f=>f.basename).filter(
+			f=>f.extension==='md'
+		);
+		if(!notes){return [];}
+		return notes;
+	}
+
+	async suggester_notes(tfile=this.current_note){
+		let kv = [
+			'当前笔记',
+			'同级目录',
+			'出链+入链',
+			'入链',
+			'出链',
+		]
+		let mode = await this.suggester(kv,kv);
+		if(mode==='当前笔记'){
+			return [tfile];
+		}else if(mode==='同级目录'){
+			return this.get_same_parent(tfile);
+		}else if(mode==='出链+入链'){
+			return this.get_links(tfile);
+		}else if(mode==='入链'){
+			return this.get_inlinks(tfile);
+		}else if(mode==='出链'){
+			return this.get_outlinks(tfile);
+		}else{
+			return [];
+		}
+	}
+
 
 	get_first_note(tfile){
 		let res = new Array();
@@ -147,7 +228,7 @@ class NoteChain{
 		return tmp;
 	}
 
-	get_file_chain(tfile,prev=10,next=10){
+	get_file_chain(tfile=this.current_note,prev=10,next=10){
 		let res = Array();
 		res.push(tfile);
 		
@@ -324,6 +405,88 @@ class NoteChain{
 		this.set_frontmatter(anchor,this.prev,`[[${tfile.basename}]]`);
 	}
 	
+	async rechain_folder(tfolder=null,mode='suggester'){
+		let notes = this.get_same_parent();
+		let files = await this.suggester_sort(notes);
+		
+		for(let i=0;i<files.length-1;i++){
+			if(!(this.get_frontmatter(files[i],this.next)===`[[${files[i+1].basename}]]`)){
+				this.set_frontmatter(files[i],this.next,`[[${files[i+1].basename}]]`);
+			}
+			if(!(this.get_frontmatter(files[i+1],this.prev)===`[[${files[i].basename}]]`)){
+				this.set_frontmatter(files[i+1],this.prev,`[[${files[i].basename}]]`);	
+			}
+		}
+	}
+
+	sort_tfiles(files,field){
+		if(typeof field === 'string'){
+			if(field.localeCompare("name")==0){
+				return files.sort(
+					(a,b)=>(a.name.localeCompare(b.name))
+				);
+			}else if(field.localeCompare("mtime")==0){
+				return files.sort(
+					(a,b)=>(a.stat.mtime-b.stat.mtime)
+				)
+			}else if(field.localeCompare("ctime")==0){
+				return files.sort(
+					(a,b)=>(a.stat.ctime-b.stat.ctime)
+				)
+			}
+			return files;
+		}else if(typeof field === 'object'){
+			if(field instanceof Array){
+				let nfiles = this.sort_tfiles(files,field[0]);
+				if(field.length>=2){
+					if(field[1]==='x'){
+						return nfiles.reverse()
+					}
+				}
+				return nfiles;
+			}
+		}
+		return files;
+	}
+	sort_tfiles_by_chain(files){
+
+	}
+	sort_tfiles_by_field(files,field){
+		let res = files.sort(
+			(a,b)=>{
+				let ameta = this.app.metadataCache.getFileCache(a).frontmatter;
+				let bmeta = this.app.metadataCache.getFileCache(b).frontmatter;
+				if(!ameta && !bmeta){
+					return 0;
+				}else if(!ameta){
+					return bmeta[field];
+				}else if(!bmeta){
+					return ameta[mode];
+				}else{
+					return ameta[field]-bmeta[field];
+				}
+			}
+		)
+		return res;
+	}
+
+	async suggester_sort(tfiles){
+		if(!tfiles){return [];}
+		if(tfiles.length==0){return []};
+		let kv = {
+			'name':'name',
+			'ctime':'ctime',
+			'mtime':'mtime',
+			'name 倒序':['name','x'],
+			'ctime 倒序':['ctime','x'],
+			'mtime 倒序':['mtime','x'],
+		}
+		let field = await this.suggester(
+			Object.keys(kv),
+			Object.values(kv)
+		);
+		return this.sort_tfiles(tfiles,field);
+	}
 
 }
 
@@ -345,22 +508,25 @@ class SampleModal extends Modal {
 	}
 }
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
-	templaterPlugin: TemplaterPlugin;
+export default class ZigHolding extends Plugin {
+	settings: ZigSettings;
+	chain : NoteChain;
+	editor : ZigEditor; 
 
 	async onload() {
-		
+
 		this.chain = new NoteChain(this.app);
+		this.editor = new ZigEditor(this.app);
+		this.app.zig = this;
 
 
 		await this.loadSettings();
 		
-		this.dataview = this.app.plugins.getPlugin(
+		this.dataview = await this.app.plugins.getPlugin(
 			"dataview"
 		);
 
-		this.templater = this.app.plugins.getPlugin(
+		this.templater = await this.app.plugins.getPlugin(
 			"templater-obsidian"
 		)
 
@@ -425,11 +591,30 @@ export default class MyPlugin extends Plugin {
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
+
+		console.log('Zig-Holding:regeister ufunc_on_file_open');
+		this.app.workspace.on('file-open', this.ufunc_on_file_open);
 	}
 
 	onunload() {
-
+		console.log('Zig-Holding:unregeister ufunc_on_file_open');
+		this.app.workspace.off('file-open', this.ufunc_on_file_open);
 	}
+
+	async ufunc_on_file_open(file){
+		let zh = await app.plugins.getPlugin("zig-holding");
+		if(!zh){return;}
+		if(zh.settings.refreshDataView){
+			zh.app.commands.executeCommandById(
+				"dataview:dataview-force-refresh-views"
+			)
+		}
+		if(zh.settings.refreshTasks){
+			let target = await app.plugins.getPlugin("obsidian-tasks-plugin");
+			target.cache.notifySubscribers();
+		}
+	}
+	
 
 	async showNoteContent() {
 		const activeFile = this.app.workspace.getActiveFile();
@@ -458,22 +643,26 @@ export default class MyPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 	
-	get_tp_func(target:string) {
-		// 获取  templater 函数
-		// get_tp_func("tp.system.prompt")
-		let items = target.split(".");
-		if(items[0].localeCompare("tp")!=0 | items.length!=3){return undefined;}
-		
-		let modules = this.templater.templater.functions_generator.
-			internal_functions.modules_array.filter(
-				(item)=>(item.name.localeCompare(items[1])==0)
-			);
-
-		if(modules.length==0){return undefined}
-		
-		return modules[0].static_functions.get(items[2]);
-	}
 	
+	async clear_inlinks(tfile=this.chain.current_note,mode='suggester'){
+		let notes = this.chain.get_inlinks(tfile);
+		if(notes.length){
+			if(mode==='suggester'){
+				mode = await this.suggester(
+					["删除链接","删除段落",],
+					['link','para']
+				);
+			}
+			let reg = this.editor.regexp_link(tfile,mode);
+			if(reg){
+				for(let note of notes){
+					this.editor.replace(note,reg,'');
+				}
+			}
+		}
+	}
+
+
 	get_tfile(path:string){
 		// 根据路径获取 tfile，大小不敏感
 		let files = app.vault.getMarkdownFiles();
@@ -500,8 +689,7 @@ export default class MyPlugin extends Plugin {
 	}
 
 	async select_value_of_list(targets,prompt=null){
-		let func = this.get_tp_func("tp.system.suggester");
-		const target = await func(
+		const target = await this.suggester(
 			targets,targets,false,prompt
 		); 
 		return target;
@@ -524,8 +712,7 @@ export default class MyPlugin extends Plugin {
 				(file)=>file!=curr
 			);
 		}
-		let func = this.get_tp_func("tp.system.suggester");
-		const note = await func(
+		const note = await this.suggester(
 			(file) => this.tfile_to_strint(
 					file,
 					this.settings.showLink ? ["PrevNote","NextNote"] :[],
@@ -590,17 +777,8 @@ export default class MyPlugin extends Plugin {
 
 	yaml_set_seq_notes(){
 		let curr = this.app.workspace.getActiveFile();
-		const xfiles = this.app.vault.getMarkdownFiles().filter(
-			file=>{
-				return file.parent==curr.parent;
-			}
-		);
-
-		let mode = this.select_value_of_list(
-			['name','ctime','mtime'],
-			prompt="选择排序模型"
-		);
-		let files = this.sort_tfiles(xfiles,mode);
+		let notes = this.chain.get_same_parent();
+		let files = this.chain.suggester_sort(notes);
 
 		for(let i=0;i<files.length-1;i++){
 			let neighbor = this.chain.get_neighbors(files[i]);
@@ -628,19 +806,18 @@ export default class MyPlugin extends Plugin {
 			)
 		); 
 		
-		let filteredFiles = this.sort_tfiles(
+		let filteredFiles = this.chain.sort_tfiles(
 			filteredFiles_,
 			this.settings.field,
-			this.settings.reverse
 		);
 		
-		let func = this.get_tp_func("tp.system.suggester");
 
 		const note = (
-			await func(
+			await this.suggester(
 				(file) => file.path.slice(curr.parent.path.length+1).slice(0,-3), filteredFiles
 			)
 		); 
+
 		if(note){
 			if(this.settings.newTab){
 				app.workspace.getLeaf(true).openFile(note);
@@ -650,65 +827,10 @@ export default class MyPlugin extends Plugin {
 		}
 	}
 
-
-	xreverse(res,reverse){
-		if(reverse){
-			return res.reverse()
-		}else{
-			return res;
-		}
+	get suggester(){
+		return get_tp_func(this.app,"tp.system.suggester");
 	}
-
-	sort_tfiles(files,field,reverse=false){
-		var res;
-		if(field.localeCompare("name")==0){
-			res = files.sort(
-				(a,b)=>(a.name.localeCompare(b.name))
-			);
-		}else if(field.localeCompare("mtime")==0){
-			res = files.sort(
-				(a,b)=>(a.stat.mtime-b.stat.mtime)
-			)
-		}else if(field.localeCompare("ctime")==0){
-			res = files.sort(
-				(a,b)=>(a.stat.ctime-b.stat.ctime)
-			)
-		}else if(field.localeCompare("chain")==0){
-			res = files.sort(
-				(a,b)=>{
-					let ameta = this.app.metadataCache.getFileCache(a).frontmatter;
-					let bmeta = this.app.metadataCache.getFileCache(b).frontmatter;
-					if(!ameta && !bmeta){
-						return 0;
-					}else if(!ameta){
-						return bmeta[field];
-					}else if(!bmeta){
-						return ameta[field];
-					}else{
-						return ameta[field]-bmeta[field];
-					}
-				}
-			)
-		}else{
-			res = files.sort(
-				(a,b)=>{
-					let ameta = this.app.metadataCache.getFileCache(a).frontmatter;
-					let bmeta = this.app.metadataCache.getFileCache(b).frontmatter;
-					if(!ameta && !bmeta){
-						return 0;
-					}else if(!ameta){
-						return bmeta[field];
-					}else if(!bmeta){
-						return ameta[mode];
-					}else{
-						return ameta[field]-bmeta[field];
-					}
-				}
-			)
-		}
-		return this.xreverse(res,reverse);
-	}
-
+	
 	get_file_chain(curr=null,prev=10,next=10,sameFolder=false){
 
 		if(curr===null){
@@ -781,10 +903,8 @@ export default class MyPlugin extends Plugin {
 			this.settings.sameFolder,
 		);
 
-		let func = this.get_tp_func("tp.system.suggester");
-
 		const note = (
-			await func(
+			await this.suggester(
 				(file) => {
 					if(!file){
 						return '-----📂-----';
@@ -809,9 +929,9 @@ export default class MyPlugin extends Plugin {
 }
 
 class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	plugin: ZigHolding;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: ZigHolding) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -946,7 +1066,28 @@ class SampleSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 				);
-
+		
+		containerEl.createEl("h3", { text: "初始化" });
+		new Setting(containerEl)
+				.setName('refreshDataView')
+				.setDesc('打开新笔记时刷新Dataview？')
+				.addToggle(text => text
+					.setValue(this.plugin.settings.refreshDataView)
+					.onChange(async (value) => {
+						this.plugin.settings.refreshDataView = value;
+						await this.plugin.saveSettings();
+					})
+				);
+		new Setting(containerEl)
+				.setName('refreshTasks')
+				.setDesc('打开新笔记时刷新Tasks？')
+				.addToggle(text => text
+					.setValue(this.plugin.settings.refreshTasks)
+					.onChange(async (value) => {
+						this.plugin.settings.refreshTasks = value;
+						await this.plugin.saveSettings();
+					})
+				);
 		// let s = new Setting(containerEl);
 		// console.log("Setting--->",s);
 	}

@@ -2,7 +2,7 @@
 
 
 
-这个插件基于 [Obsidian Sample Plugin](https://github.com/obsidianmd/obsidian-sample-plugin) 修改，你可下在该项目中查看基础信息。
+这个插件基于 [Obsidian Sample Plugin](https://github.com/obsidianmd/obsidian-sample-plugin) 修改，你可以在该项目中查看基础信息。
 
 
 
@@ -18,7 +18,7 @@ npm i # 下载依赖包
 npm run dev # 将 main.ts 编译为 main.js
 ```
 
-这是一个开发项目，`.gitignore` 中默认注释了 `data.json` 和 `main.js`。但我取消了注意，方便下载即项目即可使用。你可以 `.gitignore` 中重要设置为忽略。
+这是一个开发项目，`.gitignore` 中默认注释了 `data.json` 和 `main.js`。但我取消了注释，方便下载即项目即可使用。你可以 `.gitignore` 中重要设置为忽略。
 
 ```text
 # Don't include the compiled main.js file in the repo.
