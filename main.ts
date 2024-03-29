@@ -83,12 +83,14 @@ class ZigEditor{
 }
 
 class NoteChain{
+	zig:ZigHolding;
 	app:App;
 	prev:string;
 	next:string;
 
-	constructor(app:App,prev="PrevNote",next="NextNote") {
-		this.app = app;
+	constructor(zig:ZigHolding,prev="PrevNote",next="NextNote") {
+		this.zig = zig;
+		this.app = zig.app;
 		this.prev = prev;
 		this.next = next;
 
@@ -106,6 +108,56 @@ class NoteChain{
 		return get_tp_func(this.app,'tp.system.suggester');
 	}
 
+	get_all_folders(sort_mode=''){
+		let folders = Object.values(this.app.vault.fileMap
+		).filter(f=>f.children)
+		return folders;
+	}
+	
+	sort_folders_by_mtime(folders:Array<TFolder>,reverse=true){
+		function ufunc(f:TFolder){
+			return Math.max(
+				...f.children.filter(f=>f.basename).map(f=>f.stat
+				.mtime)
+			)
+		}
+		let res = folders.sort((a,b)=>ufunc(a)-ufunc(b));
+		if(reverse){
+			res = res.reverse();
+		}
+		return res;
+	}
+
+	async move_file_to_another_folder(tfile=this.current_note){
+		let folders = this.get_all_folders();
+		folders = this.sort_folders_by_mtime(folders
+		).filter(f=>f!=tfile.parent);
+
+		if(tfile.extension==='md'){
+			let exfolder = [
+				this.app.vault.configDir.attachmentFolderPath
+			];
+			if(this.app.vault.userIgnoreFilters){
+				for(let x of this.app.vault.userIgnoreFilters){
+					exfolder.push(x);
+				}
+			}
+			
+			for(let x of exfolder){
+				folders = folders.filter(f=>!f.path.startsWith(x))
+			}
+		}
+		try {
+			let folder = await this.suggester((f)=>f.path,folders);
+			// 移动笔记
+			let dst = folder.path+"/"+tfile.basename+"."+tfile.extension;
+			await app.fileManager.renameFile(tfile,dst);
+		} catch (error) {
+			
+		}
+		
+
+	}
 
 	get_tfile(path){
 		let name = path.split('|')[0].replace('[[','').replace(']]','');
@@ -497,7 +549,8 @@ export default class ZigHolding extends Plugin {
 
 	async onload() {
 
-		this.chain = new NoteChain(this.app);
+		this.chain = new NoteChain(this);
+
 		this.editor = new ZigEditor(this.app);
 		this.app.zig = this;
 
@@ -545,16 +598,31 @@ export default class ZigHolding extends Plugin {
 		});
 
 		this.addCommand({
-			id: 'clean_clear_inlinks',
+			id: 'clear_inlinks',
 			name: '整理-->清理入链',
 			callback: () => {
 				this.clear_inlinks();
 			}
 		});
 
+		this.addCommand({
+			id: 'move_file_to_another_folder',
+			name: '整理-->移动到其它文件夹',
+			callback: () => {
+				this.chain.move_file_to_another_folder();
+			}
+		});
+		
+		this.addCommand({
+			id: 'replace_notes_with_regx',
+			name: '整理-->正则表达式批量替换',
+			callback: () => {
+				this.replace_notes_with_regx();
+			}
+		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+		this.addSettingTab(new ZigSettingTab(this.app, this));
 
 		console.log('Zig-Holding:regeister ufunc_on_file_open');
 		this.app.workspace.on('file-open', this.ufunc_on_file_open);
@@ -586,21 +654,41 @@ export default class ZigHolding extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
-	
+
 	async clear_inlinks(tfile=this.chain.current_note,mode='suggester'){
 		let notes = this.chain.get_inlinks(tfile);
 		if(notes.length){
 			if(mode==='suggester'){
 				mode = await this.suggester(
-					["删除链接","删除段落",],
-					['link','para']
+					["删除链接",'替换链接',"删除段落",],
+					[['link','del'],['link','rep'],['para','rep']]
 				);
 			}
-			let reg = this.editor.regexp_link(tfile,mode);
+			let reg = this.editor.regexp_link(tfile,mode[0]);
 			if(reg){
 				for(let note of notes){
-					this.editor.replace(note,reg,'');
+					let target;
+					if(mode[1]==='rep'){
+						target=tfile.basename;
+					}else{
+						target=''
+					}
+					this.editor.replace(note,reg,target);
 				}
+			}
+		}
+	}
+
+	async replace_notes_with_regx(){
+		let notes = await this.chain.suggester_notes();
+		if(notes?.length>0){
+			let prompt = get_tp_func(this.app,'tp.system.prompt');
+			let regs = await prompt('要替换的正则表达式');
+			let reg = new RegExp(regs,'g');
+			console.log(regs,reg);
+			let target = await prompt('目标字符串');
+			for(let note of notes){
+				this.editor.replace(note,reg,target);
 			}
 		}
 	}
@@ -713,7 +801,6 @@ export default class ZigHolding extends Plugin {
 			}catch(error){
 				items.push("-");
 			}
-			
 		}
 		return items.join(seq);
 	}
@@ -850,7 +937,7 @@ export default class ZigHolding extends Plugin {
 
 }
 
-class SampleSettingTab extends PluginSettingTab {
+class ZigSettingTab extends PluginSettingTab {
 	plugin: ZigHolding;
 
 	constructor(app: App, plugin: ZigHolding) {
@@ -1010,7 +1097,5 @@ class SampleSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 				);
-		// let s = new Setting(containerEl);
-		// console.log("Setting--->",s);
 	}
 }
