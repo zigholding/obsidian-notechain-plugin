@@ -109,9 +109,7 @@ class NoteChain{
 	}
 
 	get_all_folders(sort_mode=''){
-		let folders = Object.values(this.app.vault.fileMap
-		).filter(f=>f.children)
-		return folders;
+		return this.app.vault.getAllFolders();
 	}
 	
 	sort_folders_by_mtime(folders:Array<TFolder>,reverse=true){
@@ -134,18 +132,7 @@ class NoteChain{
 		).filter(f=>f!=tfile.parent);
 
 		if(tfile.extension==='md'){
-			let exfolder = [
-				this.app.vault.configDir.attachmentFolderPath
-			];
-			if(this.app.vault.userIgnoreFilters){
-				for(let x of this.app.vault.userIgnoreFilters){
-					exfolder.push(x);
-				}
-			}
-			
-			for(let x of exfolder){
-				folders = folders.filter(f=>!f.path.startsWith(x))
-			}
+			folders = folders.filter(f=>this.filter_user_ignore(f))
 		}
 		try {
 			let folder = await this.suggester((f)=>f.path,folders);
@@ -155,9 +142,49 @@ class NoteChain{
 		} catch (error) {
 			
 		}
-		
-
 	}
+	
+	filter_user_ignore(note){
+		if(!(this.app.vault.config.attachmentFolderPath==='./')){
+			if(note.path.startsWith(
+				this.app.vault.config.attachmentFolderPath.slice(2))
+			){
+				return false;
+			}
+		}
+		if(this.app.vault.config.userIgnoreFilters){
+			for(let x of this.app.vault.config.userIgnoreFilters){
+				if(note.path.startsWith(x)){
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	open_note(tfile:TFile){
+		if(tfile){
+			if(this.app.workspace.activeLeaf.pinned){
+				this.app.workspace.getLeaf(true).openFile(note);
+			}else{
+				this.app.workspace.activeLeaf.openFile(note);
+			}
+		}
+	}
+
+	async sugguster_open_note(){
+		let notes = this.sort_tfiles(
+			this.app.vault.getFiles(),
+			['mtime','x']
+		).filter(f=>this.filter_user_ignore(f));
+		try {
+			let note = await this.suggester(f=>f.path,notes);
+			this.open_note(note);
+		} catch (error) {
+		}
+	}
+
+
 
 	get_tfile(path){
 		let name = path.split('|')[0].replace('[[','').replace(']]','');
@@ -567,7 +594,7 @@ export default class ZigHolding extends Plugin {
 
 		this.addCommand({
 			id: 'chain_insert_node',
-			name: 'Chain-->插入节点',
+			name: 'Insert node of chain',
 			callback: () => {
 				this.chain_insert_node();
 			}
@@ -575,7 +602,7 @@ export default class ZigHolding extends Plugin {
 		
 		this.addCommand({
 			id: 'chain_set_seq_note',
-			name: 'Chian-->重置当前笔记所在目录链条，会清除你的设置，慎用！',
+			name: 'Reset the chain of current folder! Warning: It will reset your chain',
 			callback: () => {
 				this.chain.rechain_folder();
 			}
@@ -583,15 +610,23 @@ export default class ZigHolding extends Plugin {
 
 		this.addCommand({
 			id: 'open_notes_in_same_folder',
-			name: 'Open-->打开目录笔记',
+			name: 'Open note under same folder of current file',
 			callback: () => {
 				this.open_notes_in_same_folder();
 			}
 		});
 
 		this.addCommand({
+			id: 'sugguster_open_note',
+			name: 'Open note by sugguster',
+			callback: () => {
+				this.chain.sugguster_open_note();
+			}
+		});
+
+		this.addCommand({
 			id: 'open_note_chain',
-			name: 'Chain-->打开笔记链条',
+			name: 'Open chain of current file',
 			callback: () => {
 				this.open_note_chain();
 			}
@@ -599,7 +634,7 @@ export default class ZigHolding extends Plugin {
 
 		this.addCommand({
 			id: 'clear_inlinks',
-			name: '整理-->清理入链',
+			name: 'Clear inlinks of current file',
 			callback: () => {
 				this.clear_inlinks();
 			}
@@ -607,7 +642,7 @@ export default class ZigHolding extends Plugin {
 
 		this.addCommand({
 			id: 'move_file_to_another_folder',
-			name: '整理-->移动到其它文件夹',
+			name: 'Move current file to another folder',
 			callback: () => {
 				this.chain.move_file_to_another_folder();
 			}
@@ -615,7 +650,7 @@ export default class ZigHolding extends Plugin {
 		
 		this.addCommand({
 			id: 'replace_notes_with_regx',
-			name: '整理-->正则表达式批量替换',
+			name: 'Replace by regex',
 			callback: () => {
 				this.replace_notes_with_regx();
 			}
@@ -682,14 +717,23 @@ export default class ZigHolding extends Plugin {
 	async replace_notes_with_regx(){
 		let notes = await this.chain.suggester_notes();
 		if(notes?.length>0){
-			let prompt = get_tp_func(this.app,'tp.system.prompt');
-			let regs = await prompt('要替换的正则表达式');
-			let reg = new RegExp(regs,'g');
-			console.log(regs,reg);
-			let target = await prompt('目标字符串');
-			for(let note of notes){
-				this.editor.replace(note,reg,target);
+			try {
+				let prompt = get_tp_func(this.app,'tp.system.prompt');
+				let regs = await prompt('要替换的正则表达式');
+				let reg = new RegExp(regs,'g');
+				
+				let target = await prompt('目标字符串')
+				target = target.trim().replace(
+					'\\n','\n'
+				);
+				console.log(regs,reg,target);
+				for(let note of notes){
+					this.editor.replace(note,reg,target);
+				}
+			} catch (error) {
+				console.log(error);
 			}
+			
 		}
 	}
 

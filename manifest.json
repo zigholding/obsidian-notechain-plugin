@@ -1,7 +1,7 @@
 {
 	"id": "zig-holding",
 	"name": "Zig Holding",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"minAppVersion": "0.15.0",
 	"description": "Package my frequently used tools, highly personal plugins.",
 	"author": "ZigHolding",
