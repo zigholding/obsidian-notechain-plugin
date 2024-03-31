@@ -9,7 +9,7 @@
   "openLink": true,
   "refreshDataView": true,
   "refreshTasks": true,
-  "allFiles": true,
-  "sameFolder": false,
+  "allFiles": false,
+  "sameFolder": true,
   "popFirst": false
 }
