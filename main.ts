@@ -75,10 +75,25 @@ class ZigEditor{
 		}
 	}
 
-	replace(tfile:TFile,regex:RegExp,target:string){
-		this.app.vault.process(tfile,(data)=>{
-			return data.replace(regex, target);
-		})
+	replace(tfile:TFile,regex,target:string){
+		if(typeof regex === 'string'){
+			this.app.vault.process(tfile,(data)=>{
+				if(data.indexOf(regex)>-1){
+					console.log('Replace: ',tfile.path);
+					return data.replace(regex, target);
+				}
+				return data;
+			})
+		}else if(regex instanceof RegExp){
+			this.app.vault.process(tfile,(data)=>{
+				if(data.match(regex)){
+					console.log('Replace: ',tfile.path);
+					return data.replace(regex, target);
+				}
+				return data;
+			})
+		}
+		
 	}
 }
 
@@ -132,7 +147,7 @@ class NoteChain{
 		).filter(f=>f!=tfile.parent);
 
 		if(tfile.extension==='md'){
-			folders = folders.filter(f=>this.filter_user_ignore(f))
+			folders = folders.filter(f=>this.filter_user_ignore(f));
 		}
 		try {
 			let folder = await this.suggester((f)=>f.path,folders);
@@ -147,7 +162,7 @@ class NoteChain{
 	filter_user_ignore(note){
 		if(!(this.app.vault.config.attachmentFolderPath==='./')){
 			if(note.path.startsWith(
-				this.app.vault.config.attachmentFolderPath.slice(2))
+				this.app.vault.config.attachmentFolderPath)
 			){
 				return false;
 			}
@@ -162,23 +177,32 @@ class NoteChain{
 		return true;
 	}
 
-	open_note(tfile:TFile){
-		if(tfile){
-			if(this.app.workspace.activeLeaf.pinned){
-				this.app.workspace.getLeaf(true).openFile(note);
-			}else{
-				this.app.workspace.activeLeaf.openFile(note);
-			}
-		}
-	}
-
-	async sugguster_open_note(){
+	async sugguster_note(){
 		let notes = this.sort_tfiles(
 			this.app.vault.getFiles(),
 			['mtime','x']
 		).filter(f=>this.filter_user_ignore(f));
 		try {
 			let note = await this.suggester(f=>f.path,notes);
+			return note;
+		} catch (error) {
+		}
+	}
+
+	open_note(tfile:TFile,new_tab=false){
+		if(tfile){
+			if(this.app.workspace.activeLeaf.pinned || new_tab){
+				this.app.workspace.getLeaf(true).openFile(tfile);
+			}else{
+				this.app.workspace.activeLeaf.openFile(tfile);
+			}
+		}
+	}
+
+	async sugguster_open_note(){
+		try {
+			let note = await this.sugguster_note();
+			console.log(note);
 			this.open_note(note);
 		} catch (error) {
 		}
@@ -393,6 +417,16 @@ class NoteChain{
 
 	get_next_notes(tfile,prev="PrevNote",next="NextNote",onlyFrontmatter=true){
 		return this.get_prev_notes(tfile,next,prev,onlyFrontmatter);
+	}
+
+	open_prev_notes(tfile=this.current_note){
+		let res = this.get_prev_notes(tfile);
+		if(res[0]){this.open_note(res[1][0]);}
+	}
+	
+	open_next_notes(tfile=this.current_note){
+		let res = this.get_next_notes(tfile);
+		if(res[0]){this.open_note(res[1][0]);}
 	}
 
 	get_neighbors(tfile){
@@ -618,9 +652,25 @@ export default class ZigHolding extends Plugin {
 
 		this.addCommand({
 			id: 'sugguster_open_note',
-			name: 'Open note by sugguster',
+			name: 'Open note',
 			callback: () => {
 				this.chain.sugguster_open_note();
+			}
+		});
+
+		this.addCommand({
+			id: 'open_prev_notes',
+			name: 'Open prev note',
+			callback: () => {
+				this.chain.open_prev_notes();
+			}
+		});
+
+		this.addCommand({
+			id: 'open_next_notes',
+			name: 'Open next note',
+			callback: () => {
+				this.chain.open_next_notes();
 			}
 		});
 
@@ -696,7 +746,7 @@ export default class ZigHolding extends Plugin {
 			if(mode==='suggester'){
 				mode = await this.suggester(
 					["删除链接",'替换链接',"删除段落",],
-					[['link','del'],['link','rep'],['para','rep']]
+					[['link','del'],['link','rep'],['para','del']]
 				);
 			}
 			let reg = this.editor.regexp_link(tfile,mode[0]);
@@ -714,21 +764,30 @@ export default class ZigHolding extends Plugin {
 		}
 	}
 
+	get prompt(){
+		return get_tp_func(this.app,'tp.system.prompt');
+	}
+
 	async replace_notes_with_regx(){
 		let notes = await this.chain.suggester_notes();
 		if(notes?.length>0){
 			try {
-				let prompt = get_tp_func(this.app,'tp.system.prompt');
-				let regs = await prompt('要替换的正则表达式');
+				let regs = await this.prompt('要替换的正则表达式');
+				if(regs==null){
+					return;
+				}
 				let reg = new RegExp(regs,'g');
 				
-				let target = await prompt('目标字符串')
+				let target = await this.prompt('目标字符串');
+				if(target==null){
+					return;
+				}
 				target = target.trim().replace(
-					'\\n','\n'
+					/\\n/g,'\n'
 				);
 				console.log(regs,reg,target);
 				for(let note of notes){
-					this.editor.replace(note,reg,target);
+					await this.editor.replace(note,reg,target);
 				}
 			} catch (error) {
 				console.log(error);

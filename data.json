@@ -3,13 +3,13 @@
   "withSelf": false,
   "reverse": true,
   "field": "NID",
-  "PrevChain": "20",
-  "NextChain": "20",
+  "PrevChain": "10",
+  "NextChain": "10",
   "showLink": false,
   "openLink": true,
   "refreshDataView": true,
   "refreshTasks": true,
-  "allFiles": true,
-  "sameFolder": false,
+  "allFiles": false,
+  "sameFolder": true,
   "popFirst": false
 }
