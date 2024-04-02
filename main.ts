@@ -264,33 +264,51 @@ class NoteChain{
 	}
 
 	get_same_parent(tfile=this.current_note){
-		let notes = tfile?.parent?.children.filter(
-		f=>f.basename).filter(
-			f=>f.extension==='md'
-		);
-		if(!notes){return [];}
+		return this.get_tfiles_of_folder(tfile?.parent,false);
+	}
+
+	get_tfiles_of_folder(tfolder:TFolder,with_children=true){
+		if(tfolder==null){return [];}
+		let notes = [];
+		for(let c of tfolder.children){
+			if(c.basename && c.extension==='md'){
+				notes.push(c);
+			}else if(c.children && with_children){
+				let tmp = this.get_tfiles_of_folder(c);
+				for(let x of tmp){
+					notes.push(x);
+				}
+			}
+		}
 		return notes;
+
 	}
 
 	async suggester_notes(tfile=this.current_note){
 		let kv = [
 			'当前笔记',
 			'同级目录',
+			'同级目录+子目录',
 			'出链+入链',
 			'入链',
 			'出链',
+			'所有笔记'
 		]
 		let mode = await this.suggester(kv,kv);
 		if(mode==='当前笔记'){
 			return [tfile];
 		}else if(mode==='同级目录'){
 			return this.get_same_parent(tfile);
+		}else if(mode==='同级目录+子目录'){
+			return this.get_tfiles_of_folder(tfile?.parent,true);
 		}else if(mode==='出链+入链'){
 			return this.get_links(tfile);
 		}else if(mode==='入链'){
 			return this.get_inlinks(tfile);
 		}else if(mode==='出链'){
 			return this.get_outlinks(tfile);
+		}else if(mode==='所有笔记'){
+			return this.MDFiles;
 		}else{
 			return [];
 		}
@@ -323,7 +341,6 @@ class NoteChain{
 			if(next[0] && !res.includes(next[1][0])){
 				res.push(next[1][0]);
 				tmp = next[1][0];
-				console.log(tmp);
 			}else{
 				break;
 			}
@@ -331,24 +348,22 @@ class NoteChain{
 		return tmp;
 	}
 
-	get_file_chain(tfile=this.current_note,prev=10,next=10){
-		let res = Array();
-		res.push(tfile);
+	get_file_chain(tfile=this.current_note,prev=10,next=10,with_self=true){
+		let res = new Array();
+		if(with_self){
+			res.push(tfile);
+		}
 		
 		let tmp = tfile;
 		for(let i=prev;i!=0;i--){
-			console.log(i);
-			let meta = this.app.metadataCache.getFileCache(tmp);
-			
-			if(!meta){break}
-	
-			let name = meta.frontmatter?.PrevNote;
+			let name = this.get_frontmatter(tmp,this.prev);
 			if(!name){break}
 	
 			let note = this.get_tfile(name);
 			if(!note){
 				break;
 			}else if(res.includes(note)){
+				// 每次自动删除循环链接
 				this.set_frontmatter(note,this.next,"");
 				this.set_frontmatter(tmp,this.prev,"");
 				break;
@@ -360,17 +375,14 @@ class NoteChain{
 	
 		tmp = tfile;
 		for(let i=next;i!=0;i--){
-			let meta = this.app.metadataCache.getFileCache(tmp);
-			
-			if(!meta){break}
-	
-			let name = meta.frontmatter?.NextNote;
+			let name = this.get_frontmatter(tmp,this.next);
 			if(!name){break}
 	
 			let note = this.get_tfile(name);
 			if(!note){
 				break;
 			}else if(res.includes(note)){
+				// 每次自动删除循环链接
 				this.set_frontmatter(note,this.prev,"");
 				this.set_frontmatter(tmp,this.next,"");
 				break;
@@ -379,6 +391,7 @@ class NoteChain{
 				tmp = note;
 			}
 		}
+		return res;
 	}
 
 	get_prev_notes(tfile,prev="PrevNote",next="NextNote",onlyFrontmatter=true){
@@ -532,20 +545,23 @@ class NoteChain{
 		}
 	}
 
-	sort_tfiles(files,field){
+	sort_tfiles(files:Array<TFile>,field){
 		if(typeof field === 'string'){
-			if(field.localeCompare("name")==0){
+			if(field==='name'){
 				return files.sort(
 					(a,b)=>(a.name.localeCompare(b.name))
 				);
-			}else if(field.localeCompare("mtime")==0){
+			}else if(field==='mtime'){
 				return files.sort(
 					(a,b)=>(a.stat.mtime-b.stat.mtime)
 				)
-			}else if(field.localeCompare("ctime")==0){
+			}else if(field==='ctime'){
 				return files.sort(
 					(a,b)=>(a.stat.ctime-b.stat.ctime)
 				)
+			}
+			else if(field==='chain'){
+				return this.sort_tfiles_by_chain(files);
 			}
 			return files;
 		}else if(typeof field === 'object'){
@@ -561,9 +577,32 @@ class NoteChain{
 		}
 		return files;
 	}
-	sort_tfiles_by_chain(files){
-
+	
+	sort_tfiles_by_chain(tfiles:Array<TFile>){
+		let notes = tfiles.map(f=>f);
+		let res = [];
+		while(notes.length>0){
+			let note = notes[0];
+			let tmp = [];
+			let xchain = this.get_file_chain(note,-1,-1);
+			for(let x of xchain){
+				if(notes.contains(x)){
+					tmp.push(x);
+					notes.remove(x);
+				}
+			}
+			res.push(tmp);
+		}
+		res = res.sort((a,b)=>b.length-a.length);
+		let rres = [];
+		for(let i of res){
+			for(let j of i){
+				rres.push(j);
+			}
+		}
+		return rres;
 	}
+
 	sort_tfiles_by_field(files,field){
 		let res = files.sort(
 			(a,b)=>{
@@ -943,7 +982,7 @@ export default class ZigHolding extends Plugin {
 		return get_tp_func(this.app,"tp.system.suggester");
 	}
 	
-	get_file_chain(curr=null,prev=10,next=10,sameFolder=false){
+	get_file_chain(curr,prev=10,next=10,sameFolder=false){
 
 		if(curr===null){
 			curr = this.app.workspace.getActiveFile();
