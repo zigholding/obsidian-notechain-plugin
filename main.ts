@@ -93,7 +93,6 @@ class ZigEditor{
 				return data;
 			})
 		}
-		
 	}
 }
 
@@ -373,39 +372,7 @@ class NoteChain{
 	}
 
 
-	get_first_note(tfile){
-		let res = new Array();
-		res.push(tfile);
-		
-		let tmp = tfile;
-		while(true){
-			let prev = this.get_prev_notes(tmp,this.prev,this.next,true);
-			if(prev[0] && !res.includes(prev[1][0])){
-				res.unshift(prev[1][0]);
-				tmp = prev[1][0]
-			}else{
-				break;
-			}
-		}
-		return tmp;
-	}
-
-	get_last_note(tfile){
-		let res = new Array();
-		res.push(tfile);
-		let tmp = tfile;
-		while(true){
-			let next = this.get_next_notes(tmp,this.prev,this.next,true);
-			if(next[0] && !res.includes(next[1][0])){
-				res.push(next[1][0]);
-				tmp = next[1][0];
-			}else{
-				break;
-			}
-		}
-		return tmp;
-	}
-
+	// Chain
 	get_file_chain(tfile=this.current_note,prev=10,next=10,with_self=true){
 		let res = new Array();
 		if(with_self){
@@ -452,82 +419,68 @@ class NoteChain{
 		return res;
 	}
 
-	get_prev_notes(tfile,prev="PrevNote",next="NextNote",onlyFrontmatter=true){
-		// onlyFrontmatter，只搜索 frontmatter 中的链接
-		let res = new Array();
-		let notes = this.get_links(tfile);
-		
-		let meta = this.app.metadataCache.getFileCache(tfile);
-		let flag = false;
-		if(meta?.frontmatter){
-			let name = meta.frontmatter[prev];
-			if(name){
-				let note = this.get_tfile(name,notes);
-				res.push(note);
-				flag = true;
-			}
+	get_first_note(tfile=this.current_note){
+		let notes = this.get_file_chain(tfile,-1,0,false);
+		if(notes.length>0){
+			return notes[0];
+		}else{
+			return null;
 		}
-		if(onlyFrontmatter){
-			return [flag,res];
-		}
-		
-		for(let note of notes){
-			if(res.includes(note)){continue}
-			if(!note){continue}
-
-			let meta = this.app.metadataCache.getFileCache(note);
-			if(meta?.frontmatter){
-				let name = meta.frontmatter[next];
-				if(this.get_tfile(name,[tfile])){
-					res.push(note);
-				}
-			}
-		}
-		return [flag,res];
 	}
 
-	get_next_notes(tfile,prev="PrevNote",next="NextNote",onlyFrontmatter=true){
-		return this.get_prev_notes(tfile,next,prev,onlyFrontmatter);
+	get_last_note(tfile=this.current_note){
+		let notes = this.get_file_chain(tfile,0,-1,false);
+		if(notes.length>0){
+			return notes[notes.length-1];
+		}else{
+			return null;
+		}
+	}
+
+	get_prev_note(tfile=this.current_note){
+		let notes = this.get_file_chain(tfile,1,0,false);
+		if(notes.length>0){
+			return notes[0];
+		}else{
+			return null;
+		}
+	}
+
+	get_next_note(tfile=this.current_note){
+		let notes = this.get_file_chain(tfile,0,1,false);
+		if(notes.length>0){
+			return notes[notes.length-1];
+		}else{
+			return null;
+		}
 	}
 
 	open_prev_notes(tfile=this.current_note){
-		let res = this.get_prev_notes(tfile);
-		if(res[0]){this.open_note(res[1][0]);}
+		let note = this.get_prev_note(tfile);
+		this.open_note(note);
 	}
 	
 	open_next_notes(tfile=this.current_note){
-		let res = this.get_next_notes(tfile);
-		if(res[0]){this.open_note(res[1][0]);}
+		let note = this.get_next_note(tfile);
+		this.open_note(note);
 	}
 
-	get_neighbors(tfile){
-		let tmp = this.get_prev_notes(tfile,this.prev,this.next,true);
-		let pflag = tmp[0];
-		let prev = tmp[1];
-		let tmp2 = this.get_next_notes(tfile,this.prev,this.next,true);
-		let nflag = tmp2[0];
-		let next = tmp2[1];
-
-		if(pflag && nflag){
-			return [prev[0],next[0]];
-		}else if(pflag){
-			return [prev[0],undefined];
-		}else if(nflag){
-			return [undefined,next[0]];
-		}else{
-			return [undefined,undefined];
-		}
+	get_neighbors(tfile=this.current_note){
+		return [
+			this.get_prev_note(tfile),
+			this.get_next_note(tfile),
+		]
 	}
 	
 
-	async set_frontmatter(tfile,key,value){
+	async set_frontmatter(tfile:TFile,key:string,value:string){
 		await this.app.fileManager.processFrontMatter(tfile,fm =>{
 			console.log(`${tfile.basename}---${key}---${value}`);
 			fm[key] = value;
 		});
 	}
 
-	get_frontmatter(tfile,key){
+	get_frontmatter(tfile:TFile,key:string){
 		let meta = this.app.metadataCache.getFileCache(tfile);
 		if(meta?.frontmatter){
 			return meta.frontmatter[key];
@@ -568,7 +521,7 @@ class NoteChain{
 	}
 
 	insert_node_after(tfile,anchor){
-		let next = this.get_next_notes(anchor,this.prev,this.next,true);
+		let next = this.get_next_note(anchor,this.prev,this.next,true);
 		if(next[0] && next[1][0]!=tfile && next[1][0]!=anchor){
 			this.set_frontmatter(next[1][0],this.prev,`[[${tfile.basename}]]`);
 			this.set_frontmatter(tfile,this.next,`[[${next[1][0].basename}]]`);
@@ -579,7 +532,7 @@ class NoteChain{
 	}
 
 	insert_node_before(tfile,anchor){
-		let prev = this.get_prev_notes(anchor,this.prev,this.next,true);
+		let prev = this.get_prev_note(anchor,this.prev,this.next,true);
 		if(prev[0] && prev[1][0]!=tfile && prev[1][0]!=anchor){
 			this.set_frontmatter(prev[1][0],this.next,`[[${tfile.basename}]]`);
 			this.set_frontmatter(tfile,this.prev,`[[${prev[1][0].basename}]]`);
