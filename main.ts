@@ -63,6 +63,23 @@ class ZigEditor{
 		this.app = app;
 	}
 
+	async set_frontmatter(tfile:TFile,key:string,value:string){
+		let prev = this.get_frontmatter(tfile,key);
+		if(prev===value){return;}
+
+		await this.app.fileManager.processFrontMatter(tfile,fm =>{
+			console.log(`${tfile.basename}---${key}---${value}`);
+			fm[key] = value;
+		});
+	}
+
+	get_frontmatter(tfile:TFile,key:string){
+		let meta = this.app.metadataCache.getFileCache(tfile);
+		if(meta?.frontmatter){
+			return meta.frontmatter[key];
+		}
+	}
+
 	regexp_link(tfile:TFile,mode:string){
 		//[[note||alias]]
 		if(mode==='link'){
@@ -101,10 +118,12 @@ class NoteChain{
 	app:App;
 	prev:string;
 	next:string;
+	editor:ZigEditor;
 
 	constructor(zig:ZigHolding,prev="PrevNote",next="NextNote") {
 		this.zig = zig;
 		this.app = zig.app;
+		this.editor = new ZigEditor(this.app);
 		this.prev = prev;
 		this.next = next;
 
@@ -381,7 +400,7 @@ class NoteChain{
 		
 		let tmp = tfile;
 		for(let i=prev;i!=0;i--){
-			let name = this.get_frontmatter(tmp,this.prev);
+			let name = this.editor.get_frontmatter(tmp,this.prev);
 			if(!name){break}
 	
 			let note = this.get_tfile(name);
@@ -389,8 +408,8 @@ class NoteChain{
 				break;
 			}else if(res.includes(note)){
 				// 每次自动删除循环链接
-				this.set_frontmatter(note,this.next,"");
-				this.set_frontmatter(tmp,this.prev,"");
+				this.editor.set_frontmatter(note,this.next,"");
+				this.editor.set_frontmatter(tmp,this.prev,"");
 				break;
 			}else{
 				res.unshift(note);
@@ -400,7 +419,7 @@ class NoteChain{
 	
 		tmp = tfile;
 		for(let i=next;i!=0;i--){
-			let name = this.get_frontmatter(tmp,this.next);
+			let name = this.editor.get_frontmatter(tmp,this.next);
 			if(!name){break}
 	
 			let note = this.get_tfile(name);
@@ -408,8 +427,8 @@ class NoteChain{
 				break;
 			}else if(res.includes(note)){
 				// 每次自动删除循环链接
-				this.set_frontmatter(note,this.prev,"");
-				this.set_frontmatter(tmp,this.next,"");
+				this.editor.set_frontmatter(note,this.prev,"");
+				this.editor.set_frontmatter(tmp,this.next,"");
 				break;
 			}else{
 				res.push(note);
@@ -446,6 +465,11 @@ class NoteChain{
 		}
 	}
 
+	open_prev_notes(tfile=this.current_note){
+		let note = this.get_prev_note(tfile);
+		this.open_note(note);
+	}
+
 	get_next_note(tfile=this.current_note){
 		let notes = this.get_file_chain(tfile,0,1,false);
 		if(notes.length>0){
@@ -455,11 +479,6 @@ class NoteChain{
 		}
 	}
 
-	open_prev_notes(tfile=this.current_note){
-		let note = this.get_prev_note(tfile);
-		this.open_note(note);
-	}
-	
 	open_next_notes(tfile=this.current_note){
 		let note = this.get_next_note(tfile);
 		this.open_note(note);
@@ -472,87 +491,72 @@ class NoteChain{
 		]
 	}
 	
-
-	async set_frontmatter(tfile:TFile,key:string,value:string){
-		await this.app.fileManager.processFrontMatter(tfile,fm =>{
-			console.log(`${tfile.basename}---${key}---${value}`);
-			fm[key] = value;
-		});
-	}
-
-	get_frontmatter(tfile:TFile,key:string){
-		let meta = this.app.metadataCache.getFileCache(tfile);
-		if(meta?.frontmatter){
-			return meta.frontmatter[key];
+	async chain_set_prev(tfile:TFile,prev:TFile){
+		if(tfile==null || tfile==prev){return;}
+		if(prev==null ){
+			await this.editor.set_frontmatter(
+				tfile,this.prev,''
+			);
+		}else{
+			await this.editor.set_frontmatter(
+				tfile,this.prev,`[[${prev.basename}]]`
+			);
 		}
 	}
 
-	pop_node(tfile){
-		// 移除 tfile，关联前后
-		let neighbor = this.get_neighbors(tfile);
-		if(neighbor[0]!=null && neighbor[1]!=null){
-			this.set_frontmatter(neighbor[0],this.next,`[[${neighbor[1].basename}]]`);
-			this.set_frontmatter(neighbor[1],this.prev,`[[${neighbor[0].basename}]]`);
-		}else if(neighbor[0]!=null){
-			this.set_frontmatter(neighbor[0],this.next,``);
-		}else if(neighbor[1]!=null){
-			this.set_frontmatter(neighbor[1],this.prev,``);
+	async chain_set_next(tfile:TFile,next:TFile){
+		if(tfile==null || tfile==next){return;}
+		if(next==null ){
+			await this.editor.set_frontmatter(
+				tfile,this.next,''
+			);
+		}else{
+			await this.editor.set_frontmatter(
+				tfile,this.next,`[[${next.basename}]]`
+			);
 		}
 	}
 
-	insert_node_as_head(tfile,anchor){
-		// 将tfile 插到 anchor 所在链的头
-		if(head==tfile){
-			return;
-		}
+	async chain_set_prev_next(prev:TFile,next:TFile){
+		await this.chain_set_prev(next,prev);
+		await this.chain_set_next(prev,next);
+	}
+
+	async chain_pop_node(tfile:TFile){
+		let notes = this.get_neighbors(tfile);
+		await this.chain_set_prev_next(notes[0],notes[1]);
+	}
+
+	async chain_insert_node_as_head(tfile:TFile,anchor:TFile){
 		let head = this.get_first_note(anchor);
-		this.set_frontmatter(tfile,this.next,`[[${head.basename}]]`);
-		this.set_frontmatter(head,this.prev,`[[${tfile.basename}]]`);
+		await this.chain_set_prev_next(tfile,head);
 	}
 
-	insert_node_as_tail(tfile,anchor){
-		// 将tfile 插到 anchor 所在链的尾
+	async chain_insert_node_as_tail(tfile:TFile,anchor:TFile){
 		let tail = this.get_last_note(anchor);
-		if(tfile==tail){
-			return;
-		}
-		this.set_frontmatter(tfile,this.prev,`[[${tail.basename}]]`);
-		this.set_frontmatter(tail,this.next,`[[${tfile.basename}]]`);
+		await this.chain_set_prev_next(tail,tfile);
 	}
 
-	insert_node_after(tfile,anchor){
-		let next = this.get_next_note(anchor,this.prev,this.next,true);
-		if(next[0] && next[1][0]!=tfile && next[1][0]!=anchor){
-			this.set_frontmatter(next[1][0],this.prev,`[[${tfile.basename}]]`);
-			this.set_frontmatter(tfile,this.next,`[[${next[1][0].basename}]]`);
-		}
+	async chain_insert_node_after(tfile:TFile,anchor:TFile){
+		this.chain_pop_node(tfile);
 
-		this.set_frontmatter(tfile,this.prev,`[[${anchor.basename}]]`);
-		this.set_frontmatter(anchor,this.next,`[[${tfile.basename}]]`);
+		let next = this.get_next_note(anchor);
+		await this.chain_set_prev_next(anchor,tfile);
+		await this.chain_set_prev_next(tfile,next);
 	}
 
-	insert_node_before(tfile,anchor){
-		let prev = this.get_prev_note(anchor,this.prev,this.next,true);
-		if(prev[0] && prev[1][0]!=tfile && prev[1][0]!=anchor){
-			this.set_frontmatter(prev[1][0],this.next,`[[${tfile.basename}]]`);
-			this.set_frontmatter(tfile,this.prev,`[[${prev[1][0].basename}]]`);
-		}
-
-		this.set_frontmatter(tfile,this.next,`[[${anchor.basename}]]`);
-		this.set_frontmatter(anchor,this.prev,`[[${tfile.basename}]]`);
+	async insert_node_before(tfile:TFile,anchor:TFile){
+		this.chain_pop_node(tfile);
+		let prev = this.get_next_note(anchor);
+		await this.chain_set_prev_next(tfile,anchor);
+		await this.chain_set_prev_next(prev,tfile);
 	}
 	
-	async rechain_folder(tfolder=null,mode='suggester'){
-		let notes = this.get_same_parent();
+	async rechain_folder(tfile=this.current_note,mode='suggester'){
+		let notes = this.get_same_parent(tfile);
 		let files = await this.suggester_sort(notes);
-		
 		for(let i=0;i<files.length-1;i++){
-			if(!(this.get_frontmatter(files[i],this.next)===`[[${files[i+1].basename}]]`)){
-				this.set_frontmatter(files[i],this.next,`[[${files[i+1].basename}]]`);
-			}
-			if(!(this.get_frontmatter(files[i+1],this.prev)===`[[${files[i].basename}]]`)){
-				this.set_frontmatter(files[i+1],this.prev,`[[${files[i].basename}]]`);	
-			}
+			await this.chain_set_prev_next(files[i],files[i+1])
 		}
 	}
 
@@ -637,6 +641,7 @@ class NoteChain{
 		if(!tfiles){return [];}
 		if(tfiles.length==0){return []};
 		let kv = {
+			'chain':'chain',
 			'name':'name',
 			'ctime':'ctime',
 			'mtime':'mtime',
@@ -909,17 +914,17 @@ export default class ZigHolding extends Plugin {
 
 		console.log(typeof(mode),mode);
 		if(this.settings.popFirst){
-			this.chain.pop_node(curr);
+			this.chain.chain_pop_node(curr);
 		}
 
 		if(mode==='insert_node_as_head'){
-			this.chain.insert_node_as_head(curr,note);
+			this.chain.chain_insert_node_as_head(curr,note);
 		}else if(mode==='insert_node_as_tail'){
-			this.chain.insert_node_as_tail(curr,note);
+			this.chain.chain_insert_node_as_tail(curr,note);
 		}else if(mode==='insert_node_before'){
 			this.chain.insert_node_before(curr,note);
 		}else if(mode==='insert_node_after'){
-			this.chain.insert_node_after(curr,note);
+			this.chain.chain_insert_node_after(curr,note);
 		}else{
 			return;
 		}
