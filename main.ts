@@ -667,6 +667,7 @@ class NoteChain{
 			Object.keys(kv),
 			Object.values(kv)
 		);
+		if(field==null){return [];}
 		return this.sort_tfiles(tfiles,field);
 	}
 
