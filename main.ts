@@ -1,7 +1,6 @@
 import { 
 	App, Editor, MarkdownView, Modal, Notice, 
 	Plugin, PluginSettingTab, Setting,
-	DataviewPlugin,
 	TFile,TFolder
 } from 'obsidian';
 
@@ -46,7 +45,7 @@ function get_tp_func(app:App,target:string) {
 	
 	let modules = templater.templater.functions_generator.
 		internal_functions.modules_array.filter(
-			(item)=>(item.name.localeCompare(items[1])==0)
+			(item:any)=>(item.name.localeCompare(items[1])==0)
 		);
 
 	if(modules.length==0){return undefined}
@@ -92,9 +91,9 @@ class ZigEditor{
 		}
 	}
 
-	replace(tfile:TFile,regex,target:string){
+	async replace(tfile:TFile,regex:any,target:string){
 		if(typeof regex === 'string'){
-			this.app.vault.process(tfile,(data)=>{
+			await this.app.vault.process(tfile,(data)=>{
 				if(data.indexOf(regex)>-1){
 					console.log('Replace: ',tfile.path);
 					return data.replace(regex, target);
@@ -102,7 +101,7 @@ class ZigEditor{
 				return data;
 			})
 		}else if(regex instanceof RegExp){
-			this.app.vault.process(tfile,(data)=>{
+			await this.app.vault.process(tfile,(data)=>{
 				if(data.match(regex)){
 					console.log('Replace: ',tfile.path);
 					return data.replace(regex, target);
@@ -127,9 +126,7 @@ class NoteChain{
 		this.prev = prev;
 		this.next = next;
 
-		this.dv_api = this.app.plugins.getPlugin(
-			"dataview"
-		);
+		this.dv_api = this.app.plugins.getPlugin("dataview");
 	}
 
 	get find_tfile(){
@@ -148,7 +145,7 @@ class NoteChain{
 	sort_folders_by_mtime(folders:Array<TFolder>,reverse=true){
 		function ufunc(f:TFolder){
 			return Math.max(
-				...f.children.filter(f=>f.basename).map(f=>f.stat
+				...f.children.filter((f:TFile)=>f.basename).map((f:TFile)=>f.stat
 				.mtime)
 			)
 		}
@@ -160,15 +157,17 @@ class NoteChain{
 	}
 
 	async move_file_to_another_folder(tfile=this.current_note){
+		if(tfile==null){return;}
+
 		let folders = this.get_all_folders();
 		folders = this.sort_folders_by_mtime(folders
 		).filter(f=>f!=tfile.parent);
 
 		if(tfile.extension==='md'){
-			folders = folders.filter(f=>this.filter_user_ignore(f));
+			folders = folders.filter((f:TFile)=>this.filter_user_ignore(f));
 		}
 		try {
-			let folder = await this.suggester((f)=>f.path,folders);
+			let folder = await this.suggester((f:TFile)=>f.path,folders);
 			// 移动笔记
 			let dst = folder.path+"/"+tfile.basename+"."+tfile.extension;
 			await app.fileManager.renameFile(tfile,dst);
@@ -177,7 +176,7 @@ class NoteChain{
 		}
 	}
 	
-	filter_user_ignore(note){
+	filter_user_ignore(note:TFile){
 		if(!(this.app.vault.config.attachmentFolderPath==='./')){
 			if(note.path.startsWith(
 				this.app.vault.config.attachmentFolderPath)
@@ -199,9 +198,9 @@ class NoteChain{
 		let notes = this.sort_tfiles(
 			this.app.vault.getFiles(),
 			['mtime','x']
-		).filter(f=>this.filter_user_ignore(f));
+		).filter((f:TFile)=>this.filter_user_ignore(f));
 		try {
-			let note = await this.suggester(f=>f.path,notes);
+			let note = await this.suggester((f:TFile)=>f.path,notes);
 			return note;
 		} catch (error) {
 		}
@@ -242,9 +241,13 @@ class NoteChain{
 	}
 
 	get_inlinks(tfile=this.current_note){
+		if(tfile==null){return [];}
+
 		let res = new Array();
 
-		let inlinks = this.dv_api.index.links.invMap.get(tfile.path);
+		let dv_api = this.app.plugins.getPlugin("dataview");
+
+		let inlinks = dv_api.index.links.invMap.get(tfile.path);
 		if(inlinks==undefined){
 			return [];
 		}else{
@@ -257,8 +260,11 @@ class NoteChain{
 	}
 
 	get_outlinks(tfile=this.current_note){
+		if(tfile==null){return [];}
+
 		let res = new Array();
-		let inlinks = this.dv_api.index.links.map.get(tfile.path);
+		let dv_api = this.app.plugins.getPlugin("dataview");
+		let inlinks = dv_api.index.links.map.get(tfile.path);
 		if(inlinks==undefined){
 			return [];
 		}else{
@@ -289,9 +295,9 @@ class NoteChain{
 		if(tfolder==null){return [];}
 		let notes = [];
 		for(let c of tfolder.children){
-			if(c.basename && c.extension==='md'){
+			if(c instanceof TFile && c.extension==='md'){
 				notes.push(c);
-			}else if(c.children && with_children){
+			}else if(c instanceof TFolder && with_children){
 				let tmp = this.get_tfiles_of_folder(c);
 				for(let x of tmp){
 					notes.push(x);
@@ -380,7 +386,7 @@ class NoteChain{
 				r.data.recentFiles).map(f=>this.app.vault.fileMap[f.path]
 			).filter(f=>f);
 		}else if(mode==='笔记链条'){
-			return this.get_file_chain(
+			return this.get_chain(
 				tfile,
 				Number(this.zig.settings.PrevChain),
 				Number(this.zig.settings.NextChain)
@@ -392,7 +398,9 @@ class NoteChain{
 
 
 	// Chain
-	get_file_chain(tfile=this.current_note,prev=10,next=10,with_self=true){
+	get_chain(tfile=this.current_note,prev=10,next=10,with_self=true){
+		if(tfile==null){return [];}
+		
 		let res = new Array();
 		if(with_self){
 			res.push(tfile);
@@ -439,7 +447,7 @@ class NoteChain{
 	}
 
 	get_first_note(tfile=this.current_note){
-		let notes = this.get_file_chain(tfile,-1,0,false);
+		let notes = this.get_chain(tfile,-1,0,false);
 		if(notes.length>0){
 			return notes[0];
 		}else{
@@ -448,7 +456,7 @@ class NoteChain{
 	}
 
 	get_last_note(tfile=this.current_note){
-		let notes = this.get_file_chain(tfile,0,-1,false);
+		let notes = this.get_chain(tfile,0,-1,false);
 		if(notes.length>0){
 			return notes[notes.length-1];
 		}else{
@@ -457,7 +465,7 @@ class NoteChain{
 	}
 
 	get_prev_note(tfile=this.current_note){
-		let notes = this.get_file_chain(tfile,1,0,false);
+		let notes = this.get_chain(tfile,1,0,false);
 		if(notes.length>0){
 			return notes[0];
 		}else{
@@ -471,7 +479,7 @@ class NoteChain{
 	}
 
 	get_next_note(tfile=this.current_note){
-		let notes = this.get_file_chain(tfile,0,1,false);
+		let notes = this.get_chain(tfile,0,1,false);
 		if(notes.length>0){
 			return notes[notes.length-1];
 		}else{
@@ -554,13 +562,27 @@ class NoteChain{
 	
 	async rechain_folder(tfile=this.current_note,mode='suggester'){
 		let notes = this.get_same_parent(tfile);
+		if(notes.length==0){return;}
+
 		let files = await this.suggester_sort(notes);
+
+		let prev = this.get_prev_note(files[0]);
+		if(files.contains(prev)){
+			await this.chain_set_prev(files[0],null);
+		}
+
+		let next = this.get_next_note(files[files.length-1]);
+		if(files.contains(next)){
+			await this.chain_set_next(files[files.length-1],null);
+		}
+		
+
 		for(let i=0;i<files.length-1;i++){
 			await this.chain_set_prev_next(files[i],files[i+1])
 		}
 	}
 
-	sort_tfiles(files:Array<TFile>,field){
+	sort_tfiles(files:Array<TFile>,field:any){
 		if(typeof field === 'string'){
 			if(field==='name'){
 				return files.sort(
@@ -599,7 +621,7 @@ class NoteChain{
 		while(notes.length>0){
 			let note = notes[0];
 			let tmp = [];
-			let xchain = this.get_file_chain(note,-1,-1);
+			let xchain = this.get_chain(note,-1,-1);
 			for(let x of xchain){
 				if(notes.contains(x)){
 					tmp.push(x);
@@ -618,26 +640,18 @@ class NoteChain{
 		return rres;
 	}
 
-	sort_tfiles_by_field(files,field){
-		let res = files.sort(
+	sort_tfiles_by_field(tfiles:Array<TFile>,field:string){
+		let res = tfiles.sort(
 			(a,b)=>{
-				let ameta = this.app.metadataCache.getFileCache(a).frontmatter;
-				let bmeta = this.app.metadataCache.getFileCache(b).frontmatter;
-				if(!ameta && !bmeta){
-					return 0;
-				}else if(!ameta){
-					return bmeta[field];
-				}else if(!bmeta){
-					return ameta[mode];
-				}else{
-					return ameta[field]-bmeta[field];
-				}
+				let av = this.editor.get_frontmatter(a,field);
+				let bv = this.editor.get_frontmatter(b,field);
+				return av - bv;
 			}
 		)
 		return res;
 	}
 
-	async suggester_sort(tfiles){
+	async suggester_sort(tfiles:Array<TFile>){
 		if(!tfiles){return [];}
 		if(tfiles.length==0){return []};
 		let kv = {
@@ -672,14 +686,6 @@ export default class ZigHolding extends Plugin {
 
 
 		await this.loadSettings();
-		
-		this.dataview = await this.app.plugins.getPlugin(
-			"dataview"
-		);
-
-		this.templater = await this.app.plugins.getPlugin(
-			"templater-obsidian"
-		)
 
 		this.addCommand({
 			id: 'chain_insert_node',
@@ -847,6 +853,8 @@ export default class ZigHolding extends Plugin {
 	async chain_insert_node(){
 
 		let curr = this.chain.current_note;
+		if(curr==null){return;}
+
 		let notes = this.chain.get_tfiles_of_folder(curr?.parent,false);
 		notes = this.chain.sort_tfiles(notes,['mtime','x']);
 		notes = this.chain.sort_tfiles_by_chain(notes);
@@ -858,7 +866,7 @@ export default class ZigHolding extends Plugin {
 					this.settings.showLink ? ["PrevNote","NextNote"] :[],
 					"\t\t\t⚡  "
 				), 
-				notes
+			notes
 		); 
 		
 		if(!note){return;}
