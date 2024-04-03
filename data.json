@@ -5,11 +5,11 @@
   "field": "NID",
   "PrevChain": "10",
   "NextChain": "10",
-  "showLink": false,
+  "showLink": true,
   "openLink": true,
-  "refreshDataView": true,
-  "refreshTasks": true,
+  "refreshDataView": false,
+  "refreshTasks": false,
   "allFiles": false,
-  "sameFolder": true,
+  "sameFolder": false,
   "popFirst": false
 }

@@ -284,17 +284,63 @@ class NoteChain{
 
 	}
 
-	async suggester_notes(tfile=this.current_note){
-		let kv = [
-			'当前笔记',
+	parse_item(item){
+		var args = [].slice.call(arguments).slice(1);
+		let kwargs = {}
+		if(args.length==1){
+			kwargs = args[0];
+		}
+		let seq = kwargs['seq'];
+
+		if(seq!=null){
+			return `${seq} -> ${item}`;
+		}
+		return item;
+	}
+
+	parse_items(items:Array<string|TFile>){
+		var args = [].slice.call(arguments).slice(1);
+		let kwargs = {}
+		if(args.length==1){
+			kwargs = args[0];
+		}
+
+		let res = [];
+		let i = 0;
+		while(i<items.length){
+			if(kwargs['seq']){
+				res.push(this.parse_item(items[i],{'seq':i+1}));
+			}else{
+				res.push(this.parse_item(items[i]));
+			}
+			
+			i++;
+		}
+		return res;
+	}
+
+	async suggester_notes(tfile=this.current_note,curr_first=true,smode=''){
+		let kv = [			
 			'同级目录',
+			'笔记链条',
 			'同级目录+子目录',
 			'出链+入链',
 			'入链',
 			'出链',
-			'所有笔记'
+			'所有笔记',
+			'recent-files-obsidian'
 		]
-		let mode = await this.suggester(kv,kv);
+		if(curr_first){
+			kv.unshift('当前笔记')
+		}else{
+			kv.push('当前笔记')
+		}
+		let mode = '';
+		if(kv.contains(smode)){
+			mode = smode;
+		}else{
+			mode = await this.suggester(kv,kv);
+		}
 		if(mode==='当前笔记'){
 			return [tfile];
 		}else if(mode==='同级目录'){
@@ -309,6 +355,18 @@ class NoteChain{
 			return this.get_outlinks(tfile);
 		}else if(mode==='所有笔记'){
 			return this.MDFiles;
+		}else if(mode==='recent-files-obsidian'){
+			let r = this.app.plugins.getPlugin("recent-files-obsidian");
+			if(!r){return [];}
+			return Object.values(
+				r.data.recentFiles).map(f=>this.app.vault.fileMap[f.path]
+			).filter(f=>f);
+		}else if(mode==='笔记链条'){
+			return this.get_file_chain(
+				tfile,
+				Number(this.zig.settings.PrevChain),
+				Number(this.zig.settings.NextChain)
+			);
 		}else{
 			return [];
 		}
@@ -682,10 +740,10 @@ export default class ZigHolding extends Plugin {
 		});
 
 		this.addCommand({
-			id: 'open_notes_in_same_folder',
-			name: 'Open note under same folder of current file',
+			id: 'open_notes_smarter',
+			name: 'Open note smarter',
 			callback: () => {
-				this.open_notes_in_same_folder();
+				this.open_note_smarter();
 			}
 		});
 
@@ -869,29 +927,20 @@ export default class ZigHolding extends Plugin {
 	}
 
 	async chain_insert_node(){
-		// 选择笔记的后置笔记
-		let curr = app.workspace.getActiveFile();
 
-		let filteredFiles = app.vault.getMarkdownFiles().sort(
-			(a,b)=>(b.stat.mtime-a.stat.mtime)
-		);
+		let curr = this.chain.current_note;
+		let notes = this.chain.get_tfiles_of_folder(curr?.parent,false);
+		notes = this.chain.sort_tfiles(notes,['mtime','x']);
+		notes = this.chain.sort_tfiles_by_chain(notes);
+		notes = notes.filter(f=>f!=curr);
 
-		if(!this.settings.allFiles){
-			filteredFiles = filteredFiles.filter(
-				(file)=>file!=curr && file.parent==curr.parent
-			);
-		}else{
-			filteredFiles = filteredFiles.filter(
-				(file)=>file!=curr
-			);
-		}
 		const note = await this.suggester(
 			(file) => this.tfile_to_string(
 					file,
 					this.settings.showLink ? ["PrevNote","NextNote"] :[],
 					"\t\t\t⚡  "
 				), 
-			filteredFiles
+				notes
 		); 
 		
 		if(!note){return;}
@@ -947,35 +996,20 @@ export default class ZigHolding extends Plugin {
 		return items.join(seq);
 	}
 
-	async open_notes_in_same_folder(){
-		let curr = this.app.workspace.getActiveFile();
-		const filteredFiles_ = this.app.vault.getMarkdownFiles().filter(
-			(file)=>(
-				(file!=curr) | (this.settings?.withSelf)
-			)&&(
-				file.path.startsWith(curr.parent.path)
-			)
-		); 
-		
-		let filteredFiles = this.chain.sort_tfiles(
-			filteredFiles_,
-			this.settings.field,
-		);
-		
+	async open_note_smarter(){
+		let curr = this.chain.current_note;
+		let notes = await this.chain.suggester_notes(curr,false);
+		notes = this.chain.sort_tfiles(notes,['mtime','x']);
+		notes = this.chain.sort_tfiles_by_chain(notes);
 
 		const note = (
 			await this.suggester(
-				(file) => file.path.slice(curr.parent.path.length+1).slice(0,-3), filteredFiles
+				(file) => file.path, 
+				notes
 			)
 		); 
-
-		if(note){
-			if(this.settings.newTab){
-				app.workspace.getLeaf(true).openFile(note);
-			}else{
-				app.workspace.activeLeaf.openFile(note);
-			}
-		}
+		
+		await this.chain.open_note(note);
 	}
 
 	get suggester(){
