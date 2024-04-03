@@ -729,13 +729,6 @@ export default class ZigHolding extends Plugin {
 			}
 		});
 
-		this.addCommand({
-			id: 'open_note_chain',
-			name: 'Open chain of current file',
-			callback: () => {
-				this.open_note_chain();
-			}
-		});
 
 		this.addCommand({
 			id: 'clear_inlinks',
@@ -799,7 +792,7 @@ export default class ZigHolding extends Plugin {
 		let notes = this.chain.get_inlinks(tfile);
 		if(notes.length){
 			if(mode==='suggester'){
-				mode = await this.suggester(
+				mode = await this.chain.suggester(
 					["删除链接",'替换链接',"删除段落",],
 					[['link','del'],['link','rep'],['para','del']]
 				);
@@ -850,40 +843,7 @@ export default class ZigHolding extends Plugin {
 			
 		}
 	}
-
-
-	get_tfile(path:string){
-		// 根据路径获取 tfile，大小不敏感
-		let files = app.vault.getMarkdownFiles();
-		if(files.includes(path)){
-			return files[path]
-		}
-		for(let file of files){
-			if(file.name.toLowerCase().localeCompare(path.toLowerCase())==0){
-				return file;
-			}
-			if(file.basename.toLowerCase().localeCompare(path.toLowerCase())==0){
-				return file;
-			}
-			if(`[[${file.basename.toLowerCase()}]]`.localeCompare(path.toLowerCase())==0){
-				return file;
-			}
-		}
-		return null;
-	}
-
-	get_tfile_config(tfile,suffix="_config"){
-		// 获取 tfile 对应的 config 文件
-		return this.get_tfile(tfile.basename+suffix);
-	}
-
-	async select_value_of_list(targets,prompt=null){
-		const target = await this.suggester(
-			targets,targets,false,prompt
-		); 
-		return target;
-	}
-
+	
 	async chain_insert_node(){
 
 		let curr = this.chain.current_note;
@@ -892,7 +852,7 @@ export default class ZigHolding extends Plugin {
 		notes = this.chain.sort_tfiles_by_chain(notes);
 		notes = notes.filter(f=>f!=curr);
 
-		const note = await this.suggester(
+		const note = await this.chain.suggester(
 			(file) => this.tfile_to_string(
 					file,
 					this.settings.showLink ? ["PrevNote","NextNote"] :[],
@@ -902,13 +862,16 @@ export default class ZigHolding extends Plugin {
 		); 
 		
 		if(!note){return;}
-
-		let mode = await this.select_value_of_list([
+		
+		let sitems = [
 			"insert_node_after",
 			"insert_node_before",
 			"insert_node_as_head",
 			"insert_node_as_tail",
-		],prompt="Select Node Insert Mode.");
+		];
+		let mode = await this.chain.suggester(
+			sitems,sitems,false,"Select Node Insert Mode."
+		);
 		
 		if(!mode){return;}
 
@@ -961,112 +924,13 @@ export default class ZigHolding extends Plugin {
 		notes = this.chain.sort_tfiles_by_chain(notes);
 
 		const note = (
-			await this.suggester(
+			await this.chain.suggester(
 				(file) => file.path, 
 				notes
 			)
 		); 
 		
 		await this.chain.open_note(note);
-	}
-
-	get suggester(){
-		return get_tp_func(this.app,"tp.system.suggester");
-	}
-	
-	get_file_chain(curr,prev=10,next=10,sameFolder=false){
-
-		if(curr===null){
-			curr = this.app.workspace.getActiveFile();
-		}
-		let res = Array();
-		res.push(curr);
-		
-		let tmp = curr;
-		for(let i=prev;i!=0;i--){
-			let meta = this.app.metadataCache.getFileCache(tmp);
-			
-			if(!meta){break}
-	
-			let name = meta.frontmatter?.PrevNote;
-			if(!name){break}
-	
-			let note = this.get_tfile(name);
-			if(!note | res.includes(note)){
-				break;
-			}else{
-				res.unshift(note);
-				tmp = note;
-			}
-		}
-	
-		tmp = curr;
-		for(let i=next;i!=0;i--){
-			let meta = this.app.metadataCache.getFileCache(tmp);
-			
-			if(!meta){break}
-	
-			let name = meta.frontmatter?.NextNote;
-			if(!name){break}
-	
-			let note = this.get_tfile(name);
-			if(!note | res.includes(note)){
-				break;
-			}else{
-				res.push(note);
-				tmp = note;
-			}
-		}
-
-		if(sameFolder){
-			res.push(null);
-			let afiles = this.app.vault.getMarkdownFiles()
-			for(let f of afiles){
-				if(f.parent == curr?.parent){
-					if(!res.includes(f)){
-						res.push(f);
-					}
-				}
-			}
-			res = res.filter(
-				(file)=>(
-					(file===null) | (file?.path.startsWith(curr.parent.path))
-				)
-			); 
-		}
-		return res;
-	}
-
-	async open_note_chain(){
-		let curr = this.app.workspace.getActiveFile();
-		let files = this.get_file_chain(
-			curr,
-			Number(this.settings.PrevChain),
-			Number(this.settings.NextChain),
-			this.settings.sameFolder,
-		);
-
-		const note = (
-			await this.suggester(
-				(file) => {
-					if(!file){
-						return '-----📂-----';
-					}else if(file==curr){
-						return `🏠 ${curr.basename}`;
-					}else{
-						return file.path.slice(curr.parent.path.length+1).slice(0,-3)
-					}
-				}, 
-				files
-			)
-		); 
-		 if(note){
-			 if(this.settings.newTab){
-				this.app.workspace.getLeaf(true).openFile(note);
-			}else{
-				this.app.workspace.activeLeaf.openFile(note);
-			}
-		 }
 	}
 
 }
