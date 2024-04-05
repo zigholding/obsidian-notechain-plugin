@@ -6,7 +6,7 @@ import {
 
 // Remember to rename these classes and interfaces!
 
-interface ZigSettings {
+interface NCSettings {
 	newTab: boolean;
 	withSelf:boolean;
 	reverse:boolean;
@@ -19,7 +19,7 @@ interface ZigSettings {
 	refreshTasks:boolean,
 }
 
-const DEFAULT_SETTINGS: ZigSettings = {
+const DEFAULT_SETTINGS: NCSettings = {
 	newTab : true,
 	withSelf : true,
 	reverse : true,
@@ -55,14 +55,14 @@ function get_tp_func(app:App,target:string) {
 
 
 
-class ZigEditor{
+class NCEditor{
 	app:App;
 
 	constructor(app:App){
 		this.app = app;
 	}
 
-	async set_frontmatter(tfile:TFile,key:string,value:string){
+	async set_frontmatter(tfile:TFile,key:string,value:any){
 		let prev = this.get_frontmatter(tfile,key);
 		if(prev===value){return;}
 
@@ -72,7 +72,7 @@ class ZigEditor{
 		});
 	}
 
-	get_frontmatter(tfile:TFile,key:string){
+	get_frontmatter(tfile:TFile,key:any){
 		let meta = this.app.metadataCache.getFileCache(tfile);
 		if(meta?.frontmatter){
 			return meta.frontmatter[key];
@@ -89,6 +89,24 @@ class ZigEditor{
 		if(mode==='para'){
 			return new RegExp(`.*\\[\\[${tfile.basename}\\|?.*\\]\\].*`,'g');
 		}
+	}
+
+	concat_array(items:Array<any>){
+		if(items==null){return [];}
+		if(typeof items === 'string'){return [items];}
+		if(!(items instanceof Array)){return [items];}
+
+		let res = [];
+		for(let item of items){
+			if(typeof item === 'string'){
+				res.push(item);
+			}else if(item instanceof Array){
+				res = res.concat(this.concat_array(item));
+			}else{
+				res.push(item);
+			}
+		}
+		return res;
 	}
 
 	async replace(tfile:TFile,regex:any,target:string){
@@ -113,16 +131,16 @@ class ZigEditor{
 }
 
 class NoteChain{
-	zig:ZigHolding;
+	zig:NoteChainPlugin;
 	app:App;
 	prev:string;
 	next:string;
-	editor:ZigEditor;
+	editor:NCEditor;
 
-	constructor(zig:ZigHolding,prev="PrevNote",next="NextNote") {
+	constructor(zig:NoteChainPlugin,prev="PrevNote",next="NextNote") {
 		this.zig = zig;
 		this.app = zig.app;
-		this.editor = new ZigEditor(this.app);
+		this.editor = new NCEditor(this.app);
 		this.prev = prev;
 		this.next = next;
 
@@ -553,33 +571,36 @@ class NoteChain{
 		await this.chain_set_prev_next(tfile,next);
 	}
 
-	async insert_node_before(tfile:TFile,anchor:TFile){
+	async chain_insert_node_before(tfile:TFile,anchor:TFile){
 		this.chain_pop_node(tfile);
 		let prev = this.get_next_note(anchor);
 		await this.chain_set_prev_next(tfile,anchor);
 		await this.chain_set_prev_next(prev,tfile);
 	}
+
+	async chain_link_tfiles(tfiles:Array<TFile>){
+		let prev = this.get_prev_note(tfiles[0]);
+		if(tfiles.contains(prev)){
+			await this.chain_set_prev(tfiles[0],null);
+		}
+
+		let next = this.get_next_note(tfiles[tfiles.length-1]);
+		if(tfiles.contains(next)){
+			await this.chain_set_next(tfiles[tfiles.length-1],null);
+		}
+		
+
+		for(let i=0;i<tfiles.length-1;i++){
+			await this.chain_set_prev_next(tfiles[i],tfiles[i+1])
+		}
+	}
 	
-	async rechain_folder(tfile=this.current_note,mode='suggester'){
+	async chain_suggester_tfiles(tfile=this.current_note,mode='suggester'){
 		let notes = this.get_same_parent(tfile);
 		if(notes.length==0){return;}
 
 		let files = await this.suggester_sort(notes);
-
-		let prev = this.get_prev_note(files[0]);
-		if(files.contains(prev)){
-			await this.chain_set_prev(files[0],null);
-		}
-
-		let next = this.get_next_note(files[files.length-1]);
-		if(files.contains(next)){
-			await this.chain_set_next(files[files.length-1],null);
-		}
-		
-
-		for(let i=0;i<files.length-1;i++){
-			await this.chain_set_prev_next(files[i],files[i+1])
-		}
+		await this.chain_link_tfiles(files);
 	}
 
 	sort_tfiles(files:Array<TFile>,field:any){
@@ -673,20 +694,92 @@ class NoteChain{
 
 }
 
-export default class ZigHolding extends Plugin {
-	settings: ZigSettings;
+const longform2notechain = (nc:NoteChainPlugin) => ({
+	id: "longform2notechain",
+    name: "Reset Note Chain by LongForm.",
+	callback: () => {
+		let curr = nc.chain.current_note;
+		app.fileManager.processFrontMatter(
+			curr,
+			fm =>{
+				if(fm['longform']==null){return;}
+				let scenes = nc.editor.concat_array(fm.longform.scenes);
+				let ignoredFiles = nc.editor.concat_array(fm.longform.ignoredFiles);
+				ignoredFiles = ignoredFiles.filter(f=>!scenes.contains(f));
+				let notes = nc.editor.concat_array([scenes,ignoredFiles]);
+				notes = notes.map(f=>nc.chain.find_tfile(f));
+				let tfiles = nc.chain.get_tfiles_of_folder(curr.parent).filter(f=>!notes.contains(f));
+				notes = nc.editor.concat_array([tfiles,notes]);
+				nc.chain.chain_link_tfiles(notes);
+			}
+		)
+	}
+});
+
+const longform4notechain = (nc:NoteChainPlugin) => ({
+	id: "longform4notechain",
+    name: "LongForm Reset Secnes to Note Chain.",
+	callback: () => {
+		let curr = nc.chain.current_note;
+		app.fileManager.processFrontMatter(
+			curr,
+			fm =>{
+				if(fm['longform']==null){return;}
+				let notes = nc.chain.get_tfiles_of_folder(curr.parent);
+				notes = nc.chain.sort_tfiles_by_chain(notes);
+				fm.longform.scenes = notes.map(f=>f.basename);
+			}
+		)
+	}
+});
+
+const suggester_reveal_folder = (plugin:NoteChainPlugin) => ({
+    id: "reveal_folder",
+    name: "Reveal Folder",
+    callback: () => {
+		let folders = plugin.chain.get_all_folders();
+		let folder = plugin.chain.suggester(
+			f=>f.path,
+			folders,
+			false,
+			'Choose folder to reveal.'
+		).then(
+			(folder)=>{
+				plugin.app.internalPlugins.plugins["file-explorer"].instance.revealInFolder(folder);
+			}
+		)
+    },
+});
+
+
+const commandBuilders = [
+	longform2notechain,
+	longform4notechain,
+	// suggester_reveal_folder,
+];
+
+function addCommands(plugin:Plugin) {
+    commandBuilders.forEach((c) => {
+        plugin.addCommand(c(plugin));
+    });
+}
+
+export default class NoteChainPlugin extends Plugin {
+	settings: NCSettings;
 	chain : NoteChain;
-	editor : ZigEditor; 
+	editor : NCEditor; 
 
 	async onload() {
 
 		this.chain = new NoteChain(this);
 
-		this.editor = new ZigEditor(this.app);
-		this.app.zig = this;
+		this.editor = new NCEditor(this.app);
+		this.app.nc = this;
 
 
 		await this.loadSettings();
+
+		addCommands(this);
 
 		this.addCommand({
 			id: 'chain_insert_node',
@@ -700,7 +793,7 @@ export default class ZigHolding extends Plugin {
 			id: 'chain_set_seq_note',
 			name: 'Reset the chain of current folder! Warning: It will reset your chain',
 			callback: () => {
-				this.chain.rechain_folder();
+				this.chain.chain_suggester_tfiles();
 			}
 		});
 
@@ -762,7 +855,7 @@ export default class ZigHolding extends Plugin {
 		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new ZigSettingTab(this.app, this));
+		this.addSettingTab(new NCSettingTab(this.app, this));
 
 		console.log('Zig-Holding:regeister ufunc_on_file_open');
 		this.app.workspace.on('file-open', this.ufunc_on_file_open);
@@ -894,7 +987,7 @@ export default class ZigHolding extends Plugin {
 		}else if(mode==='insert_node_as_tail'){
 			this.chain.chain_insert_node_as_tail(curr,note);
 		}else if(mode==='insert_node_before'){
-			this.chain.insert_node_before(curr,note);
+			this.chain.chain_insert_node_before(curr,note);
 		}else if(mode==='insert_node_after'){
 			this.chain.chain_insert_node_after(curr,note);
 		}else{
@@ -944,10 +1037,10 @@ export default class ZigHolding extends Plugin {
 
 }
 
-class ZigSettingTab extends PluginSettingTab {
-	plugin: ZigHolding;
+class NCSettingTab extends PluginSettingTab {
+	plugin: NoteChainPlugin;
 
-	constructor(app: App, plugin: ZigHolding) {
+	constructor(app: App, plugin: NoteChainPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}

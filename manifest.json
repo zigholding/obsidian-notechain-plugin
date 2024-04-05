@@ -1,11 +1,9 @@
 {
-	"id": "zig-holding",
-	"name": "Zig Holding",
+	"id": "note-chain",
+	"name": "Note Chain",
 	"version": "1.0.1",
 	"minAppVersion": "0.15.0",
-	"description": "Package my frequently used tools, highly personal plugins.",
+	"description": "Thoughts as river, and notes as chains.",
 	"author": "ZigHolding",
-	"authorUrl": "https://www.zigholding.com",
-	"fundingUrl": "https://www.zigholding.com",
-	"isDesktopOnly": true
+	"isDesktopOnly": false
 }
