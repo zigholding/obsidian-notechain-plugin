@@ -746,7 +746,7 @@ const longform2notechain = (nc:NoteChainPlugin) => ({
 
 const longform4notechain = (nc:NoteChainPlugin) => ({
 	id: "longform4notechain",
-    name: "LongForm Reset Secnes to Note Chain.",
+    name: "Reset LongForm Secnes by Note Chain.",
 	callback: () => {
 		let curr = nc.chain.current_note;
 		app.fileManager.processFrontMatter(
