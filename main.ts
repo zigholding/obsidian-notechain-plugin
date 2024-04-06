@@ -91,6 +91,10 @@ class NCEditor{
 		}
 	}
 
+	sleep(ms){
+		return new Promise(resolve => setTimeout(resolve, ms));
+	}
+
 	concat_array(items:Array<any>){
 		if(items==null){return [];}
 		if(typeof items === 'string'){return [items];}
@@ -227,9 +231,9 @@ class NoteChain{
 	open_note(tfile:TFile,new_tab=false){
 		if(tfile){
 			if(this.app.workspace.activeLeaf.pinned || new_tab){
-				this.app.workspace.getLeaf(true).openFile(tfile);
+				return this.app.workspace.getLeaf(true).openFile(tfile);
 			}else{
-				this.app.workspace.activeLeaf.openFile(tfile);
+				return this.app.workspace.activeLeaf.openFile(tfile);
 			}
 		}
 	}
@@ -340,6 +344,22 @@ class NoteChain{
 		return item;
 	}
 
+	tfile_to_string(tfile:TFile){
+		let curr = this.current_note;
+		let msg = '';
+		if(tfile.parent==curr.parent){
+			msg = tfile.basename;
+		}else{
+			msg = tfile.path;
+		}
+		if(tfile==this.current_note){
+			return `🏠 ${msg}`
+		}else{
+			return msg;
+		}
+		
+	}
+
 	parse_items(items:Array<string|TFile>){
 		var args = [].slice.call(arguments).slice(1);
 		let kwargs = {}
@@ -372,16 +392,24 @@ class NoteChain{
 			'所有笔记',
 			'recent-files-obsidian'
 		]
+		
 		if(curr_first){
 			kv.unshift('当前笔记')
 		}else{
 			kv.push('当前笔记')
 		}
+		
+		let kvs = []
+		let i = 1;
+		for(let x of kv){
+			kvs.push(`${i++} ${x}`);
+		}
+
 		let mode = '';
 		if(kv.contains(smode)){
 			mode = smode;
 		}else{
-			mode = await this.suggester(kv,kv);
+			mode = await this.suggester(kvs,kv);
 		}
 		if(mode==='当前笔记'){
 			return [tfile];
@@ -1019,20 +1047,19 @@ export default class NoteChainPlugin extends Plugin {
 		return items.join(seq);
 	}
 
-	async open_note_smarter(){
+	open_note_smarter(){
+		// 链式调用
 		let curr = this.chain.current_note;
-		let notes = await this.chain.suggester_notes(curr,false);
-		notes = this.chain.sort_tfiles(notes,['mtime','x']);
-		notes = this.chain.sort_tfiles_by_chain(notes);
-
-		const note = (
-			await this.chain.suggester(
-				(file) => file.path, 
+		return this.chain.suggester_notes(curr,false).then((notes)=>{
+			notes = this.chain.sort_tfiles(notes,['mtime','x']);
+			notes = this.chain.sort_tfiles_by_chain(notes);
+			return this.chain.suggester(
+				(file) => this.chain.tfile_to_string(file), 
 				notes
-			)
-		); 
-		
-		await this.chain.open_note(note);
+			).then((note)=>{
+				return this.chain.open_note(note);
+			})
+		});
 	}
 
 }

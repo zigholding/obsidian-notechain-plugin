@@ -3,7 +3,7 @@
 	"name": "Note Chain",
 	"version": "1.0.1",
 	"minAppVersion": "0.15.0",
-	"description": "Thoughts as river, and notes as chains.",
+	"description": "Thoughts as river, notes as chain.",
 	"author": "ZigHolding",
 	"isDesktopOnly": false
 }
