@@ -17,6 +17,7 @@ interface NCSettings {
 	openLink:boolean;
 	refreshDataView:boolean;
 	refreshTasks:boolean,
+	isSortFileExplorer:boolean,
 }
 
 const DEFAULT_SETTINGS: NCSettings = {
@@ -29,7 +30,8 @@ const DEFAULT_SETTINGS: NCSettings = {
 	showLink : true,
 	openLink : true,
 	refreshDataView : true,
-	refreshTasks : true
+	refreshTasks : true,
+	isSortFileExplorer : true
 }
 
 function get_tp_func(app:App,target:string) {
@@ -783,6 +785,16 @@ const longform4notechain = (nc:NoteChainPlugin) => ({
 	}
 });
 
+
+const sort_file_explorer = (nc:NoteChainPlugin) => ({
+	id: "sort_file_explorer",
+    name: "Sort File Explorer by Note Chain.",
+	callback: () => {
+		nc.chain.view_sort_by_chain();
+	}
+});
+
+
 const suggester_reveal_folder = (plugin:NoteChainPlugin) => ({
     id: "reveal_folder",
     name: "Reveal Folder",
@@ -805,6 +817,7 @@ const suggester_reveal_folder = (plugin:NoteChainPlugin) => ({
 const commandBuilders = [
 	longform2notechain,
 	longform4notechain,
+	sort_file_explorer
 	// suggester_reveal_folder,
 ];
 
@@ -921,6 +934,7 @@ export default class NoteChainPlugin extends Plugin {
 				});
 			});
 		}));
+
 	}
 
 	onunload() {
@@ -1040,9 +1054,6 @@ export default class NoteChainPlugin extends Plugin {
 		if(!mode){return;}
 
 		console.log(typeof(mode),mode);
-		if(this.settings.popFirst){
-			this.chain.chain_pop_node(curr);
-		}
 
 		if(mode==='insert_node_as_head'){
 			this.chain.chain_insert_node_as_head(curr,note);
@@ -1210,12 +1221,12 @@ class NCSettingTab extends PluginSettingTab {
 				);
 
 		new Setting(containerEl)
-				.setName('popFirst')
-				.setDesc('插入前链接当前笔记前后置笔记')
+				.setName('Sort File Explorer')
+				.setDesc('Sort File Explorer by Chain')
 				.addToggle(text => text
-					.setValue(this.plugin.settings.popFirst)
+					.setValue(this.plugin.settings.isSortFileExplorer)
 					.onChange(async (value) => {
-						this.plugin.settings.popFirst = value;
+						this.plugin.settings.isSortFileExplorer = value;
 						await this.plugin.saveSettings();
 					})
 				);

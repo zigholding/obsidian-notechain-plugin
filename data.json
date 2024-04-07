@@ -6,10 +6,11 @@
   "PrevChain": "8",
   "NextChain": "8",
   "showLink": true,
-  "openLink": true,
+  "openLink": false,
   "refreshDataView": false,
   "refreshTasks": false,
   "allFiles": false,
   "sameFolder": false,
-  "popFirst": false
+  "popFirst": false,
+  "SortFileExplorer": true
 }
