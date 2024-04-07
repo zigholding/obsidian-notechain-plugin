@@ -720,6 +720,28 @@ class NoteChain{
 		return this.sort_tfiles(tfiles,field);
 	}
 
+	view_sort_by_chain(){
+		let view = this.app.workspace.getLeavesOfType(
+			"file-explorer"
+		)[0]?.view;
+		if(!view){return;}
+		view.sort();
+		if(view.ready){
+			for(let path in view.fileItems){
+				let item = view.fileItems[path];
+				if(item.vChildren){
+					let files = item.vChildren._children.map(f=>f.file);
+					files = this.sort_tfiles_by_chain(files);
+					let children = item.vChildren._children.sort(
+						(a,b)=>files.indexOf(a.file)-files.indexOf(b.file)
+					)
+					item.vChildren.setChildren(children);
+				}
+			}
+			view.tree.infinityScroll.compute()
+		}
+	}
+
 }
 
 const longform2notechain = (nc:NoteChainPlugin) => ({
@@ -886,7 +908,19 @@ export default class NoteChainPlugin extends Plugin {
 		this.addSettingTab(new NCSettingTab(this.app, this));
 
 		console.log('Zig-Holding:regeister ufunc_on_file_open');
-		this.app.workspace.on('file-open', this.ufunc_on_file_open);
+		this.registerEvent(
+			this.app.workspace.on('file-open', this.ufunc_on_file_open)
+		);
+
+		this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
+			menu.addItem((item) => {
+				item
+					.setTitle("NoteChain: sort by chain")
+					.onClick(() => {
+						this.chain.view_sort_by_chain();
+				});
+			});
+		}));
 	}
 
 	onunload() {
@@ -980,7 +1014,7 @@ export default class NoteChainPlugin extends Plugin {
 		let notes = this.chain.get_tfiles_of_folder(curr?.parent,false);
 		notes = this.chain.sort_tfiles(notes,['mtime','x']);
 		notes = this.chain.sort_tfiles_by_chain(notes);
-		notes = notes.filter(f=>f!=curr);
+		//notes = notes.filter(f=>f!=curr);
 
 		const note = await this.chain.suggester(
 			(file) => this.tfile_to_string(
@@ -1036,7 +1070,12 @@ export default class NoteChainPlugin extends Plugin {
 	tfile_to_string(tfile,fields,seq){
 		let meta = this.app.metadataCache.getFileCache(tfile);
 		let items = new Array();
-		items.push(tfile.basename)
+		if(tfile==this.chain.current_note){
+			items.push('🏠' + tfile.basename)
+		}else{
+			items.push(tfile.basename)
+		}
+		
 		for(let field of fields){
 			try{
 				items.push(meta.frontmatter[field]);
