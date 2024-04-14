@@ -5,7 +5,6 @@ import {
 } from 'obsidian';
 
 
-
 import {NCEditor} from './src/NCEditor';
 import {NoteChain} from './src/NoteChain';
 import {NCFileExplorer} from './src/NCFileExplorer';
@@ -21,7 +20,6 @@ interface NCSettings {
 	PrevChain:string;
 	NextChain:string;
 	showLink:boolean;
-	openLink:boolean;
 	refreshDataView:boolean;
 	refreshTasks:boolean,
 	isSortFileExplorer:boolean,
@@ -35,45 +33,44 @@ const DEFAULT_SETTINGS: NCSettings = {
 	PrevChain : "10",
 	NextChain : "10",
 	showLink : true,
-	openLink : true,
 	refreshDataView : true,
 	refreshTasks : true,
 	isSortFileExplorer : true
 }
 
-const longform2notechain = (nc:NoteChainPlugin) => ({
+const longform2notechain = (plugin:NoteChainPlugin) => ({
 	id: "longform2notechain",
     name: "Reset Note Chain by LongForm.",
 	callback: () => {
-		let curr = nc.chain.current_note;
+		let curr = plugin.chain.current_note;
 		app.fileManager.processFrontMatter(
 			curr,
 			fm =>{
 				if(fm['longform']==null){return;}
-				let scenes = nc.editor.concat_array(fm.longform.scenes);
-				let ignoredFiles = nc.editor.concat_array(fm.longform.ignoredFiles);
+				let scenes = plugin.editor.concat_array(fm.longform.scenes);
+				let ignoredFiles = plugin.editor.concat_array(fm.longform.ignoredFiles);
 				ignoredFiles = ignoredFiles.filter(f=>!scenes.contains(f));
-				let notes = nc.editor.concat_array([scenes,ignoredFiles]);
-				notes = notes.map(f=>nc.chain.find_tfile(f));
-				let tfiles = nc.chain.get_tfiles_of_folder(curr.parent).filter(f=>!notes.contains(f));
-				notes = nc.editor.concat_array([tfiles,notes]);
-				nc.chain.chain_link_tfiles(notes);
+				let notes = plugin.editor.concat_array([scenes,ignoredFiles]);
+				notes = notes.map(f=>plugin.chain.find_tfile(f));
+				let tfiles = plugin.chain.get_tfiles_of_folder(curr.parent).filter(f=>!notes.contains(f));
+				notes = plugin.editor.concat_array([tfiles,notes]);
+				plugin.chain.chain_link_tfiles(notes);
 			}
 		)
 	}
 });
 
-const longform4notechain = (nc:NoteChainPlugin) => ({
+const longform4notechain = (plugin:NoteChainPlugin) => ({
 	id: "longform4notechain",
     name: "Reset LongForm Secnes by Note Chain.",
 	callback: () => {
-		let curr = nc.chain.current_note;
+		let curr = plugin.chain.current_note;
 		app.fileManager.processFrontMatter(
 			curr,
 			fm =>{
 				if(fm['longform']==null){return;}
-				let notes = nc.chain.get_tfiles_of_folder(curr.parent);
-				notes = nc.chain.sort_tfiles_by_chain(notes);
+				let notes = plugin.chain.get_tfiles_of_folder(curr.parent);
+				notes = plugin.chain.sort_tfiles_by_chain(notes);
 				fm.longform.scenes = notes.map(f=>f.basename);
 			}
 		)
@@ -81,11 +78,11 @@ const longform4notechain = (nc:NoteChainPlugin) => ({
 });
 
 
-const sort_file_explorer = (nc:NoteChainPlugin) => ({
+const sort_file_explorer = (plugin:NoteChainPlugin) => ({
 	id: "sort_file_explorer",
     name: "Sort File Explorer by Note Chain.",
 	callback: () => {
-		nc.chain.view_sort_by_chain();
+		plugin.chain.view_sort_by_chain();
 	}
 });
 
@@ -378,15 +375,6 @@ export default class NoteChainPlugin extends Plugin {
 			return;
 		}
 
-		if(this.settings.openLink){
-			if(note){
-				if(this.settings.newTab){
-					this.app.workspace.getLeaf(true).openFile(note);
-				}else{
-					this.app.workspace.activeLeaf.openFile(note);
-				}
-			 }
-		 }
 	}
 	
 	tfile_to_string(tfile,fields,seq){
@@ -544,17 +532,6 @@ class NCSettingTab extends PluginSettingTab {
 				);
 
 		new Setting(containerEl)
-				.setName('openLink')
-				.setDesc('选择后是否打开笔记')
-				.addToggle(text => text
-					.setValue(this.plugin.settings.openLink)
-					.onChange(async (value) => {
-						this.plugin.settings.openLink = value;
-						await this.plugin.saveSettings();
-					})
-				);
-
-		new Setting(containerEl)
 				.setName('allFiles')
 				.setDesc('是否从所有笔记中选择')
 				.addToggle(text => text
@@ -565,10 +542,10 @@ class NCSettingTab extends PluginSettingTab {
 					})
 				);
 		
-		containerEl.createEl("h3", { text: "初始化" });
-		new Setting(containerEl)
+		containerEl.createEl("h3", { text: "Refresh" });
+		new Setting(containerEl)  
 				.setName('refreshDataView')
-				.setDesc('打开新笔记时刷新Dataview？')
+				.setDesc('Refresh Dataview while open new file?')
 				.addToggle(text => text
 					.setValue(this.plugin.settings.refreshDataView)
 					.onChange(async (value) => {
@@ -578,7 +555,7 @@ class NCSettingTab extends PluginSettingTab {
 				);
 		new Setting(containerEl)
 				.setName('refreshTasks')
-				.setDesc('打开新笔记时刷新Tasks？')
+				.setDesc('Refresh Tasks while open new file?')
 				.addToggle(text => text
 					.setValue(this.plugin.settings.refreshTasks)
 					.onChange(async (value) => {

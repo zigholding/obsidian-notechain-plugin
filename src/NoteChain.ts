@@ -22,10 +22,9 @@ export class NoteChain{
 		this.editor = new NCEditor(this.app);
 		this.prev = prev;
 		this.next = next;
-
 		this.dv_api = this.app.plugins.getPlugin("dataview");
 	}
-
+    
 	get find_tfile(){
 		return get_tp_func(this.app,'tp.file.find_tfile');
 
