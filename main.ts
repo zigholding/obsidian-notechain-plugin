@@ -13,10 +13,6 @@ import {get_tp_func} from './src/utils'
 // Remember to rename these classes and interfaces!
 
 interface NCSettings {
-	newTab: boolean;
-	withSelf:boolean;
-	reverse:boolean;
-	field:string;
 	PrevChain:string;
 	NextChain:string;
 	refreshDataView:boolean;
@@ -25,10 +21,6 @@ interface NCSettings {
 }
 
 const DEFAULT_SETTINGS: NCSettings = {
-	newTab : true,
-	withSelf : true,
-	reverse : true,
-	field : "NID",
 	PrevChain : "10",
 	NextChain : "10",
 	refreshDataView : true,
@@ -420,88 +412,6 @@ class NCSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl("h1", { text: "Zig Holding" });
-
-		containerEl.createEl("h3", { text: "Switch Note" });
-
-		new Setting(containerEl)
-			.setName('newTab')
-			.setDesc('是否在新标签中打开笔记?')
-			.addToggle(text => text
-				.setValue(this.plugin.settings.newTab)
-				.onChange(async (value) => {
-					this.plugin.settings.newTab = value;
-					await this.plugin.saveSettings();
-				})
-			);
-		
-		new Setting(containerEl)
-			.setName('withSelf')
-			.setDesc('是否显示当前笔记?')
-			.addToggle(text => text
-				.setValue(this.plugin.settings.withSelf)
-				.onChange(async (value) => {
-					this.plugin.settings.withSelf = value;
-					await this.plugin.saveSettings();
-				})
-			);
-		
-		containerEl.createEl("h4", { text: "Open note in same folder" });
-
-		new Setting(containerEl)
-			.setName('reverse')
-			.setDesc('是否逆向排序?')
-			.addToggle(text => text
-				.setValue(this.plugin.settings.reverse)
-				.onChange(async (value) => {
-					this.plugin.settings.reverse = value;
-					await this.plugin.saveSettings();
-				})
-			);
-		
-		new Setting(containerEl)
-			.setName('field')
-			.setDesc('笔记排序字段：mtime，修改时间；ctime，创建时间；name,文件名；或其它元数据字段。')
-			.addText(text => text
-				.setValue(this.plugin.settings.field)
-				.onChange(async (value) => {
-					this.plugin.settings.field = value;
-					await this.plugin.saveSettings();
-				}));
-		
-		containerEl.createEl("h4", { text: "Open note chain" });
-		new Setting(containerEl)
-			.setName('PrevChain')
-			.setDesc('前置笔记数目')
-			.addText(text => text
-				.setValue(this.plugin.settings.PrevChain)
-				.onChange(async (value) => {
-					this.plugin.settings.PrevChain = value;
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName('NextChain')
-			.setDesc('后置笔记数目')
-			.addText(text => text
-				.setValue(this.plugin.settings.NextChain)
-				.onChange(async (value) => {
-					this.plugin.settings.NextChain = value;
-					await this.plugin.saveSettings();
-				}));
-		
-		new Setting(containerEl)
-				.setName('sameFolder')
-				.setDesc('仅显示当前文件夹中链路，同时展示不在链路的文件')
-				.addToggle(text => text
-					.setValue(this.plugin.settings.sameFolder)
-					.onChange(async (value) => {
-						this.plugin.settings.sameFolder = value;
-						await this.plugin.saveSettings();
-					})
-				);
-			
-		containerEl.createEl("h3", { text: "Note Chain" });
 		new Setting(containerEl)
 				.setName('Sort File Explorer')
 				.setDesc('Sort File Explorer by Chain')
@@ -514,9 +424,30 @@ class NCSettingTab extends PluginSettingTab {
 					})
 				);
 
+		
+		new Setting(containerEl)
+			.setName('PrevChain')
+			.setDesc('Number of Prev Notes to show?')
+			.addText(text => text
+				.setValue(this.plugin.settings.PrevChain)
+				.onChange(async (value) => {
+					this.plugin.settings.PrevChain = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('NextChain')
+			.setDesc('Number of Next Notes to show?')
+			.addText(text => text
+				.setValue(this.plugin.settings.NextChain)
+				.onChange(async (value) => {
+					this.plugin.settings.NextChain = value;
+					await this.plugin.saveSettings();
+				}));
+
 		new Setting(containerEl)
 				.setName('allFiles')
-				.setDesc('是否从所有笔记中选择')
+				.setDesc('Show All Notes while Insert Node?')
 				.addToggle(text => text
 					.setValue(this.plugin.settings.allFiles)
 					.onChange(async (value) => {
@@ -525,7 +456,6 @@ class NCSettingTab extends PluginSettingTab {
 					})
 				);
 		
-		containerEl.createEl("h3", { text: "Refresh" });
 		new Setting(containerEl)  
 				.setName('refreshDataView')
 				.setDesc('Refresh Dataview while open new file?')
