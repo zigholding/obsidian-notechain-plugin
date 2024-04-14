@@ -118,10 +118,10 @@ export default class NoteChainPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
+		this.editor = new NCEditor(this.app);
 		this.chain = new NoteChain(this);
 		this.explorer = new NCFileExplorer(this);
 
-		this.editor = new NCEditor(this.app);
 		this.app.nc = this;
 		this.utils = require('./src/utils');
 

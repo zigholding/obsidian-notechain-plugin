@@ -14,6 +14,7 @@ chain_sort = function(org_sort) {
 				, i = e.children.slice();
 				i = i.filter(x=>x);
 				i = plugin.chain.sort_tfiles_by_chain(i);
+				i = plugin.chain.sort_tfiles_folder_first(i);
 				for (var r = [], o = 0, a = i; o < a.length; o++) {
 					var s = a[o]
 					, l = t.fileItems[s.path];

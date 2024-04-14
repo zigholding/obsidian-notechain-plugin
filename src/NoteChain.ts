@@ -10,15 +10,15 @@ import {NCEditor} from './NCEditor';
 import {get_tp_func} from './utils'
 
 export class NoteChain{
-	zig:NoteChainPlugin;
+	plugin:NoteChainPlugin;
 	app:App;
 	prev:string;
 	next:string;
 	editor:NCEditor;
 
-	constructor(zig:NoteChainPlugin,prev="PrevNote",next="NextNote") {
-		this.zig = zig;
-		this.app = zig.app;
+	constructor(plugin:NoteChainPlugin,prev="PrevNote",next="NextNote") {
+		this.plugin = plugin;
+		this.app = plugin.app;
 		this.editor = new NCEditor(this.app);
 		this.prev = prev;
 		this.next = next;
@@ -308,8 +308,8 @@ export class NoteChain{
 		}else if(mode==='笔记链条'){
 			return this.get_chain(
 				tfile,
-				Number(this.zig.settings.PrevChain),
-				Number(this.zig.settings.NextChain)
+				Number(this.plugin.settings.PrevChain),
+				Number(this.plugin.settings.NextChain)
 			);
 		}else{
 			return [];
@@ -575,6 +575,12 @@ export class NoteChain{
 			}
 		}
 		return rres;
+	}
+
+	sort_tfiles_folder_first(tfiles:Array<TFile>){
+		let A = tfiles.filter(f=>f instanceof TFolder).sort((a,b)=>(a.name.localeCompare(b.name)));
+		let B = tfiles.filter(f=>f instanceof TFile);
+		return this.plugin.editor.concat_array([A,B]);
 	}
 
 	sort_tfiles_by_field(tfiles:Array<TFile>,field:string){
