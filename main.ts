@@ -19,7 +19,6 @@ interface NCSettings {
 	field:string;
 	PrevChain:string;
 	NextChain:string;
-	showLink:boolean;
 	refreshDataView:boolean;
 	refreshTasks:boolean,
 	isSortFileExplorer:boolean,
@@ -32,7 +31,6 @@ const DEFAULT_SETTINGS: NCSettings = {
 	field : "NID",
 	PrevChain : "10",
 	NextChain : "10",
-	showLink : true,
 	refreshDataView : true,
 	refreshTasks : true,
 	isSortFileExplorer : true
@@ -339,11 +337,7 @@ export default class NoteChainPlugin extends Plugin {
 		//notes = notes.filter(f=>f!=curr);
 
 		const note = await this.chain.suggester(
-			(file) => this.tfile_to_string(
-					file,
-					this.settings.showLink ? ["PrevNote","NextNote"] :[],
-					"\t\t\t⚡  "
-				), 
+			(file) => this.tfile_to_string(file,[],""), 
 			notes
 		); 
 		
@@ -508,17 +502,6 @@ class NCSettingTab extends PluginSettingTab {
 				);
 			
 		containerEl.createEl("h3", { text: "Note Chain" });
-		new Setting(containerEl)
-				.setName('showLink')
-				.setDesc('是否选择时显示笔记链接')
-				.addToggle(text => text
-					.setValue(this.plugin.settings.showLink)
-					.onChange(async (value) => {
-						this.plugin.settings.showLink = value;
-						await this.plugin.saveSettings();
-					})
-				);
-
 		new Setting(containerEl)
 				.setName('Sort File Explorer')
 				.setDesc('Sort File Explorer by Chain')
