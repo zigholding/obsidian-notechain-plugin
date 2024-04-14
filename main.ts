@@ -33,16 +33,18 @@ const longform2notechain = (plugin:NoteChainPlugin) => ({
     name: "Reset Note Chain by LongForm.",
 	callback: () => {
 		let curr = plugin.chain.current_note;
+		if(curr == null){return;}
 		app.fileManager.processFrontMatter(
 			curr,
 			fm =>{
 				if(fm['longform']==null){return;}
 				let scenes = plugin.editor.concat_array(fm.longform.scenes);
 				let ignoredFiles = plugin.editor.concat_array(fm.longform.ignoredFiles);
-				ignoredFiles = ignoredFiles.filter(f=>!scenes.contains(f));
+				ignoredFiles = ignoredFiles.filter((f:string)=>!scenes.contains(f));
 				let notes = plugin.editor.concat_array([scenes,ignoredFiles]);
-				notes = notes.map(f=>plugin.chain.find_tfile(f));
-				let tfiles = plugin.chain.get_tfiles_of_folder(curr.parent).filter(f=>!notes.contains(f));
+				notes = notes.map((f:string)=>plugin.chain.find_tfile(f));
+				if(curr.parent==null){return};
+				let tfiles = plugin.chain.get_tfiles_of_folder(curr.parent).filter((f:any)=>!notes.contains(f));
 				notes = plugin.editor.concat_array([tfiles,notes]);
 				plugin.chain.chain_link_tfiles(notes);
 			}
@@ -55,10 +57,12 @@ const longform4notechain = (plugin:NoteChainPlugin) => ({
     name: "Reset LongForm Secnes by Note Chain.",
 	callback: () => {
 		let curr = plugin.chain.current_note;
+		if(curr==null){return;}
 		app.fileManager.processFrontMatter(
 			curr,
 			fm =>{
 				if(fm['longform']==null){return;}
+				if(curr.parent==null){return};
 				let notes = plugin.chain.get_tfiles_of_folder(curr.parent);
 				notes = plugin.chain.sort_tfiles_by_chain(notes);
 				fm.longform.scenes = notes.map(f=>f.basename);
@@ -83,12 +87,12 @@ const suggester_reveal_folder = (plugin:NoteChainPlugin) => ({
     callback: () => {
 		let folders = plugin.chain.get_all_folders();
 		let folder = plugin.chain.suggester(
-			f=>f.path,
+			(f:TFolder)=>f.path,
 			folders,
 			false,
 			'Choose folder to reveal.'
 		).then(
-			(folder)=>{
+			(folder:TFolder)=>{
 				plugin.app.internalPlugins.plugins["file-explorer"].instance.revealInFolder(folder);
 			}
 		)
@@ -103,7 +107,7 @@ const commandBuilders = [
 	// suggester_reveal_folder,
 ];
 
-function addCommands(plugin:Plugin) {
+function addCommands(plugin:NoteChainPlugin) {
     commandBuilders.forEach((c) => {
         plugin.addCommand(c(plugin));
     });
@@ -121,10 +125,6 @@ export default class NoteChainPlugin extends Plugin {
 		this.editor = new NCEditor(this.app);
 		this.chain = new NoteChain(this);
 		this.explorer = new NCFileExplorer(this);
-
-		this.app.nc = this;
-		this.utils = require('./src/utils');
-
 
 		addCommands(this);
 
@@ -224,7 +224,7 @@ export default class NoteChainPlugin extends Plugin {
 		}));
 
 		this.registerEvent(this.app.vault.on(
-			"delete", (file: Tfile) => {
+			"delete", (file: TFile) => {
 				this.chain.chain_pop_node(file);
 				this.explorer.file_explorer.sort();
 			}
@@ -241,7 +241,7 @@ export default class NoteChainPlugin extends Plugin {
 	}
 
 	async ufunc_on_file_open(file){
-		let zh = await app.plugins.getPlugin("zig-holding");
+		let zh = await app.plugins.getPlugin("note-chain");
 		if(!zh){return;}
 		if(zh.settings.refreshDataView){
 			zh.app.commands.executeCommandById(
