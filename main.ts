@@ -37,6 +37,7 @@ const longform2notechain = (plugin:NoteChainPlugin) => ({
 		app.fileManager.processFrontMatter(
 			curr,
 			fm =>{
+				if(curr==null){return;}
 				if(fm['longform']==null){return;}
 				let scenes = plugin.editor.concat_array(fm.longform.scenes);
 				let ignoredFiles = plugin.editor.concat_array(fm.longform.ignoredFiles);
