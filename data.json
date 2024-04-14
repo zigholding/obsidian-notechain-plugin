@@ -9,6 +9,7 @@
   "openLink": false,
   "refreshDataView": false,
   "refreshTasks": false,
+  "isSortFileExplorer": true,
   "allFiles": false,
   "sameFolder": false,
   "popFirst": false,
