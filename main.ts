@@ -62,11 +62,13 @@ const longform4notechain = (plugin:NoteChainPlugin) => ({
 		app.fileManager.processFrontMatter(
 			curr,
 			fm =>{
-				if(fm['longform']==null){return;}
+				if(curr==null){return;}
 				if(curr.parent==null){return};
+
+				if(fm['longform']==null){return;}
 				let notes = plugin.chain.get_tfiles_of_folder(curr.parent);
 				notes = plugin.chain.sort_tfiles_by_chain(notes);
-				fm.longform.scenes = notes.map(f=>f.basename);
+				fm.longform.scenes = notes.map((f:TFile)=>f.basename);
 			}
 		)
 	}
