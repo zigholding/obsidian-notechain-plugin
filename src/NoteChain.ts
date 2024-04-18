@@ -2,6 +2,7 @@
 import { 
 	App, Editor, MarkdownView, Modal, Notice, 
 	Plugin, PluginSettingTab, Setting,
+	TAbstractFile,
 	TFile,TFolder
 } from 'obsidian';
 
@@ -9,12 +10,91 @@ import {NoteChainPlugin} from "../main";
 import {NCEditor} from './NCEditor';
 import {get_tp_func} from './utils'
 
+class DBChain{
+	nc:NoteChain;
+	CHAINS:Array<TFile>;
+	constructor(nc:NoteChain){
+		this.nc = nc;
+		this.init_chains();
+	}
+
+	init_chains(){
+		let tfiles = this.nc.MDFiles;
+		this.CHAINS = this.nc.sort_tfiles_by_chain(tfiles);
+	}
+
+	indexOf(tfile:TAbstractFile,debug=false){
+		if(tfile instanceof TFile){
+			let idx = this.CHAINS.indexOf(tfile);
+			return idx;
+		}else if(tfile instanceof TFolder){
+			if(debug){console.log('abc');};
+			let fnote = this.nc.find_tfile(tfile.name+'.md');
+			if(debug){console.log(fnote);};
+			let msg = this.nc.plugin.editor.get_frontmatter(
+				fnote,"FolderPrevNote"
+			);
+			if(debug){console.log(msg);};
+			if(!msg){return -1;}
+			let items = msg.split("+");
+			let anchor = this.nc.get_tfile(items[0]);
+			if(debug){console.log(anchor);};
+			if(!anchor){return -1;}
+			let idx = this.CHAINS.indexOf(anchor);
+			if(items.length==2){
+				idx = idx + parseFloat(items[1]);
+			}
+			return idx;
+		}
+		return -1;
+	}
+
+	sort_tfiles_by_chain(tfiles:Array<TAbstractFile>){
+		let res = tfiles.sort((a:TAbstractFile,b:TAbstractFile)=>{
+			return this.indexOf(a)-this.indexOf(b);
+		})
+		return res;
+	}
+
+	async chain_insert_node_after(tfile:TFile,anchor:TFile){
+		this.CHAINS.remove(tfile)
+		let idx = this.CHAINS.indexOf(anchor);
+		if(idx<0){
+			this.init_chains();
+			idx = this.CHAINS.indexOf(anchor);
+		}
+		if(idx<0){
+			return;
+		}{
+			this.CHAINS.splice(idx+1,0,tfile);
+		}
+	}
+
+	async chain_insert_node_before(tfile:TFile,anchor:TFile){
+		this.CHAINS.remove(tfile)
+		let idx = this.CHAINS.indexOf(anchor);
+		if(idx<0){
+			this.init_chains();
+			idx = this.CHAINS.indexOf(anchor);
+		}
+		if(idx<0){
+			return;
+		}{
+			this.CHAINS.splice(idx,0,tfile);
+		}
+	}
+
+	
+}
+
 export class NoteChain{
 	plugin:NoteChainPlugin;
 	app:App;
 	prev:string;
 	next:string;
 	editor:NCEditor;
+	dbchain:DBChain;
+	
 
 	constructor(plugin:NoteChainPlugin,prev="PrevNote",next="NextNote") {
 		this.plugin = plugin;
@@ -22,12 +102,14 @@ export class NoteChain{
 		this.editor = new NCEditor(this.app);
 		this.prev = prev;
 		this.next = next;
+		this.dbchain = new DBChain(this);
 		this.dv_api = this.app.plugins.getPlugin("dataview");
+		this.ob = require('obsidian');
+		this.app.nc = this.plugin;
 	}
     
 	get find_tfile(){
 		return get_tp_func(this.app,'tp.file.find_tfile');
-
 	}
 
 	get suggester(){
@@ -36,6 +118,14 @@ export class NoteChain{
 
 	get_all_folders(sort_mode=''){
 		return this.app.vault.getAllFolders();
+	}
+
+	get_all_tfiles(sort_mode=''){
+		let files = this.app.vault.getMarkdownFiles();
+		if(!(sort_mode==='')){
+			this.sort_tfiles(files,sort_mode=sort_mode);
+		}
+		return files;
 	}
 	
 	sort_folders_by_mtime(folders:Array<TFolder>,reverse=true){
@@ -481,7 +571,6 @@ export class NoteChain{
 
 	async chain_insert_node_after(tfile:TFile,anchor:TFile){
 		this.chain_pop_node(tfile);
-
 		let next = this.get_next_note(anchor);
 		await this.chain_set_prev_next(anchor,tfile);
 		await this.chain_set_prev_next(tfile,next);
@@ -489,9 +578,23 @@ export class NoteChain{
 
 	async chain_insert_node_before(tfile:TFile,anchor:TFile){
 		this.chain_pop_node(tfile);
-		let prev = this.get_next_note(anchor);
+		let prev = this.get_prev_note(anchor);
 		await this.chain_set_prev_next(tfile,anchor);
 		await this.chain_set_prev_next(prev,tfile);
+	}
+
+	async chain_insert_folder_after(tfile:TFile,anchor:TFile){
+		if(!tfile.parent || tfile.parent.parent!=anchor.parent){
+			return;
+		}
+		let note = this.get_tfile(tfile.parent.name);
+		if(!note){
+			console.log('需要要先创建同名笔记');
+			return;
+		}
+		await this.plugin.editor.set_frontmatter(
+			note,"FolderPrevNote",`[[${anchor.basename}]]+0.5`
+		)
 	}
 
 	async chain_link_tfiles(tfiles:Array<TFile>){
@@ -557,24 +660,15 @@ export class NoteChain{
 		let res = [];
 		while(notes.length>0){
 			let note = notes[0];
-			let tmp = [];
 			let xchain = this.get_chain(note,-1,-1);
 			for(let x of xchain){
 				if(notes.contains(x)){
-					tmp.push(x);
+					res.push(x);
 					notes.remove(x);
 				}
 			}
-			res.push(tmp);
 		}
-		res = res.sort((a,b)=>b.length-a.length);
-		let rres = [];
-		for(let i of res){
-			for(let j of i){
-				rres.push(j);
-			}
-		}
-		return rres;
+		return res;
 	}
 
 	sort_tfiles_folder_first(tfiles:Array<TFile>){

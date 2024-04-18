@@ -1,10 +1,38 @@
 import { 
-	App,TFolder,Vault
+	App,TAbstractFile,TFolder,Vault
 } from 'obsidian';
 
 import {NoteChainPlugin} from "../main";
 
 chain_sort = function(org_sort) {
+	let plugin = app.plugins.getPlugin('note-chain');
+	return function(...d){
+		if(plugin){
+			if(plugin?.settings.isSortFileExplorer){
+				var e = this.file
+				, t = this.view
+				, i = e.children.slice();
+				i = i.filter((x:TAbstractFile)=>x);
+				i = plugin.chain.dbchain.sort_tfiles_by_chain(i);
+				if(plugin.settings.isFolderFirst){
+					i = plugin.chain.sort_tfiles_folder_first(i);
+				}
+				for (var r = [], o = 0, a = i; o < a.length; o++) {
+					var s = a[o]
+					, l = t.fileItems[s.path];
+					l && r.push(l)
+				}
+				this.vChildren.setChildren(r)
+			}else{
+				return org_sort.call(this,...d);
+			}
+		}else{
+			return org_sort.call(this,...d);
+		}
+	}
+}
+
+chain_sort_v1 = function(org_sort) {
 	let plugin = app.plugins.getPlugin('note-chain');
 	return function(...d){
 		if(plugin){
@@ -29,7 +57,6 @@ chain_sort = function(org_sort) {
 		}
 	}
 }
-
 
 export class NCFileExplorer{
 	plugin:NoteChainPlugin;

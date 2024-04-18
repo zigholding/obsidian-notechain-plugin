@@ -18,6 +18,7 @@ interface NCSettings {
 	refreshDataView:boolean;
 	refreshTasks:boolean,
 	isSortFileExplorer:boolean,
+	isFolderFirst:boolean,
 }
 
 const DEFAULT_SETTINGS: NCSettings = {
@@ -25,7 +26,8 @@ const DEFAULT_SETTINGS: NCSettings = {
 	NextChain : "10",
 	refreshDataView : true,
 	refreshTasks : true,
-	isSortFileExplorer : true
+	isSortFileExplorer : true,
+	isFolderFirst : true
 }
 
 const longform2notechain = (plugin:NoteChainPlugin) => ({
@@ -79,7 +81,8 @@ const sort_file_explorer = (plugin:NoteChainPlugin) => ({
 	id: "sort_file_explorer",
     name: "Sort File Explorer by Note Chain.",
 	callback: () => {
-		plugin.chain.view_sort_by_chain();
+		plugin.chain.dbchain.indexOf();
+		plugin.explorer.file_explorer.sort();
 	}
 });
 
@@ -134,10 +137,10 @@ export default class NoteChainPlugin extends Plugin {
 		this.addCommand({
 			id: 'chain_insert_node',
 			name: 'Insert node of chain',
-			callback: () => {
-				this.chain_insert_node().then(
-					()=>{this.explorer.file_explorer.sort();}
-				);
+			callback: async () => {
+				await this.chain_insert_node();
+				await this.editor.sleep(300);
+				this.explorer.file_explorer.sort();
 			}
 		});
 		
@@ -221,6 +224,7 @@ export default class NoteChainPlugin extends Plugin {
 				item
 					.setTitle("NoteChain: sort by chain")
 					.onClick(() => {
+						this.chain.dbchain.init_chains();
 						this.chain.view_sort_by_chain();
 				});
 			});
@@ -229,6 +233,23 @@ export default class NoteChainPlugin extends Plugin {
 		this.registerEvent(this.app.vault.on(
 			"delete", (file: TFile) => {
 				this.chain.chain_pop_node(file);
+				this.chain.dbchain.init_chains();
+				this.explorer.file_explorer.sort();
+			}
+		))
+
+		this.registerEvent(this.app.vault.on(
+			"create", () => {
+				console.log('create');
+				this.chain.dbchain.init_chains();
+				this.explorer.file_explorer.sort();
+			}
+		))
+
+		this.registerEvent(this.app.vault.on(
+			"rename", (file: TFile,oldPath:string) => {
+				console.log(file,oldPath);
+				this.chain.dbchain.init_chains();
 				this.explorer.file_explorer.sort();
 			}
 		))
@@ -325,8 +346,8 @@ export default class NoteChainPlugin extends Plugin {
 
 		let curr = this.chain.current_note;
 		if(curr==null){return;}
-
-		let notes = this.chain.get_tfiles_of_folder(curr?.parent,false);
+		let notes = await this.chain.suggester_notes(curr,false);
+		if(!notes){return}
 		notes = this.chain.sort_tfiles(notes,['mtime','x']);
 		notes = this.chain.sort_tfiles_by_chain(notes);
 		//notes = notes.filter(f=>f!=curr);
@@ -343,6 +364,7 @@ export default class NoteChainPlugin extends Plugin {
 			"insert_node_before",
 			"insert_node_as_head",
 			"insert_node_as_tail",
+			"insert_folder_after",
 		];
 		let mode = await this.chain.suggester(
 			sitems,sitems,false,"Select Node Insert Mode."
@@ -353,13 +375,15 @@ export default class NoteChainPlugin extends Plugin {
 		console.log(typeof(mode),mode);
 
 		if(mode==='insert_node_as_head'){
-			this.chain.chain_insert_node_as_head(curr,note);
+			await this.chain.chain_insert_node_as_head(curr,note);
 		}else if(mode==='insert_node_as_tail'){
-			this.chain.chain_insert_node_as_tail(curr,note);
+			await this.chain.chain_insert_node_as_tail(curr,note);
 		}else if(mode==='insert_node_before'){
-			this.chain.chain_insert_node_before(curr,note);
+			await this.chain.chain_insert_node_before(curr,note);
 		}else if(mode==='insert_node_after'){
-			this.chain.chain_insert_node_after(curr,note);
+			await this.chain.chain_insert_node_after(curr,note);
+		}else if(mode==='insert_folder_after'){
+			await this.chain.chain_insert_folder_after(curr,note);
 		}else{
 			return;
 		}
@@ -426,6 +450,17 @@ class NCSettingTab extends PluginSettingTab {
 						this.plugin.explorer.file_explorer.sort();
 					})
 				);
+		new Setting(containerEl)
+				.setName('Sort Folder First')
+				.setDesc('Sort File Explorer Folder First')
+				.addToggle(text => text
+					.setValue(this.plugin.settings.isFolderFirst)
+					.onChange(async (value) => {
+						this.plugin.settings.isFolderFirst = value;
+						await this.plugin.saveSettings();
+						this.plugin.explorer.file_explorer.sort();
+					})
+				);
 
 		
 		new Setting(containerEl)
@@ -448,16 +483,6 @@ class NCSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
-		new Setting(containerEl)
-				.setName('allFiles')
-				.setDesc('Show All Notes while Insert Node?')
-				.addToggle(text => text
-					.setValue(this.plugin.settings.allFiles)
-					.onChange(async (value) => {
-						this.plugin.settings.allFiles = value;
-						await this.plugin.saveSettings();
-					})
-				);
 		
 		new Setting(containerEl)  
 				.setName('refreshDataView')
