@@ -4,6 +4,23 @@ import {
 	TFile,TFolder
 } from 'obsidian';
 
+export function sleep(ms:number){
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export async function check_value(t,k,v,dt:number,T:number){
+    let i = 0;
+    while(t[k]==null || !(t[k]===v)){
+        await sleep(dt);
+        i = dt+dt;
+        if(i>T){break;}
+    }
+    if(t[k] && t[k]===v){
+        return true;
+    }else{
+        return false;
+    }
+}
 
 export function get_tp_func(app:App,target:string) {
 	// 获取  templater 函数

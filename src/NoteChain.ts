@@ -19,7 +19,7 @@ class DBChain{
 	}
 
 	init_chains(){
-		let tfiles = this.nc.MDFiles;
+		let tfiles = this.nc.get_all_tfiles();
 		this.CHAINS = this.nc.sort_tfiles_by_chain(tfiles);
 	}
 
@@ -83,8 +83,6 @@ class DBChain{
 			this.CHAINS.splice(idx,0,tfile);
 		}
 	}
-
-	
 }
 
 export class NoteChain{
@@ -142,7 +140,7 @@ export class NoteChain{
 		return res;
 	}
 
-	async move_file_to_another_folder(tfile=this.current_note){
+	async cmd_move_file_to_another_folder(tfile=this.current_note){
 		if(tfile==null){return;}
 
 		let folders = this.get_all_folders();
@@ -156,7 +154,7 @@ export class NoteChain{
 			let folder = await this.suggester((f:TFile)=>f.path,folders);
 			// 移动笔记
 			let dst = folder.path+"/"+tfile.basename+"."+tfile.extension;
-			await app.fileManager.renameFile(tfile,dst);
+			await this.app.fileManager.renameFile(tfile,dst);
 		} catch (error) {
 			
 		}
@@ -181,6 +179,7 @@ export class NoteChain{
 	}
 
 	async sugguster_note(){
+		// 从库中选择一个笔记
 		let notes = this.sort_tfiles(
 			this.app.vault.getFiles(),
 			['mtime','x']
@@ -189,6 +188,7 @@ export class NoteChain{
 			let note = await this.suggester((f:TFile)=>f.path,notes);
 			return note;
 		} catch (error) {
+			return null;
 		}
 	}
 
@@ -212,14 +212,9 @@ export class NoteChain{
 	}
 
 
-
 	get_tfile(path){
 		let name = path.split('|')[0].replace('[[','').replace(']]','');
 		return this.find_tfile(name);
-	}
-
-	get MDFiles(){
-		return app.vault.getMarkdownFiles();
 	}
 
 	get current_note(){
@@ -388,7 +383,7 @@ export class NoteChain{
 		}else if(mode==='出链'){
 			return this.get_outlinks(tfile);
 		}else if(mode==='所有笔记'){
-			return this.MDFiles;
+			return this.get_all_tfiles();
 		}else if(mode==='recent-files-obsidian'){
 			let r = this.app.plugins.getPlugin("recent-files-obsidian");
 			if(!r){return [];}
@@ -514,8 +509,6 @@ export class NoteChain{
 		}
 	}
 
-	
-
 	get_neighbors(tfile=this.current_note){
 		return [
 			this.get_prev_note(tfile),
@@ -554,6 +547,24 @@ export class NoteChain{
 		await this.chain_set_next(prev,next);
 	}
 
+	async chain_concat_tfiles(tfiles:Array<TFile>){
+		// 清除自闭环
+		let prev = this.get_prev_note(tfiles[0]);
+		if(tfiles.contains(prev)){
+			await this.chain_set_prev(tfiles[0],null);
+		}
+
+		// 清除自闭环
+		let next = this.get_next_note(tfiles[tfiles.length-1]);
+		if(tfiles.contains(next)){
+			await this.chain_set_next(tfiles[tfiles.length-1],null);
+		}
+		
+		for(let i=0;i<tfiles.length-1;i++){
+			await this.chain_set_prev_next(tfiles[i],tfiles[i+1])
+		}
+	}
+
 	async chain_pop_node(tfile:TFile){
 		let notes = this.get_neighbors(tfile);
 		await this.chain_set_prev_next(notes[0],notes[1]);
@@ -570,17 +581,15 @@ export class NoteChain{
 	}
 
 	async chain_insert_node_after(tfile:TFile,anchor:TFile){
-		this.chain_pop_node(tfile);
+		await this.chain_pop_node(tfile);
 		let next = this.get_next_note(anchor);
-		await this.chain_set_prev_next(anchor,tfile);
-		await this.chain_set_prev_next(tfile,next);
+		await this.chain_concat_tfiles([anchor,tfile,next]);
 	}
 
 	async chain_insert_node_before(tfile:TFile,anchor:TFile){
-		this.chain_pop_node(tfile);
+		await this.chain_pop_node(tfile);
 		let prev = this.get_prev_note(anchor);
-		await this.chain_set_prev_next(tfile,anchor);
-		await this.chain_set_prev_next(prev,tfile);
+		await this.chain_concat_tfiles([prev,tfile,anchor]);
 	}
 
 	async chain_insert_folder_after(tfile:TFile,anchor:TFile){
@@ -596,30 +605,13 @@ export class NoteChain{
 			note,"FolderPrevNote",`[[${anchor.basename}]]+0.5`
 		)
 	}
-
-	async chain_link_tfiles(tfiles:Array<TFile>){
-		let prev = this.get_prev_note(tfiles[0]);
-		if(tfiles.contains(prev)){
-			await this.chain_set_prev(tfiles[0],null);
-		}
-
-		let next = this.get_next_note(tfiles[tfiles.length-1]);
-		if(tfiles.contains(next)){
-			await this.chain_set_next(tfiles[tfiles.length-1],null);
-		}
-		
-
-		for(let i=0;i<tfiles.length-1;i++){
-			await this.chain_set_prev_next(tfiles[i],tfiles[i+1])
-		}
-	}
 	
 	async chain_suggester_tfiles(tfile=this.current_note,mode='suggester'){
 		let notes = this.get_same_parent(tfile);
 		if(notes.length==0){return;}
 
 		let files = await this.suggester_sort(notes);
-		await this.chain_link_tfiles(files);
+		await this.chain_concat_tfiles(files);
 	}
 
 	sort_tfiles(files:Array<TFile>,field:any){

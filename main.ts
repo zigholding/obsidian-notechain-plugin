@@ -49,7 +49,7 @@ const longform2notechain = (plugin:NoteChainPlugin) => ({
 				if(curr.parent==null){return};
 				let tfiles = plugin.chain.get_tfiles_of_folder(curr.parent).filter((f:any)=>!notes.contains(f));
 				notes = plugin.editor.concat_array([tfiles,notes]);
-				plugin.chain.chain_link_tfiles(notes);
+				plugin.chain.chain_concat_tfiles(notes);
 			}
 		)
 	}
@@ -80,37 +80,100 @@ const longform4notechain = (plugin:NoteChainPlugin) => ({
 const sort_file_explorer = (plugin:NoteChainPlugin) => ({
 	id: "sort_file_explorer",
     name: "Sort File Explorer by Note Chain.",
+	callback: async () => {
+		await plugin.explorer.sort();
+	}
+});
+
+const open_notes_smarter = (plugin:NoteChainPlugin) => ({
+	id: 'open_notes_smarter',
+	name: 'Open note smarter',
 	callback: () => {
-		plugin.chain.dbchain.indexOf();
-		plugin.explorer.file_explorer.sort();
+		plugin.open_note_smarter();
+	}
+})
+
+const sugguster_open_note = (plugin:NoteChainPlugin) => ({
+	id: 'sugguster_open_note',
+	name: 'Open note',
+	callback: () => {
+		plugin.chain.sugguster_open_note();
+	}
+});
+
+const open_prev_notes = (plugin:NoteChainPlugin) => ({
+	id: 'open_prev_notes',
+	name: 'Open prev note',
+	callback: () => {
+		plugin.chain.open_prev_notes();
+	}
+});
+
+const open_next_notes = (plugin:NoteChainPlugin) => ({
+	id: 'open_next_notes',
+	name: 'Open next note',
+	callback: () => {
+		plugin.chain.open_next_notes();
 	}
 });
 
 
-const suggester_reveal_folder = (plugin:NoteChainPlugin) => ({
-    id: "reveal_folder",
-    name: "Reveal Folder",
-    callback: () => {
-		let folders = plugin.chain.get_all_folders();
-		let folder = plugin.chain.suggester(
-			(f:TFolder)=>f.path,
-			folders,
-			false,
-			'Choose folder to reveal.'
-		).then(
-			(folder:TFolder)=>{
-				plugin.app.internalPlugins.plugins["file-explorer"].instance.revealInFolder(folder);
-			}
-		)
-    },
+const clear_inlinks = (plugin:NoteChainPlugin) => ({
+	id: 'clear_inlinks',
+	name: 'Clear inlinks of current file',
+	callback: () => {
+		plugin.clear_inlinks();
+	}
 });
 
+const move_file_to_another_folder = (plugin:NoteChainPlugin) => ({
+	id: 'move_file_to_another_folder',
+	name: 'Move current file to another folder',
+	callback: () => {
+		plugin.chain.cmd_move_file_to_another_folder();
+	}
+});
+
+const replace_notes_with_regx = (plugin:NoteChainPlugin) => ({
+	id: 'replace_notes_with_regx',
+	name: 'Replace by regex',
+	callback: () => {
+		plugin.replace_notes_with_regx();
+	}
+});
+
+const chain_insert_node = (plugin:NoteChainPlugin) => ({
+	id: 'chain_insert_node',
+	name: 'Insert node of chain',
+	callback: async () => {
+		await plugin.cmd_chain_insert_node();
+		await plugin.explorer.sort(500);
+	}
+});
+
+const chain_set_seq_note = (plugin:NoteChainPlugin) => ({
+	id: 'chain_set_seq_note',
+	name: 'Reset the chain of current folder! Warning: It will reset your chain',
+	callback: () => {
+		plugin.chain.chain_suggester_tfiles().then(
+			()=>{plugin.explorer.file_explorer.sort();}
+		);
+	}
+});
 
 const commandBuilders = [
+	open_prev_notes,
+	open_next_notes,
+	open_notes_smarter,
+	sugguster_open_note,
 	longform2notechain,
 	longform4notechain,
-	sort_file_explorer
-	// suggester_reveal_folder,
+	sort_file_explorer,
+	clear_inlinks,
+	replace_notes_with_regx,
+	move_file_to_another_folder,
+	chain_insert_node,
+	chain_set_seq_note
 ];
 
 function addCommands(plugin:NoteChainPlugin) {
@@ -134,83 +197,6 @@ export default class NoteChainPlugin extends Plugin {
 
 		addCommands(this);
 
-		this.addCommand({
-			id: 'chain_insert_node',
-			name: 'Insert node of chain',
-			callback: async () => {
-				await this.chain_insert_node();
-				await this.editor.sleep(300);
-				this.explorer.file_explorer.sort();
-			}
-		});
-		
-		this.addCommand({
-			id: 'chain_set_seq_note',
-			name: 'Reset the chain of current folder! Warning: It will reset your chain',
-			callback: () => {
-				this.chain.chain_suggester_tfiles().then(
-					()=>{this.explorer.file_explorer.sort();}
-				);
-			}
-		});
-
-		this.addCommand({
-			id: 'open_notes_smarter',
-			name: 'Open note smarter',
-			callback: () => {
-				this.open_note_smarter();
-			}
-		});
-
-		this.addCommand({
-			id: 'sugguster_open_note',
-			name: 'Open note',
-			callback: () => {
-				this.chain.sugguster_open_note();
-			}
-		});
-
-		this.addCommand({
-			id: 'open_prev_notes',
-			name: 'Open prev note',
-			callback: () => {
-				this.chain.open_prev_notes();
-			}
-		});
-
-		this.addCommand({
-			id: 'open_next_notes',
-			name: 'Open next note',
-			callback: () => {
-				this.chain.open_next_notes();
-			}
-		});
-
-
-		this.addCommand({
-			id: 'clear_inlinks',
-			name: 'Clear inlinks of current file',
-			callback: () => {
-				this.clear_inlinks();
-			}
-		});
-
-		this.addCommand({
-			id: 'move_file_to_another_folder',
-			name: 'Move current file to another folder',
-			callback: () => {
-				this.chain.move_file_to_another_folder();
-			}
-		});
-		
-		this.addCommand({
-			id: 'replace_notes_with_regx',
-			name: 'Replace by regex',
-			callback: () => {
-				this.replace_notes_with_regx();
-			}
-		});
-
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new NCSettingTab(this.app, this));
 
@@ -219,38 +205,22 @@ export default class NoteChainPlugin extends Plugin {
 			this.app.workspace.on('file-open', this.ufunc_on_file_open)
 		);
 
-		this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
-			menu.addItem((item) => {
-				item
-					.setTitle("NoteChain: sort by chain")
-					.onClick(() => {
-						this.chain.dbchain.init_chains();
-						this.chain.view_sort_by_chain();
-				});
-			});
-		}));
-
 		this.registerEvent(this.app.vault.on(
 			"delete", (file: TFile) => {
 				this.chain.chain_pop_node(file);
-				this.chain.dbchain.init_chains();
-				this.explorer.file_explorer.sort();
+				this.explorer.sort();
 			}
 		))
 
 		this.registerEvent(this.app.vault.on(
 			"create", () => {
-				console.log('create');
-				this.chain.dbchain.init_chains();
-				this.explorer.file_explorer.sort();
+				this.explorer.sort();
 			}
 		))
 
 		this.registerEvent(this.app.vault.on(
 			"rename", (file: TFile,oldPath:string) => {
-				console.log(file,oldPath);
-				this.chain.dbchain.init_chains();
-				this.explorer.file_explorer.sort();
+				this.explorer.sort();
 			}
 		))
 	}
@@ -342,8 +312,7 @@ export default class NoteChainPlugin extends Plugin {
 		}
 	}
 	
-	async chain_insert_node(){
-
+	async cmd_chain_insert_node(){
 		let curr = this.chain.current_note;
 		if(curr==null){return;}
 		let notes = await this.chain.suggester_notes(curr,false);
@@ -351,7 +320,7 @@ export default class NoteChainPlugin extends Plugin {
 		notes = this.chain.sort_tfiles(notes,['mtime','x']);
 		notes = this.chain.sort_tfiles_by_chain(notes);
 		//notes = notes.filter(f=>f!=curr);
-
+		if(notes.length==0){return;}
 		const note = await this.chain.suggester(
 			(file) => this.tfile_to_string(file,[],""), 
 			notes

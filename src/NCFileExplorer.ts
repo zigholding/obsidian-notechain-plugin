@@ -88,7 +88,6 @@ export class NCFileExplorer{
 			console.log("Reset FileExplorer to origin sort function.");
 			this._FolderDom_.prototype.sort = this.org_sort;
 		}
-		
 	}
 
 	get file_explorer(){
@@ -97,4 +96,15 @@ export class NCFileExplorer{
 		)[0]?.view;
 		return view;
 	}
+	
+	async sort(nsleep=0){
+		if(nsleep>0){
+			await this.plugin.editor.sleep(nsleep);
+		}
+		this.plugin.chain.dbchain.init_chains();
+		this.file_explorer.sort();
+	}
 }
+
+
+	
