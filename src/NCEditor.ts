@@ -42,28 +42,6 @@ export class NCEditor{
 		}
 	}
 
-	sleep(ms){
-		return new Promise(resolve => setTimeout(resolve, ms));
-	}
-
-	concat_array(items:Array<any>){
-		if(items==null){return [];}
-		if(typeof items === 'string'){return [items];}
-		if(!(items instanceof Array)){return [items];}
-
-		let res = [];
-		for(let item of items){
-			if(typeof item === 'string'){
-				res.push(item);
-			}else if(item instanceof Array){
-				res = res.concat(this.concat_array(item));
-			}else{
-				res.push(item);
-			}
-		}
-		return res;
-	}
-
 	async replace(tfile:TFile,regex:any,target:string){
 		if(typeof regex === 'string'){
 			await this.app.vault.process(tfile,(data)=>{

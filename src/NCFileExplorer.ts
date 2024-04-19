@@ -1,10 +1,12 @@
 import { 
-	App,TAbstractFile,TFolder,Vault
+	App,TAbstractFile,TFile,TFolder,Vault
 } from 'obsidian';
 
 import {NoteChainPlugin} from "../main";
+import {NoteChain} from "./NoteChain";
 
-chain_sort = function(org_sort) {
+
+let chain_sort = function(org_sort) {
 	let plugin = app.plugins.getPlugin('note-chain');
 	return function(...d){
 		if(plugin){
@@ -13,7 +15,15 @@ chain_sort = function(org_sort) {
 				, t = this.view
 				, i = e.children.slice();
 				i = i.filter((x:TAbstractFile)=>x);
-				i = plugin.chain.dbchain.sort_tfiles_by_chain(i);
+				if(i.length>0){
+					let items = plugin.chain.children[i[0].parent.path];
+					if(items){
+						let a = items.filter((x:TAbstractFile)=>i.contains(x));
+						let b = items.filter((x:TAbstractFile)=>!i.contains(x));
+						a.push(...b);
+						i = a;
+					}
+				}
 				if(plugin.settings.isFolderFirst){
 					i = plugin.chain.sort_tfiles_folder_first(i);
 				}
@@ -61,14 +71,17 @@ chain_sort_v1 = function(org_sort) {
 export class NCFileExplorer{
 	plugin:NoteChainPlugin;
 	app:App;
+	chain:NoteChain;
 	org_sort:Function;
+	new_sort:Function;
 
 	constructor(plugin:NoteChainPlugin){
 		this.plugin = plugin;
+		this.chain = plugin.chain;
 		this.app = plugin.app;
-		this.ob = require('obsidian');
 		this.register();
 	}
+
 
 	register(){
 		this.app.workspace.onLayoutReady(()=>{
@@ -78,10 +91,9 @@ export class NCFileExplorer{
 			this.org_sort = dom.prototype.sort;
 			this.new_sort = chain_sort(this.org_sort);
 			this._FolderDom_.prototype.sort = this.new_sort;
-			this.file_explorer.sort();
+			this.sort();
 		})
 	}
-
 
 	unregister(){
 		if(this.org_sort){
@@ -98,11 +110,13 @@ export class NCFileExplorer{
 	}
 	
 	async sort(nsleep=0){
-		if(nsleep>0){
-			await this.plugin.editor.sleep(nsleep);
-		}
-		this.plugin.chain.dbchain.init_chains();
-		this.file_explorer.sort();
+		if(this.file_explorer?.sort){
+			if(nsleep>0){
+				await this.plugin.utils.sleep(nsleep);
+			}
+			this.plugin.chain.init_children();
+			this.file_explorer.sort();
+		}	
 	}
 }
 

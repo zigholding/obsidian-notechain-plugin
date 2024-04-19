@@ -1,14 +1,30 @@
 import { 
-	App, Editor, MarkdownView, Modal, Notice, 
-	Plugin, PluginSettingTab, Setting,
-	TFile,TFolder
+	App
 } from 'obsidian';
 
-export function sleep(ms:number){
+export function concat_array(items:Array<any>){
+    if(items==null){return [];}
+    if(typeof items === 'string'){return [items];}
+    if(!(items instanceof Array)){return [items];}
+
+    let res = [] as any [];
+    for(let item of items){
+        if(typeof item === 'string'){
+            res.push(item);
+        }else if(item instanceof Array){
+            res = res.concat(this.concat_array(item));
+        }else{
+            res.push(item);
+        }
+    }
+    return res;
+}  
+
+export function sleep(ms:number|undefined){
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export async function check_value(t,k,v,dt:number,T:number){
+export async function check_value(t:any,k:any,v:any,dt:number,T:number){
     let i = 0;
     while(t[k]==null || !(t[k]===v)){
         await sleep(dt);

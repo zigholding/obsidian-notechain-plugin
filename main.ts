@@ -41,14 +41,14 @@ const longform2notechain = (plugin:NoteChainPlugin) => ({
 			fm =>{
 				if(curr==null){return;}
 				if(fm['longform']==null){return;}
-				let scenes = plugin.editor.concat_array(fm.longform.scenes);
-				let ignoredFiles = plugin.editor.concat_array(fm.longform.ignoredFiles);
+				let scenes = plugin.utils.concat_array(fm.longform.scenes);
+				let ignoredFiles = plugin.utils.concat_array(fm.longform.ignoredFiles);
 				ignoredFiles = ignoredFiles.filter((f:string)=>!scenes.contains(f));
-				let notes = plugin.editor.concat_array([scenes,ignoredFiles]);
+				let notes = plugin.utils.concat_array([scenes,ignoredFiles]);
 				notes = notes.map((f:string)=>plugin.chain.find_tfile(f));
 				if(curr.parent==null){return};
 				let tfiles = plugin.chain.get_tfiles_of_folder(curr.parent).filter((f:any)=>!notes.contains(f));
-				notes = plugin.editor.concat_array([tfiles,notes]);
+				notes = plugin.utils.concat_array([tfiles,notes]);
 				plugin.chain.chain_concat_tfiles(notes);
 			}
 		)
@@ -187,12 +187,16 @@ export default class NoteChainPlugin extends Plugin {
 	chain : NoteChain;
 	editor : NCEditor; 
 	explorer : NCFileExplorer;
+	debug:boolean;
+	utils:any;
 
 	async onload() {
+		this.debug=false;
 		await this.loadSettings();
-
+		
+		this.utils = require('./src/utils');
 		this.editor = new NCEditor(this.app);
-		this.chain = new NoteChain(this);
+		this.chain = new NoteChain(this,this.editor);
 		this.explorer = new NCFileExplorer(this);
 
 		addCommands(this);
@@ -207,6 +211,7 @@ export default class NoteChainPlugin extends Plugin {
 
 		this.registerEvent(this.app.vault.on(
 			"delete", (file: TFile) => {
+				if(this.debug){console.log("delete...");}
 				this.chain.chain_pop_node(file);
 				this.explorer.sort();
 			}
@@ -214,12 +219,14 @@ export default class NoteChainPlugin extends Plugin {
 
 		this.registerEvent(this.app.vault.on(
 			"create", () => {
+				if(this.debug){console.log("create...");}
 				this.explorer.sort();
 			}
 		))
 
 		this.registerEvent(this.app.vault.on(
 			"rename", (file: TFile,oldPath:string) => {
+				if(this.debug){console.log("rename...");}
 				this.explorer.sort();
 			}
 		))
