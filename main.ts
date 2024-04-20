@@ -194,6 +194,7 @@ const create_new_note = (plugin:NoteChainPlugin) => ({
 					if(!(target==='null')){
 						await plugin.chain[target](dst,curr);
 					}
+					await plugin.utils.sleep(300);
 					await plugin.chain.open_note(dst);
 					await plugin.explorer.sort();
 				}
@@ -256,10 +257,10 @@ export default class NoteChainPlugin extends Plugin {
 		);
 
 		this.registerEvent(this.app.vault.on(
-			"delete", (file: TFile) => {
+			"delete", async (file: TFile) => {
 				if(this.debug){console.log("delete...");}
-				this.chain.chain_pop_node(file);
-				this.explorer.sort();
+				await this.chain.chain_pop_node(file);
+				await this.explorer.sort();
 			}
 		))
 

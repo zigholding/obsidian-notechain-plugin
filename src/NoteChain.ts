@@ -384,9 +384,11 @@ export class NoteChain{
 		if(!tfile){return;}
 		if(tfile.deleted){
 			let tfiles = this.app.vault.getMarkdownFiles();
+			
+			tfiles.filter(f=>`[[${tfile.basename}]]`===app.nc.editor.get_frontmatter(f,"NextNote"))
 			tfiles = tfiles.filter(f=>`[[${tfile.basename}]]`===this.editor.get_frontmatter(f,this.next));
 			if(tfiles.length>0){
-				return tfile[0];
+				return tfiles[0];
 			}else{
 				return null;
 			}
@@ -397,6 +399,7 @@ export class NoteChain{
 			let note = this.get_tfile(name);
 			return note?note:null;
 		}
+		
 	}
 
 	open_prev_notes(tfile=this.current_note){
@@ -497,7 +500,7 @@ export class NoteChain{
 	
 	async chain_set_prev(tfile:TFile,prev:TFile|null){
 		if(tfile==null || tfile==prev){return;}
-		this.plugin.console_log('chain_set_prev:',tfile,prev);
+		this.plugin.console_log('chain_set_prev:',tfile.basename,prev?.basename);
 		if(prev==null ){
 			await this.editor.set_frontmatter(
 				tfile,this.prev,''
@@ -511,7 +514,7 @@ export class NoteChain{
 
 	async chain_set_next(tfile:TFile,next:TFile|null){
 		if(tfile==null || tfile==next){return;}
-		this.plugin.console_log('chain_set_next:',tfile,next);
+		this.plugin.console_log('chain_set_next:',tfile.basename,next?.basename);
 		if(next==null ){
 			await this.editor.set_frontmatter(
 				tfile,this.next,''
