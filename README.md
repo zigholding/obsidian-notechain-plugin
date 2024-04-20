@@ -2,7 +2,17 @@
 
 
 
-这个插件基于 [Obsidian Sample Plugin](https://github.com/obsidianmd/obsidian-sample-plugin) 修改，你可以在该项目中查看基础信息。
+Why this plugin? 
+
+Thought as River，Notes as Chain!
+
+
+
+
+
+为什么做这个插件？
+
+随着卡片盒笔记的深入使用，我认为其核心是：线性的输入，需要线性的输出。我需要一个插件，像链条一样，串起所有的笔记。补上笔记管理世界的一块小拼图。
 
 
 

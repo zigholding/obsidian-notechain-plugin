@@ -200,8 +200,23 @@ export class NoteChain{
 		return outlinks;
 	}
 
-	get_same_parent(tfile=this.current_note){
-		return this.get_tfiles_of_folder(tfile?.parent,false);
+	get_brothers(tfile=this.current_note){
+		if(tfile&&tfile.parent){
+			return this.get_tfiles_of_folder(tfile.parent,false);
+		}else{
+			return [];
+		}
+		
+	}
+
+	get_uncles(tfile:TFile){
+		if(tfile && tfile.parent && tfile.parent.parent){
+			let folder = tfile.parent.parent;
+			return folder.children.filter(
+				(x:TAbstractFile)=>x instanceof TFile
+			)
+		}
+		return []
 	}
 
 	get_tfiles_of_folder(tfolder:TFolder,with_children=false){
@@ -221,14 +236,16 @@ export class NoteChain{
 
 	}
 
+	
+
 	indexOfFolder(tfile:TFolder,tfiles:Array<TFile>){
 		let fnote = this.find_tfile(tfile.name+'.md');
 		let msg = this.plugin.editor.get_frontmatter(
 			fnote,"FolderPrevNote"
 		);
 		if(!msg){return -1;}
-		let items = msg.split("+");
-		let anchor = this.get_tfile(items[0]);
+		let items = msg.split("]]+");
+		let anchor = this.get_tfile(items[0].slice(2));
 		if(!anchor){return -1;}
 		let idx = tfiles.indexOf(anchor);
 		if(items.length==2){
@@ -289,10 +306,12 @@ export class NoteChain{
 	}
 
 	async suggester_notes(tfile=this.current_note,curr_first=true,smode=''){
+		if(tfile){tfile==this.current_note;}
 		let kv = [			
-			'同级目录',
+			'同级笔记',
 			'笔记链条',
-			'同级目录+子目录',
+			'上级笔记',
+			'同级笔记+子目录',
 			'出链+入链',
 			'入链',
 			'出链',
@@ -320,9 +339,9 @@ export class NoteChain{
 		}
 		if(mode==='当前笔记'){
 			return [tfile];
-		}else if(mode==='同级目录'){
-			return this.get_same_parent(tfile);
-		}else if(mode==='同级目录+子目录'){
+		}else if(mode==='同级笔记'){
+			return this.get_brothers(tfile);
+		}else if(mode==='同级笔记+子目录'){
 			return this.get_tfiles_of_folder(tfile?.parent,true);
 		}else if(mode==='出链+入链'){
 			return this.get_links(tfile);
@@ -338,6 +357,8 @@ export class NoteChain{
 			return Object.values(
 				r.data.recentFiles).map(f=>this.app.vault.fileMap[f.path]
 			).filter(f=>f);
+		}else if(mode==='上级笔记'){
+			return this.get_uncles(tfile);
 		}else if(mode==='笔记链条'){
 			return this.get_chain(
 				tfile,
@@ -352,6 +373,7 @@ export class NoteChain{
 
 	// Chain
 	get_prev_note(tfile=this.current_note){
+		if(!tfile){return;}
 		if(tfile.deleted){
 			let tfiles = this.app.vault.getMarkdownFiles();
 			tfiles = tfiles.filter(f=>`[[${tfile.basename}]]`===this.editor.get_frontmatter(f,this.next));
@@ -555,7 +577,7 @@ export class NoteChain{
 	}
 	
 	async chain_suggester_tfiles(tfile=this.current_note,mode='suggester'){
-		let notes = this.get_same_parent(tfile);
+		let notes = this.get_brothers(tfile);
 		if(notes.length==0){return;}
 
 		let files = await this.suggester_sort(notes);
@@ -662,6 +684,9 @@ export class NoteChain{
 			Object.values(kv)
 		);
 		if(field==null){return [];}
+		if(field=='chain'){
+			tfiles = this.sort_tfiles(tfiles,'name');
+		}
 		return this.sort_tfiles(tfiles,field);
 	}
 

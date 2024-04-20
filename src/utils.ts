@@ -1,6 +1,11 @@
+import { get } from 'http';
 import { 
 	App
 } from 'obsidian';
+
+export function get_plugins(app:App,name:string){
+
+}
 
 export function concat_array(items:Array<any>){
     if(items==null){return [];}

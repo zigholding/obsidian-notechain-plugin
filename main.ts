@@ -153,11 +153,10 @@ const chain_insert_node = (plugin:NoteChainPlugin) => ({
 
 const chain_set_seq_note = (plugin:NoteChainPlugin) => ({
 	id: 'chain_set_seq_note',
-	name: 'Reset the chain of current folder! Warning: It will reset your chain',
-	callback: () => {
-		plugin.chain.chain_suggester_tfiles().then(
-			()=>{plugin.explorer.file_explorer.sort();}
-		);
+	name: 'Reset the chain of current folder!',
+	callback: async () => {
+		await plugin.chain.chain_suggester_tfiles();
+		plugin.explorer.sort();
 	}
 });
 
@@ -189,12 +188,14 @@ export default class NoteChainPlugin extends Plugin {
 	explorer : NCFileExplorer;
 	debug:boolean;
 	utils:any;
+	ob:any;
 
 	async onload() {
 		this.debug=false;
 		await this.loadSettings();
 		
 		this.utils = require('./src/utils');
+		this.ob = require('obsidian');
 		this.editor = new NCEditor(this.app);
 		this.chain = new NoteChain(this,this.editor);
 		this.explorer = new NCFileExplorer(this);
@@ -237,11 +238,13 @@ export default class NoteChainPlugin extends Plugin {
 		console.log('Zig-Holding:unregeister ufunc_on_file_open');
 		this.app.workspace.off('file-open', this.ufunc_on_file_open);
 		this.explorer.unregister();
-		this.explorer.file_explorer.sort();
-		
+		this.explorer.sort();
 	}
 
-	async ufunc_on_file_open(file){
+	async ufunc_on_file_open(file:TFile){
+		if(this.app.hasOwnProperty('plugins')){
+			let zh = await this.app.plugins.getPlugin("note-chain");
+		}
 		let zh = await app.plugins.getPlugin("note-chain");
 		if(!zh){return;}
 		if(zh.settings.refreshDataView){
@@ -329,7 +332,7 @@ export default class NoteChainPlugin extends Plugin {
 		//notes = notes.filter(f=>f!=curr);
 		if(notes.length==0){return;}
 		const note = await this.chain.suggester(
-			(file) => this.tfile_to_string(file,[],""), 
+			(file:TFile) => this.tfile_to_string(file,[],""), 
 			notes
 		); 
 		
@@ -366,8 +369,7 @@ export default class NoteChainPlugin extends Plugin {
 
 	}
 	
-	tfile_to_string(tfile,fields,seq){
-		let meta = this.app.metadataCache.getFileCache(tfile);
+	tfile_to_string(tfile:TFile,fields:Array<string>,seq:string){
 		let items = new Array();
 		if(tfile==this.chain.current_note){
 			items.push('🏠' + tfile.basename)
@@ -377,7 +379,7 @@ export default class NoteChainPlugin extends Plugin {
 		
 		for(let field of fields){
 			try{
-				items.push(meta.frontmatter[field]);
+				items.push(this.editor.get_frontmatter(tfile,field));
 			}catch(error){
 				items.push("-");
 			}
@@ -385,19 +387,22 @@ export default class NoteChainPlugin extends Plugin {
 		return items.join(seq);
 	}
 
-	open_note_smarter(){
+	async open_note_smarter(){
 		// 链式调用
 		let curr = this.chain.current_note;
-		return this.chain.suggester_notes(curr,false).then((notes)=>{
-			notes = this.chain.sort_tfiles(notes,['mtime','x']);
-			notes = this.chain.sort_tfiles_by_chain(notes);
-			return this.chain.suggester(
-				(file) => this.chain.tfile_to_string(file), 
+		let notes = await this.chain.suggester_notes(curr,false)
+		
+		notes = this.chain.sort_tfiles(notes,['mtime','x']);
+		notes = this.chain.sort_tfiles_by_chain(notes);
+		if(notes.length>0){
+			let note = await this.chain.suggester(
+				(file:TFile) => this.chain.tfile_to_string(file), 
 				notes
-			).then((note)=>{
-				return this.chain.open_note(note);
-			})
-		});
+			)
+			if(note){
+				await this.chain.open_note(note);
+			}
+		}
 	}
 
 }
