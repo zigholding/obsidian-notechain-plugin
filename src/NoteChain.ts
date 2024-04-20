@@ -39,12 +39,16 @@ export class NoteChain{
 		}
 	}
 
-	get find_tfile(){
+	get tp_find_tfile(){
 		return get_tp_func(this.app,'tp.file.find_tfile');
 	}
 
-	get suggester(){
+	get tp_suggester(){
 		return get_tp_func(this.app,'tp.system.suggester');
+	}
+
+	get tp_prompt(){
+		return get_tp_func(this.app,'tp.system.prompt');
 	}
 
 	get_all_folders(sort_mode=''){
@@ -84,7 +88,7 @@ export class NoteChain{
 			folders = folders.filter((f:TFile)=>this.filter_user_ignore(f));
 		}
 		try {
-			let folder = await this.suggester((f:TFile)=>f.path,folders);
+			let folder = await this.tp_suggester((f:TFile)=>f.path,folders);
 			// 移动笔记
 			let dst = folder.path+"/"+tfile.basename+"."+tfile.extension;
 			await this.app.fileManager.renameFile(tfile,dst);
@@ -118,7 +122,7 @@ export class NoteChain{
 			['mtime','x']
 		).filter((f:TFile)=>this.filter_user_ignore(f));
 		try {
-			let note = await this.suggester((f:TFile)=>f.path,notes);
+			let note = await this.tp_suggester((f:TFile)=>f.path,notes);
 			return note;
 		} catch (error) {
 			return null;
@@ -146,7 +150,7 @@ export class NoteChain{
 
 	get_tfile(path){
 		let name = path.split('|')[0].replace('[[','').replace(']]','');
-		return this.find_tfile(name);
+		return this.tp_find_tfile(name);
 	}
 
 	get current_note(){
@@ -239,7 +243,7 @@ export class NoteChain{
 	
 
 	indexOfFolder(tfile:TFolder,tfiles:Array<TFile>){
-		let fnote = this.find_tfile(tfile.name+'.md');
+		let fnote = this.tp_find_tfile(tfile.name+'.md');
 		let msg = this.plugin.editor.get_frontmatter(
 			fnote,"FolderPrevNote"
 		);
@@ -335,7 +339,7 @@ export class NoteChain{
 		if(kv.contains(smode)){
 			mode = smode;
 		}else{
-			mode = await this.suggester(kvs,kv);
+			mode = await this.tp_suggester(kvs,kv);
 		}
 		if(mode==='当前笔记'){
 			return [tfile];
@@ -679,7 +683,7 @@ export class NoteChain{
 			'ctime 倒序':['ctime','x'],
 			'mtime 倒序':['mtime','x'],
 		}
-		let field = await this.suggester(
+		let field = await this.tp_suggester(
 			Object.keys(kv),
 			Object.values(kv)
 		);

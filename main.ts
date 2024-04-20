@@ -45,7 +45,7 @@ const longform2notechain = (plugin:NoteChainPlugin) => ({
 				let ignoredFiles = plugin.utils.concat_array(fm.longform.ignoredFiles);
 				ignoredFiles = ignoredFiles.filter((f:string)=>!scenes.contains(f));
 				let notes = plugin.utils.concat_array([scenes,ignoredFiles]);
-				notes = notes.map((f:string)=>plugin.chain.find_tfile(f));
+				notes = notes.map((f:string)=>plugin.chain.tp_find_tfile(f));
 				if(curr.parent==null){return};
 				let tfiles = plugin.chain.get_tfiles_of_folder(curr.parent).filter((f:any)=>!notes.contains(f));
 				notes = plugin.utils.concat_array([tfiles,notes]);
@@ -270,7 +270,7 @@ export default class NoteChainPlugin extends Plugin {
 		let notes = this.chain.get_inlinks(tfile);
 		if(notes.length){
 			if(mode==='suggester'){
-				mode = await this.chain.suggester(
+				mode = await this.chain.tp_suggester(
 					["删除链接",'替换链接',"删除段落",],
 					[['link','del'],['link','rep'],['para','del']]
 				);
@@ -290,21 +290,17 @@ export default class NoteChainPlugin extends Plugin {
 		}
 	}
 
-	get prompt(){
-		return get_tp_func(this.app,'tp.system.prompt');
-	}
-
 	async replace_notes_with_regx(){
 		let notes = await this.chain.suggester_notes();
 		if(notes?.length>0){
 			try {
-				let regs = await this.prompt('要替换的正则表达式');
+				let regs = await this.chain.tp_prompt('要替换的正则表达式');
 				if(regs==null){
 					return;
 				}
 				let reg = new RegExp(regs,'g');
 				
-				let target = await this.prompt('目标字符串');
+				let target = await this.chain.tp_prompt('目标字符串');
 				if(target==null){
 					return;
 				}
@@ -331,7 +327,7 @@ export default class NoteChainPlugin extends Plugin {
 		notes = this.chain.sort_tfiles_by_chain(notes);
 		//notes = notes.filter(f=>f!=curr);
 		if(notes.length==0){return;}
-		const note = await this.chain.suggester(
+		const note = await this.chain.tp_suggester(
 			(file:TFile) => this.tfile_to_string(file,[],""), 
 			notes
 		); 
@@ -345,7 +341,7 @@ export default class NoteChainPlugin extends Plugin {
 			"insert_node_as_tail",
 			"insert_folder_after",
 		];
-		let mode = await this.chain.suggester(
+		let mode = await this.chain.tp_suggester(
 			sitems,sitems,false,"Select Node Insert Mode."
 		);
 		
@@ -395,7 +391,7 @@ export default class NoteChainPlugin extends Plugin {
 		notes = this.chain.sort_tfiles(notes,['mtime','x']);
 		notes = this.chain.sort_tfiles_by_chain(notes);
 		if(notes.length>0){
-			let note = await this.chain.suggester(
+			let note = await this.chain.tp_suggester(
 				(file:TFile) => this.chain.tfile_to_string(file), 
 				notes
 			)
