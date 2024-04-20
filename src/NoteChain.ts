@@ -26,9 +26,6 @@ export class NoteChain{
 		
 		this.prev = prev;
 		this.next = next;
-		
-		this.ob = require('obsidian');
-		this.app.nc = this.plugin;
 		this.init_children();
 	}
     
@@ -178,8 +175,12 @@ export class NoteChain{
 
 	get_outlinks(tfile=this.current_note){
 		if(tfile==null){return [];}
+		if(this.app instanceof App){
+			if(this.app.plugins){
 
-		let res = new Array();
+			}
+		}
+		
 		let dv_api = this.app.plugins.getPlugin("dataview");
 		let inlinks = dv_api.index.links.map.get(tfile.path);
 		if(inlinks==undefined){
