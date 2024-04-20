@@ -160,6 +160,48 @@ const chain_set_seq_note = (plugin:NoteChainPlugin) => ({
 	}
 });
 
+const create_new_note = (plugin:NoteChainPlugin) => ({
+	id: 'create_new_note',
+	name: 'Create new note.',
+	callback: async () => {
+		let targets = {
+			'添加后置笔记' :'chain_insert_node_after',
+			'链尾添加笔记' : 'chain_insert_node_as_tail',
+			'添加前置笔记' : 'chain_insert_node_before',
+			'链头添加笔记' : 'chain_insert_node_as_head',
+			'无链接' : `null`,
+		}
+		let target = await plugin.chain.tp_suggester(
+			plugin.utils.array_prefix_id(Object.keys(targets)), 
+			Object.values(targets), 
+			true, 
+			'选择笔记类型.'
+		);
+		if(!target){return;}
+		let name = await plugin.chain.tp_prompt('请输入文件名');
+		if(name){
+			let curr = plugin.chain.current_note;
+			if(curr && curr.parent){
+				let path = curr.parent.path+'/'+name+'.md';
+				let dst = await plugin.chain.get_tfile(path);
+				if(dst==null){
+					let func = plugin.utils.get_tp_func(plugin.app,'tp.file.create_new')
+					dst = await func(
+						'',name,
+						false,curr.parent
+					);
+					await plugin.utils.sleep(300);
+					if(!(target==='null')){
+						await plugin.chain[target](dst,curr);
+					}
+					await plugin.chain.open_note(dst);
+					await plugin.explorer.sort();
+				}
+			}	
+		}
+	}
+});
+
 const commandBuilders = [
 	open_prev_notes,
 	open_next_notes,
@@ -172,7 +214,8 @@ const commandBuilders = [
 	replace_notes_with_regx,
 	move_file_to_another_folder,
 	chain_insert_node,
-	chain_set_seq_note
+	chain_set_seq_note,
+	create_new_note
 ];
 
 function addCommands(plugin:NoteChainPlugin) {
@@ -191,11 +234,12 @@ export default class NoteChainPlugin extends Plugin {
 	ob:any;
 
 	async onload() {
-		this.debug=false;
+		this.debug=true;
 		await this.loadSettings();
 		
 		this.utils = require('./src/utils');
 		this.ob = require('obsidian');
+		this.app.nc = this;
 		
 		this.editor = new NCEditor(this.app);
 		this.chain = new NoteChain(this,this.editor);
@@ -242,10 +286,14 @@ export default class NoteChainPlugin extends Plugin {
 		this.explorer.sort();
 	}
 
-	async ufunc_on_file_open(file:TFile){
-		if(this.app.hasOwnProperty('plugins')){
-			let zh = await this.app.plugins.getPlugin("note-chain");
+
+	console_log(...d:any){
+		if(this.debug){
+			console.log(...d);
 		}
+	}
+
+	async ufunc_on_file_open(file:TFile){
 		let zh = await app.plugins.getPlugin("note-chain");
 		if(!zh){return;}
 		if(zh.settings.refreshDataView){

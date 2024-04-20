@@ -6,9 +6,9 @@ import {NoteChainPlugin} from "../main";
 import {NoteChain} from "./NoteChain";
 
 
-let chain_sort = function(org_sort) {
+let chain_sort = function(org_sort:Function) {
 	let plugin = app.plugins.getPlugin('note-chain');
-	return function(...d){
+	return function(...d:any){
 		if(plugin){
 			if(plugin?.settings.isSortFileExplorer){
 				var e = this.file
@@ -42,9 +42,9 @@ let chain_sort = function(org_sort) {
 	}
 }
 
-chain_sort_v1 = function(org_sort) {
+chain_sort_v1 = function(org_sort:Function) {
 	let plugin = app.plugins.getPlugin('note-chain');
-	return function(...d){
+	return function(...d:any){
 		if(plugin){
 			if(plugin?.settings.isSortFileExplorer){
 				var e = this.file

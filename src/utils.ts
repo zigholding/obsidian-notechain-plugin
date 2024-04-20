@@ -7,6 +7,14 @@ export function get_plugins(app:App,name:string){
 
 }
 
+export function array_prefix_id(items:Array<any>,offset=1){
+    let res = new Array();
+    for(let i=0;i<items.length;i++){
+        res.push(`${i+offset} ${items[i]}`);
+    }
+    return res;
+}
+
 export function concat_array(items:Array<any>){
     if(items==null){return [];}
     if(typeof items === 'string'){return [items];}

@@ -126,12 +126,15 @@ export class NoteChain{
 		}
 	}
 
-	open_note(tfile:TFile,new_tab=false){
+	open_note(tfile:TFile,new_tab=false,revealFolder=true){
 		if(tfile){
 			if(this.app.workspace.activeLeaf.pinned || new_tab){
-				return this.app.workspace.getLeaf(true).openFile(tfile);
+				this.app.workspace.getLeaf(true).openFile(tfile);
 			}else{
-				return this.app.workspace.activeLeaf.openFile(tfile);
+				this.app.workspace.activeLeaf.openFile(tfile);
+			}
+			if(revealFolder){
+				this.plugin.explorer.file_explorer.revealInFolder(tfile);
 			}
 		}
 	}
@@ -402,6 +405,7 @@ export class NoteChain{
 	}
 
 	get_next_note(tfile=this.current_note){
+		if(!tfile){return null;}
 		if(tfile.deleted){
 			let tfiles = this.app.vault.getMarkdownFiles();
 			tfiles = tfiles.filter(f=>`[[${tfile.basename}]]`===this.editor.get_frontmatter(f,this.prev));
@@ -491,8 +495,9 @@ export class NoteChain{
 		]
 	}
 	
-	async chain_set_prev(tfile:TFile,prev:TFile){
+	async chain_set_prev(tfile:TFile,prev:TFile|null){
 		if(tfile==null || tfile==prev){return;}
+		this.plugin.console_log('chain_set_prev:',tfile,prev);
 		if(prev==null ){
 			await this.editor.set_frontmatter(
 				tfile,this.prev,''
@@ -504,8 +509,9 @@ export class NoteChain{
 		}
 	}
 
-	async chain_set_next(tfile:TFile,next:TFile){
+	async chain_set_next(tfile:TFile,next:TFile|null){
 		if(tfile==null || tfile==next){return;}
+		this.plugin.console_log('chain_set_next:',tfile,next);
 		if(next==null ){
 			await this.editor.set_frontmatter(
 				tfile,this.next,''
@@ -556,7 +562,10 @@ export class NoteChain{
 	}
 
 	async chain_insert_node_after(tfile:TFile,anchor:TFile){
-		await this.chain_pop_node(tfile);
+		let t = this;
+		console.log(this);
+		t.plugin.console_log(t);
+		await t.chain_pop_node(tfile);
 		let next = this.get_next_note(anchor);
 		await this.chain_concat_tfiles([anchor,tfile,next]);
 	}
