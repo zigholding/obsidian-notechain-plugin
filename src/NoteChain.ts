@@ -244,10 +244,9 @@ export class NoteChain{
 
 	}
 
-	
-
 	indexOfFolder(tfile:TFolder,tfiles:Array<TFile>){
 		let fnote = this.tp_find_tfile(tfile.name+'.md');
+		if(!fnote){return -1;}
 		let msg = this.plugin.editor.get_frontmatter(
 			fnote,"FolderPrevNote"
 		);

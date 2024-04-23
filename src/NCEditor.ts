@@ -24,10 +24,19 @@ export class NCEditor{
 	}
 
 	get_frontmatter(tfile:TFile,key:any){
-		let meta = this.app.metadataCache.getFileCache(tfile);
-		if(meta?.frontmatter){
-			return meta.frontmatter[key];
+		try {
+			if(!tfile){return null;}
+			let meta = this.app.metadataCache.getFileCache(tfile);
+			if(meta?.frontmatter){
+				return meta.frontmatter[key];
+			}
+		} catch (error) {
+			console.log('get_frontmatter');
+			console.log(tfile);
+			console.log(error);
+			return null;
 		}
+		
 	}
 
 	regexp_link(tfile:TFile,mode:string){
