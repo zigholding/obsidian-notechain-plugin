@@ -462,7 +462,8 @@ export class NoteChain{
 	
 	async chain_set_prev(tfile:TFile,prev:TFile|null){
 		if(tfile==null || tfile==prev){return;}
-		this.plugin.console_log('chain_set_prev:',tfile.basename,prev?.basename);
+		let msg = `Note Chain set prev: ${tfile.basename} --> ${prev?.basename}`;
+		new Notice(msg,5000);
 		if(prev==null ){
 			await this.editor.set_frontmatter(
 				tfile,this.prev,''
@@ -476,7 +477,8 @@ export class NoteChain{
 
 	async chain_set_next(tfile:TFile,next:TFile|null){
 		if(tfile==null || tfile==next){return;}
-		this.plugin.console_log('chain_set_next:',tfile.basename,next?.basename);
+		let msg = `Note Chain set next: ${tfile.basename} --> ${next?.basename}`;
+		new Notice(msg,5000);
 		if(next==null ){
 			await this.editor.set_frontmatter(
 				tfile,this.next,''

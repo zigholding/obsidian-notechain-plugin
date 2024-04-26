@@ -8,7 +8,7 @@ import {
 import {NCEditor} from './src/NCEditor';
 import {NoteChain} from './src/NoteChain';
 import {NCFileExplorer} from './src/NCFileExplorer';
-import {get_tp_func} from './src/utils'
+import { LangString } from 'src/lang';
 
 // Remember to rename these classes and interfaces!
 
@@ -30,9 +30,9 @@ const DEFAULT_SETTINGS: NCSettings = {
 	isFolderFirst : true
 }
 
-const longform2notechain = (plugin:NoteChainPlugin) => ({
+const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 	id: "longform2notechain",
-    name: "Reset Note Chain by LongForm.",
+    name: plugin.lang.cmd_longform2notechain,
 	callback: () => {
 		let curr = plugin.chain.current_note;
 		if(curr == null){return;}
@@ -55,9 +55,9 @@ const longform2notechain = (plugin:NoteChainPlugin) => ({
 	}
 });
 
-const longform4notechain = (plugin:NoteChainPlugin) => ({
+const cmd_longform4notechain = (plugin:NoteChainPlugin) => ({
 	id: "longform4notechain",
-    name: "Reset LongForm Secnes by Note Chain.",
+    name: plugin.lang.cmd_longform4notechain,
 	callback: () => {
 		let curr = plugin.chain.current_note;
 		if(curr==null){return;}
@@ -77,41 +77,41 @@ const longform4notechain = (plugin:NoteChainPlugin) => ({
 });
 
 
-const sort_file_explorer = (plugin:NoteChainPlugin) => ({
+const cmd_sort_file_explorer = (plugin:NoteChainPlugin) => ({
 	id: "sort_file_explorer",
-    name: "Sort File Explorer by Note Chain.",
+    name: plugin.lang.cmd_sort_file_explorer,
 	callback: async () => {
 		await plugin.explorer.sort();
 	}
 });
 
-const open_notes_smarter = (plugin:NoteChainPlugin) => ({
+const cmd_open_notes_smarter = (plugin:NoteChainPlugin) => ({
 	id: 'open_notes_smarter',
-	name: 'Open note smarter',
+	name: plugin.lang.cmd_open_notes_smarter,
 	callback: () => {
 		plugin.open_note_smarter();
 	}
 })
 
-const sugguster_open_note = (plugin:NoteChainPlugin) => ({
+const cmd_open_note = (plugin:NoteChainPlugin) => ({
 	id: 'sugguster_open_note',
-	name: 'Open note',
+	name: plugin.lang.cmd_open_note,
 	callback: () => {
 		plugin.chain.sugguster_open_note();
 	}
 });
 
-const open_prev_notes = (plugin:NoteChainPlugin) => ({
+const cmd_open_prev_notes = (plugin:NoteChainPlugin) => ({
 	id: 'open_prev_notes',
-	name: 'Open prev note',
+	name: plugin.lang.cmd_open_prev_notes,
 	callback: () => {
 		plugin.chain.open_prev_notes();
 	}
 });
 
-const open_next_notes = (plugin:NoteChainPlugin) => ({
+const cmd_open_next_notes = (plugin:NoteChainPlugin) => ({
 	id: 'open_next_notes',
-	name: 'Open next note',
+	name: plugin.lang.cmd_open_next_notes,
 	callback: () => {
 		plugin.chain.open_next_notes();
 	}
@@ -120,7 +120,7 @@ const open_next_notes = (plugin:NoteChainPlugin) => ({
 
 const clear_inlinks = (plugin:NoteChainPlugin) => ({
 	id: 'clear_inlinks',
-	name: 'Clear inlinks of current file',
+	name: plugin.lang.clear_inlinks,
 	callback: () => {
 		plugin.clear_inlinks();
 	}
@@ -128,7 +128,7 @@ const clear_inlinks = (plugin:NoteChainPlugin) => ({
 
 const move_file_to_another_folder = (plugin:NoteChainPlugin) => ({
 	id: 'move_file_to_another_folder',
-	name: 'Move current file to another folder',
+	name: plugin.lang.move_file_to_another_folder,
 	callback: () => {
 		plugin.chain.cmd_move_file_to_another_folder();
 	}
@@ -136,7 +136,7 @@ const move_file_to_another_folder = (plugin:NoteChainPlugin) => ({
 
 const replace_notes_with_regx = (plugin:NoteChainPlugin) => ({
 	id: 'replace_notes_with_regx',
-	name: 'Replace by regex',
+	name: plugin.lang.replace_notes_with_regx,
 	callback: () => {
 		plugin.replace_notes_with_regx();
 	}
@@ -144,7 +144,7 @@ const replace_notes_with_regx = (plugin:NoteChainPlugin) => ({
 
 const chain_insert_node = (plugin:NoteChainPlugin) => ({
 	id: 'chain_insert_node',
-	name: 'Insert node of chain',
+	name: plugin.lang.chain_insert_node,
 	callback: async () => {
 		await plugin.cmd_chain_insert_node();
 		await plugin.explorer.sort(500);
@@ -153,7 +153,7 @@ const chain_insert_node = (plugin:NoteChainPlugin) => ({
 
 const chain_set_seq_note = (plugin:NoteChainPlugin) => ({
 	id: 'chain_set_seq_note',
-	name: 'Reset the chain of current folder!',
+	name: plugin.lang.chain_set_seq_note,
 	callback: async () => {
 		await plugin.chain.chain_suggester_tfiles();
 		plugin.explorer.sort();
@@ -162,7 +162,7 @@ const chain_set_seq_note = (plugin:NoteChainPlugin) => ({
 
 const create_new_note = (plugin:NoteChainPlugin) => ({
 	id: 'create_new_note',
-	name: 'Create new note.',
+	name: plugin.lang.create_new_note,
 	callback: async () => {
 		let targets = {
 			'添加后置笔记' :'chain_insert_node_after',
@@ -204,13 +204,13 @@ const create_new_note = (plugin:NoteChainPlugin) => ({
 });
 
 const commandBuilders = [
-	open_prev_notes,
-	open_next_notes,
-	open_notes_smarter,
-	sugguster_open_note,
-	longform2notechain,
-	longform4notechain,
-	sort_file_explorer,
+	cmd_open_prev_notes,
+	cmd_open_next_notes,
+	cmd_open_notes_smarter,
+	cmd_open_note,
+	cmd_longform2notechain,
+	cmd_longform4notechain,
+	cmd_sort_file_explorer,
 	clear_inlinks,
 	replace_notes_with_regx,
 	move_file_to_another_folder,
@@ -230,6 +230,7 @@ export default class NoteChainPlugin extends Plugin {
 	chain : NoteChain;
 	editor : NCEditor; 
 	explorer : NCFileExplorer;
+	lang : LangString;
 	debug:boolean;
 	utils:any;
 	ob:any;
@@ -244,6 +245,7 @@ export default class NoteChainPlugin extends Plugin {
 		this.editor = new NCEditor(this.app);
 		this.chain = new NoteChain(this,this.editor);
 		this.explorer = new NCFileExplorer(this);
+		this.lang = new LangString();
 
 		addCommands(this);
 
@@ -257,7 +259,6 @@ export default class NoteChainPlugin extends Plugin {
 
 		this.registerEvent(this.app.vault.on(
 			"delete", async (file: TFile) => {
-				if(this.debug){console.log("delete...");}
 				await this.chain.chain_pop_node(file);
 				await this.explorer.sort();
 			}
@@ -265,7 +266,6 @@ export default class NoteChainPlugin extends Plugin {
 
 		this.registerEvent(this.app.vault.on(
 			"create", async () => {
-				if(this.debug){console.log("create...");}
 				await this.utils.sleep(500);
 				this.explorer.sort();
 			}
@@ -273,7 +273,6 @@ export default class NoteChainPlugin extends Plugin {
 
 		this.registerEvent(this.app.vault.on(
 			"rename", async (file: TFile,oldPath:string) => {
-				if(this.debug){console.log("rename...");}
 				await this.utils.sleep(500);
 				this.explorer.sort();
 			}
@@ -469,8 +468,7 @@ class NCSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-				.setName('Sort File Explorer')
-				.setDesc('Sort File Explorer by Chain')
+				.setName(this.plugin.lang.setting_isSortFileExplorer)
 				.addToggle(text => text
 					.setValue(this.plugin.settings.isSortFileExplorer)
 					.onChange(async (value) => {
@@ -480,8 +478,7 @@ class NCSettingTab extends PluginSettingTab {
 					})
 				);
 		new Setting(containerEl)
-				.setName('Sort Folder First')
-				.setDesc('Sort File Explorer Folder First')
+				.setName(this.plugin.lang.setting_isFolderFirst)
 				.addToggle(text => text
 					.setValue(this.plugin.settings.isFolderFirst)
 					.onChange(async (value) => {
@@ -493,8 +490,7 @@ class NCSettingTab extends PluginSettingTab {
 
 		
 		new Setting(containerEl)
-			.setName('PrevChain')
-			.setDesc('Number of Prev Notes to show?')
+			.setName('Number of Prev Notes to show?')
 			.addText(text => text
 				.setValue(this.plugin.settings.PrevChain)
 				.onChange(async (value) => {
@@ -503,8 +499,7 @@ class NCSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('NextChain')
-			.setDesc('Number of Next Notes to show?')
+			.setName(this.plugin.lang.setting_NextChain)
 			.addText(text => text
 				.setValue(this.plugin.settings.NextChain)
 				.onChange(async (value) => {
@@ -514,8 +509,7 @@ class NCSettingTab extends PluginSettingTab {
 
 		
 		new Setting(containerEl)  
-				.setName('refreshDataView')
-				.setDesc('Refresh Dataview while open new file?')
+				.setName(this.plugin.lang.setting_refreshDataView)
 				.addToggle(text => text
 					.setValue(this.plugin.settings.refreshDataView)
 					.onChange(async (value) => {
@@ -524,8 +518,7 @@ class NCSettingTab extends PluginSettingTab {
 					})
 				);
 		new Setting(containerEl)
-				.setName('refreshTasks')
-				.setDesc('Refresh Tasks while open new file?')
+				.setName(this.plugin.lang.setting_refreshTasks)
 				.addToggle(text => text
 					.setValue(this.plugin.settings.refreshTasks)
 					.onChange(async (value) => {
