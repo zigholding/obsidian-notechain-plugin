@@ -5,7 +5,6 @@ import {
 } from 'obsidian';
 
 
-
 export class NCEditor{
 	app:App;
 

@@ -6,7 +6,7 @@ import {
 	TFile,TFolder
 } from 'obsidian';
 
-import {NoteChainPlugin} from "../main";
+import NoteChainPlugin from "../main";
 import {NCEditor} from './NCEditor';
 import {get_tp_func} from './utils'
 
@@ -49,7 +49,7 @@ export class NoteChain{
 	}
 
 	get_all_folders(sort_mode=''){
-		return this.app.vault.getAllFolders();
+		return (this.app.vault as any).getAllFolders();
 	}
 
 	get_all_tfiles(sort_mode=''){
@@ -95,15 +95,15 @@ export class NoteChain{
 	}
 	
 	filter_user_ignore(note:TFile){
-		if(!(this.app.vault.config.attachmentFolderPath==='./')){
+		if(!((this.app.vault as any).config.attachmentFolderPath==='./')){
 			if(note.path.startsWith(
-				this.app.vault.config.attachmentFolderPath)
+				(this.app.vault as any).config.attachmentFolderPath)
 			){
 				return false;
 			}
 		}
-		if(this.app.vault.config.userIgnoreFilters){
-			for(let x of this.app.vault.config.userIgnoreFilters){
+		if((this.app.vault as any).userIgnoreFilters){
+			for(let x of (this.app.vault as any).userIgnoreFilters){
 				if(note.path.startsWith(x)){
 					return false;
 				}
@@ -134,7 +134,7 @@ export class NoteChain{
 				this.app.workspace.activeLeaf.openFile(tfile);
 			}
 			if(revealFolder){
-				this.plugin.explorer.file_explorer.revealInFolder(tfile);
+				(this.plugin.explorer.file_explorer as any).revealInFolder(tfile);
 			}
 		}
 	}
@@ -148,7 +148,7 @@ export class NoteChain{
 	}
 
 
-	get_tfile(path){
+	get_tfile(path:string){
 		let name = path.split('|')[0].replace('[[','').replace(']]','');
 		return this.tp_find_tfile(name);
 	}
@@ -162,37 +162,31 @@ export class NoteChain{
 
 		let res = new Array();
 
-		let dv_api = this.app.plugins.getPlugin("dataview");
+		let dv_api = (this.app as any).plugins.getPlugin("dataview");
 
 		let inlinks = dv_api.index.links.invMap.get(tfile.path);
 		if(inlinks==undefined){
 			return [];
 		}else{
 			return Array.from(inlinks).map(
-				(path)=>(this.app.vault.fileMap[path])
+				(path:string)=>((this.app.vault as any).fileMap[path])
 			).filter(
-				(item)=>(item)
+				(item:string)=>(item)
 			)
 		}
 	}
 
 	get_outlinks(tfile=this.current_note){
 		if(tfile==null){return [];}
-		if(this.app instanceof App){
-			if(this.app.plugins){
-
-			}
-		}
-		
-		let dv_api = this.app.plugins.getPlugin("dataview");
+		let dv_api = (this.app as any).plugins.getPlugin("dataview");
 		let inlinks = dv_api.index.links.map.get(tfile.path);
 		if(inlinks==undefined){
 			return [];
 		}else{
 			return Array.from(inlinks).map(
-				(path)=>(this.app.vault.fileMap[path])
+				(path:string)=>((this.app.vault as any).fileMap[path])
 			).filter(
-				(item)=>(item)
+				(item:string)=>(item)
 			)
 		}
 	}
@@ -227,7 +221,7 @@ export class NoteChain{
 		return []
 	}
 
-	get_tfiles_of_folder(tfolder:TFolder,with_children=false){
+	get_tfiles_of_folder(tfolder:TFolder|null,with_children=false):any{
 		if(tfolder==null){return [];}
 		let notes = [];
 		for(let c of tfolder.children){
@@ -261,24 +255,10 @@ export class NoteChain{
 		return idx;
 	}
 
-	parse_item(item){
-		var args = [].slice.call(arguments).slice(1);
-		let kwargs = {}
-		if(args.length==1){
-			kwargs = args[0];
-		}
-		let seq = kwargs['seq'];
-
-		if(seq!=null){
-			return `${seq} -> ${item}`;
-		}
-		return item;
-	}
-
 	tfile_to_string(tfile:TFile){
 		let curr = this.current_note;
 		let msg = '';
-		if(tfile.parent==curr.parent){
+		if(tfile.parent==curr?.parent){
 			msg = tfile.basename;
 		}else{
 			msg = tfile.path;
@@ -289,27 +269,6 @@ export class NoteChain{
 			return msg;
 		}
 		
-	}
-
-	parse_items(items:Array<string|TFile>){
-		var args = [].slice.call(arguments).slice(1);
-		let kwargs = {}
-		if(args.length==1){
-			kwargs = args[0];
-		}
-
-		let res = [];
-		let i = 0;
-		while(i<items.length){
-			if(kwargs['seq']){
-				res.push(this.parse_item(items[i],{'seq':i+1}));
-			}else{
-				res.push(this.parse_item(items[i]));
-			}
-			
-			i++;
-		}
-		return res;
 	}
 
 	async suggester_notes(tfile=this.current_note,curr_first=true,smode=''){
@@ -349,7 +308,9 @@ export class NoteChain{
 		}else if(mode==='同级笔记'){
 			return this.get_brothers(tfile);
 		}else if(mode==='同级笔记+子目录'){
-			return this.get_tfiles_of_folder(tfile?.parent,true);
+			if(tfile?.parent){
+				return this.get_tfiles_of_folder(tfile.parent,true);
+			}
 		}else if(mode==='出链+入链'){
 			return this.get_links(tfile);
 		}else if(mode==='入链'){
@@ -359,13 +320,15 @@ export class NoteChain{
 		}else if(mode==='所有笔记'){
 			return this.get_all_tfiles();
 		}else if(mode==='recent-files-obsidian'){
-			let r = this.app.plugins.getPlugin("recent-files-obsidian");
+			let r = (this.app as any).plugins.getPlugin("recent-files-obsidian");
 			if(!r){return [];}
 			return Object.values(
-				r.data.recentFiles).map(f=>this.app.vault.fileMap[f.path]
+				r.data.recentFiles).map((f:TAbstractFile)=>(this.app.vault as any).fileMap[f.path]
 			).filter(f=>f);
 		}else if(mode==='上级笔记'){
-			return this.get_uncles(tfile);
+			if(tfile){
+				return this.get_uncles(tfile);
+			}
 		}else if(mode==='笔记链条'){
 			return this.get_chain(
 				tfile,
@@ -381,10 +344,10 @@ export class NoteChain{
 	// Chain
 	get_prev_note(tfile=this.current_note){
 		if(!tfile){return;}
-		if(tfile.deleted){
+		if((tfile as any).deleted){
 			let tfiles = this.app.vault.getMarkdownFiles();
 			
-			tfiles.filter(f=>`[[${tfile.basename}]]`===app.nc.editor.get_frontmatter(f,"NextNote"))
+			tfiles.filter(f=>`[[${tfile.basename}]]`===this.plugin.editor.get_frontmatter(f,"NextNote"))
 			tfiles = tfiles.filter(f=>`[[${tfile.basename}]]`===this.editor.get_frontmatter(f,this.next));
 			if(tfiles.length>0){
 				return tfiles[0];
@@ -408,7 +371,7 @@ export class NoteChain{
 
 	get_next_note(tfile=this.current_note){
 		if(!tfile){return null;}
-		if(tfile.deleted){
+		if((tfile as any).deleted){
 			let tfiles = this.app.vault.getMarkdownFiles();
 			tfiles = tfiles.filter(f=>`[[${tfile.basename}]]`===this.editor.get_frontmatter(f,this.prev));
 			if(tfiles.length>0){
@@ -600,7 +563,7 @@ export class NoteChain{
 		await this.chain_concat_tfiles(files);
 	}
 
-	sort_tfiles(files:Array<TFile>,field:any){
+	sort_tfiles(files:Array<TFile>,field:any):any{
 		if(typeof field === 'string'){
 			if(field==='name'){
 				return files.sort(
@@ -709,17 +672,17 @@ export class NoteChain{
 	view_sort_by_chain(){
 		let view = this.app.workspace.getLeavesOfType(
 			"file-explorer"
-		)[0]?.view;
+		)[0]?.view as any;
 		if(!view){return;}
 		view.sort();
 		if(view.ready){
 			for(let path in view.fileItems){
 				let item = view.fileItems[path];
 				if(item.vChildren){
-					let files = item.vChildren._children.map(f=>f.file);
+					let files = item.vChildren._children.map((f:any)=>f.file);
 					files = this.sort_tfiles_by_chain(files);
 					let children = item.vChildren._children.sort(
-						(a,b)=>files.indexOf(a.file)-files.indexOf(b.file)
+						(a:any,b:any)=>files.indexOf(a.file)-files.indexOf(b.file)
 					)
 					item.vChildren.setChildren(children);
 				}

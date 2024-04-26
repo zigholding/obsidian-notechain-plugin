@@ -2,12 +2,12 @@ import {
 	App,TAbstractFile,TFile,TFolder,Vault
 } from 'obsidian';
 
-import {NoteChainPlugin} from "../main";
+import NoteChainPlugin from "../main";
 import {NoteChain} from "./NoteChain";
 
 
 let chain_sort = function(org_sort:Function) {
-	let plugin = app.plugins.getPlugin('note-chain');
+	let plugin = (app as any).plugins.getPlugin('note-chain');
 	return function(...d:any){
 		if(plugin){
 			if(plugin?.settings.isSortFileExplorer){
@@ -42,38 +42,13 @@ let chain_sort = function(org_sort:Function) {
 	}
 }
 
-chain_sort_v1 = function(org_sort:Function) {
-	let plugin = app.plugins.getPlugin('note-chain');
-	return function(...d:any){
-		if(plugin){
-			if(plugin?.settings.isSortFileExplorer){
-				var e = this.file
-				, t = this.view
-				, i = e.children.slice();
-				i = i.filter(x=>x);
-				i = plugin.chain.sort_tfiles_by_chain(i);
-				i = plugin.chain.sort_tfiles_folder_first(i);
-				for (var r = [], o = 0, a = i; o < a.length; o++) {
-					var s = a[o]
-					, l = t.fileItems[s.path];
-					l && r.push(l)
-				}
-				this.vChildren.setChildren(r)
-			}else{
-				return org_sort.call(this,...d);
-			}
-		}else{
-			return org_sort.call(this,...d);
-		}
-	}
-}
-
 export class NCFileExplorer{
 	plugin:NoteChainPlugin;
 	app:App;
 	chain:NoteChain;
 	org_sort:Function;
 	new_sort:Function;
+	_FolderDom_:any;
 
 	constructor(plugin:NoteChainPlugin){
 		this.plugin = plugin;
@@ -86,7 +61,7 @@ export class NCFileExplorer{
 	register(){
 		this.app.workspace.onLayoutReady(()=>{
 			let folder = new TFolder(Vault,"");
-			let dom = this.file_explorer.createFolderDom(folder).constructor;
+			let dom = (this.file_explorer as any).createFolderDom(folder).constructor;
 			this._FolderDom_ = dom;
 			this.org_sort = dom.prototype.sort;
 			this.new_sort = chain_sort(this.org_sort);
@@ -110,12 +85,12 @@ export class NCFileExplorer{
 	}
 	
 	async sort(nsleep=0){
-		if(this.file_explorer?.sort){
+		if((this.file_explorer as any)?.sort){
 			if(nsleep>0){
 				await this.plugin.utils.sleep(nsleep);
 			}
 			this.plugin.chain.init_children();
-			this.file_explorer.sort();
+			(this.file_explorer as any).sort();
 		}	
 	}
 }

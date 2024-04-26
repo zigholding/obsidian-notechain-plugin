@@ -192,7 +192,7 @@ const create_new_note = (plugin:NoteChainPlugin) => ({
 					);
 					await plugin.utils.sleep(300);
 					if(!(target==='null')){
-						await plugin.chain[target](dst,curr);
+						await (plugin.chain as any)[target](dst,curr);
 					}
 					await plugin.utils.sleep(300);
 					await plugin.chain.open_note(dst);
@@ -240,7 +240,6 @@ export default class NoteChainPlugin extends Plugin {
 		
 		this.utils = require('./src/utils');
 		this.ob = require('obsidian');
-		this.app.nc = this;
 		
 		this.editor = new NCEditor(this.app);
 		this.chain = new NoteChain(this,this.editor);
@@ -265,15 +264,17 @@ export default class NoteChainPlugin extends Plugin {
 		))
 
 		this.registerEvent(this.app.vault.on(
-			"create", () => {
+			"create", async () => {
 				if(this.debug){console.log("create...");}
+				await this.utils.sleep(500);
 				this.explorer.sort();
 			}
 		))
 
 		this.registerEvent(this.app.vault.on(
-			"rename", (file: TFile,oldPath:string) => {
+			"rename", async (file: TFile,oldPath:string) => {
 				if(this.debug){console.log("rename...");}
+				await this.utils.sleep(500);
 				this.explorer.sort();
 			}
 		))
@@ -295,7 +296,7 @@ export default class NoteChainPlugin extends Plugin {
 	}
 
 	async ufunc_on_file_open(file:TFile){
-		let zh = await app.plugins.getPlugin("note-chain");
+		let zh = await (app as any).plugins.getPlugin("note-chain");
 		if(!zh){return;}
 		if(zh.settings.refreshDataView){
 			zh.app.commands.executeCommandById(
@@ -303,7 +304,7 @@ export default class NoteChainPlugin extends Plugin {
 			)
 		}
 		if(zh.settings.refreshTasks){
-			let target = await app.plugins.getPlugin("obsidian-tasks-plugin");
+			let target = await (app as any).plugins.getPlugin("obsidian-tasks-plugin");
 			target.cache.notifySubscribers();
 		}
 	}
@@ -317,6 +318,7 @@ export default class NoteChainPlugin extends Plugin {
 	}
 
 	async clear_inlinks(tfile=this.chain.current_note,mode='suggester'){
+		if(tfile==null){return;}
 		let notes = this.chain.get_inlinks(tfile);
 		if(notes.length){
 			if(mode==='suggester'){
@@ -474,7 +476,7 @@ class NCSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.isSortFileExplorer = value;
 						await this.plugin.saveSettings();
-						this.plugin.explorer.file_explorer.sort();
+						this.plugin.explorer.sort();
 					})
 				);
 		new Setting(containerEl)
@@ -485,7 +487,7 @@ class NCSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.isFolderFirst = value;
 						await this.plugin.saveSettings();
-						this.plugin.explorer.file_explorer.sort();
+						this.plugin.explorer.sort();
 					})
 				);
 
