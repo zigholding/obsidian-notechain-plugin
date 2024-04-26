@@ -8,7 +8,7 @@ import {
 import {NCEditor} from './src/NCEditor';
 import {NoteChain} from './src/NoteChain';
 import {NCFileExplorer} from './src/NCFileExplorer';
-import { LangString } from 'src/lang';
+import { NCString } from 'src/lang';
 
 // Remember to rename these classes and interfaces!
 
@@ -32,7 +32,7 @@ const DEFAULT_SETTINGS: NCSettings = {
 
 const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 	id: "longform2notechain",
-    name: plugin.lang.cmd_longform2notechain,
+    name: plugin.ncstrings.cmd_longform2notechain,
 	callback: () => {
 		let curr = plugin.chain.current_note;
 		if(curr == null){return;}
@@ -57,7 +57,7 @@ const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 
 const cmd_longform4notechain = (plugin:NoteChainPlugin) => ({
 	id: "longform4notechain",
-    name: plugin.lang.cmd_longform4notechain,
+    name: plugin.ncstrings.cmd_longform4notechain,
 	callback: () => {
 		let curr = plugin.chain.current_note;
 		if(curr==null){return;}
@@ -79,7 +79,7 @@ const cmd_longform4notechain = (plugin:NoteChainPlugin) => ({
 
 const cmd_sort_file_explorer = (plugin:NoteChainPlugin) => ({
 	id: "sort_file_explorer",
-    name: plugin.lang.cmd_sort_file_explorer,
+    name: plugin.ncstrings.cmd_sort_file_explorer,
 	callback: async () => {
 		await plugin.explorer.sort();
 	}
@@ -87,7 +87,7 @@ const cmd_sort_file_explorer = (plugin:NoteChainPlugin) => ({
 
 const cmd_open_notes_smarter = (plugin:NoteChainPlugin) => ({
 	id: 'open_notes_smarter',
-	name: plugin.lang.cmd_open_notes_smarter,
+	name: plugin.ncstrings.cmd_open_notes_smarter,
 	callback: () => {
 		plugin.open_note_smarter();
 	}
@@ -95,7 +95,7 @@ const cmd_open_notes_smarter = (plugin:NoteChainPlugin) => ({
 
 const cmd_open_note = (plugin:NoteChainPlugin) => ({
 	id: 'sugguster_open_note',
-	name: plugin.lang.cmd_open_note,
+	name: plugin.ncstrings.cmd_open_note,
 	callback: () => {
 		plugin.chain.sugguster_open_note();
 	}
@@ -103,7 +103,7 @@ const cmd_open_note = (plugin:NoteChainPlugin) => ({
 
 const cmd_open_prev_notes = (plugin:NoteChainPlugin) => ({
 	id: 'open_prev_notes',
-	name: plugin.lang.cmd_open_prev_notes,
+	name: plugin.ncstrings.cmd_open_prev_notes,
 	callback: () => {
 		plugin.chain.open_prev_notes();
 	}
@@ -111,7 +111,7 @@ const cmd_open_prev_notes = (plugin:NoteChainPlugin) => ({
 
 const cmd_open_next_notes = (plugin:NoteChainPlugin) => ({
 	id: 'open_next_notes',
-	name: plugin.lang.cmd_open_next_notes,
+	name: plugin.ncstrings.cmd_open_next_notes,
 	callback: () => {
 		plugin.chain.open_next_notes();
 	}
@@ -120,7 +120,7 @@ const cmd_open_next_notes = (plugin:NoteChainPlugin) => ({
 
 const clear_inlinks = (plugin:NoteChainPlugin) => ({
 	id: 'clear_inlinks',
-	name: plugin.lang.clear_inlinks,
+	name: plugin.ncstrings.clear_inlinks,
 	callback: () => {
 		plugin.clear_inlinks();
 	}
@@ -128,7 +128,7 @@ const clear_inlinks = (plugin:NoteChainPlugin) => ({
 
 const move_file_to_another_folder = (plugin:NoteChainPlugin) => ({
 	id: 'move_file_to_another_folder',
-	name: plugin.lang.move_file_to_another_folder,
+	name: plugin.ncstrings.move_file_to_another_folder,
 	callback: () => {
 		plugin.chain.cmd_move_file_to_another_folder();
 	}
@@ -136,7 +136,7 @@ const move_file_to_another_folder = (plugin:NoteChainPlugin) => ({
 
 const replace_notes_with_regx = (plugin:NoteChainPlugin) => ({
 	id: 'replace_notes_with_regx',
-	name: plugin.lang.replace_notes_with_regx,
+	name: plugin.ncstrings.replace_notes_with_regx,
 	callback: () => {
 		plugin.replace_notes_with_regx();
 	}
@@ -144,7 +144,7 @@ const replace_notes_with_regx = (plugin:NoteChainPlugin) => ({
 
 const chain_insert_node = (plugin:NoteChainPlugin) => ({
 	id: 'chain_insert_node',
-	name: plugin.lang.chain_insert_node,
+	name: plugin.ncstrings.chain_insert_node,
 	callback: async () => {
 		await plugin.cmd_chain_insert_node();
 		await plugin.explorer.sort(500);
@@ -153,7 +153,7 @@ const chain_insert_node = (plugin:NoteChainPlugin) => ({
 
 const chain_set_seq_note = (plugin:NoteChainPlugin) => ({
 	id: 'chain_set_seq_note',
-	name: plugin.lang.chain_set_seq_note,
+	name: plugin.ncstrings.chain_set_seq_note,
 	callback: async () => {
 		await plugin.chain.chain_suggester_tfiles();
 		plugin.explorer.sort();
@@ -162,7 +162,7 @@ const chain_set_seq_note = (plugin:NoteChainPlugin) => ({
 
 const create_new_note = (plugin:NoteChainPlugin) => ({
 	id: 'create_new_note',
-	name: plugin.lang.create_new_note,
+	name: plugin.ncstrings.create_new_note,
 	callback: async () => {
 		let targets = {
 			'添加后置笔记' :'chain_insert_node_after',
@@ -230,7 +230,7 @@ export default class NoteChainPlugin extends Plugin {
 	chain : NoteChain;
 	editor : NCEditor; 
 	explorer : NCFileExplorer;
-	lang : LangString;
+	ncstrings : NCString;
 	debug:boolean;
 	utils:any;
 	ob:any;
@@ -245,7 +245,7 @@ export default class NoteChainPlugin extends Plugin {
 		this.editor = new NCEditor(this.app);
 		this.chain = new NoteChain(this,this.editor);
 		this.explorer = new NCFileExplorer(this);
-		this.lang = new LangString();
+		this.ncstrings = new NCString();
 
 		addCommands(this);
 
@@ -468,7 +468,7 @@ class NCSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-				.setName(this.plugin.lang.setting_isSortFileExplorer)
+				.setName(this.plugin.ncstrings.setting_isSortFileExplorer)
 				.addToggle(text => text
 					.setValue(this.plugin.settings.isSortFileExplorer)
 					.onChange(async (value) => {
@@ -478,7 +478,7 @@ class NCSettingTab extends PluginSettingTab {
 					})
 				);
 		new Setting(containerEl)
-				.setName(this.plugin.lang.setting_isFolderFirst)
+				.setName(this.plugin.ncstrings.setting_isFolderFirst)
 				.addToggle(text => text
 					.setValue(this.plugin.settings.isFolderFirst)
 					.onChange(async (value) => {
@@ -490,7 +490,7 @@ class NCSettingTab extends PluginSettingTab {
 
 		
 		new Setting(containerEl)
-			.setName('Number of Prev Notes to show?')
+			.setName(this.plugin.ncstrings.setting_PrevChain)
 			.addText(text => text
 				.setValue(this.plugin.settings.PrevChain)
 				.onChange(async (value) => {
@@ -499,7 +499,7 @@ class NCSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName(this.plugin.lang.setting_NextChain)
+			.setName(this.plugin.ncstrings.setting_NextChain)
 			.addText(text => text
 				.setValue(this.plugin.settings.NextChain)
 				.onChange(async (value) => {
@@ -509,7 +509,7 @@ class NCSettingTab extends PluginSettingTab {
 
 		
 		new Setting(containerEl)  
-				.setName(this.plugin.lang.setting_refreshDataView)
+				.setName(this.plugin.ncstrings.setting_refreshDataView)
 				.addToggle(text => text
 					.setValue(this.plugin.settings.refreshDataView)
 					.onChange(async (value) => {
@@ -518,7 +518,7 @@ class NCSettingTab extends PluginSettingTab {
 					})
 				);
 		new Setting(containerEl)
-				.setName(this.plugin.lang.setting_refreshTasks)
+				.setName(this.plugin.ncstrings.setting_refreshTasks)
 				.addToggle(text => text
 					.setValue(this.plugin.settings.refreshTasks)
 					.onChange(async (value) => {

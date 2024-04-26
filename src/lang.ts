@@ -1,6 +1,6 @@
 
 
-export class LangString{
+export class NCString{
     language:string;
     constructor(){
         let lang = window.localStorage.getItem('language');
