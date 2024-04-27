@@ -1,6 +1,6 @@
 
 
-export class NCString{
+export class Strings{
     language:string;
     constructor(){
         let lang = window.localStorage.getItem('language');
@@ -93,7 +93,7 @@ export class NCString{
 
     get chain_insert_node(){
         if(this.language=='zh'){
-            return '当前笔记插入节点'
+            return '插入节点'
         }else{
             return "Insert node of chain";
         }
@@ -147,6 +147,14 @@ export class NCString{
         }
     }
 
+    get setting_suggesterNotesMode(){
+        if(this.language=='zh'){
+            return `${this.cmd_open_notes_smarter}：默认模式`
+        }else{
+            return `${this.cmd_open_notes_smarter}:Default Mode`
+        }
+    }
+
     get setting_refreshDataView(){
         if(this.language=='zh'){
             return '打开文件时刷新Dataview视图？'
@@ -164,6 +172,133 @@ export class NCString{
     }
 
     
+    get item_insert_suggester(){
+        if(this.language=='zh'){
+            return '插入模式（相对于锚点）'
+        }else{
+            return "Insert Mode(Relate to Anchor).";
+        }
+    }
+
+    get item_insert_node_after(){
+        if(this.language=='zh'){
+            return '后置笔记'
+        }else{
+            return "Next Note";
+        }
+    }
+
+    get item_insert_node_before(){
+        if(this.language=='zh'){
+            return '前置笔记'
+        }else{
+            return "Prev Note";
+        }
+    }
+
+    get item_insert_node_as_head(){
+        if(this.language=='zh'){
+            return '链头'
+        }else{
+            return "Head of Chain";
+        }
+    }
+
+    get item_insert_node_as_tail(){
+        if(this.language=='zh'){
+            return '链尾'
+        }else{
+            return "Tail of Chain";
+        }
+    }
+
+    get item_insert_folder_after(){
+        if(this.language=='zh'){
+            return '文件夹后置'
+        }else{
+            return "Folder As Next";
+        }
+    }
+
+    get item_get_brothers(){
+        if(this.language=='zh'){
+            return '同级笔记'
+        }else{
+            return "Notes In Same Folder";
+        }
+    }
+
+    get item_same_folder(){
+        if(this.language=='zh'){
+            return '同级笔记+子目录'
+        }else{
+            return "Notes In Same Folder(Recursive)";
+        }
+    }
+
+    get item_inlinks_outlinks(){
+        if(this.language=='zh'){
+            return '出链+入链'
+        }else{
+            return "OutLinks+InLinks";
+        }
+    }
+
+    get item_inlins(){
+        if(this.language=='zh'){
+            return '入链'
+        }else{
+            return "Inlinks";
+        }
+    }
+
+    get item_outlinks(){
+        if(this.language=='zh'){
+            return '出链'
+        }else{
+            return "Outlinks";
+        }
+    }
+
+    get item_all_noes(){
+        if(this.language=='zh'){
+            return '所有笔记'
+        }else{
+            return "All Notes";
+        }
+    }
+
+    get item_recent(){
+        if(this.language=='zh'){
+            return '近期笔记（基于插件：recent-files-obsidian）'
+        }else{
+            return "Recent (Based on Plugin:recent-files-obsidian)";
+        }
+    }
+
+    get item_uncle_notes(){
+        if(this.language=='zh'){
+            return '上级笔记'
+        }else{
+            return "Notes In Grandpa Folder";
+        }
+    }
+
+    get item_notechain(){
+        if(this.language=='zh'){
+            return '笔记链条'
+        }else{
+            return "Note Chain";
+        }
+    }
+
+    get item_currentnote(){
+        if(this.language=='zh'){
+            return '当前笔记'
+        }else{
+            return "Current Note";
+        }
+    }
 }
 
 

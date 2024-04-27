@@ -5,6 +5,7 @@
   "refreshTasks": false,
   "isSortFileExplorer": true,
   "isFolderFirst": false,
+  "suggesterNotesMode": "Notes In Same Folder",
   "newTab": true,
   "withSelf": false,
   "reverse": true,

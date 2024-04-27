@@ -32,7 +32,7 @@ export class NoteChain{
 	init_children(){
 		this.children = {};
 		for(let f of this.get_all_folders()){
-			this.children[f.path] = this.sort_tfiles_by_chain(f.children);
+			(this.children as any)[f.path] = this.sort_tfiles_by_chain(f.children);
 		}
 	}
 
@@ -271,24 +271,24 @@ export class NoteChain{
 		
 	}
 
-	async suggester_notes(tfile=this.current_note,curr_first=true,smode=''){
+	async suggester_notes(tfile=this.current_note,curr_first=false,smode=''){
 		if(tfile){tfile==this.current_note;}
-		let kv = [			
-			'同级笔记',
-			'笔记链条',
-			'上级笔记',
-			'同级笔记+子目录',
-			'出链+入链',
-			'入链',
-			'出链',
-			'所有笔记',
-			'recent-files-obsidian'
+		let kv = [
+			this.plugin.strings.item_get_brothers,
+			this.plugin.strings.item_notechain,
+			this.plugin.strings.item_uncle_notes,
+			this.plugin.strings.item_same_folder,
+			this.plugin.strings.item_inlinks_outlinks,
+			this.plugin.strings.item_inlins,
+			this.plugin.strings.item_outlinks,
+			this.plugin.strings.item_all_noes,
+			this.plugin.strings.item_recent,
 		]
 		
 		if(curr_first){
-			kv.unshift('当前笔记')
+			kv.unshift(this.plugin.strings.item_currentnote)
 		}else{
-			kv.push('当前笔记')
+			kv.push(this.plugin.strings.item_currentnote)
 		}
 		
 		let kvs = []
@@ -303,33 +303,33 @@ export class NoteChain{
 		}else{
 			mode = await this.tp_suggester(kvs,kv);
 		}
-		if(mode==='当前笔记'){
+		if(mode===this.plugin.strings.item_currentnote){
 			return [tfile];
-		}else if(mode==='同级笔记'){
+		}else if(mode===this.plugin.strings.item_get_brothers){
 			return this.get_brothers(tfile);
-		}else if(mode==='同级笔记+子目录'){
+		}else if(mode===this.plugin.strings.item_same_folder){
 			if(tfile?.parent){
 				return this.get_tfiles_of_folder(tfile.parent,true);
 			}
-		}else if(mode==='出链+入链'){
+		}else if(mode===this.plugin.strings.item_inlinks_outlinks){
 			return this.get_links(tfile);
-		}else if(mode==='入链'){
+		}else if(mode===this.plugin.strings.item_inlins){
 			return this.get_inlinks(tfile);
-		}else if(mode==='出链'){
+		}else if(mode===this.plugin.strings.item_outlinks){
 			return this.get_outlinks(tfile);
-		}else if(mode==='所有笔记'){
+		}else if(mode===this.plugin.strings.item_all_noes){
 			return this.get_all_tfiles();
-		}else if(mode==='recent-files-obsidian'){
+		}else if(mode===this.plugin.strings.item_recent){
 			let r = (this.app as any).plugins.getPlugin("recent-files-obsidian");
 			if(!r){return [];}
 			return Object.values(
 				r.data.recentFiles).map((f:TAbstractFile)=>(this.app.vault as any).fileMap[f.path]
 			).filter(f=>f);
-		}else if(mode==='上级笔记'){
+		}else if(mode===this.plugin.strings.item_uncle_notes){
 			if(tfile){
 				return this.get_uncles(tfile);
 			}
-		}else if(mode==='笔记链条'){
+		}else if(mode===this.plugin.strings.item_notechain){
 			return this.get_chain(
 				tfile,
 				Number(this.plugin.settings.PrevChain),
