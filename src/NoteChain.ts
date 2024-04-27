@@ -656,12 +656,12 @@ export class NoteChain{
 		if(tfiles.length==0){return []};
 		let kv = {
 			'chain':'chain',
-			'name':'name',
-			'ctime':'ctime',
-			'mtime':'mtime',
-			'name 倒序':['name','x'],
-			'ctime 倒序':['ctime','x'],
-			'mtime 倒序':['mtime','x'],
+			'name (a to z)':'name',
+			'ctime (old to new)':'ctime',
+			'mtime (old to new)':'mtime',
+			'name (z to a)':['name','x'],
+			'ctime (new to old)':['ctime','x'],
+			'mtime (new to old)':['mtime','x'],
 		}
 		let field = await this.tp_suggester(
 			Object.keys(kv),

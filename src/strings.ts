@@ -149,9 +149,9 @@ export class Strings{
 
     get setting_suggesterNotesMode(){
         if(this.language=='zh'){
-            return `${this.cmd_open_notes_smarter}：默认模式`
+            return `${this.chain_insert_node}：默认模式`
         }else{
-            return `${this.cmd_open_notes_smarter}:Default Mode`
+            return `${this.chain_insert_node}:Default Mode`
         }
     }
 
