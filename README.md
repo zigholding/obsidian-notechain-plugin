@@ -64,6 +64,8 @@ Now that you have completed setting up the note chain, experience the fun of bro
 > 3. 选择节点关系
 > ![Pasted image 20240420113408.png](./assets/Pasted image 20240420113408.png)
 
+![Pasted image 20240420113408.png](./assets/Pasted image 20240420113408.png)
+
 > [!NOTE]- `Reset Note Chain by LongForm`
 > 1. 首先，安装 LongForm 新建项目，对笔记排序；
 > ![Pasted image 20240420113647.png](./assets/Pasted image 20240420113647.png)
