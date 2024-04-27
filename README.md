@@ -13,6 +13,9 @@ graph LR
 Head -.-> P[...] --> PrevA --> A --> NextA -.-> N[...] --> Tail
 ```
 
+These plugins are needed to install:
+- [[Templater]] + [[DataView]] + [[Obsidian Recent Files]]
+
 ## Connect&Open
 
 `Note Chain: Create New Note`：Create Prev/Next/Tail/Head Note relative to current note.
@@ -54,10 +57,12 @@ graph LR
 noteA --> noteB --> FolderC --> FolderD --> noteF
 ```
 
-> [!NOTE]- `Reset Note Chain by LongForm`
-> 1. First, install LongForm to create a new project and sort the notes;
-> ![image](./assets/Pasted%20image%2020240420113647.png)
-> 2. Call the `longform` metadata note and execute the command. The preceding and following notes will be set according to the order of `scenes` + `ignored`;
+`Reset Note Chain by LongForm`：
+1. Install LongForm to create a new project and sort the notes.
+2. Open the notes with frontmatter `longform`
+3. Run this command and Set note chain by the sequence of  `scenes` + `ignored`;
+
+![image](./assets/Pasted%20image%2020240427212022.png)
 
 `Reset the chain of current folder!`：Select mode to set prev/next note sequencely.
 - `chain`: Sort by file name first, then sort by the exsited chain
