@@ -128,10 +128,10 @@ export class NoteChain{
 
 	open_note(tfile:TFile,new_tab=false,revealFolder=true){
 		if(tfile){
-			if(this.app.workspace.activeLeaf.pinned || new_tab){
+			if((this.app.workspace.activeLeaf as any).pinned || new_tab){
 				this.app.workspace.getLeaf(true).openFile(tfile);
 			}else{
-				this.app.workspace.activeLeaf.openFile(tfile);
+				(this.app.workspace.activeLeaf as any).openFile(tfile);
 			}
 			if(revealFolder){
 				(this.plugin.explorer.file_explorer as any).revealInFolder(tfile);
