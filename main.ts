@@ -166,21 +166,20 @@ const create_new_note = (plugin:NoteChainPlugin) => ({
 	id: 'create_new_note',
 	name: plugin.strings.create_new_note,
 	callback: async () => {
-		let targets = {
-			'添加后置笔记' :'chain_insert_node_after',
-			'链尾添加笔记' : 'chain_insert_node_as_tail',
-			'添加前置笔记' : 'chain_insert_node_before',
-			'链头添加笔记' : 'chain_insert_node_as_head',
-			'无链接' : `null`,
-		}
+		let targets :{[key:string]:string} = {}
+		targets[plugin.strings.item_chain_insert_node_after] = 'chain_insert_node_after';
+		targets[plugin.strings.item_chain_insert_node_as_tail] = 'chain_insert_node_as_tail';
+		targets[plugin.strings.item_chain_insert_node_before] = 'chain_insert_node_before';
+		targets[plugin.strings.item_chain_insert_node_as_head] = 'chain_insert_node_as_head';
+		targets[plugin.strings.item_item_chain_insert_null] = 'null';
+
 		let target = await plugin.chain.tp_suggester(
 			plugin.utils.array_prefix_id(Object.keys(targets)), 
 			Object.values(targets), 
-			true, 
-			'选择笔记类型.'
+			true
 		);
 		if(!target){return;}
-		let name = await plugin.chain.tp_prompt('请输入文件名');
+		let name = await plugin.chain.tp_prompt(plugin.strings.prompt_notename);
 		if(name){
 			let curr = plugin.chain.current_note;
 			if(curr && curr.parent){

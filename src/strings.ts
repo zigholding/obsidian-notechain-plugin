@@ -299,6 +299,56 @@ export class Strings{
             return "Current Note";
         }
     }
+
+    get item_chain_insert_node_after():string{
+        if(this.language=='zh'){
+            return '添加后置笔记'
+        }else{
+            return "Create Next Note";
+        }
+    }
+
+    get item_chain_insert_node_as_tail():string{
+        if(this.language=='zh'){
+            return '链尾添加笔记'
+        }else{
+            return "Create Tail Note";
+        }
+    }
+
+    get item_chain_insert_node_before():string{
+        if(this.language=='zh'){
+            return '添加前置笔记'
+        }else{
+            return "Create Prev Note";
+        }
+    }
+
+    get item_chain_insert_node_as_head():string{
+        if(this.language=='zh'){
+            return '链头添加笔记'
+        }else{
+            return "Create Head Note";
+        }
+    }
+
+    get item_item_chain_insert_null():string{
+        if(this.language=='zh'){
+            return '无链接'
+        }else{
+            return "Create Note not in chain";
+        }
+    }
+
+    get prompt_notename():string{
+        if(this.language=='zh'){
+            return '输入笔记名'
+        }else{
+            return "Input Note Name";
+        }
+    }
+
 }
 
 
+export let strings = new Strings();

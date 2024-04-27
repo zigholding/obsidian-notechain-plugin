@@ -9,6 +9,7 @@ import {
 import NoteChainPlugin from "../main";
 import {NCEditor} from './NCEditor';
 import {get_tp_func} from './utils'
+import { strings } from './strings';
 
 
 export class NoteChain{
@@ -128,11 +129,13 @@ export class NoteChain{
 
 	open_note(tfile:TFile,new_tab=false,revealFolder=true){
 		if(tfile){
-			if((this.app.workspace.activeLeaf as any).pinned || new_tab){
+			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+			if(!view || view.leaf && !((view.leaf as any).pinned)||new_tab){
 				this.app.workspace.getLeaf(true).openFile(tfile);
 			}else{
-				(this.app.workspace.activeLeaf as any).openFile(tfile);
+				view.leaf.openFile(tfile);
 			}
+			
 			if(revealFolder){
 				(this.plugin.explorer.file_explorer as any).revealInFolder(tfile);
 			}
