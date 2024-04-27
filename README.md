@@ -16,15 +16,15 @@ Currently, the plug-in provides three ways to help set up note chains.
 > [!NOTE]- `Insert node of chain`
 > > Set the node for the current note.
 > 1. Select node type
-> ![Pasted image 20240426223510.png](./assets/Pasted image 20240426223510.png)
+> ![Pasted image 20240426223510.png](https://github.com/zigholding/obsidian-notechain-plugin/blob/master/assets/Pasted image 20240426223510.png)
 > 2. Select node notes
-> ![Pasted image 20240420113355.png](./assets/Pasted image 20240420113355.png)
+> ![Pasted image 20240420113355.png](https://github.com/zigholding/obsidian-notechain-plugin/blob/master/assets/Pasted image 20240420113355.png)
 > 3. Select node relationship
-> ![Pasted image 20240420113408.png](./assets/Pasted image 20240420113408.png)
+> ![Pasted image 20240420113408.png](https://github.com/zigholding/obsidian-notechain-plugin/blob/master/assets/Pasted image 20240420113408.png)
 
 > [!NOTE]- `Reset Note Chain by LongForm`
 > 1. First, install LongForm to create a new project and sort the notes;
-> ![Pasted image 20240420113647.png](./assets/Pasted image 20240420113647.png)
+> ![Pasted image 20240420113647.png](https://github.com/zigholding/obsidian-notechain-plugin/blob/master/assets/Pasted image 20240420113647.png)
 > 2. Call the `longform` metadata note and execute the command. The preceding and following notes will be set according to the order of `scenes` + `ignored`;
 
 > [!NOTE]- `Reset the chain of current folder!`
@@ -33,7 +33,7 @@ Currently, the plug-in provides three ways to help set up note chains.
 > - `name`: sort by file name;
 > - `ctime`: Sort by creation time;
 > - `mtime`: Sort by modification time;
-> ![Pasted image 20240420113945.png](./assets/Pasted image 20240420113945.png)
+> ![Pasted image 20240420113945.png](https://github.com/zigholding/obsidian-notechain-plugin/blob/master/assets/Pasted image 20240420113945.png)
 
 Now that you have completed setting up the note chain, experience the fun of browsing in the directory. Turn on the `Sort File Exploter` option in the settings page. You will find that the files in the directory have been sorted by note chains. This will invalidate existing sorting functionality.
 
@@ -58,17 +58,15 @@ Now that you have completed setting up the note chain, experience the fun of bro
 > 
 > 为当前笔记设置节点。
 > 1. 选择节点类型
-> ![Pasted image 20240420130232.png](./assets/Pasted image 20240420130232.png)
+> ![Pasted image 20240420130232.png](https://github.com/zigholding/obsidian-notechain-plugin/blob/master/assets/Pasted image 20240420130232.png)
 > 2. 选择节点笔记
-> ![Pasted image 20240420113355.png](./assets/Pasted image 20240420113355.png)
+> ![Pasted image 20240420113355.png](https://github.com/zigholding/obsidian-notechain-plugin/blob/master/assets/Pasted image 20240420113355.png)
 > 3. 选择节点关系
-> ![Pasted image 20240420113408.png](./assets/Pasted image 20240420113408.png)
-
-![Pasted image 20240420113408.png](./assets/Pasted image 20240420113408.png)
+> ![Pasted image 20240420113408.png](https://github.com/zigholding/obsidian-notechain-plugin/blob/master/assets/Pasted image 20240420113408.png)
 
 > [!NOTE]- `Reset Note Chain by LongForm`
 > 1. 首先，安装 LongForm 新建项目，对笔记排序；
-> ![Pasted image 20240420113647.png](./assets/Pasted image 20240420113647.png)
+> ![Pasted image 20240420113647.png](https://github.com/zigholding/obsidian-notechain-plugin/blob/master/assets/Pasted image 20240420113647.png)
 > 2. 打来 `longform` 元数据笔记，执行命令。将会根据 `scenes` + `ignored` 的顺序，设置前后置笔记；
 
 > [!NOTE]- `Reset the chain of current folder!`
@@ -77,14 +75,14 @@ Now that you have completed setting up the note chain, experience the fun of bro
 > 	- `name`：按文件名排序；
 > 	- `ctime`：按创建时间排序；
 > 	- `mtime`：按修改时间排序；
-> ![Pasted image 20240420113945.png](./assets/Pasted image 20240420113945.png)
+> ![Pasted image 20240420113945.png](https://github.com/zigholding/obsidian-notechain-plugin/blob/master/assets/Pasted image 20240420113945.png)
 
 
 
 
 现在，你已经完成了笔记链条的设置，体验在目录中浏览的乐趣吧。在设置页面中打开 `Sort File Exploter` 选项。你会发现，目录中的文件已经按笔记链条排序了。这会让已有的排序功能失效。
 
-![Pasted image 20240420114605.png](./assets/Pasted image 20240420114605.png)
+![Pasted image 20240420114605.png](https://github.com/zigholding/obsidian-notechain-plugin/blob/master/assets/Pasted image 20240420114605.png)
 
 也许你注意到了 `Sort Folder First`？是的，如果目录中同时有文件夹和文件，优先目录，之后笔记。关闭选项后，并不是说将文件夹排到最后。而是，根据通设置目录的同名笔记 `FolderPrevNote` 来确定放在哪条笔记后面。
 
