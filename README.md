@@ -22,6 +22,8 @@ Currently, the plug-in provides three ways to help set up note chains.
 > 3. Select node relationship
 > ![Pasted%20image%2020240420113408.png]("https://github.com/zigholding/obsidian-notechain-plugin/blob/master/assets/Pasted%20image%2020240420113408.png")
 
+![image](https://github.com/zigholding/obsidian-notechain-plugin/blob/master/assets/Pasted%20image%2020240420113408.png)
+
 > [!NOTE]- `Reset Note Chain by LongForm`
 > 1. First, install LongForm to create a new project and sort the notes;
 > ![Pasted%20image%2020240420113647.png]("https://github.com/zigholding/obsidian-notechain-plugin/blob/master/assets/Pasted%20image%2020240420113647.png")
