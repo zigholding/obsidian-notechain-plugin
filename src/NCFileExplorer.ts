@@ -61,11 +61,7 @@ export class NCFileExplorer{
 	register(){
 		this.app.workspace.onLayoutReady(()=>{
 			let folder;
-			try {
-				folder = new TFolder();
-			} catch (error) {
-				folder = new TFolder(Vault,"");
-			}
+			folder = new TFolder();
 			let dom = (this.file_explorer as any).createFolderDom(folder).constructor;
 			this._FolderDom_ = dom;
 			this.org_sort = dom.prototype.sort;
