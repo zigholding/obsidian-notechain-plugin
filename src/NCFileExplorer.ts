@@ -11,7 +11,7 @@ let chain_sort = function(org_sort:Function) {
 	return function(...d:any){
 		if(plugin){
 			if(plugin?.settings.isSortFileExplorer){
-				var e = this.file
+				let e = this.file
 				, t = this.view
 				, i = e.children.slice();
 				i = i.filter((x:TAbstractFile)=>x);
@@ -27,8 +27,8 @@ let chain_sort = function(org_sort:Function) {
 				if(plugin.settings.isFolderFirst){
 					i = plugin.chain.sort_tfiles_folder_first(i);
 				}
-				for (var r = [], o = 0, a = i; o < a.length; o++) {
-					var s = a[o]
+				for (let r = [], o = 0, a = i; o < a.length; o++) {
+					let s = a[o]
 					, l = t.fileItems[s.path];
 					l && r.push(l)
 				}

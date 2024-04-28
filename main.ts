@@ -253,7 +253,6 @@ export default class NoteChainPlugin extends Plugin {
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new NCSettingTab(this.app, this));
 
-		console.log('Zig-Holding:regeister ufunc_on_file_open');
 		this.registerEvent(
 			this.app.workspace.on('file-open', this.ufunc_on_file_open)
 		);
@@ -282,17 +281,9 @@ export default class NoteChainPlugin extends Plugin {
 
 
 	onunload() {
-		console.log('Zig-Holding:unregeister ufunc_on_file_open');
 		this.app.workspace.off('file-open', this.ufunc_on_file_open);
 		this.explorer.unregister();
 		this.explorer.sort();
-	}
-
-
-	console_log(...d:any){
-		if(this.debug){
-			console.log(...d);
-		}
 	}
 
 	async ufunc_on_file_open(file:TFile){
@@ -359,12 +350,11 @@ export default class NoteChainPlugin extends Plugin {
 				target = target.trim().replace(
 					/\\n/g,'\n'
 				);
-				console.log(regs,reg,target);
 				for(let note of notes){
 					await this.editor.replace(note,reg,target);
 				}
 			} catch (error) {
-				console.log(error);
+				
 			}
 			
 		}
@@ -400,8 +390,6 @@ export default class NoteChainPlugin extends Plugin {
 		);
 		
 		if(!mode){return;}
-
-		console.log(typeof(mode),mode);
 
 		if(mode===this.strings.item_insert_node_as_head){
 			await this.chain.chain_insert_node_as_head(curr,note);

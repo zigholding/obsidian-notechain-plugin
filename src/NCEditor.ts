@@ -17,7 +17,6 @@ export class NCEditor{
 		if(prev===value){return;}
 
 		await this.app.fileManager.processFrontMatter(tfile,fm =>{
-			console.log(`${tfile.basename}---${key}---${value}`);
 			fm[key] = value;
 		});
 	}
@@ -30,9 +29,6 @@ export class NCEditor{
 				return meta.frontmatter[key];
 			}
 		} catch (error) {
-			console.log('get_frontmatter');
-			console.log(tfile);
-			console.log(error);
 			return null;
 		}
 		
@@ -54,7 +50,6 @@ export class NCEditor{
 		if(typeof regex === 'string'){
 			await this.app.vault.process(tfile,(data)=>{
 				if(data.indexOf(regex)>-1){
-					console.log('Replace: ',tfile.path);
 					return data.replace(regex, target);
 				}
 				return data;
@@ -62,7 +57,6 @@ export class NCEditor{
 		}else if(regex instanceof RegExp){
 			await this.app.vault.process(tfile,(data)=>{
 				if(data.match(regex)){
-					console.log('Replace: ',tfile.path);
 					return data.replace(regex, target);
 				}
 				return data;

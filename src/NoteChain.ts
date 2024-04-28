@@ -533,8 +533,6 @@ export class NoteChain{
 
 	async chain_insert_node_after(tfile:TFile,anchor:TFile){
 		let t = this;
-		console.log(this);
-		t.plugin.console_log(t);
 		await t.chain_pop_node(tfile);
 		let next = this.get_next_note(anchor);
 		await this.chain_concat_tfiles([anchor,tfile,next]);
@@ -552,7 +550,6 @@ export class NoteChain{
 		}
 		let note = this.get_tfile(tfile.parent.name);
 		if(!note){
-			console.log('需要要先创建同名笔记');
 			return;
 		}
 		await this.plugin.editor.set_frontmatter(
@@ -602,22 +599,26 @@ export class NoteChain{
 	}
 	
 	sort_tfiles_by_chain(tfiles:Array<TAbstractFile>){
-		let notes = tfiles.filter(f=>f instanceof TFile) as TFile[];
-		let res = [] as TAbstractFile[];
+		let notes = tfiles.filter(f=>f instanceof TFile);
+		let res:TAbstractFile[] = [];
+		let ctfiles:TFile[] = [];
 		while(notes.length>0){
 			let note = notes[0];
-			let xchain = this.get_chain(note,-1,-1);
-			for(let x of xchain){
-				if(notes.contains(x)){
-					res.push(x);
-					notes.remove(x);
+			if(note instanceof TFile){
+				let xchain = this.get_chain(note,-1,-1);
+				for(let x of xchain){
+					if(notes.contains(x)){
+						ctfiles.push(x);
+						notes.remove(x);
+					}
 				}
 			}
 		}
-		let folders = tfiles.filter(f=>f instanceof TFolder) as TFolder[];
+		res.push(...ctfiles);
+		let folders = tfiles.filter(f=>f instanceof TFolder);
 		if(folders.length>0){
 			let idxs = folders.map(
-				(f:TFolder)=>this.indexOfFolder(f,res as TFile[])
+				(f:TFolder)=>this.indexOfFolder(f,ctfiles)
 			);
 			res.push(...folders);
 			function indexOf(f:TAbstractFile){
