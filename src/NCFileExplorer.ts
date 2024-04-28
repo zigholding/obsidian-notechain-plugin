@@ -27,12 +27,13 @@ let chain_sort = function(org_sort:Function) {
 				if(plugin.settings.isFolderFirst){
 					i = plugin.chain.sort_tfiles_folder_first(i);
 				}
-				for (let r = [], o = 0, a = i; o < a.length; o++) {
+				let r = [];
+				for (let o = 0, a = i; o < a.length; o++) {
 					let s = a[o]
 					, l = t.fileItems[s.path];
 					l && r.push(l)
 				}
-				this.vChildren.setChildren(r)
+				this.vChildren.setChildren(r);
 			}else{
 				return org_sort.call(this,...d);
 			}
@@ -72,7 +73,6 @@ export class NCFileExplorer{
 
 	unregister(){
 		if(this.org_sort){
-			console.log("Reset FileExplorer to origin sort function.");
 			this._FolderDom_.prototype.sort = this.org_sort;
 		}
 	}
