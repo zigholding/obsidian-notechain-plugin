@@ -49,8 +49,13 @@ export class NoteChain{
 		return get_tp_func(this.app,'tp.system.prompt');
 	}
 
-	get_all_folders(sort_mode=''){
-		return (this.app.vault as any).getAllFolders();
+	get_all_folders(){
+		let folders = (this.app.vault as any).getAllFolders();
+		let folder = this.app.vault.getFolderByPath('/');
+		if(folder&& !folders.contains(folder)){
+			folders.push(folder);
+		}
+		return folders;
 	}
 
 	get_all_tfiles(sort_mode=''){

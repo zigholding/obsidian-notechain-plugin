@@ -15,7 +15,7 @@ export class Strings{
         if(this.language=='zh'){
             return '根据LongForm重置笔记链条'
         }else{
-            return 'Reset Note Chain by LongForm.';
+            return 'Reset note chain by LongForm.';
         }
     }
 
@@ -23,7 +23,7 @@ export class Strings{
         if(this.language=='zh'){
             return '根据笔记链条，重置LongForm场景'
         }else{
-            return "Reset LongForm Scenes by Note Chain.";
+            return "Reset longForm scenes by note chain.";
         }
     }
 
@@ -31,7 +31,7 @@ export class Strings{
         if(this.language=='zh'){
             return '根据笔记链排序'
         }else{
-            return "Sort File Explorer by Note Chain.";
+            return "Sort file explorer by note chain.";
         }
     }
 
@@ -119,7 +119,7 @@ export class Strings{
         if(this.language=='zh'){
             return '根据笔记链条排序目录'
         }else{
-            return "Sort by Chain in File Explorer ?";
+            return "Sort by chain in File Explorer ?";
         }
     }
 
@@ -127,7 +127,7 @@ export class Strings{
         if(this.language=='zh'){
             return '排序时目录时文件夹优先？'
         }else{
-            return "Sort folder first in File Explorer?";
+            return "Sort folder first in file explorer?";
         }
     }
 
@@ -167,7 +167,7 @@ export class Strings{
         if(this.language=='zh'){
             return '打开文件时刷新Tasks视图？'
         }else{
-            return "Refresh Tasks while open new file?";
+            return "Refresh tasks while open new file?";
         }
     }
 
@@ -176,7 +176,7 @@ export class Strings{
         if(this.language=='zh'){
             return '插入模式（相对于锚点）'
         }else{
-            return "Insert Mode(Relate to Anchor).";
+            return "Insert mode(relate to anchor).";
         }
     }
 
@@ -184,7 +184,7 @@ export class Strings{
         if(this.language=='zh'){
             return '后置笔记'
         }else{
-            return "Next Note";
+            return "Next note";
         }
     }
 
@@ -192,7 +192,7 @@ export class Strings{
         if(this.language=='zh'){
             return '前置笔记'
         }else{
-            return "Prev Note";
+            return "Prev note";
         }
     }
 
@@ -200,7 +200,7 @@ export class Strings{
         if(this.language=='zh'){
             return '链头'
         }else{
-            return "Head of Chain";
+            return "Head of chain";
         }
     }
 
@@ -208,7 +208,7 @@ export class Strings{
         if(this.language=='zh'){
             return '链尾'
         }else{
-            return "Tail of Chain";
+            return "Tail of thain";
         }
     }
 
@@ -288,7 +288,7 @@ export class Strings{
         if(this.language=='zh'){
             return '笔记链条'
         }else{
-            return "Note Chain";
+            return "Note chain";
         }
     }
 
