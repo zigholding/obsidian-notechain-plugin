@@ -96,7 +96,7 @@ const cmd_open_notes_smarter = (plugin:NoteChainPlugin) => ({
 })
 
 const cmd_open_note = (plugin:NoteChainPlugin) => ({
-	id: 'sugguster_open_note',
+	id: 'suggestor_open_note',
 	name: plugin.strings.cmd_open_note,
 	callback: () => {
 		plugin.chain.sugguster_open_note();
@@ -281,22 +281,19 @@ export default class NoteChainPlugin extends Plugin {
 
 
 	onunload() {
-		this.app.workspace.off('file-open', this.ufunc_on_file_open);
 		this.explorer.unregister();
 		this.explorer.sort();
 	}
 
 	async ufunc_on_file_open(file:TFile){
-		let zh = await (app as any).plugins.getPlugin("note-chain");
-		if(!zh){return;}
-		if(zh.settings.refreshDataView){
-			zh.app.commands.executeCommandById(
+		if(this.settings.refreshDataView){
+			(this.app as any).commands.executeCommandById(
 				"dataview:dataview-force-refresh-views"
 			)
 		}
-		if(zh.settings.refreshTasks){
-			let target = await (app as any).plugins.getPlugin("obsidian-tasks-plugin");
-			target.cache.notifySubscribers();
+		if(this.settings.refreshTasks){
+			let target = await (this.app as any).plugins.getPlugin("obsidian-tasks-plugin");
+			target && target.cache.notifySubscribers();
 		}
 	}
 	
@@ -337,13 +334,13 @@ export default class NoteChainPlugin extends Plugin {
 		let notes = await this.chain.suggester_notes();
 		if(notes?.length>0){
 			try {
-				let regs = await this.chain.tp_prompt('要替换的正则表达式');
+				let regs = await this.chain.tp_prompt('Enter the regular expression to replace.');
 				if(regs==null){
 					return;
 				}
 				let reg = new RegExp(regs,'g');
 				
-				let target = await this.chain.tp_prompt('目标字符串');
+				let target = await this.chain.tp_prompt('Enter the target string.');
 				if(target==null){
 					return;
 				}

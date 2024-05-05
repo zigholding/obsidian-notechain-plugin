@@ -33,10 +33,6 @@ export function concat_array(items:Array<any>){
     return res;
 }  
 
-export function sleep(ms:number|undefined){
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 export async function check_value(t:any,k:any,v:any,dt:number,T:number){
     let i = 0;
     while(t[k]==null || !(t[k]===v)){

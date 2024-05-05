@@ -23,7 +23,7 @@ export class Strings{
         if(this.language=='zh'){
             return '根据笔记链条，重置LongForm场景'
         }else{
-            return "Reset LongForm Secnes by Note Chain.";
+            return "Reset LongForm Scenes by Note Chain.";
         }
     }
 
@@ -119,7 +119,7 @@ export class Strings{
         if(this.language=='zh'){
             return '根据笔记链条排序目录'
         }else{
-            return "Sort File Explorer by Chain?";
+            return "Sort by Chain in File Explorer ?";
         }
     }
 
@@ -127,7 +127,7 @@ export class Strings{
         if(this.language=='zh'){
             return '排序时目录时文件夹优先？'
         }else{
-            return "Sort File Explorer Folder First?";
+            return "Sort folder first in File Explorer?";
         }
     }
 
@@ -135,7 +135,7 @@ export class Strings{
         if(this.language=='zh'){
             return '前置笔记数量？'
         }else{
-            return "Number of Prev Notes to show?";
+            return "Number of prev notes to show?";
         }
     }
 
@@ -143,7 +143,7 @@ export class Strings{
         if(this.language=='zh'){
             return '后置笔记数量？'
         }else{
-            return "Number of Next Notes to show?";
+            return "Number of next notes to show?";
         }
     }
 
@@ -151,7 +151,7 @@ export class Strings{
         if(this.language=='zh'){
             return `${this.chain_insert_node}：默认模式`
         }else{
-            return `${this.chain_insert_node}:Default Mode`
+            return `${this.chain_insert_node}:Default mode`
         }
     }
 
@@ -216,7 +216,7 @@ export class Strings{
         if(this.language=='zh'){
             return '文件夹后置'
         }else{
-            return "Folder As Next";
+            return "Folder as next";
         }
     }
 
@@ -224,7 +224,7 @@ export class Strings{
         if(this.language=='zh'){
             return '同级笔记'
         }else{
-            return "Notes In Same Folder";
+            return "Notes in same folder";
         }
     }
 
@@ -232,7 +232,7 @@ export class Strings{
         if(this.language=='zh'){
             return '同级笔记+子目录'
         }else{
-            return "Notes In Same Folder(Recursive)";
+            return "Notes in same folder(recursive)";
         }
     }
 
@@ -240,7 +240,7 @@ export class Strings{
         if(this.language=='zh'){
             return '出链+入链'
         }else{
-            return "OutLinks+InLinks";
+            return "OutLinks + InLinks";
         }
     }
 
@@ -264,7 +264,7 @@ export class Strings{
         if(this.language=='zh'){
             return '所有笔记'
         }else{
-            return "All Notes";
+            return "All notes";
         }
     }
 
@@ -272,7 +272,7 @@ export class Strings{
         if(this.language=='zh'){
             return '近期笔记（基于插件：recent-files-obsidian）'
         }else{
-            return "Recent (Based on Plugin:recent-files-obsidian)";
+            return "Recent (Based on recent files plugin)";
         }
     }
 
@@ -280,7 +280,7 @@ export class Strings{
         if(this.language=='zh'){
             return '上级笔记'
         }else{
-            return "Notes In Grandpa Folder";
+            return "Notes in grandpa folder";
         }
     }
 
@@ -296,7 +296,7 @@ export class Strings{
         if(this.language=='zh'){
             return '当前笔记'
         }else{
-            return "Current Note";
+            return "Current note";
         }
     }
 
@@ -304,7 +304,7 @@ export class Strings{
         if(this.language=='zh'){
             return '添加后置笔记'
         }else{
-            return "Create Next Note";
+            return "Create next note";
         }
     }
 
@@ -312,7 +312,7 @@ export class Strings{
         if(this.language=='zh'){
             return '链尾添加笔记'
         }else{
-            return "Create Tail Note";
+            return "Create tail note";
         }
     }
 
@@ -320,7 +320,7 @@ export class Strings{
         if(this.language=='zh'){
             return '添加前置笔记'
         }else{
-            return "Create Prev Note";
+            return "Create prev note";
         }
     }
 
@@ -328,7 +328,7 @@ export class Strings{
         if(this.language=='zh'){
             return '链头添加笔记'
         }else{
-            return "Create Head Note";
+            return "Create head note";
         }
     }
 
@@ -336,7 +336,7 @@ export class Strings{
         if(this.language=='zh'){
             return '无链接'
         }else{
-            return "Create Note not in chain";
+            return "Create note not in chain";
         }
     }
 
@@ -344,7 +344,7 @@ export class Strings{
         if(this.language=='zh'){
             return '输入笔记名'
         }else{
-            return "Input Note Name";
+            return "Input note name";
         }
     }
 
