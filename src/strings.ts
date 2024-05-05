@@ -23,7 +23,7 @@ export class Strings{
         if(this.language=='zh'){
             return '根据笔记链条，重置LongForm场景'
         }else{
-            return "Reset longForm scenes by note chain.";
+            return "Reset LongForm scenes by note chain.";
         }
     }
 
