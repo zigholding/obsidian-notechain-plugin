@@ -254,7 +254,7 @@ export default class NoteChainPlugin extends Plugin {
 		this.addSettingTab(new NCSettingTab(this.app, this));
 
 		this.registerEvent(
-			this.app.workspace.on('file-open', this.ufunc_on_file_open)
+			this.app.workspace.on('file-open', this.ufunc_on_file_open.bind(this))
 		);
 
 		this.registerEvent(this.app.vault.on(
@@ -284,7 +284,7 @@ export default class NoteChainPlugin extends Plugin {
 		this.explorer.unregister();
 		this.explorer.sort();
 	}
-
+	
 	async ufunc_on_file_open(file:TFile){
 		if(this.settings.refreshDataView){
 			(this.app as any).commands.executeCommandById(
