@@ -3,13 +3,12 @@
 export class Strings{
     language:string;
     constructor(){
-        this.language = 'en';
-        // let lang = window.localStorage.getItem('language');
-        // if(lang){
-        //     this.language = lang;
-        // }else{
-        //     this.language = 'en';
-        // }
+        let lang = window.localStorage.getItem('language');
+        if(lang){
+            this.language = lang;
+        }else{
+            this.language = 'en';
+        }
 	}
 
     get cmd_longform2notechain(){
