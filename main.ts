@@ -191,11 +191,11 @@ const create_new_note = (plugin:NoteChainPlugin) => ({
 						'',name,
 						false,curr.parent
 					);
-					await plugin.utils.sleep(300);
+					await sleep(300);
 					if(!(target==='null')){
 						await (plugin.chain as any)[target](dst,curr);
 					}
-					await plugin.utils.sleep(300);
+					await sleep(300);
 					await plugin.chain.open_note(dst);
 					await plugin.explorer.sort();
 				}
@@ -266,14 +266,14 @@ export default class NoteChainPlugin extends Plugin {
 
 		this.registerEvent(this.app.vault.on(
 			"create", async () => {
-				await this.utils.sleep(500);
+				await sleep(500);
 				this.explorer.sort();
 			}
 		))
 
 		this.registerEvent(this.app.vault.on(
 			"rename", async (file: TFile,oldPath:string) => {
-				await this.utils.sleep(500);
+				await sleep(500);
 				this.explorer.sort();
 			}
 		))
@@ -360,7 +360,8 @@ export default class NoteChainPlugin extends Plugin {
 	async cmd_chain_insert_node(){
 		let curr = this.chain.current_note;
 		if(curr==null){return;}
-		let notes = await this.chain.suggester_notes(curr,false,this.settings.suggesterNotesMode);
+		let smode = (this.strings as any)[this.settings.suggesterNotesMode];
+		let notes = await this.chain.suggester_notes(curr,false,smode);
 		if(!notes){return}
 		notes = this.chain.sort_tfiles(notes,['mtime','x']);
 		notes = this.chain.sort_tfiles_by_chain(notes);
@@ -488,15 +489,15 @@ class NCSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName(this.plugin.strings.setting_suggesterNotesMode)
 			.addDropdown(dropdown => dropdown
-				.addOption(this.plugin.strings.item_get_brothers,this.plugin.strings.item_get_brothers)
-				.addOption(this.plugin.strings.item_uncle_notes,this.plugin.strings.item_uncle_notes)
-				.addOption(this.plugin.strings.item_notechain,this.plugin.strings.item_notechain)
-				.addOption(this.plugin.strings.item_same_folder,this.plugin.strings.item_same_folder)
-				.addOption(this.plugin.strings.item_inlinks_outlinks,this.plugin.strings.item_inlinks_outlinks)
-				.addOption(this.plugin.strings.item_inlins,this.plugin.strings.item_inlins)
-				.addOption(this.plugin.strings.item_outlinks,this.plugin.strings.item_outlinks)
-				.addOption(this.plugin.strings.item_all_noes,this.plugin.strings.item_all_noes)
-				.addOption(this.plugin.strings.item_recent,this.plugin.strings.item_recent)
+				.addOption('item_get_brothers',this.plugin.strings.item_get_brothers)
+				.addOption('item_uncle_notes',this.plugin.strings.item_uncle_notes)
+				.addOption('item_notechain',this.plugin.strings.item_notechain)
+				.addOption('item_same_folder',this.plugin.strings.item_same_folder)
+				.addOption('item_inlinks_outlinks',this.plugin.strings.item_inlinks_outlinks)
+				.addOption('item_inlins',this.plugin.strings.item_inlins)
+				.addOption('item_outlinks',this.plugin.strings.item_outlinks)
+				.addOption('item_all_noes',this.plugin.strings.item_all_noes)
+				.addOption('item_recent',this.plugin.strings.item_recent)
 				.addOption('','')
 
 				.setValue(this.plugin.settings.suggesterNotesMode)

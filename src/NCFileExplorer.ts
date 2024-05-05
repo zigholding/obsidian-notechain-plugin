@@ -87,7 +87,7 @@ export class NCFileExplorer{
 	async sort(nsleep=0){
 		if((this.file_explorer as any)?.sort){
 			if(nsleep>0){
-				await this.plugin.utils.sleep(nsleep);
+				await sleep(nsleep);
 			}
 			this.plugin.chain.init_children();
 			(this.file_explorer as any).sort();
