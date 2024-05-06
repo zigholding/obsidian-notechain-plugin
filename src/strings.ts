@@ -15,7 +15,7 @@ export class Strings{
         if(this.language=='zh'){
             return '根据LongForm重置笔记链条'
         }else{
-            return 'Reset note chain by LongForm.';
+            return 'Reset note chain by longform.';
         }
     }
 
@@ -23,7 +23,7 @@ export class Strings{
         if(this.language=='zh'){
             return '根据笔记链条，重置LongForm场景'
         }else{
-            return "Reset LongForm scenes by note chain.";
+            return "Reset longform scenes by note chain.";
         }
     }
 
@@ -119,7 +119,7 @@ export class Strings{
         if(this.language=='zh'){
             return '根据笔记链条排序目录'
         }else{
-            return "Sort by chain in File Explorer ?";
+            return "Sort by chain in file explorer ?";
         }
     }
 
@@ -159,7 +159,7 @@ export class Strings{
         if(this.language=='zh'){
             return '打开文件时刷新Dataview视图？'
         }else{
-            return "Refresh Dataview while open new file?";
+            return "Refresh dataview while open new file?";
         }
     }
 
@@ -240,7 +240,7 @@ export class Strings{
         if(this.language=='zh'){
             return '出链+入链'
         }else{
-            return "OutLinks + InLinks";
+            return "outLinks + inLinks";
         }
     }
 
@@ -248,7 +248,7 @@ export class Strings{
         if(this.language=='zh'){
             return '入链'
         }else{
-            return "Inlinks";
+            return "inlinks";
         }
     }
 
@@ -256,7 +256,7 @@ export class Strings{
         if(this.language=='zh'){
             return '出链'
         }else{
-            return "Outlinks";
+            return "outlinks";
         }
     }
 

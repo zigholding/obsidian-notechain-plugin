@@ -38,7 +38,7 @@ const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 	callback: () => {
 		let curr = plugin.chain.current_note;
 		if(curr == null){return;}
-		app.fileManager.processFrontMatter(
+		plugin.app.fileManager.processFrontMatter(
 			curr,
 			fm =>{
 				if(curr==null){return;}
@@ -63,7 +63,7 @@ const cmd_longform4notechain = (plugin:NoteChainPlugin) => ({
 	callback: () => {
 		let curr = plugin.chain.current_note;
 		if(curr==null){return;}
-		app.fileManager.processFrontMatter(
+		plugin.app.fileManager.processFrontMatter(
 			curr,
 			fm =>{
 				if(curr==null){return;}
@@ -311,7 +311,7 @@ export default class NoteChainPlugin extends Plugin {
 		if(notes.length){
 			if(mode==='suggester'){
 				mode = await this.chain.tp_suggester(
-					["删除链接",'替换链接',"删除段落",],
+					["delete links",'replace links',"delete paragraph with links",],
 					[['link','del'],['link','rep'],['para','del']]
 				);
 			}
