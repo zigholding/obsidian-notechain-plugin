@@ -16,19 +16,19 @@ export class NCEditor{
 		let prev = this.get_frontmatter(tfile,key);
 		if(prev===value){return;}
 
-		await this.app.fileManager.processFrontMatter(tfile,fm =>{
+		await this.app.fileManager.processFrontMatter(tfile, async (fm) =>{
 			fm[key] = value;
+			// let meta = this.app.metadataCache.getFileCache(tfile);
+			// if(meta){
+			// 	if(meta.frontmatter){
+			// 		meta.frontmatter[key] = value;
+			// 	}else{
+			// 		meta['frontmatter'] ={
+			// 			key:value
+			// 		}
+			// 	}
+			// }
 		});
-		let meta = this.app.metadataCache.getFileCache(tfile);
-		if(meta){
-			if(meta.frontmatter){
-				meta.frontmatter[key] = value;
-			}else{
-				meta['frontmatter'] ={
-					key:value
-				}
-			}
-		}
 	}
 
 	get_frontmatter(tfile:TFile,key:any){

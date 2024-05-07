@@ -59,6 +59,22 @@ export class Strings{
         }
     }
 
+    get chain_move_up_node(){
+        if(this.language=='zh'){
+            return '打开前置笔记'
+        }else{
+            return "Move node up";
+        }
+    }
+
+    get chain_move_down_node(){
+        if(this.language=='zh'){
+            return '打开前置笔记'
+        }else{
+            return "Move node down";
+        }
+    }
+
     get cmd_open_next_notes(){
         if(this.language=='zh'){
             return '打开后置笔记'

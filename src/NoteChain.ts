@@ -471,8 +471,7 @@ export class NoteChain{
 	async chain_set_prev(tfile:TFile,prev:TFile|null){
 		if(tfile==null || tfile==prev){return;}
 		if(this.get_prev_note(tfile)==prev){return;}
-		let msg = `Note Chain set prev: ${tfile.basename} --> ${prev?.basename}`;
-		new Notice(msg,5000);
+		let msg = `Note Chain: ${prev?.basename} --> 🏠${tfile.basename}`;
 		if(prev==null ){
 			await this.editor.set_frontmatter(
 				tfile,this.prev,null
@@ -482,13 +481,13 @@ export class NoteChain{
 				tfile,this.prev,`[[${prev.basename}]]`
 			);
 		}
+		new Notice(msg,5000);
 	}
 
 	async chain_set_next(tfile:TFile,next:TFile|null){
 		if(tfile==null || tfile==next){return;}
 		if(this.get_next_note(tfile)==next){return;}
-		let msg = `Note Chain set next: ${tfile.basename} --> ${next?.basename}`;
-		new Notice(msg,5000);
+		let msg = `Note Chain: 🏠${tfile?.basename} <-- ${next?.basename}`;
 		if(next==null ){
 			await this.editor.set_frontmatter(
 				tfile,this.next,null
@@ -498,9 +497,31 @@ export class NoteChain{
 				tfile,this.next,`[[${next.basename}]]`
 			);
 		}
+		new Notice(msg,5000);
 	}
 
-	async chain_set_prev_next(prev:TFile,next:TFile){
+	async chain_set_prev_next(tfile:TFile,prev:TFile,next:TFile){
+		if(tfile==null || prev==next||tfile==prev||tfile==next){return;}
+
+		if(this.get_prev_note(tfile)==prev){
+			await this.chain_set_next(tfile,next);
+			return;
+		}
+
+		if(this.get_next_note(tfile)==next){
+			await this.chain_set_prev(tfile,prev);
+			return;
+		}
+
+		let msg = `Note Chain: ${prev?.basename} --> 🏠${tfile?.basename} <-- ${next?.basename}`;
+		await this.app.fileManager.processFrontMatter(tfile, async (fm) =>{
+			fm[this.prev] = prev?`[[${prev.basename}]]`:null;
+			fm[this.next] = next?`[[${next.basename}]]`:null;
+		});
+		new Notice(msg,5000);
+	}
+
+	async chain_link_prev_next(prev:TFile,next:TFile){
 		await this.chain_set_prev(next,prev);
 		await this.chain_set_next(prev,next);
 	}
@@ -517,38 +538,59 @@ export class NoteChain{
 		if(tfiles.contains(next)){
 			await this.chain_set_next(tfiles[tfiles.length-1],null);
 		}
-		
-		for(let i=0;i<tfiles.length-1;i++){
-			await this.chain_set_prev_next(tfiles[i],tfiles[i+1])
+		if(tfiles.length<=1){
+			return;
+		}
+		let N = tfiles.length;
+		await this.chain_set_next(tfiles[0],tfiles[1]);
+		await this.chain_set_prev(tfiles[N-1],tfiles[N-2]);
+		for(let i=1;i<tfiles.length-1;i++){
+			await this.chain_set_prev_next(tfiles[i],tfiles[i-1],tfiles[i+1])
 		}
 	}
 
 	async chain_pop_node(tfile:TFile){
 		let notes = this.get_neighbors(tfile);
-		await this.chain_set_prev_next(notes[0],notes[1]);
+		await this.chain_link_prev_next(notes[0],notes[1]);
 	}
 
 	async chain_insert_node_as_head(tfile:TFile,anchor:TFile){
 		let head = this.get_first_note(anchor);
-		await this.chain_set_prev_next(tfile,head);
+		await this.chain_link_prev_next(tfile,head);
 	}
 
 	async chain_insert_node_as_tail(tfile:TFile,anchor:TFile){
 		let tail = this.get_last_note(anchor);
-		await this.chain_set_prev_next(tail,tfile);
+		await this.chain_link_prev_next(tail,tfile);
 	}
 
 	async chain_insert_node_after(tfile:TFile,anchor:TFile){
-		let t = this;
-		await t.chain_pop_node(tfile);
-		let next = this.get_next_note(anchor);
-		await this.chain_concat_tfiles([anchor,tfile,next]);
+		let anchor_next = this.get_next_note(anchor);
+		if(anchor_next==tfile){return;}
+
+		let tfile_neighbor = this.get_neighbors(tfile);
+		if(tfile_neighbor[1]==anchor){
+			await this.chain_concat_tfiles(
+				[tfile_neighbor[0],anchor,tfile,anchor_next]
+			);
+		}else{
+			await this.chain_pop_node(tfile);
+			await this.chain_concat_tfiles([anchor,tfile,anchor_next]);
+		}
 	}
 
 	async chain_insert_node_before(tfile:TFile,anchor:TFile){
-		await this.chain_pop_node(tfile);
-		let prev = this.get_prev_note(anchor);
-		await this.chain_concat_tfiles([prev,tfile,anchor]);
+		let anchor_prev = this.get_prev_note(anchor);
+		if(anchor_prev==tfile){return;}
+		let tfile_neighbor = this.get_neighbors(tfile);
+		if(tfile_neighbor[0]==anchor){
+			await this.chain_concat_tfiles(
+				[anchor_prev,tfile,anchor,tfile_neighbor[1]]
+			);
+		}else{
+			await this.chain_pop_node(tfile);
+			await this.chain_concat_tfiles([anchor_prev,tfile,anchor]);
+		}
 	}
 
 	async chain_insert_folder_after(tfile:TFile,anchor:TFile){

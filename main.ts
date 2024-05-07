@@ -35,12 +35,12 @@ const DEFAULT_SETTINGS: NCSettings = {
 const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 	id: "longform2notechain",
     name: plugin.strings.cmd_longform2notechain,
-	callback: () => {
+	callback: async () => {
 		let curr = plugin.chain.current_note;
 		if(curr == null){return;}
 		plugin.app.fileManager.processFrontMatter(
 			curr,
-			fm =>{
+			async (fm) =>{
 				if(curr==null){return;}
 				if(fm['longform']==null){return;}
 				let scenes = plugin.utils.concat_array(fm.longform.scenes);
@@ -51,7 +51,8 @@ const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 				if(curr.parent==null){return};
 				let tfiles = plugin.chain.get_tfiles_of_folder(curr.parent).filter((f:any)=>!notes.contains(f));
 				notes = plugin.utils.concat_array([tfiles,notes]);
-				plugin.chain.chain_concat_tfiles(notes);
+				await plugin.chain.chain_concat_tfiles(notes);
+				plugin.explorer.sort();
 			}
 		)
 	}
@@ -162,6 +163,40 @@ const chain_set_seq_note = (plugin:NoteChainPlugin) => ({
 	}
 });
 
+const chain_move_up_node = (plugin:NoteChainPlugin) => ({
+	id: 'chain_move_up_node',
+	name: plugin.strings.chain_move_up_node,
+	callback: async () => {
+		let tfile = plugin.chain.current_note;
+		if(tfile){
+			let anchor = plugin.chain.get_prev_note(tfile);
+			if(anchor){
+				await plugin.chain.chain_insert_node_before(
+					tfile,anchor
+				);
+				await plugin.explorer.sort();
+			}
+		}
+	}
+});
+
+const chain_move_down_node = (plugin:NoteChainPlugin) => ({
+	id: 'chain_move_donw_node',
+	name: plugin.strings.chain_move_down_node,
+	callback: async () => {
+		let tfile = plugin.chain.current_note;
+		if(tfile){
+			let anchor = plugin.chain.get_next_note(tfile);
+			if(anchor){
+				await plugin.chain.chain_insert_node_after(
+					tfile,anchor
+				);
+				await plugin.explorer.sort();
+			}
+		}
+	}
+});
+
 const create_new_note = (plugin:NoteChainPlugin) => ({
 	id: 'create_new_note',
 	name: plugin.strings.create_new_note,
@@ -217,7 +252,9 @@ const commandBuilders = [
 	move_file_to_another_folder,
 	chain_insert_node,
 	chain_set_seq_note,
-	create_new_note
+	create_new_note,
+	chain_move_up_node,
+	chain_move_down_node
 ];
 
 function addCommands(plugin:NoteChainPlugin) {
