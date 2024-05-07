@@ -19,6 +19,16 @@ export class NCEditor{
 		await this.app.fileManager.processFrontMatter(tfile,fm =>{
 			fm[key] = value;
 		});
+		let meta = this.app.metadataCache.getFileCache(tfile);
+		if(meta){
+			if(meta.frontmatter){
+				meta.frontmatter[key] = value;
+			}else{
+				meta['frontmatter'] ={
+					key:value
+				}
+			}
+		}
 	}
 
 	get_frontmatter(tfile:TFile,key:any){
