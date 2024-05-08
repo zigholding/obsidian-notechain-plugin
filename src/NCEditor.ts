@@ -9,12 +9,14 @@ import * as internal from 'stream';
 
 export class NCEditor{
 	app:App;
+	nretry:number;
 
 	constructor(app:App){
 		this.app = app;
+		this.nretry=100;
 	}
 
-	async set_frontmatter(tfile:TFile,key:string,value:any,nretry=3){
+	async set_frontmatter(tfile:TFile,key:string,value:any,nretry=this.nretry){
 		let kv:{[key:string]:string} = {};
 		kv[key] = value;
 		return this.set_multi_frontmatter(tfile,kv,nretry);
@@ -38,7 +40,7 @@ export class NCEditor{
 		}
 	}
 
-	async set_multi_frontmatter(tfile:TFile,kv:{[key:string]:any},nretry=3):Promise<boolean>{
+	async set_multi_frontmatter(tfile:TFile,kv:{[key:string]:any},nretry=this.nretry):Promise<boolean>{
 		if(!tfile || this.check_frontmatter(tfile,kv)){
 			return true;
 		}
@@ -49,11 +51,11 @@ export class NCEditor{
 			}
 		});
 		await sleep(100);
-		if(nretry>0){
+		if(nretry!=0){
 			return this.set_multi_frontmatter(tfile,kv,nretry-1);
 		}else{
 			if(!this.check_frontmatter(tfile,kv)){
-				new Notice("Fail to set frontmatter.",5000);
+				new Notice("Fail to set frontmatter: "+tfile.basename,5000);
 				return false;
 			}else{
 				return true;
