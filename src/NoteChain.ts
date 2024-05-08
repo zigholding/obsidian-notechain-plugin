@@ -514,10 +514,11 @@ export class NoteChain{
 		}
 
 		let msg = `Note Chain: ${prev?.basename} --> 🏠${tfile?.basename} <-- ${next?.basename}`;
-		await this.app.fileManager.processFrontMatter(tfile, async (fm) =>{
-			fm[this.prev] = prev?`[[${prev.basename}]]`:null;
-			fm[this.next] = next?`[[${next.basename}]]`:null;
-		});
+		let fm:{[key:string]:any} = {};
+		fm[this.prev] = prev?`[[${prev.basename}]]`:null;
+		fm[this.next] = next?`[[${next.basename}]]`:null;
+
+		await this.plugin.editor.set_multi_frontmatter(tfile,fm);
 		new Notice(msg,5000);
 	}
 

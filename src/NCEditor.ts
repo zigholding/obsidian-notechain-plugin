@@ -1,8 +1,10 @@
+import { time } from 'console';
 import { 
 	App, Editor, MarkdownView, Modal, Notice, 
 	Plugin, PluginSettingTab, Setting,
 	TFile,TFolder
 } from 'obsidian';
+import * as internal from 'stream';
 
 
 export class NCEditor{
@@ -12,23 +14,51 @@ export class NCEditor{
 		this.app = app;
 	}
 
-	async set_frontmatter(tfile:TFile,key:string,value:any){
-		let prev = this.get_frontmatter(tfile,key);
-		if(prev===value){return;}
+	async set_frontmatter(tfile:TFile,key:string,value:any,nretry=3){
+		let kv:{[key:string]:string} = {};
+		kv[key] = value;
+		return this.set_multi_frontmatter(tfile,kv,nretry);
+	}
 
-		await this.app.fileManager.processFrontMatter(tfile, async (fm) =>{
-			fm[key] = value;
-			// let meta = this.app.metadataCache.getFileCache(tfile);
-			// if(meta){
-			// 	if(meta.frontmatter){
-			// 		meta.frontmatter[key] = value;
-			// 	}else{
-			// 		meta['frontmatter'] ={
-			// 			key:value
-			// 		}
-			// 	}
-			// }
+	check_frontmatter(tfile:TFile,kv:{[key:string]:any}){
+		try {
+			if(!tfile){return null;}
+			let meta = this.app.metadataCache.getFileCache(tfile);
+			if(meta?.frontmatter){
+				for(let k in kv){
+					if(!(meta.frontmatter[k]==kv[k])){
+						return false;
+					}
+				}
+				return true;
+			}
+			return false;
+		} catch (error) {
+			return false;
+		}
+	}
+
+	async set_multi_frontmatter(tfile:TFile,kv:{[key:string]:any},nretry=3):Promise<boolean>{
+		if(!tfile || this.check_frontmatter(tfile,kv)){
+			return true;
+		}
+
+		await this.app.fileManager.processFrontMatter(tfile, (fm) =>{
+			for(let k in kv){
+				fm[k] = kv[k];
+			}
 		});
+		await sleep(100);
+		if(nretry>0){
+			return this.set_multi_frontmatter(tfile,kv,nretry-1);
+		}else{
+			if(!this.check_frontmatter(tfile,kv)){
+				new Notice("Fail to set frontmatter.",5000);
+				return false;
+			}else{
+				return true;
+			}
+		}
 	}
 
 	get_frontmatter(tfile:TFile,key:any){
@@ -41,7 +71,6 @@ export class NCEditor{
 		} catch (error) {
 			return null;
 		}
-		
 	}
 
 	regexp_link(tfile:TFile,mode:string){
