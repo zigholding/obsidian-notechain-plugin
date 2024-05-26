@@ -1,6 +1,7 @@
 import { 
 	App, Editor, MarkdownView, Modal, Notice, 
 	Plugin, PluginSettingTab, Setting,
+	TAbstractFile,
 	TFile,TFolder
 } from 'obsidian';
 
@@ -299,21 +300,91 @@ export default class NoteChainPlugin extends Plugin {
 				await this.chain.chain_pop_node(file);
 				await this.explorer.sort();
 			}
-		))
+		));
 
 		this.registerEvent(this.app.vault.on(
 			"create", async () => {
 				await sleep(500);
 				this.explorer.sort();
 			}
-		))
+		));
 
 		this.registerEvent(this.app.vault.on(
 			"rename", async (file: TFile,oldPath:string) => {
 				await sleep(500);
 				this.explorer.sort();
 			}
-		))
+		));
+
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, file) => {
+				if(file instanceof TFile){
+					menu.addItem((item) => {
+						item
+						.setTitle("Create next note")
+						.setIcon("file-plus")
+						.onClick(async () => {
+							let filename = await this.chain.tp_prompt('File name');
+							let dst = file.parent?file.parent.path + '/' + filename+'.md':filename+'.md';
+							if(this.chain.get_tfile(dst)){
+								new Notice('Exists:'+file.path,3000);
+							}else{
+								let tfile = await this.app.vault.create(dst,'');
+								await this.chain.chain_insert_node_after(tfile,file);
+								await this.chain.open_note(tfile,false,false);
+							}
+						});
+					});
+				}
+			})
+		);
+
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, file) => {
+				if(file instanceof TFile && file.extension=='md'){
+					menu.addItem((item) => {
+						item
+						.setTitle("Move as next note")
+						.setIcon("hand")
+						.onClick(async () => {
+							let anchor = await this.chain.sugguster_note();
+							await this.chain.chain_insert_node_after(file,anchor);
+							if(file.parent!=anchor.parent){
+								let dst = anchor.parent.path+'/'+file.name;
+								await this.app.fileManager.renameFile(file,dst);
+							}
+							this.explorer.sort();
+						});
+					});
+				}else if(file instanceof TFolder){
+					menu.addItem((item) => {
+						item
+						.setTitle("Move as next note")
+						.setIcon("hand")
+						.onClick(async () => {
+							let notes = file.parent?.children;
+							if(notes){
+								let anchor = await this.chain.tp_suggester(
+									(f:TAbstractFile)=>f.name,
+									notes.filter((x:TAbstractFile)=>x instanceof TFile)
+								)
+
+								let note = this.chain.get_tfile(file.path+'/'+file.name+'.md');
+								if(!note){
+									note = await this.app.vault.create(
+										file.path+'/'+file.name+'.md',''
+									);
+								}
+								await this.editor.set_frontmatter(
+									note,"FolderPrevNote",`[[${anchor.basename}]]+0.5`
+								)
+							}
+						});
+					});
+				}
+			})
+		);
+		
 	}
 
 
