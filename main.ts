@@ -1,5 +1,6 @@
 import { 
 	App, Editor, MarkdownView, Modal, Notice, 
+	CachedMetadata,
 	Plugin, PluginSettingTab, Setting,
 	TAbstractFile,
 	TFile,TFolder
@@ -375,9 +376,15 @@ export default class NoteChainPlugin extends Plugin {
 										file.path+'/'+file.name+'.md',''
 									);
 								}
-								await this.editor.set_frontmatter(
-									note,"FolderPrevNote",`[[${anchor.basename}]]+0.5`
+								await this.editor.set_multi_frontmatter(
+									note,
+									{
+										"FolderPrevNote":`[[${anchor.basename}]]`,
+										"FolderPrevNoteOffset":0.5,
+									}
 								)
+								this.chain.refresh_children(file);
+								await this.explorer.sort(0,false);
 							}
 						});
 					});
@@ -385,6 +392,17 @@ export default class NoteChainPlugin extends Plugin {
 			})
 		);
 		
+		this.registerEvent(
+			this.app.metadataCache.on(
+				'changed',(file: TFile, data: string, cache: CachedMetadata)=>{
+					if(file.parent){
+						this.chain.children[file.parent.path]= this.chain.sort_tfiles_by_chain(
+							file.parent.children
+						);
+					}
+					this.explorer.sort(0,false);
+			})
+		);
 	}
 
 

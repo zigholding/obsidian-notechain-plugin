@@ -84,12 +84,14 @@ export class NCFileExplorer{
 		return view;
 	}
 	
-	async sort(nsleep=0){
+	async sort(nsleep=0,init=false){
 		if((this.file_explorer as any)?.sort){
 			if(nsleep>0){
 				await sleep(nsleep);
 			}
-			this.plugin.chain.init_children();
+			if(init){
+				this.plugin.chain.init_children();
+			}
 			(this.file_explorer as any).sort();
 		}	
 	}

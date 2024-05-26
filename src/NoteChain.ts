@@ -18,7 +18,7 @@ export class NoteChain{
 	prev:string;
 	next:string;
 	editor:NCEditor;
-	children:{};
+	children:{[key:string]:any};
 
 	constructor(plugin:NoteChainPlugin,editor:NCEditor,prev="PrevNote",next="NextNote") {
 		this.plugin = plugin;
@@ -34,6 +34,14 @@ export class NoteChain{
 		this.children = {};
 		for(let f of this.get_all_folders()){
 			(this.children as any)[f.path] = this.sort_tfiles_by_chain(f.children);
+		}
+	}
+
+	refresh_children(tfile:TAbstractFile){
+		if(tfile.parent){
+			this.children[tfile.parent.path] = this.sort_tfiles_by_chain(
+				tfile.parent.children
+			);
 		}
 	}
 
@@ -253,12 +261,16 @@ export class NoteChain{
 			fnote,"FolderPrevNote"
 		);
 		if(!msg){return -1;}
-		let items = msg.split("]]+");
-		let anchor = this.get_tfile(items[0].slice(2));
+		let anchor = this.get_tfile(msg);
 		if(!anchor){return -1;}
 		let idx = tfiles.indexOf(anchor);
-		if(items.length==2){
-			idx = idx + parseFloat(items[1]);
+		let offset = this.plugin.editor.get_frontmatter(
+			fnote,"FolderPrevNoteOffset"
+		);
+		if(offset){
+			idx = idx + parseFloat(offset);
+		}else{
+			idx = idx + 0.5;
 		}
 		return idx;
 	}
@@ -602,8 +614,12 @@ export class NoteChain{
 		if(!note){
 			return;
 		}
-		await this.plugin.editor.set_frontmatter(
-			note,"FolderPrevNote",`[[${anchor.basename}]]+0.5`
+		await this.plugin.editor.set_multi_frontmatter(
+			note,
+			{
+				"FolderPrevNote":`[[${anchor.basename}]]`,
+				"FolderPrevNoteOffset":0.5,
+		    }
 		)
 	}
 	

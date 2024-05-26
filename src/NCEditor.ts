@@ -50,7 +50,7 @@ export class NCEditor{
 				fm[k] = kv[k];
 			}
 		});
-		await sleep(100);
+		await sleep(100*(this.nretry-nretry));
 		if(nretry!=0){
 			return this.set_multi_frontmatter(tfile,kv,nretry-1);
 		}else{
