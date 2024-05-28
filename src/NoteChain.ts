@@ -140,7 +140,7 @@ export class NoteChain{
 		}
 	}
 
-	open_note(tfile:TFile,new_tab=false,revealFolder=true){
+	open_note(tfile:TFile,new_tab=false,revealFolder=false){
 		if(tfile){
 			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 			if(!view || view.leaf && !((view.leaf as any).pinned)||new_tab){

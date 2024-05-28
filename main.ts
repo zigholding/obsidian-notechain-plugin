@@ -86,7 +86,7 @@ const cmd_sort_file_explorer = (plugin:NoteChainPlugin) => ({
 	id: "sort_file_explorer",
     name: plugin.strings.cmd_sort_file_explorer,
 	callback: async () => {
-		await plugin.explorer.sort();
+		await plugin.explorer.sort(0,true);
 	}
 });
 
@@ -306,13 +306,13 @@ export default class NoteChainPlugin extends Plugin {
 		this.registerEvent(this.app.vault.on(
 			"create", async () => {
 				await sleep(500);
-				this.explorer.sort();
+				this.explorer.sort(0,true);
 			}
 		));
 
 		this.registerEvent(this.app.vault.on(
 			"rename", async (file: TFile,oldPath:string) => {
-				await sleep(500);
+				this.chain.refresh_children(file);
 				this.explorer.sort();
 			}
 		));
