@@ -33,14 +33,28 @@ export class NoteChain{
 	init_children(){
 		this.children = {};
 		for(let f of this.get_all_folders()){
-			(this.children as any)[f.path] = this.sort_tfiles_by_chain(f.children);
+			let tfiles = f.children;
+			if(this.plugin.explorer?.file_explorer){
+				tfiles  = this.sort_tfiles(
+					tfiles,
+					(this.plugin.explorer.file_explorer as any).sortOrder
+				);
+			}
+			(this.children as any)[f.path] = this.sort_tfiles_by_chain(tfiles);
 		}
 	}
 
 	refresh_children(tfile:TAbstractFile){
-		if(tfile.parent){
+		if(tfile.parent?.children){
+			let tfiles  = tfile.parent.children;
+			if(this.plugin.explorer.file_explorer){
+				tfiles  = this.sort_tfiles(
+					tfiles as any,
+					(this.plugin.explorer.file_explorer as any).sortOrder
+				);
+			}
 			this.children[tfile.parent.path] = this.sort_tfiles_by_chain(
-				tfile.parent.children
+				tfiles
 			);
 		}
 	}
@@ -633,20 +647,31 @@ export class NoteChain{
 
 	sort_tfiles(files:Array<TFile>,field:any):any{
 		if(typeof field === 'string'){
-			if(field==='name'){
+			if(field==='name' || field==='alphabetical'){
 				return files.sort(
 					(a,b)=>(a.name.localeCompare(b.name))
 				);
-			}else if(field==='mtime'){
+			}else if(field==='mtime'|| field==='byModifiedTime'){
 				return files.sort(
 					(a,b)=>(a.stat.mtime-b.stat.mtime)
 				)
-			}else if(field==='ctime'){
+			}else if(field==='ctime' || field==='byCreatedTime'){
 				return files.sort(
 					(a,b)=>(a.stat.ctime-b.stat.ctime)
 				)
-			}
-			else if(field==='chain'){
+			}else if(field==='alphabeticalReverse'){
+				return files.sort(
+					(b,a)=>(a.name.localeCompare(b.name))
+				);
+			}else if(field==='byModifiedTimeReverse'){
+				return files.sort(
+					(b,a)=>(a.stat.mtime-b.stat.mtime)
+				)
+			}else if(field==='byCreatedTimeReverse'){
+				return files.sort(
+					(b,a)=>(a.stat.ctime-b.stat.ctime)
+				)
+			}else if(field==='chain'){
 				return this.sort_tfiles_by_chain(files);
 			}
 			return files;
