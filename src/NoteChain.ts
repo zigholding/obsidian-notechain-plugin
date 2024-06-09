@@ -653,11 +653,11 @@ export class NoteChain{
 				);
 			}else if(field==='mtime'|| field==='byModifiedTime'){
 				return files.sort(
-					(a,b)=>(a.stat.mtime-b.stat.mtime)
+					(a,b)=>(a.stat?.mtime-b.stat?.mtime)
 				)
 			}else if(field==='ctime' || field==='byCreatedTime'){
 				return files.sort(
-					(a,b)=>(a.stat.ctime-b.stat.ctime)
+					(a,b)=>(a.stat?.ctime-b.stat?.ctime)
 				)
 			}else if(field==='alphabeticalReverse'){
 				return files.sort(
@@ -665,11 +665,11 @@ export class NoteChain{
 				);
 			}else if(field==='byModifiedTimeReverse'){
 				return files.sort(
-					(b,a)=>(a.stat.mtime-b.stat.mtime)
+					(b,a)=>(a.stat?.mtime-b.stat?.mtime)
 				)
 			}else if(field==='byCreatedTimeReverse'){
 				return files.sort(
-					(b,a)=>(a.stat.ctime-b.stat.ctime)
+					(b,a)=>(a.stat?.ctime-b.stat?.ctime)
 				)
 			}else if(field==='chain'){
 				return this.sort_tfiles_by_chain(files);
