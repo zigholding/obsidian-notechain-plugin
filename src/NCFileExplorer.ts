@@ -7,7 +7,7 @@ import {NoteChain} from "./NoteChain";
 
 
 let chain_sort = function(org_sort:Function) {
-	let plugin = (app as any).plugins.getPlugin('note-chain');
+	let plugin = (this.app as any).plugins.getPlugin('note-chain');
 	return function(...d:any){
 		if(plugin){
 			if(plugin?.settings.isSortFileExplorer){
@@ -43,12 +43,29 @@ let chain_sort = function(org_sort:Function) {
 	}
 }
 
+let getSortedFolderItems = function(org_sort:Function) {
+	let plugin = (this.app as any).plugins.getPlugin('note-chain');
+	return function(e:any){
+		if(plugin){
+			let res = org_sort.call(this,e);
+			let tfiles = plugin.chain.children[e.path];
+			
+			res = res.sort((a:any,b:any)=>tfiles.indexOf(a.file)-tfiles.indexOf(b.file));
+			return res;
+		}else{
+			return org_sort.call(this,e);
+		}
+	}
+}
+
 export class NCFileExplorer{
 	plugin:NoteChainPlugin;
 	app:App;
 	chain:NoteChain;
 	org_sort:Function;
 	new_sort:Function;
+	getSortedFolderItems:Function;
+	getSortedFolderItems_new:Function;
 	_FolderDom_:any;
 
 	constructor(plugin:NoteChainPlugin){
@@ -67,6 +84,12 @@ export class NCFileExplorer{
 			this.org_sort = dom.prototype.sort;
 			this.new_sort = chain_sort(this.org_sort);
 			this._FolderDom_.prototype.sort = this.new_sort;
+
+			this.getSortedFolderItems = this.file_explorer.constructor.prototype.getSortedFolderItems;
+			this.getSortedFolderItems_new = getSortedFolderItems(this.getSortedFolderItems);
+			this.file_explorer.constructor.prototype.getSortedFolderItems = this.getSortedFolderItems_new;
+
+
 			this.sort();
 		})
 	}
@@ -74,6 +97,9 @@ export class NCFileExplorer{
 	unregister(){
 		if(this.org_sort){
 			this._FolderDom_.prototype.sort = this.org_sort;
+		}
+		if(this.getSortedFolderItems){
+			this.file_explorer.constructor.prototype.getSortedFolderItems = this.getSortedFolderItems;
 		}
 	}
 
