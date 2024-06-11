@@ -441,9 +441,9 @@ export class NoteChain{
 			if(!note){
 				break;
 			}else if(res.includes(note)){
-				// 每次自动删除循环链接
-				this.editor.set_frontmatter(note,this.next,"");
-				this.editor.set_frontmatter(tmp,this.prev,"");
+				// // 每次自动删除循环链接
+				// this.editor.set_frontmatter(note,this.next,"");
+				// this.editor.set_frontmatter(tmp,this.prev,"");
 				break;
 			}else{
 				res.unshift(note);
@@ -457,9 +457,9 @@ export class NoteChain{
 			if(!note){
 				break;
 			}else if(res.includes(note)){
-				// 每次自动删除循环链接
-				this.editor.set_frontmatter(note,this.prev,"");
-				this.editor.set_frontmatter(tmp,this.next,"");
+				// // 每次自动删除循环链接
+				// this.editor.set_frontmatter(note,this.prev,"");
+				// this.editor.set_frontmatter(tmp,this.next,"");
 				break;
 			}else{
 				res.push(note);
@@ -543,7 +543,6 @@ export class NoteChain{
 		let fm:{[key:string]:any} = {};
 		fm[this.prev] = prev?`[[${prev.basename}]]`:null;
 		fm[this.next] = next?`[[${next.basename}]]`:null;
-
 		await this.plugin.editor.set_multi_frontmatter(tfile,fm);
 		new Notice(msg,5000);
 	}

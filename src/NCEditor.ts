@@ -13,18 +13,19 @@ export class NCEditor{
 
 	constructor(app:App){
 		this.app = app;
-		this.nretry=100;
+		this.nretry=10;
 	}
 
 	async set_frontmatter(tfile:TFile,key:string,value:any,nretry=this.nretry){
 		let kv:{[key:string]:string} = {};
 		kv[key] = value;
-		return this.set_multi_frontmatter(tfile,kv,nretry);
+		let flag = await this.set_multi_frontmatter(tfile,kv,nretry);
+		return flag;
 	}
 
-	check_frontmatter(tfile:TFile,kv:{[key:string]:any}){
+	check_frontmatter(tfile:TFile,kv:{[key:string]:any}):boolean{
 		try {
-			if(!tfile){return null;}
+			if(!tfile){return false;}
 			let meta = this.app.metadataCache.getFileCache(tfile);
 			if(meta?.frontmatter){
 				for(let k in kv){
@@ -40,27 +41,31 @@ export class NCEditor{
 		}
 	}
 
-	async set_multi_frontmatter(tfile:TFile,kv:{[key:string]:any},nretry=this.nretry):Promise<boolean>{
-		if(!tfile || this.check_frontmatter(tfile,kv)){
-			return true;
+	async wait_frontmatter(tfile:TFile,kv:{[key:string]:any},nretry=this.nretry):Promise<boolean>{
+		let flag = this.check_frontmatter(tfile,kv);
+		
+		while(!flag && nretry>0){
+			await sleep(100);
+			nretry = nretry-1;
+			flag = this.check_frontmatter(tfile,kv);
 		}
+		return flag;
+	}
 
-		await this.app.fileManager.processFrontMatter(tfile, (fm) =>{
-			for(let k in kv){
-				fm[k] = kv[k];
-			}
-		});
-		await sleep(100*(this.nretry-nretry));
-		if(nretry!=0){
-			return this.set_multi_frontmatter(tfile,kv,nretry-1);
-		}else{
-			if(!this.check_frontmatter(tfile,kv)){
-				new Notice("Fail to set frontmatter: "+tfile.basename,5000);
-				return false;
-			}else{
-				return true;
-			}
+	async set_multi_frontmatter(tfile:TFile,kv:{[key:string]:any},nretry=this.nretry):Promise<boolean>{
+		let flag = this.check_frontmatter(tfile,kv);
+		while(!flag && nretry>0){
+			await this.app.fileManager.processFrontMatter(tfile, (fm) =>{
+				for(let k in kv){
+					fm[k] = kv[k];
+				}
+			});
+			await sleep(100);
+			nretry = nretry-1;
+			flag = this.check_frontmatter(tfile,kv);
+			//console.log('nretry:',nretry,tfile.name,kv,flag);
 		}
+		return flag;
 	}
 
 	get_frontmatter(tfile:TFile,key:any){
