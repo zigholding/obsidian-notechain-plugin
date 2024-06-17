@@ -13,7 +13,7 @@ export class NCEditor{
 
 	constructor(app:App){
 		this.app = app;
-		this.nretry=10;
+		this.nretry=100;
 	}
 
 	async set_frontmatter(tfile:TFile,key:string,value:any,nretry=this.nretry){
@@ -45,7 +45,7 @@ export class NCEditor{
 		let flag = this.check_frontmatter(tfile,kv);
 		
 		while(!flag && nretry>0){
-			await sleep(100);
+			await sleep(50);
 			nretry = nretry-1;
 			flag = this.check_frontmatter(tfile,kv);
 		}

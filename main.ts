@@ -273,6 +273,7 @@ export default class NoteChainPlugin extends Plugin {
 	strings : Strings;
 	debug:boolean;
 	utils:any;
+	timerId:any;
 	ob:any;
 
 	async onload() {
@@ -312,7 +313,11 @@ export default class NoteChainPlugin extends Plugin {
 
 		this.registerEvent(this.app.vault.on(
 			"rename", async (file: TFile,oldPath:string) => {
-				this.chain.refresh_children(file);
+				let oldFolder = this.app.vault.getFolderByPath(
+					oldPath.slice(0,oldPath.lastIndexOf('/'))
+				)
+				oldFolder && this.chain.refresh_folder(oldFolder);
+				this.chain.refresh_tfile(file);
 				this.explorer.sort();
 			}
 		));
@@ -383,7 +388,7 @@ export default class NoteChainPlugin extends Plugin {
 										"FolderPrevNoteOffset":0.5,
 									}
 								)
-								this.chain.refresh_children(file);
+								this.chain.refresh_tfile(file);
 								await this.explorer.sort(0,false);
 							}
 						});
@@ -395,12 +400,15 @@ export default class NoteChainPlugin extends Plugin {
 		this.registerEvent(
 			this.app.metadataCache.on(
 				'changed',(file: TFile, data: string, cache: CachedMetadata)=>{
-					if(file.parent){
-						this.chain.children[file.parent.path]= this.chain.sort_tfiles_by_chain(
-							file.parent.children
-						);
-					}
-					this.explorer.sort(0,false);
+					clearTimeout(this.timerId);
+					this.timerId = setTimeout(()=>{
+						if(file.parent){
+							this.chain.children[file.parent.path]= this.chain.sort_tfiles_by_chain(
+								file.parent.children
+							);
+						}
+						this.explorer.sort(0,false);
+					},500)
 			})
 		);
 	}

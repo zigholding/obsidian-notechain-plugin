@@ -43,19 +43,24 @@ export class NoteChain{
 			(this.children as any)[f.path] = this.sort_tfiles_by_chain(tfiles);
 		}
 	}
-
-	refresh_children(tfile:TAbstractFile){
-		if(tfile.parent?.children){
-			let tfiles  = tfile.parent.children;
+	refresh_folder(tfolder:TFolder){
+		if(tfolder?.children){
+			let tfiles  = tfolder.children;
 			if(this.plugin.explorer.file_explorer){
 				tfiles  = this.sort_tfiles(
 					tfiles as any,
 					(this.plugin.explorer.file_explorer as any).sortOrder
 				);
 			}
-			this.children[tfile.parent.path] = this.sort_tfiles_by_chain(
+			this.children[tfolder.path] = this.sort_tfiles_by_chain(
 				tfiles
 			);
+		}
+	}
+
+	refresh_tfile(tfile:TAbstractFile){
+		if(tfile.parent?.children){
+			this.refresh_folder(tfile.parent);
 		}
 	}
 
