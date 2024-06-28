@@ -159,16 +159,21 @@ export class NoteChain{
 		}
 	}
 
-	open_note(tfile:TFile,new_tab=false,revealFolder=false){
+	open_note(tfile:TFile,new_tab=false,revealFolder=false,collapse=true){
 		if(tfile){
 			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-			if(!view || view.leaf && !((view.leaf as any).pinned)||new_tab){
+			if(new_tab || !view || !view.leaf){
+				this.app.workspace.getLeaf(true).openFile(tfile);
+			}else if((view.leaf as any).pinned){
 				this.app.workspace.getLeaf(true).openFile(tfile);
 			}else{
 				view.leaf.openFile(tfile);
 			}
 			
 			if(revealFolder){
+				if(collapse){
+					(this.plugin.explorer.file_explorer as any).tree.setCollapseAll(true);
+				}
 				(this.plugin.explorer.file_explorer as any).revealInFolder(tfile);
 			}
 		}
