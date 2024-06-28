@@ -10,6 +10,7 @@ import NoteChainPlugin from "../main";
 import {NCEditor} from './NCEditor';
 import {get_tp_func} from './utils'
 import { strings } from './strings';
+import { off } from 'process';
 
 
 export class NoteChain{
@@ -43,6 +44,7 @@ export class NoteChain{
 			(this.children as any)[f.path] = this.sort_tfiles_by_chain(tfiles);
 		}
 	}
+	
 	refresh_folder(tfolder:TFolder){
 		if(tfolder?.children){
 			let tfiles  = tfolder.children;
@@ -714,7 +716,10 @@ export class NoteChain{
 				}
 			}
 		}
+
 		res.push(...ctfiles);
+		let canvas = res.filter(f=>(f instanceof TFile) &&(f.extension=='canvas'))
+		res = res.filter(f=>(f instanceof TFile) &&(f.extension!='canvas'));
 		let folders = tfiles.filter(f=>f instanceof TFolder);
 		if(folders.length>0){
 			let idxs = folders.map(
@@ -731,6 +736,21 @@ export class NoteChain{
 				}
 			}
 			res = res.sort((a,b)=>indexOf(a)-indexOf(b));
+		}
+		
+		for(let tfile of canvas){
+			let rname = res.map(x=>x instanceof TFolder?x.name: (x as TFile).basename);
+			let cname = (tfile as TFile).basename;
+			let idx = rname.indexOf(cname);
+			if(idx<0){
+				idx = rname.indexOf(cname.split('.').slice(0,-1).join('.'));
+			}
+			if(idx<0){
+				res.push(tfile);
+			}else{
+				res.splice(idx+1,0,tfile);
+				
+			}
 		}
 		return res;
 	}
