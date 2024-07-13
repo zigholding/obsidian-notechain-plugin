@@ -14,13 +14,13 @@ Head -.-> P[...] --> PrevA --> A --> NextA -.-> N[...] --> Tail
 ```
 
 These plugins are needed to install:
-- [[Templater]] + [[DataView]] + [[Obsidian Recent Files]]
+- [[Templater]] + [[DataView]] + [[Recent Files]] + [[Tasks]]
 
 ## Connect&Open
 
 `Note Chain: Create New Note`：Create Prev/Next/Tail/Head Note relative to current note.
 
-![image](./assets/Pasted%20image%2020240427203711.png)
+![Pasted image 20240427203711.png](./assets/Pasted image 20240427203711.png)
 
 `Note Chain: Open prev note`: Open prev note, recommended shortcut key `Alt+←`;
 
@@ -30,7 +30,7 @@ These plugins are needed to install:
 
 `Note Chain: Open note smarter`: First select the group of notes, then select and open note.
 
-![image](./assets/Pasted%20image%2020240427204500.png)
+![Pasted image 20240427204500.png](./assets/Pasted image 20240427204500.png)
 
 ## Build Chain
 
@@ -41,7 +41,7 @@ NoteChain provides three ways to help set up note chains for multiple notes.
 2. Select node note
 3. Select node relationship
 
-![image](./assets/Pasted%20image%2020240427204943.png)
+![Pasted image 20240427204943.png](./assets/Pasted image 20240427204943.png)
 
 First two steps are same as `Open note smarter`. After select a node note, select the relation between current note to anchor. `Folder As Next` is used to set the Prev Note for the parent of current note. 
 
@@ -62,7 +62,7 @@ noteA --> noteB --> FolderC --> FolderD --> noteF
 2. Open the notes with frontmatter `longform`
 3. Run this command and Set note chain by the sequence of  `scenes` + `ignored`;
 
-![image](./assets/Pasted%20image%2020240427212022.png)
+![Pasted image 20240427212022.png](./assets/Pasted image 20240427212022.png)
 
 `Reset the chain of current folder!`：Select mode to set prev/next note sequencely.
 - `chain`: Sort by file name first, then sort by the exsited chain
@@ -80,6 +80,31 @@ Now that you have completed setting up the note chain, experience the fun of bro
 
 If you set `Insert node of chain:Default Mode`, when run `Insert node of chain`, NoteChain select anchor node from `Notes In Same Folder`。
 
-![image](./assets/Pasted%20image%2020240427211326.png)
+![Pasted image 20240427211326.png](./assets/Pasted image 20240427211326.png)
+
+## Commands/命令
+
+### Open and reveal note
+
+> Open and reveal note
+
+- Select a note to open.
+- Open and reveal the note.
+- Collapse other folders and scroll the note to center
+
+> 打开并定位笔记
+
+- 选择一个笔记打开
+- 打开并在目录中定位笔记
+- 折叠其它目录，并将笔记滚动到目录面板中央
 
 
+## `Version`
+
+`v1.0.4`:  Use `setTimeout` and `clearTimeout` to prevent frequent invocation of the callback function registered with `metadataCache.on`.
+
+Implement a delay response mechanism using `setTimeout` and `clearTimeout` to prevent frequent triggering of the callback function, which is registered with `metadataCache.on`. The delay time is set to 5 seconds.
+
+当修改后1秒执行函数
+
+使用 `setTimeout/clearTimeout` 避免频繁调用 `metadataCache.on` callback 函数
