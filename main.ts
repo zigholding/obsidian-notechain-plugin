@@ -241,6 +241,29 @@ const create_new_note = (plugin:NoteChainPlugin) => ({
 	}
 });
 
+const cmd_open_and_reveal_note = (plugin:NoteChainPlugin) => ({
+	id: 'cmd_open_and_reveal_note',
+	name: plugin.strings.cmd_open_and_reveal_note,
+	callback: async () => {
+		let nc = plugin;
+		let note = await nc.chain.sugguster_note();
+		if(note){
+			await nc.chain.open_note(note);
+			await (nc.explorer.file_explorer as any).tree.setCollapseAll(true);
+			await (nc.explorer.file_explorer as any).revealInFolder(note);
+			await sleep(100);
+
+			let containerEl = nc.explorer.file_explorer.containerEl;
+			let panel = containerEl.querySelector('.nav-files-container');
+			let itemEl=containerEl.querySelector(`[data-path="${note.path}"]`);
+			if(panel && itemEl && (itemEl as any).offsetTop){
+				let xtop = panel.scrollTop+((itemEl as any).offsetTop-(panel.scrollTop+panel.clientHeight/2))
+				panel.scrollTo({ top: xtop, behavior: 'smooth' });
+			}
+		}
+	}
+});
+
 const commandBuilders = [
 	cmd_open_prev_notes,
 	cmd_open_next_notes,
@@ -256,7 +279,9 @@ const commandBuilders = [
 	chain_set_seq_note,
 	create_new_note,
 	chain_move_up_node,
-	chain_move_down_node
+	chain_move_down_node,
+	cmd_open_and_reveal_note
+	
 ];
 
 function addCommands(plugin:NoteChainPlugin) {

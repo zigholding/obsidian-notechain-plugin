@@ -15,7 +15,7 @@ export class Strings{
         if(this.language=='zh'){
             return '根据LongForm重置笔记链条'
         }else{
-            return 'Reset note chain by longform.';
+            return 'Reset note chain by longform';
         }
     }
 
@@ -23,7 +23,7 @@ export class Strings{
         if(this.language=='zh'){
             return '根据笔记链条，重置LongForm场景'
         }else{
-            return "Reset longform scenes by note chain.";
+            return "Reset longform scenes by note chain";
         }
     }
 
@@ -31,7 +31,7 @@ export class Strings{
         if(this.language=='zh'){
             return '根据笔记链排序'
         }else{
-            return "Sort file explorer by note chain.";
+            return "Sort file explorer by note chain";
         }
     }
 
@@ -39,7 +39,7 @@ export class Strings{
         if(this.language=='zh'){
             return '智能打开文件'
         }else{
-            return "Open note smarter.";
+            return "Open note smarter";
         }
     }
 
@@ -47,7 +47,7 @@ export class Strings{
         if(this.language=='zh'){
             return '打开文件'
         }else{
-            return "Open note.";
+            return "Open note";
         }
     }
 
@@ -55,7 +55,7 @@ export class Strings{
         if(this.language=='zh'){
             return '打开前置笔记'
         }else{
-            return "Open prev note.";
+            return "Open prev note";
         }
     }
 
@@ -79,7 +79,15 @@ export class Strings{
         if(this.language=='zh'){
             return '打开后置笔记'
         }else{
-            return "Open next note.";
+            return "Open next note";
+        }
+    }
+
+    get cmd_open_and_reveal_note(){
+        if(this.language=='zh'){
+            return '打开并定位笔记'
+        }else{
+            return "Open and reveal note";
         }
     }
 
@@ -135,7 +143,7 @@ export class Strings{
         if(this.language=='zh'){
             return '根据笔记链条排序目录'
         }else{
-            return "Sort by chain in file explorer ?";
+            return "Sort by chain in file explorer?";
         }
     }
 
