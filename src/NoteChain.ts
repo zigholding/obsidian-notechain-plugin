@@ -195,6 +195,20 @@ export class NoteChain{
 		return this.tp_find_tfile(name);
 	}
 
+	get_neighbor_leaf(offset=1){
+		let app = this.plugin.app
+		let leaves = app.workspace.getLeavesOfType('markdown');
+		let activeLeaf = app.workspace.getActiveViewOfType(MarkdownView);
+		if(activeLeaf){
+			let idx = leaves.map(x=>x.view==activeLeaf).indexOf(true);
+			idx = idx+offset;
+			if(idx<0 || idx>leaves.length-1){
+				return null;
+			}
+			return leaves[idx];
+		}
+	}
+
 	get current_note(){
 		return this.app.workspace.getActiveFile();
 	}

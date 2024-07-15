@@ -51,7 +51,7 @@ export class Strings{
         }
     }
 
-    get cmd_open_prev_notes(){
+    get cmd_open_prev_note(){
         if(this.language=='zh'){
             return '打开前置笔记'
         }else{
@@ -75,11 +75,19 @@ export class Strings{
         }
     }
 
-    get cmd_open_next_notes(){
+    get cmd_open_next_note(){
         if(this.language=='zh'){
             return '打开后置笔记'
         }else{
             return "Open next note";
+        }
+    }
+
+    get cmd_reveal_note(){
+        if(this.language=='zh'){
+            return '定位当前笔记'
+        }else{
+            return "Reveal current file in navigation";
         }
     }
 
@@ -88,6 +96,22 @@ export class Strings{
             return '打开并定位笔记'
         }else{
             return "Open and reveal note";
+        }
+    }
+
+    get cmd_open_prev_note_of_right_leaf(){
+        if(this.language=='zh'){
+            return '右侧页面打开前置笔记'
+        }else{
+            return "Open prev note of right leaf";
+        }
+    }
+
+    get cmd_open_next_note_of_right_leaf(){
+        if(this.language=='zh'){
+            return '右侧页面打开后置笔记'
+        }else{
+            return "Open next note of right leaf";
         }
     }
 
