@@ -203,7 +203,7 @@ export class NoteChain{
 		}
 		
 		let leaf = this.get_neighbor_leaf();
-		tfile = (leaf?.view as any).file;
+		tfile = (leaf?.view as any)?.file;
 		if(tfile?.basename?.match(pattern)){
 			return tfile;
 		}
@@ -224,8 +224,8 @@ export class NoteChain{
 				return tfile;
 			}
 			
-			let files = app.vault.getMarkdownFiles().filter(
-				x=>x.basename.match(pattern)
+			let files = this.app.vault.getMarkdownFiles().filter(
+				(x:TFile)=>x.basename.match(pattern)
 			);
 			files = this.sort_tfiles(files,'name');
 			if(files.length>0){

@@ -146,7 +146,7 @@ export class WordCount{
 	}
 
     async update_word_count_of_vault(){
-        let tfiles = app.vault.getMarkdownFiles().filter(x=>this.filter(x));
+        let tfiles = this.app.vault.getMarkdownFiles().filter((x:TFile)=>this.filter(x));
         let i = 0;
         for(let tfile of tfiles){
             new Notice(`${i}/${tfiles.length}:${tfile.name}`,3000);
