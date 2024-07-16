@@ -1,7 +1,7 @@
 
 import { 
 	App, Editor, MarkdownView, Modal, Notice, 
-	Plugin, PluginSettingTab, Setting,
+	Plugin, PluginSettingTab, Setting,moment,
 	TAbstractFile,
 	TFile,TFolder
 } from 'obsidian';
@@ -193,6 +193,47 @@ export class NoteChain{
 	get_tfile(path:string){
 		let name = path.split('|')[0].replace('[[','').replace(']]','');
 		return this.tp_find_tfile(name);
+	}
+
+	get_last_daily_note(){
+		let pattern=/^\d{4}-\d{2}-\d{2}$/;
+		let tfile = this.app.workspace.getActiveFile();
+		if(tfile && tfile.basename?.match(pattern)){
+			return tfile;
+		}
+		
+		let leaf = this.get_neighbor_leaf();
+		tfile = (leaf?.view as any).file;
+		if(tfile?.basename?.match(pattern)){
+			return tfile;
+		}
+		
+		let recent = (this.app as any).plugins.getPlugin('recent-files-obsidian');
+		if(recent){
+			let files = recent.data.recentFiles.filter(
+				(x:TFile)=>x.basename?.match(pattern)
+			);
+			if(files.length>0){
+				tfile = this.get_tfile(files[0].basename);
+				return tfile;
+			}
+		}else{
+			let fname = moment().format('YYYY-MM-DD');
+			tfile = this.get_tfile(fname);
+			if(tfile){
+				return tfile;
+			}
+			
+			let files = app.vault.getMarkdownFiles().filter(
+				x=>x.basename.match(pattern)
+			);
+			files = this.sort_tfiles(files,'name');
+			if(files.length>0){
+				return files[files.length-1];
+			}
+			
+		}
+		return null;
 	}
 
 	get_neighbor_leaf(offset=1){
