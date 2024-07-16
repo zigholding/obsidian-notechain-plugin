@@ -219,6 +219,21 @@ export class Strings{
         }
     }
 
+    get setting_wordcout(){
+        if(this.language=='zh'){
+            return '统计每日字数'
+        }else{
+            return "Register daily word count?";
+        }
+    }
+
+    get setting_wordcout_xfolder(){
+        if(this.language=='zh'){
+            return '字数统计：跳过目录'
+        }else{
+            return "Word cout: ignored folders";
+        }
+    }
     
     get item_insert_suggester(){
         if(this.language=='zh'){

@@ -11,6 +11,7 @@ import {NCEditor} from './src/NCEditor';
 import {NoteChain} from './src/NoteChain';
 import {NCFileExplorer} from './src/NCFileExplorer';
 import { Strings } from 'src/strings';
+import { WordCount } from 'src/WordCount';
 
 // Remember to rename these classes and interfaces!
 
@@ -22,6 +23,8 @@ interface NCSettings {
 	isSortFileExplorer:boolean,
 	isFolderFirst:boolean,
 	suggesterNotesMode:string,
+	wordcout:boolean,
+	wordcountxfolder:string,
 }
 
 const DEFAULT_SETTINGS: NCSettings = {
@@ -31,7 +34,9 @@ const DEFAULT_SETTINGS: NCSettings = {
 	refreshTasks : true,
 	isSortFileExplorer : true,
 	isFolderFirst : true,
-	suggesterNotesMode:''
+	suggesterNotesMode:'',
+	wordcout:true,
+	wordcountxfolder:'',
 }
 
 const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
@@ -353,6 +358,7 @@ export default class NoteChainPlugin extends Plugin {
 	chain : NoteChain;
 	editor : NCEditor; 
 	explorer : NCFileExplorer;
+	wordcout : WordCount;
 	strings : Strings;
 	debug:boolean;
 	utils:any;
@@ -369,6 +375,7 @@ export default class NoteChainPlugin extends Plugin {
 		this.editor = new NCEditor(this.app);
 		this.chain = new NoteChain(this,this.editor);
 		this.explorer = new NCFileExplorer(this);
+		this.wordcout = new WordCount(this,this.app);
 		this.strings = new Strings();
 
 		addCommands(this);
@@ -494,6 +501,12 @@ export default class NoteChainPlugin extends Plugin {
 					},500)
 			})
 		);
+
+		this.wordcout.set_xfolders(this.settings.wordcountxfolder);
+		if(this.settings.wordcout){
+			this.wordcout.regeister_editor_change();
+			this.wordcout.regeister_active_leaf_change();
+		}
 	}
 
 
@@ -748,6 +761,27 @@ class NCSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.refreshTasks)
 					.onChange(async (value) => {
 						this.plugin.settings.refreshTasks = value;
+						await this.plugin.saveSettings();
+					})
+				);
+
+		new Setting(containerEl)
+				.setName(this.plugin.strings.setting_wordcout)
+				.addToggle(text => text
+					.setValue(this.plugin.settings.wordcout)
+					.onChange(async (value) => {
+						this.plugin.settings.wordcout = value;
+						await this.plugin.saveSettings();
+					})
+				);
+		
+		new Setting(containerEl)
+				.setName(this.plugin.strings.setting_wordcout_xfolder)
+				.addTextArea(text => text
+					.setValue(this.plugin.settings.wordcountxfolder)
+					.onChange(async (value) => {
+						this.plugin.settings.wordcountxfolder = value;
+						this.plugin.wordcout.set_xfolders(value);
 						await this.plugin.saveSettings();
 					})
 				);
