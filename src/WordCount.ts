@@ -26,7 +26,7 @@ export class WordCount{
         if(!tfile){return false;}
         if((tfile as any).deleted){return false;}
         if(tfile.extension!='md'){return false;}
-        let xfolders = this.plugin.settings.wordcountxfolder.split('\n').filter(x=>x!='')
+        let xfolders = this.plugin.settings.wordcountxfolder.split('\n').filter(x=>x!='');
         for(let item of xfolders){
             if(tfile.path.startsWith(item)){
                 return false;
@@ -198,5 +198,71 @@ export class WordCount{
                 }
             })
         )
+    }
+
+    get_words_of_tfiles(){
+        return this.plugin.chain.get_all_tfiles().map(
+            x=>this.plugin.editor.get_frontmatter(x,'words')
+        ).filter(x=>x);
+    }
+
+    sum_words_of_tifles(files:Array<any>, begt:number|string, endt:number|string) {
+        if(typeof(begt)=='number'){
+            begt = moment().add(-begt,'days').format('YYYY-MM-DD')
+        }
+        if(typeof(endt)=='number'){
+            endt = moment().add(-endt,'days').format('YYYY-MM-DD')
+        }
+        
+        let startDate = new Date(begt);
+        let endDate = new Date(endt);
+        let dailyWordCounts:{[key:string]:any} = {};
+    
+        // Initialize dailyWordCounts with all dates in the range
+        for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+            let dateStr = date.toISOString().split('T')[0];
+            dailyWordCounts[dateStr] = 0;
+        }
+        
+        // Sum up the word counts for each date
+        files.forEach((file:any) => {
+            let lastWordCount = 0;
+            let earliestDate = new Date(Object.keys(file).sort()[0]);
+    
+            // Initialize lastWordCount with the earliest date's word count in the file
+            if (earliestDate < startDate) {
+                lastWordCount = file[earliestDate.toISOString().split('T')[0]];
+            }
+            
+            for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+                let dateStr = date.toISOString().split('T')[0];
+                if (file.hasOwnProperty(dateStr)) {
+                    lastWordCount = file[dateStr];
+                }
+                dailyWordCounts[dateStr] += lastWordCount;
+            }
+        });
+        return dailyWordCounts;
+    }
+
+    diff_words_of_tifles(dailyWordCounts: { [key: string]: number }, first_as_zero: boolean = true): { [key: string]: number } {
+        let dailyNewWordCounts: { [key: string]: number } = {};
+        let previousTotal = 0;
+        let first = '';
+    
+        for (let date in dailyWordCounts) {
+            if (first === '') {
+                first = date;
+            }
+            let currentTotal = dailyWordCounts[date];
+            dailyNewWordCounts[date] = currentTotal - previousTotal;
+            previousTotal = currentTotal;
+        }
+    
+        if (first_as_zero && first !== '') {
+            dailyNewWordCounts[first] = 0;
+        }
+    
+        return dailyNewWordCounts;
     }
 }

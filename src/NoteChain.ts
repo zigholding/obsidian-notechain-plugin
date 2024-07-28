@@ -120,7 +120,11 @@ export class NoteChain{
 			folders = folders.filter((f:TFile)=>this.filter_user_ignore(f));
 		}
 		try {
-			let folder = await this.tp_suggester((f:TFile)=>f.path,folders);
+			let folder = await this.tp_suggester(
+				this.plugin.utils.array_prefix_id(
+					folders.map((f:TFile)=>f.path)
+				),folders
+			);
 			// 移动笔记
 			let dst = folder.path+"/"+tfile.basename+"."+tfile.extension;
 			await this.app.fileManager.renameFile(tfile,dst);
@@ -392,7 +396,7 @@ export class NoteChain{
 		}else{
 			kv.push(this.plugin.strings.item_currentnote)
 		}
-		
+
 		let mode = '';
 		if(kv.contains(smode)){
 			mode = smode;
