@@ -7,13 +7,13 @@
 
 The modern note concept of dual-linking allows notes to think like the brain, in a mesh of thoughts. Like roots or river networks, they are scattered without missing any idea, and based on the internal links of the notes, we can easily pick up each idea.
 
-However, when we finally decide to organize our views into articles and compile topics into books, we have to roll this net into a main line. So why not make a little effort for this from the start?	
+However, when we finally decide to organize our views into articles and compile topics into books, we have to roll this net into a main line. So why not make a little effort for this from the start?
 
 When I stared at the messy drawers of notes like `Nicholas Bourbaki`, various drawers, all kinds of notes, titles, content, tags, references, and dates flickered in my mind, I realized:
 
 > Linear output requires linear input.
 
-![](./assets/Pasted image 20240727203225.png)
+![Pasted image 20240727203225.png](assets/Pasted image 20240727203225.png)
 
 For this reason, I call all notes arranged in order the note chain and developed the `Note Chain` plugin, aimed at adding a small piece to the puzzle of note management.
 
@@ -36,7 +36,7 @@ Head -.-> P[...] --> PrevA --> A --> NextA -.-> N[...] --> Tail
 
 `Create New Note`: Create `pre/post/head/tail/non-chain` notes for the current note. Choose the type when creating, then enter the file name. If the file already exists, it will jump to that file. This command can replace the `Create New Note` command provided by `Obsidian`, and it is recommended to set the shortcut key to `Ctrl + N`;
 
-![](./assets/Pasted image 20240427203711.png)
+![Pasted image 20240427203711.png](assets/Pasted image 20240427203711.png)
 
 `Move node up`: Move the current note up in the note chain, changing `A-B-C-D-E` to `A-C-B-D-E`. It is recommended to set the shortcut key to `Alt + PgUp`;
 
@@ -44,7 +44,7 @@ Head -.-> P[...] --> PrevA --> A --> NextA -.-> N[...] --> Tail
 
 `Insert node of chain`: Insert the current note into the note chain. First, select the note group according to different modes, then choose the note as the anchor point, and finally select the relationship between the current note and the anchor point. Since it is usually chosen for the same directory notes, you can select the default note group in the `Insert node of chain: Default mode` on the settings page. It is recommended to set the shortcut key to `Alt + I`.
 
-![Pasted image 20240727220947.png](./assets/Pasted image 20240727220947.png)
+![Pasted image 20240727220947.png](assets/Pasted image 20240727220947.png)
 
 `Files` in the file list also provides two commands to facilitate the creation of note chains:
 
@@ -63,7 +63,7 @@ The methods introduced above are all for setting nodes for a single note. `Note 
 
 After setting the note chain, turn on `Sort by chain in file explorer` on the settings page, and the files in the `Files` list will be sorted in the order of the note chain.
 
-![](./assets/Pasted image 20240728152820.png)
+![Pasted image 20240728152820.png](assets/Pasted image 20240728152820.png)
 
 ### Note Sorting Rules
 
@@ -114,7 +114,7 @@ Set folder sorting, in the `Files/Files` list, right-click the directory, and cl
 
 `Open note`: Open the note. All notes are sorted by modification time and can be accessed through numerical encoding.
 
-![](./assets/Pasted image 20240728182019.png)
+![Pasted image 20240728182019.png](assets/Pasted image 20240728182019.png)
 
 `Open and reveal note`: Open and locate the note, the note will be displayed in the middle of the `File List`;
 
@@ -122,7 +122,7 @@ Set folder sorting, in the `Files/Files` list, right-click the directory, and cl
 
 `Open note smarter`: First select the note group, then select the note.
 
-![](./assets/Pasted image 20240728182158.png)
+![Pasted image 20240728182158.png](assets/Pasted image 20240728182158.png)
 
 `Move current file to another folder`: Move the current note, the folder is sorted according to the latest modification time of the note, so it is prioritized to move to the active directory.
 
