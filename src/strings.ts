@@ -115,6 +115,22 @@ export class Strings{
         }
     }
 
+    get filemenu_create_next_note(){
+        if(this.language=='zh'){
+            return '创建后置笔记'
+        }else{
+            return "Create next note";
+        }
+    }
+
+    get filemenu_move_as_next_note(){
+        if(this.language=='zh'){
+            return '移动为后置笔记'
+        }else{
+            return "Move as next note";
+        }
+    }
+
     get clear_inlinks(){
         if(this.language=='zh'){
             return '清理笔记入链'

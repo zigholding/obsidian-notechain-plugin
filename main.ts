@@ -78,7 +78,7 @@ export default class NoteChainPlugin extends Plugin {
 				if(file instanceof TFile){
 					menu.addItem((item) => {
 						item
-						.setTitle("Create next note")
+						.setTitle(this.strings.filemenu_create_next_note)
 						.setIcon("file-plus")
 						.onClick(async () => {
 							let filename = await this.chain.tp_prompt('File name');
@@ -101,22 +101,24 @@ export default class NoteChainPlugin extends Plugin {
 				if(file instanceof TFile && file.extension=='md'){
 					menu.addItem((item) => {
 						item
-						.setTitle("Move as next note")
+						.setTitle(this.strings.filemenu_move_as_next_note)
 						.setIcon("hand")
 						.onClick(async () => {
 							let anchor = await this.chain.sugguster_note();
-							await this.chain.chain_insert_node_after(file,anchor);
-							if(file.parent!=anchor.parent){
-								let dst = anchor.parent.path+'/'+file.name;
-								await this.app.fileManager.renameFile(file,dst);
+							if(anchor){
+								await this.chain.chain_insert_node_after(file,anchor);
+								if(file.parent!=anchor.parent){
+									let dst = anchor.parent.path+'/'+file.name;
+									await this.app.fileManager.renameFile(file,dst);
+								}
+								this.explorer.sort();
 							}
-							this.explorer.sort();
 						});
 					});
 				}else if(file instanceof TFolder){
 					menu.addItem((item) => {
 						item
-						.setTitle("Move as next note")
+						.setTitle(this.strings.filemenu_move_as_next_note)
 						.setIcon("hand")
 						.onClick(async () => {
 							let notes = file.parent?.children;
