@@ -20,7 +20,7 @@ export class WordCount{
         this.plugin = plugin;
 		this.app = app;
 		this.nretry=100;
-        this.set_xfolders('');
+        this.register();
 	}
 
     set_xfolders(s:string){
@@ -153,6 +153,14 @@ export class WordCount{
             await this.update_word_count(tfile);
             i = i+1;
         }
+    }
+
+    register(){
+        this.set_xfolders(this.plugin.settings.wordcountxfolder);
+		if(this.plugin.settings.wordcout){
+			this.regeister_editor_change();
+			this.regeister_active_leaf_change();
+		}
     }
 
     regeister_editor_change(){

@@ -1,0 +1,147 @@
+import { 
+	App, PluginSettingTab, Setting,Plugin
+} from 'obsidian';
+
+import NoteChainPlugin from '../main';
+
+
+export interface NCSettings {
+	PrevChain:string;
+	NextChain:string;
+	refreshDataView:boolean;
+	refreshTasks:boolean,
+	isSortFileExplorer:boolean,
+	isFolderFirst:boolean,
+	suggesterNotesMode:string,
+	wordcout:boolean,
+	wordcountxfolder:string,
+}
+
+export const DEFAULT_SETTINGS: NCSettings = {
+	PrevChain : "10",
+	NextChain : "10",
+	refreshDataView : true,
+	refreshTasks : true,
+	isSortFileExplorer : true,
+	isFolderFirst : true,
+	suggesterNotesMode:'',
+	wordcout:true,
+	wordcountxfolder:'',
+}
+
+
+export class NCSettingTab extends PluginSettingTab {
+	plugin: NoteChainPlugin;
+
+	constructor(app: App, plugin: NoteChainPlugin) {
+		super(app, plugin);
+		this.plugin = plugin;
+	}
+
+	display(): void {
+		const {containerEl} = this;
+
+		containerEl.empty();
+
+		new Setting(containerEl)
+				.setName(this.plugin.strings.setting_isSortFileExplorer)
+				.addToggle(text => text
+					.setValue(this.plugin.settings.isSortFileExplorer)
+					.onChange(async (value) => {
+						this.plugin.settings.isSortFileExplorer = value;
+						await this.plugin.saveSettings();
+						this.plugin.explorer.sort();
+					})
+				);
+		new Setting(containerEl)
+				.setName(this.plugin.strings.setting_isFolderFirst)
+				.addToggle(text => text
+					.setValue(this.plugin.settings.isFolderFirst)
+					.onChange(async (value) => {
+						this.plugin.settings.isFolderFirst = value;
+						await this.plugin.saveSettings();
+						this.plugin.explorer.sort();
+					})
+				);
+
+		
+		new Setting(containerEl)
+			.setName(this.plugin.strings.setting_PrevChain)
+			.addText(text => text
+				.setValue(this.plugin.settings.PrevChain)
+				.onChange(async (value) => {
+					this.plugin.settings.PrevChain = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(this.plugin.strings.setting_suggesterNotesMode)
+			.addDropdown(dropdown => dropdown
+				.addOption('item_get_brothers',this.plugin.strings.item_get_brothers)
+				.addOption('item_uncle_notes',this.plugin.strings.item_uncle_notes)
+				.addOption('item_notechain',this.plugin.strings.item_notechain)
+				.addOption('item_same_folder',this.plugin.strings.item_same_folder)
+				.addOption('item_inlinks_outlinks',this.plugin.strings.item_inlinks_outlinks)
+				.addOption('item_inlins',this.plugin.strings.item_inlins)
+				.addOption('item_outlinks',this.plugin.strings.item_outlinks)
+				.addOption('item_all_noes',this.plugin.strings.item_all_noes)
+				.addOption('item_recent',this.plugin.strings.item_recent)
+				.addOption('','')
+
+				.setValue(this.plugin.settings.suggesterNotesMode)
+				.onChange(async (value) => {
+					this.plugin.settings.suggesterNotesMode = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(this.plugin.strings.setting_NextChain)
+			.addText(text => text
+				.setValue(this.plugin.settings.NextChain)
+				.onChange(async (value) => {
+					this.plugin.settings.NextChain = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)  
+				.setName(this.plugin.strings.setting_refreshDataView)
+				.addToggle(text => text
+					.setValue(this.plugin.settings.refreshDataView)
+					.onChange(async (value) => {
+						this.plugin.settings.refreshDataView = value;
+						await this.plugin.saveSettings();
+					})
+				);
+				
+		new Setting(containerEl)
+				.setName(this.plugin.strings.setting_refreshTasks)
+				.addToggle(text => text
+					.setValue(this.plugin.settings.refreshTasks)
+					.onChange(async (value) => {
+						this.plugin.settings.refreshTasks = value;
+						await this.plugin.saveSettings();
+					})
+				);
+
+		new Setting(containerEl)
+				.setName(this.plugin.strings.setting_wordcout)
+				.addToggle(text => text
+					.setValue(this.plugin.settings.wordcout)
+					.onChange(async (value) => {
+						this.plugin.settings.wordcout = value;
+						await this.plugin.saveSettings();
+					})
+				);
+		
+		new Setting(containerEl)
+				.setName(this.plugin.strings.setting_wordcout_xfolder)
+				.addTextArea(text => text
+					.setValue(this.plugin.settings.wordcountxfolder)
+					.onChange(async (value) => {
+						this.plugin.settings.wordcountxfolder = value;
+						this.plugin.wordcout.set_xfolders(value);
+						await this.plugin.saveSettings();
+					})
+				);
+	}
+}
