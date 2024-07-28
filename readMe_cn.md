@@ -13,7 +13,7 @@
 
 > 线性输出需要线性输入。
 
-![](./assets/Pasted image 20240727203225.png)
+![image](./assets/Pasted%20image%2020240727203225.png)
 
 
 为此，我将所有按顺序排列的笔记称为笔记链，并开发了 `Note Chain` 插件，旨在为笔记管理这张拼图，添上一小块。
@@ -39,7 +39,7 @@ Head -.-> P[...] --> PrevA --> A --> NextA -.-> N[...] --> Tail
 
 `Create New Note`：创建当前笔记的`前置/后置/头/尾/非链` 笔记，创建时选择类型，之后输入文件名，如果文件已存在，会跳转到该文件。这个命令可以替代 `Obsidian` 提供的 `Create New Note` 命令，建议将快捷键设置为 `Ctrl + N`；
 
-![](./assets/Pasted image 20240427203711.png)
+![image](./assets/Pasted%20image%2020240427203711.png)
 
 `Move node up`：笔记链中上移当前笔记，`A-B-C-D-E` 变为 `A-C-B-D-E`，建议将快捷键设置为 `Alt + PgUp`；
 
@@ -47,7 +47,7 @@ Head -.-> P[...] --> PrevA --> A --> NextA -.-> N[...] --> Tail
 
 `Insert node of chain`：将当前笔记插入笔记链。首先按照不同的模式选择笔记组，再选择笔记作为锚点，最后选择当前笔记与锚点的关系。由于通常选择同目录笔记，可以在设置页 `Insert nde of chain: Default mode` 选择默认笔记组。建议将快捷键设置为 `Alt + I`。
 
-![](./assets/Pasted image 20240727220947.png)
+![image](./assets/Pasted%20image%2020240727220947.png)
 
 `文件列表 Files` 中也提供了两个命令方便创建笔记链：
 
@@ -67,7 +67,7 @@ Head -.-> P[...] --> PrevA --> A --> NextA -.-> N[...] --> Tail
 
 在设置笔记链之后，在设置页开启 `Sort by chain in file explorer`，`文件列表Files` 中的文件将按笔记链顺序排序。
 
-![](./assets/Pasted image 20240728152820.png)
+![image](./assets/Pasted%20image%2020240728152820.png)
 
 ### 笔记排序规则
 
@@ -114,11 +114,12 @@ graph LR
 
 ## 快速访问
 
+
 `Note Chain` 提供了多个命令更方便地访问笔记。
 
 `Open note`: 打开笔记。所有的笔记按修改时间排序，并且可以通过数字编码访问。
 
-![](./assets/Pasted image 20240728182019.png)
+![image](./assets/Pasted%20image%2020240728182019.png)
 
 `Open and reveal note`：打开并定位笔记，笔记将在 `文件列表` 中间显示；
 
@@ -126,7 +127,7 @@ graph LR
 
 `Open note smarter`：先选择笔记分组，再选择笔记。
 
-![](./assets/Pasted image 20240728182158.png)
+![image](./assets/Pasted%20image%2020240728182158.png)
 
 `Move current file to another folder`：移动当前笔记，文件夹根据笔记的最新修改时间排序，因此优先移动到活跃中的目录。
 
