@@ -68,21 +68,50 @@ const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 const cmd_longform4notechain = (plugin:NoteChainPlugin) => ({
 	id: "longform4notechain",
     name: plugin.strings.cmd_longform4notechain,
-	callback: () => {
+	callback: async () => {
+		let nc = plugin;
 		let curr = plugin.chain.current_note;
-		if(curr==null){return;}
-		plugin.app.fileManager.processFrontMatter(
-			curr,
+		if(curr==null || curr.parent==null){return;}
+
+		let path = curr.parent.path+'/'+curr.parent.name+'.md';
+		let dst = await nc.chain.get_tfile(path);
+		if(dst==null){
+			let ufunc = nc.utils.get_tp_func('tp.file.create_new');
+			dst = await ufunc(
+				'',curr.parent.name,
+				false,curr.parent
+			);
+		}
+
+		await nc.app.fileManager.processFrontMatter(
+			dst,
 			fm =>{
-				if(curr==null){return;}
-				if(curr.parent==null){return};
+				if(fm['longform']==null){
+					fm['longform'] = {
+						'format':'scenes',
+						'title':dst.parent.name,
+						'workflow':'Default Workflow',
+						'sceneFolder':'/',
+						'scenes':[],
+						'ignoredFiles':[],
+					};
+				}
+			}
+		)
+		
+		await plugin.app.fileManager.processFrontMatter(
+			dst,
+			fm =>{
+				if(dst==null){return;}
+				if(dst.parent==null){return};
 
 				if(fm['longform']==null){return;}
-				let notes = plugin.chain.get_tfiles_of_folder(curr.parent);
+				let notes = plugin.chain.get_tfiles_of_folder(dst.parent);
 				notes = plugin.chain.sort_tfiles_by_chain(notes);
 				fm.longform.scenes = notes.map((f:TFile)=>f.basename);
 			}
 		)
+		await nc.chain.open_note(dst);
 	}
 });
 

@@ -151,7 +151,7 @@ export class Strings{
         if(this.language=='zh'){
             return '重置当前文件夹笔记链条'
         }else{
-            return "Reset the chain of current folder!";
+            return "Reset the chain of current folder";
         }
     }
 
