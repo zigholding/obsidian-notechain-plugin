@@ -13,7 +13,7 @@ When I stared at the messy drawers of notes like `Nicholas Bourbaki`, various dr
 
 > Linear output requires linear input.
 
-![Pasted image 20240727203225.png](assets/Pasted image 20240727203225.png)
+![Pasted image 20240727203225.png](assets/Pasted%20image%2020240727203225.png)
 
 For this reason, I call all notes arranged in order the note chain and developed the `Note Chain` plugin, aimed at adding a small piece to the puzzle of note management.
 
