@@ -210,5 +210,5 @@ Note Chain 依赖以下插件：
 3. 重启 `Obsidian` 或刷新插件列表，你将看到这一插件；
 4. 在插件列表中，启用 `Note Chain`；
 
-你也可以从[百度云盘]( [BaiduCloudDisk](https://pan.baidu.com/s/1mR71B9lLE9CgZwcnfyLOEg?pwd=khum))下载这些文件。
+你也可以从[百度云盘](https://pan.baidu.com/s/1mR71B9lLE9CgZwcnfyLOEg?pwd=khum)下载这些文件。
 
