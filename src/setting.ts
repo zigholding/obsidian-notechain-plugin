@@ -152,7 +152,6 @@ export class NCSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.wordcountxfolder)
 					.onChange(async (value) => {
 						this.plugin.settings.wordcountxfolder = value;
-						this.plugin.wordcout.set_xfolders(value);
 						await this.plugin.saveSettings();
 					})
 				);
