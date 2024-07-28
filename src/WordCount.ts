@@ -14,7 +14,6 @@ export class WordCount{
 	nretry:number;
     timerId:NodeJS.Timeout;
     curr_active_file:TFile;
-    xfolders : Array<string>;
 
 	constructor(plugin:NoteChainPlugin,app:App){
         this.plugin = plugin;
@@ -23,15 +22,12 @@ export class WordCount{
         this.register();
 	}
 
-    set_xfolders(s:string){
-        this.xfolders = s.split('\n').filter(x=>x!='');
-    }
-
     filter(tfile:TFile){
         if(!tfile){return false;}
         if((tfile as any).deleted){return false;}
         if(tfile.extension!='md'){return false;}
-        for(let item of this.xfolders){
+        let xfolders = this.plugin.settings.wordcountxfolder.split('\n').filter(x=>x!='')
+        for(let item of xfolders){
             if(tfile.path.startsWith(item)){
                 return false;
             }
@@ -156,7 +152,6 @@ export class WordCount{
     }
 
     register(){
-        this.set_xfolders(this.plugin.settings.wordcountxfolder);
 		if(this.plugin.settings.wordcout){
 			this.regeister_editor_change();
 			this.regeister_active_leaf_change();

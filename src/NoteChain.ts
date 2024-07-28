@@ -154,7 +154,8 @@ export class NoteChain{
 			['mtime','x']
 		).filter((f:TFile)=>this.filter_user_ignore(f));
 		try {
-			let note = await this.tp_suggester((f:TFile)=>f.path,notes);
+			let msg = this.plugin.utils.array_prefix_id(notes.map((f:TFile)=>f.path));
+			let note = await this.tp_suggester(msg,notes);
 			return note;
 		} catch (error) {
 			return null;
@@ -392,17 +393,11 @@ export class NoteChain{
 			kv.push(this.plugin.strings.item_currentnote)
 		}
 		
-		let kvs = []
-		let i = 1;
-		for(let x of kv){
-			kvs.push(`${i++} ${x}`);
-		}
-
 		let mode = '';
 		if(kv.contains(smode)){
 			mode = smode;
 		}else{
-			mode = await this.tp_suggester(kvs,kv);
+			mode = await this.tp_suggester(this.plugin.utils.array_prefix_id(kv),kv);
 		}
 		if(mode===this.plugin.strings.item_currentnote){
 			return [tfile];
@@ -844,7 +839,7 @@ export class NoteChain{
 			Object.values(kv)
 		);
 		if(field==null){return [];}
-		if(field=='chain'){
+		if(field=='chain'){ 
 			tfiles = this.sort_tfiles(tfiles,'name');
 		}
 		return this.sort_tfiles(tfiles,field);

@@ -165,9 +165,9 @@ export class Strings{
 
     get chain_set_seq_note(){
         if(this.language=='zh'){
-            return '重置当前文件夹笔记链条'
+            return '重塑当前文件夹笔记链条'
         }else{
-            return "Reset the chain of current folder";
+            return "Rebuild the chain of current folder";
         }
     }
 
@@ -219,9 +219,17 @@ export class Strings{
         }
     }
 
+    get setting_auto_notechain(){
+        if(this.language=='zh'){
+            return '打开文件时，自动重塑文件夹笔记链？'
+        }else{
+            return "Auto build notechain of folder while open new file?";
+        }
+    }
+
     get setting_refreshDataView(){
         if(this.language=='zh'){
-            return '打开文件时刷新Dataview视图？'
+            return '打开文件时，刷新Dataview视图？'
         }else{
             return "Refresh dataview while open new file?";
         }
@@ -229,7 +237,7 @@ export class Strings{
 
     get setting_refreshTasks(){
         if(this.language=='zh'){
-            return '打开文件时刷新Tasks视图？'
+            return '打开文件时，刷新Tasks视图？'
         }else{
             return "Refresh tasks while open new file?";
         }
@@ -245,9 +253,9 @@ export class Strings{
 
     get setting_wordcout_xfolder(){
         if(this.language=='zh'){
-            return '字数统计：跳过目录'
+            return '跳过以下目录'
         }else{
-            return "Word cout: ignored folders";
+            return "Ignore these folders";
         }
     }
     

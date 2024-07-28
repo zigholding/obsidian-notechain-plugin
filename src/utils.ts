@@ -9,8 +9,10 @@ export function get_plugins(app:App,name:string){
 
 export function array_prefix_id(items:Array<any>,offset=1){
     let res = new Array();
+    let N = items.length.toString().length;
     for(let i=0;i<items.length;i++){
-        res.push(`${i+offset} ${items[i]}`);
+        let id =  (i + offset).toString().padStart(N, '0');
+        res.push(`${id} 🔥 ${items[i]}`);
     }
     return res;
 }

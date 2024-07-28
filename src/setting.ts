@@ -8,6 +8,7 @@ import NoteChainPlugin from '../main';
 export interface NCSettings {
 	PrevChain:string;
 	NextChain:string;
+	auto_notechain:boolean;
 	refreshDataView:boolean;
 	refreshTasks:boolean,
 	isSortFileExplorer:boolean,
@@ -20,6 +21,7 @@ export interface NCSettings {
 export const DEFAULT_SETTINGS: NCSettings = {
 	PrevChain : "10",
 	NextChain : "10",
+	auto_notechain : false,
 	refreshDataView : true,
 	refreshTasks : true,
 	isSortFileExplorer : true,
@@ -53,6 +55,7 @@ export class NCSettingTab extends PluginSettingTab {
 						this.plugin.explorer.sort();
 					})
 				);
+
 		new Setting(containerEl)
 				.setName(this.plugin.strings.setting_isFolderFirst)
 				.addToggle(text => text
@@ -102,6 +105,16 @@ export class NCSettingTab extends PluginSettingTab {
 					this.plugin.settings.NextChain = value;
 					await this.plugin.saveSettings();
 				}));
+		
+		new Setting(containerEl)  
+				.setName(this.plugin.strings.setting_auto_notechain)
+				.addToggle(text => text
+					.setValue(this.plugin.settings.auto_notechain)
+					.onChange(async (value) => {
+						this.plugin.settings.auto_notechain = value;
+						await this.plugin.saveSettings();
+					})
+				);
 
 		new Setting(containerEl)  
 				.setName(this.plugin.strings.setting_refreshDataView)

@@ -183,6 +183,23 @@ export default class NoteChainPlugin extends Plugin {
 			let target = await (this.app as any).plugins.getPlugin("obsidian-tasks-plugin");
 			target && target.cache.notifySubscribers();
 		}
+		if(this.settings.auto_notechain){
+			let notes = this.chain.get_brothers(file);
+			if(notes.length==0){return;}
+			let xfolders = this.settings.wordcountxfolder.split('\n').filter(x=>x!='');
+			for(let item of xfolders){
+				if(file.path.startsWith(item)){
+					return false;
+				}
+			}
+
+			if(this.explorer?.file_explorer){
+				notes = this.chain.sort_tfiles(notes,(this.explorer.file_explorer as any).sortOrder);
+				notes = this.chain.sort_tfiles(notes,'chain');
+				await this.chain.chain_concat_tfiles(notes);
+				this.explorer.sort();
+			}
+		}
 	}
 	
 	async loadSettings() {
@@ -257,7 +274,9 @@ export default class NoteChainPlugin extends Plugin {
 		//为0时也显示，否则以为是bug
 		//if(notes.length==0){return;}
 		const note = await this.chain.tp_suggester(
-			(file:TFile) => this.tfile_to_string(file,[],""), 
+			this.utils.array_prefix_id(
+				notes.map((file:TFile) => this.tfile_to_string(file,[],""))
+			), 
 			notes
 		); 
 		
@@ -319,7 +338,9 @@ export default class NoteChainPlugin extends Plugin {
 		notes = this.chain.sort_tfiles_by_chain(notes);
 		if(notes.length>0){
 			let note = await this.chain.tp_suggester(
-				(file:TFile) => this.chain.tfile_to_string(file), 
+				this.utils.array_prefix_id(
+					notes.map((file:TFile) => this.chain.tfile_to_string(file))
+				),
 				notes
 			)
 			if(note){
