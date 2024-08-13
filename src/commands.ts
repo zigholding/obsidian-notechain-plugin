@@ -46,7 +46,7 @@ const cmd_longform4notechain = (plugin:NoteChainPlugin) => ({
 		let path = curr.parent.path+'/'+curr.parent.name+'.md';
 		let dst = await nc.chain.get_tfile(path);
 		if(dst==null){
-			let ufunc = nc.utils.get_tp_func('tp.file.create_new');
+			let ufunc = nc.utils.get_tp_func(nc.app,'tp.file.create_new');
 			dst = await ufunc(
 				'',curr.parent.name,
 				false,curr.parent
