@@ -323,6 +323,98 @@ const cmd_open_next_note_of_right_leaf = (plugin:NoteChainPlugin) => ({
 	}
 });
 
+const cmd_file_open_with_system_app = (plugin:NoteChainPlugin) => ({
+	id: 'cmd_file_open_with_system_app',
+	name: plugin.strings.cmd_file_open_with_system_app,
+	callback: async () => {
+		let nc = plugin;
+		if((nc.app as any).isMobile){return;}
+		let tfile = nc.chain.current_note;
+		if(tfile){
+			let items = await nc.chain.get_file_links(tfile);
+			let item = await nc.chain.tp_suggester(
+				nc.utils.array_prefix_id(Object.keys(items)),
+				Object.values(items),
+			)
+			if(item){
+				let electron = require('electron')
+				electron.remote.shell.openPath(item);
+			}
+		}
+	}
+});
+
+const cmd_file_show_in_system_explorer = (plugin:NoteChainPlugin) => ({
+	id: 'cmd_file_show_in_system_explorer',
+	name: plugin.strings.cmd_file_show_in_system_explorer,
+	callback: async () => {
+		let nc = plugin;
+		if((nc.app as any).isMobile){return;}
+		let tfile = nc.chain.current_note;
+		if(tfile){
+			let items = await nc.chain.get_file_links(tfile);
+			let item = await nc.chain.tp_suggester(
+				nc.utils.array_prefix_id(Object.keys(items)),
+				Object.values(items),
+			)
+			if(item){
+				let electron = require('electron')
+				electron.remote.shell.showItemInFolder(item);
+			}
+		}
+	}
+});
+
+const cmd_file_rename = (plugin:NoteChainPlugin) => ({
+	id: 'cmd_file_rename',
+	name: plugin.strings.cmd_file_rename,
+	callback: async () => {
+		let nc = plugin;
+		if((nc.app as any).isMobile){return;}
+		let tfile = nc.chain.current_note;
+
+		if(tfile){
+			let items:{[key:string]:any} = {}
+			let links = nc.chain.get_inlinks();
+			for(let i of links){
+				if(i.extension==='md'){
+					items['ℹ️ '+i.basename] = i;
+				}else{
+					items['ℹ️ '+i.name] = i;
+				}
+			}
+			links = nc.chain.get_outlinks();
+			for(let i of links){
+				if(i.extension==='md'){
+					items['🅾️ '+i.basename] = i;
+				}else{
+					items['🅾️ '+i.name] = i;
+				}
+			}
+			
+			let note = await nc.chain.tp_suggester(
+				nc.utils.array_prefix_id(Object.keys(items)),
+				Object.values(items),
+			)
+
+			if(note){
+				let res = await nc.chain.tp_prompt('New Name',note.basename);
+				if(res && !(res===note.basename) && !(res==='')){
+					let npath = note.parent.path+'/'+res+'.'+note.extension;
+					let dst = nc.chain.get_tfile(res+'.'+note.extension);
+					if(dst){
+						new Notice('Exist:'+res+note.extension,3000);
+					}else{
+						nc.app.fileManager.renameFile(note,npath);
+					}
+				}
+			}
+		}
+	}
+});
+
+
+
 const commandBuilders = [
 	cmd_open_note,
 	cmd_reveal_note,
@@ -342,12 +434,23 @@ const commandBuilders = [
 	chain_set_seq_note,
 	create_new_note,
 	chain_move_up_node,
-	chain_move_down_node
-	
+	chain_move_down_node,
+	cmd_file_rename
 ];
+
+const commandBuildersDesktop = [
+	cmd_file_open_with_system_app,
+	cmd_file_show_in_system_explorer,
+
+]
 
 export function addCommands(plugin:NoteChainPlugin) {
     commandBuilders.forEach((c) => {
         plugin.addCommand(c(plugin));
     });
+	if((plugin.app as any).isMobile==false){
+		commandBuildersDesktop.forEach((c) => {
+			plugin.addCommand(c(plugin));
+		});
+	}
 }

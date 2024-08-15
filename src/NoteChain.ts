@@ -871,4 +871,87 @@ export class NoteChain{
 		}
 	}
 
+	async get_file_links(tfile:TFile,xlinks=true,inlinks=true,outlinks=true,onlymd=false){
+		let items:{[key:string]:any} = {}
+
+		if(!tfile){
+			return items;
+		}
+
+		items['🏠 '+tfile.basename] = (this.app.vault.adapter as any).getFullPath(tfile.path)
+		if(xlinks){
+			let tmp;
+			tmp = this.editor.get_frontmatter(tfile,'github');
+			if(tmp){
+				if(tmp.contains('github.com')){
+					items['🌐github'] = tmp;
+				}else{
+					items['🌐github'] = `https://github.com/`+tmp;
+				}
+			}
+			tmp = this.editor.get_frontmatter(tfile,'huggingface');
+			if(tmp){
+				if(tmp.contains('huggingface.co')){
+					items['🌐huggingface🤗'] = tmp;
+				}else{
+					items['🌐huggingface🤗'] = `https://huggingface.co/`+tmp;
+				}
+			}
+			tmp = this.editor.get_frontmatter(tfile,'arxiv');
+			if(tmp?.ID){
+				items['🌐arxiv'] = `https://arxiv.org/abs/`+tmp?.ID;
+			}
+
+
+			let text = await this.app.vault.cachedRead(tfile)
+			// 匹配外部链接
+			const regex = /\[[^(\[\])]*?\]\(.*?\)/g;
+			const matches = text.match(regex);
+			if (matches) {
+				for (const match of matches) {
+					// 提取匹配的组
+					let key = match.slice(1,match.indexOf(']('));
+					let value = match.slice(match.indexOf('](')).slice(2,-1);
+					if(value===''){continue;}
+					if(key===''){
+						key = value;
+					}
+					if(value.startsWith('http')){
+						key='🌐 '+key;
+					}else if(value.startsWith('file:///')){
+						value = value.slice(8)
+						key= '📁 ' +key;
+					}else{
+						key = '🔗 '+key;
+					}
+					items[key] = value;
+				}
+			}
+		}
+		if(inlinks){
+	        let links = this.get_inlinks();
+	        for(let i of links){
+	            if(onlymd&& !(i.extension==='md')){continue;}
+				if(i.extension==='md'){
+					items['ℹ️ '+i.basename] = (this.app.vault.adapter as any).getFullPath(i.path);
+				}else{
+					items['ℹ️ '+i.name] = (this.app.vault.adapter as any).getFullPath(i.path);
+				}
+	        }
+	    }
+	    if(outlinks){
+	        let links = this.get_outlinks();
+	        for(let i of links){
+	            if(onlymd&& !(i.extension==='md')){continue;}
+				if(i.extension==='md'){
+					items['🅾️ '+i.basename] = (this.app.vault.adapter as any).getFullPath(i.path);
+				}else{
+					items['🅾️ '+i.name] = (this.app.vault.adapter as any).getFullPath(i.path);
+				}
+	        }
+	    }
+		items['💒 vault'] = (this.app.vault.adapter as any).getFullPath('.');
+		return items;
+	}
+
 }

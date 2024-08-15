@@ -11,6 +11,31 @@ export class Strings{
         }
 	}
 
+    get cmd_file_open_with_system_app(){
+        if(this.language=='zh'){
+            return '文件 - 使用系统程序打开（仅桌面）'
+        }else{
+            return 'File - open with system app (desktop only)';
+        }
+    }
+
+    get cmd_file_show_in_system_explorer(){
+        if(this.language=='zh'){
+            return '文件 - 在系统浏览的查看（仅桌面）'
+        }else{
+            return 'File - show in system explorer (desktop only)';
+        }
+    }
+
+    get cmd_file_rename(){
+        if(this.language=='zh'){
+            return '文件 - 重命名文件'
+        }else{
+            return 'File - rename file';
+        }
+    }
+
+
     get cmd_longform2notechain(){
         if(this.language=='zh'){
             return '根据LongForm重置笔记链条'
