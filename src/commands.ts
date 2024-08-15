@@ -332,11 +332,15 @@ const cmd_file_open_with_system_app = (plugin:NoteChainPlugin) => ({
 		let tfile = nc.chain.current_note;
 		if(tfile){
 			let items = await nc.chain.get_file_links(tfile);
-			let item = await nc.chain.tp_suggester(
-				nc.utils.array_prefix_id(Object.keys(items)),
-				Object.values(items),
+
+			let keys = Object.keys(items);
+			let key = await nc.chain.tp_suggester(
+				nc.utils.array_prefix_id(keys),
+				keys
 			)
-			if(item){
+			
+			if(key){
+				let item = items[key];
 				let electron = require('electron')
 				electron.remote.shell.openPath(item);
 			}
@@ -353,11 +357,14 @@ const cmd_file_show_in_system_explorer = (plugin:NoteChainPlugin) => ({
 		let tfile = nc.chain.current_note;
 		if(tfile){
 			let items = await nc.chain.get_file_links(tfile);
-			let item = await nc.chain.tp_suggester(
-				nc.utils.array_prefix_id(Object.keys(items)),
-				Object.values(items),
+			let keys = Object.keys(items);
+			let key = await nc.chain.tp_suggester(
+				nc.utils.array_prefix_id(keys),
+				keys
 			)
-			if(item){
+			
+			if(key){
+				let item = items[key]
 				let electron = require('electron')
 				electron.remote.shell.showItemInFolder(item);
 			}
@@ -391,13 +398,16 @@ const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 					items['🅾️ '+i.name] = i;
 				}
 			}
+
+			let keys = Object.keys(items);
 			
-			let note = await nc.chain.tp_suggester(
-				nc.utils.array_prefix_id(Object.keys(items)),
-				Object.values(items),
+			let key = await nc.chain.tp_suggester(
+				nc.utils.array_prefix_id(keys),
+				keys,
 			)
 
-			if(note){
+			if(key){
+				let note = items[key];
 				let res = await nc.chain.tp_prompt('New Name',note.basename);
 				if(res && !(res===note.basename) && !(res==='')){
 					let npath = note.parent.path+'/'+res+'.'+note.extension;
