@@ -255,11 +255,60 @@ export class NoteChain{
 		}
 	}
 
+	get_last_activate_leaf(skip_conote=true){
+		let leaves:Array<any> = []
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			leaves.push(leaf)
+		});
+		leaves = leaves.filter(x=>x.getViewState().state.file);
+
+		let r = (this.app as any).plugins.getPlugin("recent-files-obsidian");
+		if(!r){
+			new Notice("Need Plugin recent-files-obsidian ",5000);
+			return;
+		}
+
+		let dv = (this.app as any).plugins.getPlugin('dataview')?.api;
+		if(!dv){
+			new Notice("Need Plugin dataview",5000);
+			return;
+		}
+		let rfiles = r.data.recentFiles.map((x:any)=>x.path);
+		for(let path of rfiles){
+			if(skip_conote && dv.index.tags.delegate.map.get(path)?.has('#conote')){
+				continue;
+			}
+			for(let leaf of leaves){
+				if(leaf.getViewState().state.file==path){
+					return leaf;
+				}
+			}
+		}
+		for(let leaf of leaves.reverse()){
+			let cfile = leaf.getViewState().state.file;
+			if(skip_conote && dv.index.tags.delegate.map.get(cfile)?.has('#conote')){
+				continue
+			}
+
+			if(!rfiles.contains(cfile)){
+				return leaf;
+			}
+		}
+		let leaf = null;
+		for(let i of [1,-1,0]){
+			leaf = this.plugin.chain.get_neighbor_leaf(i);
+			if(leaf){
+				return leaf;
+			}
+		}
+		return null;
+	}
+
 	get current_note(){
 		return this.app.workspace.getActiveFile();
 	}
 
-	get_inlinks(tfile=this.current_note){
+	get_inlinks(tfile=this.current_note,only_md=false){
 		if(tfile==null){return [];}
 
 		let res = new Array();
@@ -273,12 +322,16 @@ export class NoteChain{
 			return Array.from(inlinks).map(
 				(path:string)=>((this.app.vault as any).fileMap[path])
 			).filter(
-				(item:string)=>(item)
+				(item:TFile)=>(item)
+			).filter(
+				(item:TFile)=>{
+					return !only_md || item.extension=='md'
+				}
 			)
 		}
 	}
 
-	get_outlinks(tfile=this.current_note){
+	get_outlinks(tfile=this.current_note,only_md=false){
 		if(tfile==null){return [];}
 		let dv_api = (this.app as any).plugins.getPlugin("dataview");
 		let inlinks = dv_api.index.links.map.get(tfile.path);
@@ -289,6 +342,10 @@ export class NoteChain{
 				(path:string)=>((this.app.vault as any).fileMap[path])
 			).filter(
 				(item:string)=>(item)
+			).filter(
+				(item:TFile)=>{
+					return !only_md || item.extension=='md'
+				}
 			)
 		}
 	}

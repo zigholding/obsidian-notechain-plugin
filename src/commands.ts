@@ -296,7 +296,7 @@ const cmd_open_prev_note_of_right_leaf = (plugin:NoteChainPlugin) => ({
 	name: plugin.strings.cmd_open_prev_note_of_right_leaf,
 	callback: async () => {
 		let nc = plugin;
-		let leaf = nc.chain.get_neighbor_leaf(1);
+		let leaf = nc.chain.get_last_activate_leaf();
 		if(leaf){
 			let prev = nc.chain.get_prev_note((leaf.view as any).file);
 			if(prev){
@@ -312,7 +312,7 @@ const cmd_open_next_note_of_right_leaf = (plugin:NoteChainPlugin) => ({
 	name: plugin.strings.cmd_open_next_note_of_right_leaf,
 	callback: async () => {
 		let nc = plugin;
-		let leaf = nc.chain.get_neighbor_leaf(1);
+		let leaf = nc.chain.get_last_activate_leaf();
 		if(leaf){
 			let next = nc.chain.get_next_note((leaf.view as any).file);
 			if(next){
