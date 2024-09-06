@@ -1,16 +1,18 @@
 
 import { 
 	App, Editor, MarkdownView, Modal, Notice, 
-	Plugin, PluginSettingTab, Setting,moment,
+	Plugin, PluginSettingTab, Setting,moment,MarkdownRenderer,Component,
 	TAbstractFile,
 	TFile,TFolder
 } from 'obsidian';
 
 import NoteChainPlugin from "../main";
 import {NCEditor} from './NCEditor';
-import {get_tp_func} from './utils'
+import {get_tp_func} from './utils';
+import {NoteContentModal} from './NCModal'
 import { strings } from './strings';
 import { off } from 'process';
+
 
 
 export class NoteChain{
@@ -30,7 +32,22 @@ export class NoteChain{
 		this.next = next;
 		this.init_children();
 	}
-    
+
+    async openNoteInModal(notePath: string) {
+        try {
+            const file = this.app.vault.getAbstractFileByPath(notePath);
+            if (file instanceof TFile) {
+                const content = await this.app.vault.read(file);
+                new NoteContentModal(this.app, content, this.plugin).open();
+            } else {
+				new NoteContentModal(this.app, notePath, this.plugin).open();
+            }
+        } catch (error) {
+            console.error("Error opening note in modal:", error);
+            new Notice(`Error opening note in modal: ${error.message}`);
+        }
+    }
+
 	init_children(){
 		this.children = {};
 		for(let f of this.get_all_folders()){
@@ -350,15 +367,75 @@ export class NoteChain{
 		}
 	}
 
-	get_links(tfile=this.current_note){
-		let inlinks = this.get_inlinks(tfile);
-		let outlinks = this.get_outlinks(tfile);
+	get_links(tfile=this.current_note,only_md=false){
+		let inlinks = this.get_inlinks(tfile,only_md);
+		let outlinks = this.get_outlinks(tfile,only_md);
 		for(let link of inlinks){
 			if(!outlinks.includes(link)){
 				outlinks.push(link)
 			}
 		}
 		return outlinks;
+	}
+
+	get_group_inlinks(tfiles:Array<TFile>,level=1){
+		let items = tfiles.map((x:TFile)=>x);
+		while(level!=0){
+			let curr = items.map((x:TFile)=>x);
+			for(let c of curr){
+				let links = this.get_inlinks(c,true);
+				for(let link of links){
+					if(!items.contains(link)){
+						items.push(link)
+					}
+				}
+			}
+			if(curr.length==items.length){
+				break;
+			}
+			level = level-1;
+		}
+		return items;
+	}
+
+	get_group_outlinks(tfiles:Array<TFile>,level=1){
+		let items = tfiles.map((x:TFile)=>x);
+		while(level!=0){
+			let curr = items.map((x:TFile)=>x);
+			for(let c of curr){
+				let links = this.get_outlinks(c,true);
+				for(let link of links){
+					if(!items.contains(link)){
+						items.push(link)
+					}
+				}
+			}
+			if(curr.length==items.length){
+				break;
+			}
+			level = level-1;
+		}
+		return items;
+	}
+
+	get_group_links(tfiles:Array<TFile>,level=1){
+		let items = tfiles.map((x:TFile)=>x);
+		while(level!=0){
+			let curr = items.map((x:TFile)=>x);
+			for(let c of curr){
+				let links = this.get_links(c,true);
+				for(let link of links){
+					if(!items.contains(link)){
+						items.push(link)
+					}
+				}
+			}
+			if(curr.length==items.length){
+				break;
+			}
+			level = level-1;
+		}
+		return items;
 	}
 
 	get_brothers(tfile=this.current_note){

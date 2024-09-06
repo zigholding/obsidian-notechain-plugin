@@ -11,6 +11,23 @@ export class Strings{
         }
 	}
 
+    get cmd_mermaid_flowchart_link(){
+        if(this.language=='zh'){
+            return 'Mermaid链接卡片'
+        }else{
+            return 'Mermaid of linked notes';
+        }
+    }
+
+    get cmd_mermaid_flowchart_folder(){
+        if(this.language=='zh'){
+            return 'Mermaid目录卡片'
+        }else{
+            return 'Mermaid of folder notes';
+        }
+    }
+
+
     get cmd_file_open_with_system_app(){
         if(this.language=='zh'){
             return '文件 - 使用系统程序打开（仅桌面）'

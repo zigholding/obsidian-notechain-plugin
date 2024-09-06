@@ -25,8 +25,8 @@ class NoteNode {
 		this.id = 0;
 	}
 
+	// 返回 IDXXXX
 	get_id(tfile:TFile) {
-
 		if (tfile.basename in this.note2id) {
 			return this.note2id[tfile.basename];
 		}
@@ -37,6 +37,7 @@ class NoteNode {
 
 	}
 
+	// 返回IDXXXX["tfile.basename"]
 	get_node(tfile:TFile){
 		let id = this.get_id(tfile);
 		return `${id}("${tfile.basename}")`
@@ -52,6 +53,308 @@ class NoteNode {
 }
 
 export class MermaidGraph{
+	plugin:NoteChainPlugin;
+	app:App;
+	editor:NCEditor;
+
+	constructor(plugin:NoteChainPlugin) {
+		this.plugin = plugin;
+		this.app = plugin.app;
+		this.editor = plugin.editor;
+		this.editor = new NCEditor(this.app);
+	}
+
+	get_note_node(tfile:TFile){
+		let node = new NoteNode(tfile);
+		return node;
+	}
+
+	subgraph_chain(node:NoteNode,tfiles:Array<TFile>,subgraph='',line='<-->'){
+
+		let msg = '';
+		let items = tfiles.map(x=>x);
+		let stab = '\t';
+		if(subgraph!=''){
+			msg = msg + `\n\tsubgraph ${subgraph}\n`;
+			stab = '\t\t';
+		}
+
+		let i = 0;
+		while(i<items.length-1){
+			let prev = node.get_node(items[i]);
+			let next = node.get_node(items[i+1]);
+			msg = msg+`${stab}${prev}${line}${next}\n`;
+			i = i+1;
+		}
+
+		if(subgraph!=''){
+			msg = msg+"\tend\n";
+		}
+		return msg;
+	}
+
+	subgraph_links(node:NoteNode,tfiles:Array<TFile>,subgraph='',line='-->',tfiles_first=false){
+		let msg = '';
+		let items = tfiles.map(x=>x);
+		let stab = '\t';
+		if(subgraph!=''){
+			msg = msg + `\n\tsubgraph ${subgraph}\n`;
+			stab = '\t\t';
+
+		}
+		let i = 0;
+		let sid = node.get_node(node.tfile);
+		while(i<items.length){
+			let id = node.get_node(items[i]);
+			if(tfiles_first){
+				msg = msg+`${stab}${id}${line}${sid}\n`;
+
+			}else{
+				msg = msg+`${stab}${sid}${line}${id}\n`;
+			}
+			i = i+1;
+		}
+		if(subgraph!=''){
+			msg = msg+"\tend\n";
+		}
+		return msg;
+	}
+
+	// [src,dst,io]
+	edges_of_tfiles(tfiles:Array<TFile>,merge_inout=true){
+		let inlinks:{[key:string]:Array<TFile>} = {}
+		let outlinks:{[key:string]:Array<TFile>} = {}
+		for(let tfile of tfiles){
+			outlinks[tfiles.indexOf(tfile)] = this.plugin.chain.get_outlinks(tfile,true);
+			inlinks[tfiles.indexOf(tfile)] = this.plugin.chain.get_inlinks(tfile,true);
+		}
+		
+		let edges = [];
+		for(let tfile of tfiles){
+			let i = tfiles.indexOf(tfile);
+			for(let outlink of outlinks[i]){
+				if(tfiles.contains(outlink)){
+					if(tfiles.indexOf(outlink)<=i){continue;}
+					if(merge_inout){
+						if(inlinks[i].contains(outlink)){
+							edges.push([tfile,outlink,true]);
+						}else{
+							edges.push([tfile,outlink,false]);
+						}
+					}else{
+						edges.push([tfile,outlink,false]);
+					}
+				}
+			}
+
+			for(let inlink of inlinks[i]){
+				if(tfiles.contains(inlink)){
+					if(tfiles.indexOf(inlink)<=i){continue;}
+					if(merge_inout){
+						if(!outlinks[i].contains(inlink)){
+							edges.push([inlink,tfile,false]);
+						}
+					}else{
+						edges.push([inlink,tfile,false]);
+					}
+				}
+			}
+		}
+		return edges;
+	}
+
+	subgraph_cross(node:NoteNode,tfiles:Array<TFile>,subgraph='',line='-->',tfiles_first=false){
+		let msg = '';
+		let items = tfiles.map(x=>x);
+		let stab = '\t';
+		if(subgraph!=''){
+			msg = msg + `\n\tsubgraph ${subgraph}\n`;
+			stab = '\t\t';
+
+		}
+		
+		let edges = this.edges_of_tfiles(tfiles);
+		for(let edge of edges){
+			let sid = node.get_node(edge[0] as any);
+			let did = node.get_node(edge[1] as any);
+			if(edge[2]){
+				msg = msg + `${stab}${sid}<-.->${did}\n`;
+			}else{
+				msg = msg + `${stab}${sid}-.->${did}\n`;
+			}
+		}
+		
+		if(subgraph!=''){
+			msg = msg+"\tend\n";
+		}
+		return msg;
+	}
+
+	get_flowchart(tfile:TFile,N=2,c_chain='#F05454',c_inlink='#776B5D',c_outlink='#222831',c_anchor='#40A578'){
+		if(!tfile){
+			let leaf = this.plugin.chain.get_last_activate_leaf();
+			if(leaf){
+				tfile = leaf.view.file;
+			}
+		}
+
+		if(!tfile){
+			return 'No File.'
+		}
+
+		let node = new NoteNode(tfile);
+
+		let nc = this.plugin;
+
+		let msg = "\`\`\`mermaid\nflowchart TD\n";
+		let chain = nc.chain.get_chain(tfile,N,N)
+		msg = msg + this.subgraph_chain(node,chain,'笔记链');
+
+		let inlinks = nc.chain.get_inlinks(tfile,true).filter((x:TFile)=>!chain.contains(x));
+		let outlinks = nc.chain.get_outlinks(tfile,true).filter((x:TFile)=>!chain.contains(x));
+
+		msg = msg + this.subgraph_links(node,inlinks,'入链','-->',true);
+
+		msg = msg + this.subgraph_links(node,outlinks,'出链','-->');
+
+		msg = msg + node.notes2class();
+		msg = msg + [
+			'classDef 笔记链C fill:'+c_chain,
+			'classDef 入链C fill:'+c_inlink,
+			'classDef 出链C fill:'+c_outlink,
+			`classDef Anchor fill:${c_anchor},stoke:${c_anchor}`,
+			'class 笔记链 笔记链C',
+			'class 入链 入链C',
+			'class 出链 出链C',
+			''
+		].join('\n')
+		msg = msg+"\`\`\`";
+		msg = msg.replace(
+			`class ${node.get_id(tfile)} internal-link;`,
+			`class ${node.get_id(tfile)} Anchor;`
+		);
+		return msg;
+	}
+
+	flowchart_folder(tfile:TFile,subgraph='Folder',color='#F05454',c_anchor='#40A578'){
+		if(!tfile){
+			let leaf = this.plugin.chain.get_last_activate_leaf();
+			if(leaf){
+				tfile = leaf.view.file;
+			}
+		}
+
+		if(!tfile){
+			return 'No File.'
+		}
+
+		let tfiles = this.plugin.chain.get_brothers(tfile);
+		return this.flowchart_cross(tfile,tfiles,subgraph,color,c_anchor);
+	}
+
+	flowchart_notechain(tfile:TFile,N=10,subgraph='NoteChain',color='#F05454',c_anchor='#40A578'){
+		if(!tfile){
+			let leaf = this.plugin.chain.get_last_activate_leaf();
+			if(leaf){
+				tfile = leaf.view.file;
+			}
+		}
+
+		if(!tfile){
+			return 'No File.'
+		}
+
+		let tfiles = this.plugin.chain.get_chain(tfile,N,N);
+		return this.flowchart_cross(tfile,tfiles,subgraph,color,c_anchor);
+	}
+
+	flowchart_cross(anchor:TFile,tfiles:Array<TFile>,subgraph='',color='#F05454',c_anchor='#40A578'){
+		let node = new NoteNode(tfiles[0]);
+		let msg = "\`\`\`mermaid\nflowchart TD\n";
+		msg = msg + this.subgraph_cross(node,tfiles,subgraph);
+		msg = msg + node.notes2class();
+		msg = msg + [
+			`classDef ${subgraph}C fill:${color}`,
+			`classDef Anchor fill:${c_anchor},stoke:${c_anchor}`,
+			`class ${subgraph} ${subgraph}C`,
+			''
+		].join('\n')
+		msg = msg+"\`\`\`";
+		msg = msg.replace(
+			`class ${node.get_id(anchor)} internal-link;`,
+			`class ${node.get_id(anchor)} Anchor;`
+		);
+		return msg;
+	}
+
+	get_subgrah_names(group_name:string,tfiles:Array<TFile>,name='group'){
+		let nc = this.plugin;
+		let items:{[key:string]:string} = {}
+		for(let cfile of tfiles){
+			let cgroup = nc.editor.get_frontmatter(cfile,name)
+			if(cgroup){
+				for(let cg of cgroup){
+					let tmp = cg.split('/');
+					if(tmp[0]==group_name){
+						if(tmp.length==1){
+							items[tfiles.indexOf(cfile)] = '';
+						}else{
+							items[tfiles.indexOf(cfile)] = tmp[1];
+						}
+						break
+					}
+				}
+			}
+		}
+		return items
+	}
+
+	flowchart_groups(anchor:TFile,name='group'){
+		let nc = this.plugin;
+
+		let tfiles = nc.chain.get_brothers(anchor);
+		tfiles = nc.chain.get_group_links(tfiles,1)
+
+		let node = nc.mermaid.get_note_node(anchor);
+
+		
+		let group = nc.editor.get_frontmatter(anchor,name);
+		if(!group){return [];}
+		let res:Array<string> = [];
+		for(let g of group){
+			g = g.split('/')[0]
+			let items = this.get_subgrah_names(g,tfiles,name);
+			let subs = new Set(Object.values(items))
+
+			let msg = `\`\`\`mermaid\n---\ntitle: ${g}\n---\nflowchart TD\n`;
+			for(let sub of subs){
+				if(sub==''){
+					for(let idx in items){
+						if(items[idx]==sub){
+							msg = msg+'\n'+node.get_node(tfiles[idx]);
+						}
+					}
+				}else{
+					msg = msg+'\nsubgraph '+sub+'\n'
+					for(let idx in items){
+						if(items[idx]==sub){
+							msg = msg+'\n\t'+node.get_node(tfiles[idx]);
+						}
+					}
+
+					msg = msg+'\nend'
+				}
+			}
+			msg = msg+'\n'+this.subgraph_cross(node,Object.keys(items).map(x=>tfiles[x]));
+			msg = msg+'\n'+node.notes2class();
+			msg = msg+"\n\`\`\`";
+			res.push(msg);
+		}
+		return res;
+	}
+}
+
+export class EchartGraph{
 	plugin:NoteChainPlugin;
 	app:App;
 	editor:NCEditor;
@@ -238,5 +541,8 @@ export class MermaidGraph{
 		);
 		return msg;
 	}
+
+
+	
 
 }

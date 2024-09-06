@@ -1,9 +1,5 @@
 import { 
-	App, Editor, MarkdownView, Modal, Notice, 
-	CachedMetadata,
-	Plugin,
-	TAbstractFile,
-	TFile,TFolder
+	Notice, TFile
 } from 'obsidian';
 
 import NoteChainPlugin from '../main';
@@ -423,6 +419,24 @@ const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 	}
 });
 
+const cmd_mermaid_flowchart_link = (plugin: NoteChainPlugin) => ({
+    id: 'open_notechain_mermaid',
+    name: plugin.strings.cmd_mermaid_flowchart_link,
+    callback: async () => {
+        const content = "```dataviewjs\nlet nc=app.plugins.getPlugin('note-chain');\nlet msg =nc.mermaid.get_flowchart(null,2);\ndv.span(msg)\n```";
+        await plugin.chain.openNoteInModal(content);
+    }
+});
+
+const cmd_mermaid_flowchart_folder = (plugin: NoteChainPlugin) => ({
+    id: 'open_notechain_mermaid',
+    name: plugin.strings.cmd_mermaid_flowchart_folder,
+    callback: async () => {
+        const content = "```dataviewjs\nlet nc=app.plugins.getPlugin('note-chain');\nlet msg =nc.mermaid.flowchart_folder(null,'Folder');\ndv.span(msg)\n```";
+        await plugin.chain.openNoteInModal(content);
+    }
+});
+
 
 
 const commandBuilders = [
@@ -445,7 +459,9 @@ const commandBuilders = [
 	create_new_note,
 	chain_move_up_node,
 	chain_move_down_node,
-	cmd_file_rename
+	cmd_file_rename,
+	cmd_mermaid_flowchart_link,
+	cmd_mermaid_flowchart_folder
 ];
 
 const commandBuildersDesktop = [
