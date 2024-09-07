@@ -35,9 +35,9 @@ export class NoteChain{
 
     async openNoteInModal(notePath: string) {
         try {
-            const file = this.app.vault.getAbstractFileByPath(notePath);
+            let file = this.app.vault.getAbstractFileByPath(notePath);
             if (file instanceof TFile) {
-                const content = await this.app.vault.read(file);
+                let content = await this.app.vault.read(file);
                 new NoteContentModal(this.app, content, this.plugin).open();
             } else {
 				new NoteContentModal(this.app, notePath, this.plugin).open();

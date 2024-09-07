@@ -1,6 +1,8 @@
 import { get } from 'http';
 import { 
-	App
+	App,
+    TFile,
+    Notice
 } from 'obsidian';
 
 export function get_plugins(app:App,name:string){
@@ -87,4 +89,57 @@ export async function get_tp_user_func(app:App,target:string) {
         user_script_functions.
         generate_user_script_functions();
     return funcs.get(items[2])
+}
+
+async function templater$1(app:App,template:string, active_file:TFile, target_file:TFile) {
+	const config = {
+		template_file: template,
+		active_file: active_file,
+		target_file: target_file,
+		run_mode: "DynamicProcessor",
+	};
+	const plugins = (app as any).plugins.plugins;
+	const exists = plugins["templater-obsidian"];
+	if (!exists) {
+		new Notice("Templater is not installed. Please install it.");
+		return;
+	}
+	// eslint-disable-next-line
+	// @ts-ignore
+	const {templater} = plugins["templater-obsidian"];
+	const functions = await templater.functions_generator.internal_functions.generate_object(config);
+	functions.user = {};
+	const userScriptFunctions = await templater.functions_generator.user_functions.user_script_functions.generate_user_script_functions(config);
+	userScriptFunctions.forEach((value:any,key:any)=>{
+		functions.user[key] = value;
+	}
+	);
+	if (template) {
+		const userSystemFunctions = await templater.functions_generator.user_functions.user_system_functions.generate_system_functions(config);
+		userSystemFunctions.forEach((value:any,key:any)=>{
+			functions.user[key] = value;
+		}
+		);
+	}
+	return async(command:any)=>{
+		return await templater.parser.parse_commands(command, functions);
+	};
+}
+
+export async function exec_templater(app:App,template:string) {
+    let nc =(app as any).plugins.getPlugin('note-chain');
+    if(!nc){return;}
+
+    let file = nc.chain.get_tfile(template);
+    if (file instanceof TFile) {
+        template = await app.vault.read(file);
+    }
+    
+    let notes = app.vault.getMarkdownFiles();
+    if(notes.length==0){return;}
+    let active_file = notes[0];
+    let target_file =  notes[0];
+    console.log(active_file);
+    let templateFunc = await templater$1(app,'',active_file,target_file);
+    return templateFunc ? await templateFunc(template) : undefined;
 }

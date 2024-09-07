@@ -24,3 +24,4 @@ data.json
 
 package-lock.json
 otherplugins
+src/temp.ts
