@@ -13,6 +13,8 @@ export class NoteContentModal extends Modal {
         super(app);
         this.content = content;
         this.plugin = plugin;
+        this.modalEl.style.width = `${this.plugin.settings.modal_default_width}px`;
+        this.modalEl.style.height = `${this.plugin.settings.modal_default_height}px`;
     }
 
     onOpen() {
