@@ -33,17 +33,20 @@ export class NoteChain{
 		this.init_children();
 	}
 
-    async openNoteInModal(notePath: string) {
+    async open_note_in_modal(notePath: string) {
         try {
-            let file = this.app.vault.getAbstractFileByPath(notePath);
+            let file = this.get_tfile(notePath);
             if (file instanceof TFile) {
                 let content = await this.app.vault.read(file);
-                new NoteContentModal(this.app, content, this.plugin).open();
+                let modal = new NoteContentModal(this.app, content, this.plugin);
+				modal.open();
+				return modal;
             } else {
-				new NoteContentModal(this.app, notePath, this.plugin).open();
+				let modal = new NoteContentModal(this.app, notePath, this.plugin);
+				modal.open();
+				return modal;
             }
         } catch (error) {
-            console.error("Error opening note in modal:", error);
             new Notice(`Error opening note in modal: ${error.message}`);
         }
     }

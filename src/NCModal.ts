@@ -19,42 +19,64 @@ export class NoteContentModal extends Modal {
         const {contentEl} = this;
         contentEl.empty();
         
-        // 设置固定大小
-        this.modalEl.style.width = `${this.plugin.settings.modal_default_width}px`;
-        this.modalEl.style.height = `${this.plugin.settings.modal_default_height}px`;
+        // 移除默认的 padding
+        this.modalEl.style.padding = '0';
+        
+        // 设置模态框样式
+        this.modalEl.style.display = 'flex';
+        this.modalEl.style.justifyContent = 'center';
+        this.modalEl.style.alignItems = 'center';
+        this.modalEl.style.width = `${this.plugin.settings.modal_default_width}px`;;
+        this.modalEl.style.height = `${this.plugin.settings.modal_default_height}px`;;
         
         const wrapper = contentEl.createDiv({ cls: 'note-content-wrapper' });
         wrapper.style.display = 'flex';
         wrapper.style.justifyContent = 'center';
-        wrapper.style.alignItems = 'flex-start';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.width = '100%';
         wrapper.style.height = '100%';
         wrapper.style.overflow = 'auto';
 
         const container = wrapper.createDiv({ cls: 'note-content-container' });
         container.addClass('markdown-rendered');
-        container.style.maxWidth = '800px'; // 或其他适当的最大宽度
-        container.style.width = '100%';
-        container.style.margin = 'auto';
+        container.style.maxWidth = '100%';
+        container.style.maxHeight = '100%';
+        container.style.padding = '20px';
+        container.style.overflow = 'auto';
 
         // 创建一个临时的 Component 实例
         const component = new Component();
         
-        MarkdownRenderer.renderMarkdown(this.content, container, '', component);
+        MarkdownRenderer.render(this.app, this.content, container, '', component).then(() => {
+            // 渲染完成后调整容器大小
+            this.adjustContainerSize();
+        });
 
         this.addClickListener(container);
     }
 
+    adjustContainerSize() {
+        const container = this.contentEl.querySelector('.note-content-container') as HTMLElement;
+        if (!container) return;
+
+        const maxWidth = this.modalEl.clientWidth - 40; // 40px for padding
+        const maxHeight = this.modalEl.clientHeight - 40; // 40px for padding
+
+        container.style.width = `${Math.min(container.scrollWidth, maxWidth)}px`;
+        container.style.height = `${Math.min(container.scrollHeight, maxHeight)}px`;
+    }
+
     onClose() {
-        const {contentEl} = this;
+        let {contentEl} = this;
         contentEl.empty();
     }
 
     addClickListener(container: HTMLElement) {
         container.addEventListener('click', (event: MouseEvent) => {
-            const target = event.target as HTMLElement;
+            let target = event.target as HTMLElement;
             if (target.tagName === 'A' && target.hasClass('internal-link')) {
                 event.preventDefault();
-                const href = target.getAttribute('href');
+                let href = target.getAttribute('href');
                 if (href) {
                     this.openNoteInMainView(href);
                 }

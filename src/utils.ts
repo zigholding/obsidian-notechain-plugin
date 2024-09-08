@@ -126,20 +126,26 @@ async function templater$1(app:App,template:string, active_file:TFile, target_fi
 	};
 }
 
-export async function exec_templater(app:App,template:string) {
+export async function parse_templater(app:App,template:string,without_meta=true) {
     let nc =(app as any).plugins.getPlugin('note-chain');
     if(!nc){return;}
 
     let file = nc.chain.get_tfile(template);
     if (file instanceof TFile) {
         template = await app.vault.read(file);
+        if(without_meta){
+            let headerRegex = /^---\s*([\s\S]*?)\s*---/
+            let match = headerRegex.exec(template);
+            if(match){
+                template = template.slice(match[0].length).trim();
+            }
+        }
     }
     
     let notes = app.vault.getMarkdownFiles();
     if(notes.length==0){return;}
     let active_file = notes[0];
     let target_file =  notes[0];
-    console.log(active_file);
     let templateFunc = await templater$1(app,'',active_file,target_file);
     return templateFunc ? await templateFunc(template) : undefined;
 }
