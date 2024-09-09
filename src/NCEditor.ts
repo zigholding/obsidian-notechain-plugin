@@ -63,7 +63,6 @@ export class NCEditor{
 			await sleep(100);
 			nretry = nretry-1;
 			flag = this.check_frontmatter(tfile,kv);
-			//console.log('nretry:',nretry,tfile.name,kv,flag);
 		}
 		return flag;
 	}
