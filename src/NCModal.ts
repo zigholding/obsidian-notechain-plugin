@@ -18,14 +18,15 @@ export class NoteContentModal extends Modal {
     onOpen() {
         const {contentEl} = this;
         contentEl.empty();
-        this.modalEl.style.padding = '0';
-            
-        // 设置模态框样式
-        this.modalEl.style.display = 'table';
-        // this.modalEl.style.justifyContent = 'center';
-        // this.modalEl.style.alignItems = 'center';
+        this.modalEl.style.display = 'flex';
+        this.modalEl.style.overflow = 'auto'; // 添加滚动条
+
         const container = contentEl.createDiv({ cls: 'note-content-container' });
         container.addClass('markdown-rendered');
+        container.style.display = 'table-cell';
+        container.style.verticalAlign = 'middle';
+        container.style.padding = '20px'; // 添加一些内边距
+
         // 创建一个临时的 Component 实例
         const component = new Component();
         
