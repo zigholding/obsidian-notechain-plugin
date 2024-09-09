@@ -159,29 +159,5 @@ export class NCSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 				);
-
-		new Setting(containerEl)
-				.setName(this.plugin.strings.setting_modal_size)
-				.setDesc(this.plugin.strings.setting_modal_width)
-				.addText(text => text
-					.setPlaceholder("800")
-					.setValue(this.plugin.settings.modal_default_width.toString())
-					.onChange(async (value) => {
-						this.plugin.settings.modal_default_width = parseInt(value) || 800;
-						await this.plugin.saveSettings();
-				}));
-	
-			new Setting(containerEl)
-				.setName("")
-				.setDesc(this.plugin.strings.setting_modal_height)
-				.addText(text => text
-					.setPlaceholder("600")
-					.setValue(this.plugin.settings.modal_default_height.toString())
-					.onChange(async (value) => {
-						this.plugin.settings.modal_default_height = parseInt(value) || 600;
-						await this.plugin.saveSettings();
-				}));
-
-		
 	}
 }

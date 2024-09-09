@@ -1,8 +1,8 @@
 import { time } from 'console';
 import { 
-	App, Editor, MarkdownView, Modal, Notice, 
-	Plugin, PluginSettingTab, Setting,
-	TFile,TFolder,moment
+    App, Editor, MarkdownView, Modal, Notice, 
+    Plugin, PluginSettingTab, Setting,
+    TFile, TFolder, moment, EditorPosition, EditorSelection
 } from 'obsidian';
 import NoteChainPlugin from "../main";
 import * as internal from 'stream';
@@ -54,6 +54,32 @@ export class WordCount{
     }
 
     async set_mtime_value(tfile:TFile,key:string,val:number){
+
+        let activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        let editorState: {
+            cursor?: EditorPosition,
+            selection?: string,
+            sanchor?:EditorPosition,
+            shead?:EditorPosition,
+            scrollInfo?: { left: number, top: number }
+        } = {};
+    
+        if (activeView && activeView.file === tfile) {
+            let editor = activeView.editor;
+            if (editor) {
+                editorState.cursor = editor.getCursor();
+                editorState.selection = editor.getSelection();
+                editorState.sanchor = editor.getCursor('anchor');
+                editorState.shead = editor.getCursor('head');
+                editorState.scrollInfo = editor.getScrollInfo();
+            }
+        }
+        let aline = editorState?.cursor?.line !== undefined
+            ? activeView?.editor?.getLine(editorState.cursor.line)
+            : undefined;
+        if(aline && aline.startsWith('|') && aline.endsWith('|')){
+            return;
+        }
         await this.app.fileManager.processFrontMatter(
             tfile,
             (fm) =>{
@@ -86,6 +112,24 @@ export class WordCount{
                 }
             }
         )
+        // Restore editor state if it was saved
+        if (activeView && activeView.file === tfile) {
+            let editor = activeView.editor;
+            if (editor) {
+                if (editorState.scrollInfo) {
+                    editor.scrollTo(editorState.scrollInfo.left, editorState.scrollInfo.top);
+                }
+                if (editorState.selection && editorState.sanchor && editorState.shead) {
+                    try {
+                        editor.setSelection(editorState.sanchor,editorState.shead);
+                    } catch (error) {
+                        new Notice(`Error setting selection:${error}`,3000);
+                    }
+                }else if (editorState.cursor) {
+                    editor.setCursor(editorState.cursor);
+                }
+            }
+        }
     }
 
     get_new_words(tfile:TFile,day=moment().format('YYYY-MM-DD')){

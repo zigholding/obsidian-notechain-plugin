@@ -301,30 +301,6 @@ export class Strings{
         }
     }
 
-    get setting_modal_size(){
-        if(this.language=='zh'){
-            return '设置弹窗大小'
-        }else{
-            return "Modal Size";
-        }
-    }
-
-    get setting_modal_width(){
-        if(this.language=='zh'){
-            return '宽度'
-        }else{
-            return "Width";
-        }
-    }
-
-    get setting_modal_height(){
-        if(this.language=='zh'){
-            return '高度'
-        }else{
-            return "Height";
-        }
-    }
-    
     get item_insert_suggester(){
         if(this.language=='zh'){
             return '插入模式（相对于锚点）'
