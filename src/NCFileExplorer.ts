@@ -47,11 +47,16 @@ let getSortedFolderItems = function(org_sort:Function) {
 	let plugin = (this.app as any).plugins.getPlugin('note-chain');
 	return function(e:any){
 		if(plugin){
-			let res = org_sort.call(this,e);
-			let tfiles = plugin.chain.children[e.path];
-			
-			res = res.sort((a:any,b:any)=>tfiles.indexOf(a.file)-tfiles.indexOf(b.file));
-			return res;
+			try{
+				let res = org_sort.call(this,e);
+				let tfiles = plugin.chain.children[e.path];
+				if(tfiles){
+					res = res.sort((a:any,b:any)=>tfiles.indexOf(a.file)-tfiles.indexOf(b.file));
+				}
+				return res;
+			}catch(e){
+				return org_sort.call(this,e);
+			}
 		}else{
 			return org_sort.call(this,e);
 		}
