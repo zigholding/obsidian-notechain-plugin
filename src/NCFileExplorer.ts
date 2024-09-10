@@ -95,7 +95,7 @@ export class NCFileExplorer{
 			this.file_explorer.constructor.prototype.getSortedFolderItems = this.getSortedFolderItems_new;
 
 
-			this.sort();
+			this.sort(0,true);
 		})
 	}
 
@@ -123,7 +123,14 @@ export class NCFileExplorer{
 			if(init){
 				this.plugin.chain.init_children();
 			}
-			(this.file_explorer as any).sort();
+
+			if(Object.keys(this.plugin.chain.children).length==0){
+				setTimeout(()=>{
+					this.sort(nsleep,true);
+				}, 3000);
+			}else{
+				(this.file_explorer as any).sort();
+			}
 		}	
 	}
 }
