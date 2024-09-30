@@ -353,7 +353,7 @@ export class MermaidGraph{
 		return res;
 	}
 
-	get_relationship_graph(tfile:TFile,key='link') {
+	get_relationship_graph(tfile:TFile, key='link') {
 		let nc = this.plugin;
 		let node = new NoteNode(tfile);
 		let msg = "```mermaid\nflowchart TD\n";
@@ -368,8 +368,8 @@ export class MermaidGraph{
 				for (let [relation, linkedNote] of Object.entries(links)) {
 					let linkedTFile = nc.chain.get_tfile(linkedNote as string);
 					msg += `\t${node.get_node(currentFile)} -->|${relation}| ${node.get_node(linkedTFile)}\n`;
+
 					// 递归处理 linkedNote
-					
 					if (linkedTFile instanceof TFile) {
 						createLinks(linkedTFile);
 					}
@@ -378,6 +378,21 @@ export class MermaidGraph{
 		};
 
 		createLinks(tfile); // 开始处理当前笔记
+
+		// 处理入链，建立反向关系
+		const inlinks = nc.chain.get_inlinks(tfile, true);
+		for (const inlink of inlinks) {
+			const inlinkLinks = nc.editor.get_frontmatter(inlink, key);
+			if (inlinkLinks) {
+				for (const [relation, linkedNote] of Object.entries(inlinkLinks)) {
+					const linkedTFile = nc.chain.get_tfile(linkedNote as string);
+					if (linkedTFile instanceof TFile && linkedTFile.path === tfile.path) {
+						msg += `\t${node.get_node(inlink)} -->|${relation}| ${node.get_node(tfile)}\n`;
+					}
+				}
+			}
+		}
+
 		msg = msg + node.notes2class();
 		msg += "```";
 		return msg;
