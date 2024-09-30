@@ -352,6 +352,36 @@ export class MermaidGraph{
 		}
 		return res;
 	}
+
+	get_relationship_graph(tfile:TFile,key='link') {
+		let nc = this.plugin;
+		let node = new NoteNode(tfile);
+		let msg = "```mermaid\nflowchart TD\n";
+		let processedFiles = new Set<TFile>(); // 用于跟踪已处理的笔记
+
+		let createLinks = (currentFile: TFile) => {
+			if (processedFiles.has(currentFile)) return; // 如果已处理，直接返回
+			processedFiles.add(currentFile); // 标记为已处理
+
+			let links = nc.editor.get_frontmatter(currentFile, key);
+			if (links) {
+				for (let [relation, linkedNote] of Object.entries(links)) {
+					let linkedTFile = nc.chain.get_tfile(linkedNote as string);
+					msg += `\t${node.get_node(currentFile)} -->|${relation}| ${node.get_node(linkedTFile)}\n`;
+					// 递归处理 linkedNote
+					
+					if (linkedTFile instanceof TFile) {
+						createLinks(linkedTFile);
+					}
+				}
+			}
+		};
+
+		createLinks(tfile); // 开始处理当前笔记
+		msg = msg + node.notes2class();
+		msg += "```";
+		return msg;
+	}
 }
 
 export class EchartGraph{
