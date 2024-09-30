@@ -353,41 +353,27 @@ export class MermaidGraph{
 		return res;
 	}
 
-	get_relationship_graph(tfile:TFile, key='link') {
+	get_relationship_graph(tfile:TFile, N=1, key='link') {
 		let nc = this.plugin;
 		let node = new NoteNode(tfile);
 		let msg = "```mermaid\nflowchart TD\n";
-		let processedFiles = new Set<TFile>(); // 用于跟踪已处理的笔记
 
-		let createLinks = (currentFile: TFile) => {
-			if (processedFiles.has(currentFile)) return; // 如果已处理，直接返回
+		// 获取 N 层链接的笔记
+		let tfiles = nc.chain.get_group_links([tfile], N);
+
+		// 用于跟踪已处理的笔记
+		let processedFiles = new Set<TFile>();
+
+		for (let currentFile of tfiles) {
+			if (processedFiles.has(currentFile)) continue; // 如果已处理，跳过
 			processedFiles.add(currentFile); // 标记为已处理
 
 			let links = nc.editor.get_frontmatter(currentFile, key);
 			if (links) {
 				for (let [relation, linkedNote] of Object.entries(links)) {
 					let linkedTFile = nc.chain.get_tfile(linkedNote as string);
-					msg += `\t${node.get_node(currentFile)} -->|${relation}| ${node.get_node(linkedTFile)}\n`;
-
-					// 递归处理 linkedNote
 					if (linkedTFile instanceof TFile) {
-						createLinks(linkedTFile);
-					}
-				}
-			}
-		};
-
-		createLinks(tfile); // 开始处理当前笔记
-
-		// 处理入链，建立反向关系
-		const inlinks = nc.chain.get_inlinks(tfile, true);
-		for (const inlink of inlinks) {
-			const inlinkLinks = nc.editor.get_frontmatter(inlink, key);
-			if (inlinkLinks) {
-				for (const [relation, linkedNote] of Object.entries(inlinkLinks)) {
-					const linkedTFile = nc.chain.get_tfile(linkedNote as string);
-					if (linkedTFile instanceof TFile && linkedTFile.path === tfile.path) {
-						msg += `\t${node.get_node(inlink)} -->|${relation}| ${node.get_node(tfile)}\n`;
+						msg += `\t${node.get_node(currentFile)} -->|${relation}| ${node.get_node(linkedTFile)}\n`;
 					}
 				}
 			}
@@ -395,6 +381,11 @@ export class MermaidGraph{
 
 		msg = msg + node.notes2class();
 		msg += "```";
+		let c_anchor='#40A578'
+		msg = msg.replace(
+			`class ${node.get_id(tfile)} internal-link;`,
+			`classDef Anchor fill:${c_anchor},stoke:${c_anchor}\nclass ${node.get_id(tfile)} Anchor;`
+		);
 		return msg;
 	}
 }
@@ -501,6 +492,7 @@ export class EchartGraph{
 		if(!tfile){
 			return 'No File.'
 		}
+		
 
 		let node = new NoteNode(tfile);
 
