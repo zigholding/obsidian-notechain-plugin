@@ -27,6 +27,14 @@ export class Strings{
         }
     }
 
+    get cmd_mermaid_flowchart_auto(){
+        if(this.language=='zh'){
+            return 'Mermaid卡片'
+        }else{
+            return 'Mermaid of notes';
+        }
+    }
+
 
     get cmd_file_open_with_system_app(){
         if(this.language=='zh'){

@@ -437,6 +437,15 @@ const cmd_mermaid_flowchart_folder = (plugin: NoteChainPlugin) => ({
     }
 });
 
+const cmd_mermaid_flowchart_auto = (plugin: NoteChainPlugin) => ({
+    id: 'cmd_mermaid_flowchart_auto',
+    name: plugin.strings.cmd_mermaid_flowchart_auto,
+    callback: async () => {
+        const content = "```dataviewjs\nlet nc=app.plugins.getPlugin('note-chain');\nlet msg =nc.mermaid.get_mehrmaid_graph(null,4,'mermaid');\ndv.span(msg)\n```";
+        await plugin.chain.open_note_in_modal(content);
+    }
+});
+
 
 
 const commandBuilders = [
@@ -461,7 +470,8 @@ const commandBuilders = [
 	chain_move_down_node,
 	cmd_file_rename,
 	cmd_mermaid_flowchart_link,
-	cmd_mermaid_flowchart_folder
+	cmd_mermaid_flowchart_folder,
+	cmd_mermaid_flowchart_auto
 ];
 
 const commandBuildersDesktop = [

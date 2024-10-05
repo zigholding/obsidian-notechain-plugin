@@ -11,6 +11,7 @@ import {NCEditor} from './NCEditor';
 import {get_tp_func} from './utils'
 import { strings } from './strings';
 import { off } from 'process';
+import { link } from 'fs';
 
 
 
@@ -41,6 +42,16 @@ class NoteNode {
 	get_node(tfile:TFile){
 		let id = this.get_id(tfile);
 		return `${id}("${tfile.basename}")`
+	}
+
+	get_mehrmaid_node(node:string){
+		if (node in this.note2id) {
+			return this.note2id[node];
+		}
+		let newId = `ID${this.id.toString().padStart(4, '0')}`;
+		this.note2id[node] = newId;
+		this.id = this.id+1;
+		return `${newId}("${node}")`;
 	}
 
 	notes2class(){
@@ -353,14 +364,19 @@ export class MermaidGraph{
 		return res;
 	}
 
-	get_relationship_graph(tfile:TFile, N=1, key='link') {
+	get_relationship_graph(tfile:TFile, N=1, key='link',show_all_node=true) {
 		let nc = this.plugin;
 		let node = new NoteNode(tfile);
 		let msg = "```mermaid\nflowchart TD\n";
 
 		// 获取 N 层链接的笔记
 		let tfiles = nc.chain.get_group_links([tfile], N);
-
+		if(show_all_node){
+			for(let tfile of tfiles){
+				msg +=`${node.get_node(tfile)}\n`
+			}
+		}
+		
 		// 用于跟踪已处理的笔记
 		let processedFiles = new Set<TFile>();
 
@@ -371,10 +387,20 @@ export class MermaidGraph{
 			let links = nc.editor.get_frontmatter(currentFile, key);
 			if (links) {
 				for (let [relation, linkedNote] of Object.entries(links)) {
-					let linkedTFile = nc.chain.get_tfile(linkedNote as string);
-					if (linkedTFile instanceof TFile) {
-						msg += `\t${node.get_node(currentFile)} -->|${relation}| ${node.get_node(linkedTFile)}\n`;
+					if(linkedNote instanceof Array){
+						for(let item of linkedNote){
+							let linkedTFile = nc.chain.get_tfile(item as string);
+							if (linkedTFile instanceof TFile) {
+								msg += `\t${node.get_node(currentFile)} -->|${relation}| ${node.get_node(linkedTFile)}\n`;
+							}
+						}
+					}else{
+						let linkedTFile = nc.chain.get_tfile(linkedNote as string);
+						if (linkedTFile instanceof TFile) {
+							msg += `\t${node.get_node(currentFile)} -->|${relation}| ${node.get_node(linkedTFile)}\n`;
+						}
 					}
+					
 				}
 			}
 		}
@@ -388,6 +414,72 @@ export class MermaidGraph{
 		);
 		return msg;
 	}
+
+	get_mehrmaid_graph(tfile:TFile, N=1, key='mermaid',c_anchor='#d4c4b7') {
+
+		if(!tfile){
+			let leaf = this.plugin.chain.get_last_activate_leaf();
+			if(leaf){
+				tfile = leaf.view.file;
+			}
+		}
+
+		if(!tfile){
+			return 'No File.'
+		}
+
+		let nc = this.plugin;
+		let node = new NoteNode(tfile);
+		let msg = "```mehrmaid\nflowchart TD\n";
+
+		// 获取 N 层链接的笔记
+		let tfiles = nc.chain.get_group_links([tfile], N);
+
+		for (let currentFile of tfiles) {
+			let src = `[[${currentFile.basename}]]`
+			let links = nc.editor.get_frontmatter(currentFile, key);
+			if (links) {
+				for(let link of links){
+					if(link['edge']!=null && link['node']!=null){
+						let cedge = link['edge'];
+						let cnode = link['node'];
+						if(cedge==''){
+							cedge = ''
+						}else{
+							cedge = `|"${cedge}"|`
+						}
+						let line = '-->';
+						if(link['line']){
+							line = link['line']
+						}
+						if(cnode instanceof Array){
+							for(let item of cnode){
+								msg += `${node.get_mehrmaid_node(src)} ${line} ${cedge} ${node.get_mehrmaid_node(item)}\n`;
+							}
+						}else{
+							msg += `${node.get_mehrmaid_node(src)} ${line} ${cedge} ${node.get_mehrmaid_node(cnode)}\n`;
+						}
+					}else if(link['group']){
+						msg += `subgraph ${link['group']}\n\t${node.get_mehrmaid_node(src)}\nend\n`
+						if(link['color']){
+							msg += `classDef ${link['group']}Class fill:${link['color']}\n`
+							msg += `class ${link['group']} ${link['group']}Class\n`
+						}
+						
+					}
+				}
+			}
+		}
+		let src = `[[${tfile.basename}]]`
+		msg += `${node.get_mehrmaid_node(src)}\n`
+		if(c_anchor){
+			msg += `classDef Anchor fill:${c_anchor},stoke:${c_anchor}\nclass ${node.get_mehrmaid_node(src)} Anchor;\n`
+		}
+		msg += "```";
+		return msg;
+	}
+
+	
 }
 
 export class EchartGraph{
