@@ -48,6 +48,9 @@ class NoteNode {
 		if (node in this.note2id) {
 			return this.note2id[node];
 		}
+		if(node.startsWith('subgraph ')){
+			return node.slice('subgraph '.length)
+		}
 		let newId = `ID${this.id.toString().padStart(4, '0')}`;
 		this.note2id[node] = newId;
 		this.id = this.id+1;
@@ -434,6 +437,7 @@ export class MermaidGraph{
 
 		// 获取 N 层链接的笔记
 		let tfiles = nc.chain.get_group_links([tfile], N);
+		tfiles = nc.chain.sort_tfiles_by_chain(tfiles) as TFile[];
 
 		for (let currentFile of tfiles) {
 			let src = `[[${currentFile.basename}]]`
@@ -452,13 +456,26 @@ export class MermaidGraph{
 						if(link['line']){
 							line = link['line']
 						}
-						if(cnode instanceof Array){
-							for(let item of cnode){
-								msg += `${node.get_mehrmaid_node(src)} ${line} ${cedge} ${node.get_mehrmaid_node(item)}\n`;
+						if(line[0]=='<' && line[line.length-1]!='>'){
+							line = line.slice(1)+'>'
+							if(cnode instanceof Array){
+								for(let item of cnode){
+									msg += `${node.get_mehrmaid_node(item)} ${line} ${cedge} ${node.get_mehrmaid_node(src)}\n`;
+								}
+							}else{
+								msg += `${node.get_mehrmaid_node(cnode)} ${line} ${cedge} ${node.get_mehrmaid_node(src)}\n`;
 							}
 						}else{
-							msg += `${node.get_mehrmaid_node(src)} ${line} ${cedge} ${node.get_mehrmaid_node(cnode)}\n`;
+							if(cnode instanceof Array){
+								for(let item of cnode){
+									msg += `${node.get_mehrmaid_node(src)} ${line} ${cedge} ${node.get_mehrmaid_node(item)}\n`;
+								}
+							}else{
+								msg += `${node.get_mehrmaid_node(src)} ${line} ${cedge} ${node.get_mehrmaid_node(cnode)}\n`;
+							}
 						}
+
+						
 					}else if(link['group']){
 						msg += `subgraph ${link['group']}\n\t${node.get_mehrmaid_node(src)}\nend\n`
 						if(link['color']){

@@ -281,39 +281,22 @@ export class NoteChain{
 			leaves.push(leaf)
 		});
 		leaves = leaves.filter(x=>x.getViewState().state.file);
-
-		let r = (this.app as any).plugins.getPlugin("recent-files-obsidian");
-		if(!r){
-			new Notice("Need Plugin recent-files-obsidian ",5000);
-			return;
-		}
+		leaves = leaves.sort((a,b)=>b.activeTime - a.activeTime);
 
 		let dv = (this.app as any).plugins.getPlugin('dataview')?.api;
 		if(!dv){
 			new Notice("Need Plugin dataview",5000);
 			return;
 		}
-		let rfiles = r.data.recentFiles.map((x:any)=>x.path);
-		for(let path of rfiles){
-			if(skip_conote && dv.index.tags.delegate.map.get(path)?.has('#conote')){
+		
+		for(let leaf of leaves){
+			let file = leaf.getViewState().state.file;
+			if(skip_conote && dv.index.tags.delegate.map.get(file)?.has('#conote')){
 				continue;
 			}
-			for(let leaf of leaves){
-				if(leaf.getViewState().state.file==path){
-					return leaf;
-				}
-			}
+			return leaf;
 		}
-		for(let leaf of leaves.reverse()){
-			let cfile = leaf.getViewState().state.file;
-			if(skip_conote && dv.index.tags.delegate.map.get(cfile)?.has('#conote')){
-				continue
-			}
 
-			if(!rfiles.contains(cfile)){
-				return leaf;
-			}
-		}
 		let leaf = null;
 		for(let i of [1,-1,0]){
 			leaf = this.plugin.chain.get_neighbor_leaf(i);
