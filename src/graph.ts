@@ -19,11 +19,13 @@ class NoteNode {
 	tfile : TFile;
 	note2id : {[key:string]:any};
 	id : number;
+	plugin:NoteChainPlugin;
 
-	constructor(tfile:TFile) {
+	constructor(tfile:TFile,plugin:NoteChainPlugin) {
 		this.tfile = tfile;
 		this.note2id = {};
 		this.id = 0;
+		this.plugin = plugin;
 	}
 
 	// 返回 IDXXXX
@@ -54,6 +56,17 @@ class NoteNode {
 		let newId = `ID${this.id.toString().padStart(4, '0')}`;
 		this.note2id[node] = newId;
 		this.id = this.id+1;
+		let tfile = this.plugin.chain.get_tfile(node);
+		if(tfile){
+			let meta = this.plugin.editor.get_frontmatter(tfile,this.plugin.settings.avata);
+			if(meta){
+				if(meta.startsWith('#')){
+					node = `![[${tfile.basename}${meta}|no-head]]`
+				}else{
+					node = meta;
+				}
+			}
+		}
 		return `${newId}("${node}")`;
 	}
 
@@ -79,7 +92,7 @@ export class MermaidGraph{
 	}
 
 	get_note_node(tfile:TFile){
-		let node = new NoteNode(tfile);
+		let node = new NoteNode(tfile,this.plugin);
 		return node;
 	}
 
@@ -216,7 +229,7 @@ export class MermaidGraph{
 			return 'No File.'
 		}
 
-		let node = new NoteNode(tfile);
+		let node = new NoteNode(tfile,this.plugin);
 
 		let nc = this.plugin;
 
@@ -283,7 +296,7 @@ export class MermaidGraph{
 	}
 
 	flowchart_cross(anchor:TFile,tfiles:Array<TFile>,subgraph='',color='#F05454',c_anchor='#40A578'){
-		let node = new NoteNode(tfiles[0]);
+		let node = new NoteNode(tfiles[0],this.plugin);
 		let msg = "\`\`\`mermaid\nflowchart TD\n";
 		msg = msg + this.subgraph_cross(node,tfiles,subgraph);
 		msg = msg + node.notes2class();
@@ -369,7 +382,7 @@ export class MermaidGraph{
 
 	get_relationship_graph(tfile:TFile, N=1, key='link',show_all_node=true) {
 		let nc = this.plugin;
-		let node = new NoteNode(tfile);
+		let node = new NoteNode(tfile,this.plugin);
 		let msg = "```mermaid\nflowchart TD\n";
 
 		// 获取 N 层链接的笔记
@@ -432,7 +445,7 @@ export class MermaidGraph{
 		}
 
 		let nc = this.plugin;
-		let node = new NoteNode(tfile);
+		let node = new NoteNode(tfile,this.plugin);
 		let msg = "```mehrmaid\nflowchart TD\n";
 
 		// 获取 N 层链接的笔记
@@ -474,15 +487,14 @@ export class MermaidGraph{
 								msg += `${node.get_mehrmaid_node(src)} ${line} ${cedge} ${node.get_mehrmaid_node(cnode)}\n`;
 							}
 						}
-
-						
-					}else if(link['group']){
-						msg += `subgraph ${link['group']}\n\t${node.get_mehrmaid_node(src)}\nend\n`
-						if(link['color']){
-							msg += `classDef ${link['group']}Class fill:${link['color']}\n`
-							msg += `class ${link['group']} ${link['group']}Class\n`
+					}else{
+						if(link['group']){
+							msg += `subgraph ${link['group']}\n\t${node.get_mehrmaid_node(src)}\nend\n`
+							if(link['color']){
+								msg += `classDef ${link['group']}Class fill:${link['color']}\n`
+								msg += `class ${link['group']} ${link['group']}Class\n`
+							}
 						}
-						
 					}
 				}
 			}
@@ -603,7 +615,7 @@ export class EchartGraph{
 		}
 		
 
-		let node = new NoteNode(tfile);
+		let node = new NoteNode(tfile,this.plugin);
 
 		let nc = this.plugin;
 
@@ -670,7 +682,7 @@ export class EchartGraph{
 	}
 
 	flowchart_cross(anchor:TFile,tfiles:Array<TFile>,subgraph='',color='#F05454',c_anchor='#40A578'){
-		let node = new NoteNode(tfiles[0]);
+		let node = new NoteNode(tfiles[0],this.plugin);
 		let msg = "\`\`\`mermaid\nflowchart TD\n";
 		msg = msg + this.subgraph_cross(node,tfiles,subgraph);
 		msg = msg + node.notes2class();

@@ -18,6 +18,7 @@ export interface NCSettings {
 	wordcountxfolder:string,
 	modal_default_width: number,
     modal_default_height: number,
+	avata:string,
 }
 
 export const DEFAULT_SETTINGS: NCSettings = {
@@ -33,6 +34,7 @@ export const DEFAULT_SETTINGS: NCSettings = {
 	wordcountxfolder:'',
 	modal_default_width: 800,
     modal_default_height: 600,
+	avata:'avata',
 }
 
 
@@ -156,6 +158,16 @@ export class NCSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.wordcountxfolder)
 					.onChange(async (value) => {
 						this.plugin.settings.wordcountxfolder = value;
+						await this.plugin.saveSettings();
+					})
+				);
+
+		new Setting(containerEl)
+				.setName(this.plugin.strings.setting_avata)
+				.addTextArea(text => text
+					.setValue(this.plugin.settings.avata)
+					.onChange(async (value) => {
+						this.plugin.settings.avata = value;
 						await this.plugin.saveSettings();
 					})
 				);

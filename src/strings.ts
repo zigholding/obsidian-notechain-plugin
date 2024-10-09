@@ -301,6 +301,15 @@ export class Strings{
         }
     }
 
+    get setting_avata(){
+        if(this.language=='zh'){
+            return '头像'
+        }else{
+            return "Avata";
+        }
+    }
+    
+
     get setting_wordcout_xfolder(){
         if(this.language=='zh'){
             return '跳过以下目录'
