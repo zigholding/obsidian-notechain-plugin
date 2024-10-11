@@ -46,7 +46,7 @@ class NoteNode {
 		return `${id}("${tfile.basename}")`
 	}
 
-	get_mehrmaid_node(node:string){
+	get_mehrmaid_node(node:string,avata=''){
 		if (node in this.note2id) {
 			return this.note2id[node];
 		}
@@ -58,12 +58,15 @@ class NoteNode {
 		this.id = this.id+1;
 		let tfile = this.plugin.chain.get_tfile(node);
 		if(tfile){
-			let meta = this.plugin.editor.get_frontmatter(tfile,this.plugin.settings.avata);
+			if(avata ==''){
+				avata = this.plugin.settings.avata
+			}
+			let meta = this.plugin.editor.get_frontmatter(tfile,avata);
 			if(meta){
 				if(meta.startsWith('#')){
 					node = `![[${tfile.basename}${meta}|no-head]]`
 				}else{
-					node = meta;
+					node = meta.replace('SELF',`[[${tfile.basename}]]`);
 				}
 			}
 		}
@@ -431,7 +434,7 @@ export class MermaidGraph{
 		return msg;
 	}
 
-	get_mehrmaid_graph(tfile:TFile, N=1, key='mermaid',c_anchor='#d4c4b7') {
+	get_mehrmaid_graph(tfile:TFile, N=1, key='mermaid',c_anchor='#d4c4b7',field='avata') {
 
 		if(!tfile){
 			let leaf = this.plugin.chain.get_last_activate_leaf();
@@ -449,7 +452,12 @@ export class MermaidGraph{
 		let msg = "```mehrmaid\nflowchart TD\n";
 
 		// 获取 N 层链接的笔记
-		let tfiles = nc.chain.get_group_links([tfile], N);
+		let tfiles;
+		if(N==-1){
+			tfiles = nc.chain.get_brothers(tfile);
+		}else{
+			tfiles = nc.chain.get_group_links([tfile], N);
+		}
 		tfiles = nc.chain.sort_tfiles_by_chain(tfiles) as TFile[];
 
 		for (let currentFile of tfiles) {
@@ -473,23 +481,23 @@ export class MermaidGraph{
 							line = line.slice(1)+'>'
 							if(cnode instanceof Array){
 								for(let item of cnode){
-									msg += `${node.get_mehrmaid_node(item)} ${line} ${cedge} ${node.get_mehrmaid_node(src)}\n`;
+									msg += `${node.get_mehrmaid_node(item,field)} ${line} ${cedge} ${node.get_mehrmaid_node(src,field)}\n`;
 								}
 							}else{
-								msg += `${node.get_mehrmaid_node(cnode)} ${line} ${cedge} ${node.get_mehrmaid_node(src)}\n`;
+								msg += `${node.get_mehrmaid_node(cnode,field)} ${line} ${cedge} ${node.get_mehrmaid_node(src,field)}\n`;
 							}
 						}else{
 							if(cnode instanceof Array){
 								for(let item of cnode){
-									msg += `${node.get_mehrmaid_node(src)} ${line} ${cedge} ${node.get_mehrmaid_node(item)}\n`;
+									msg += `${node.get_mehrmaid_node(src,field)} ${line} ${cedge} ${node.get_mehrmaid_node(item,field)}\n`;
 								}
 							}else{
-								msg += `${node.get_mehrmaid_node(src)} ${line} ${cedge} ${node.get_mehrmaid_node(cnode)}\n`;
+								msg += `${node.get_mehrmaid_node(src,field)} ${line} ${cedge} ${node.get_mehrmaid_node(cnode,field)}\n`;
 							}
 						}
 					}else{
 						if(link['group']){
-							msg += `subgraph ${link['group']}\n\t${node.get_mehrmaid_node(src)}\nend\n`
+							msg += `subgraph ${link['group']}\n\t${node.get_mehrmaid_node(src,field)}\nend\n`
 							if(link['color']){
 								msg += `classDef ${link['group']}Class fill:${link['color']}\n`
 								msg += `class ${link['group']} ${link['group']}Class\n`
