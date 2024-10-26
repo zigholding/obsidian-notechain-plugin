@@ -1,7 +1,7 @@
 {
 	"id": "note-chain",
 	"name": "Note Chain",
-	"version": "1.1.6",
+	"version": "1.1.7",
 	"minAppVersion": "1.7.4",
 	"description": "Thoughts as river, notes as chain. Add prev and next notes to a notes, and order files by the chain in File Explorer.",
 	"author": "ZigHolding",

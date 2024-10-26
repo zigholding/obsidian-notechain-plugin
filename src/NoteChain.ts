@@ -171,14 +171,16 @@ export class NoteChain{
 		return true;
 	}
 
-	async sugguster_note(){
+	async sugguster_note(notes=null){
 		// 从库中选择一个笔记
-		let notes = this.sort_tfiles(
-			this.app.vault.getFiles(),
-			['mtime','x']
-		).filter((f:TFile)=>this.filter_user_ignore(f));
+		if(notes==null){
+			notes = this.sort_tfiles(
+				this.app.vault.getFiles(),
+				['mtime','x']
+			).filter((f:TFile)=>this.filter_user_ignore(f));
+		}
 		try {
-			let msg = this.plugin.utils.array_prefix_id(notes.map((f:TFile)=>f.path));
+			let msg = this.plugin.utils.array_prefix_id((notes as any).map((f:TFile)=>f.path));
 			let note = await this.tp_suggester(msg,notes);
 			return note;
 		} catch (error) {

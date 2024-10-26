@@ -2,7 +2,9 @@ import { get } from 'http';
 import { 
 	App,
     TFile,
-    Notice
+    Notice,
+    TFolder,
+    TAbstractFile
 } from 'obsidian';
 
 export function get_plugins(app:App,name:string){
@@ -148,4 +150,44 @@ export async function parse_templater(app:App,template:string,without_meta=true)
     let target_file =  notes[0];
     let templateFunc = await templater$1(app,'',active_file,target_file);
     return templateFunc ? await templateFunc(template) : undefined;
+}
+
+export async function toogle_note_css(app:App,document:any,name:string,refresh=false) {
+    let nc = (app as any).plugins.getPlugin('note-chain');
+    let tfile = nc.chain.get_tfile(name);
+    if(!tfile){
+        let folder = nc.chain.get_all_folders().filter((x:TFolder)=>x.name==name)
+        console.log(folder)
+        if(folder.length==0){
+            return;
+        }
+        let tfiles = nc.utils.concat_array(
+            folder.map((x:TFolder)=>nc.chain.get_tfiles_of_folder(x))
+        );
+        if(tfiles.length==0){
+            return;
+        }
+        tfile = await nc.chain.sugguster_note(tfiles)
+        if(!tfile){
+            return;
+        }
+    }
+
+    let link = document.getElementById(tfile.basename);
+    if(link){
+        link.remove()
+        if(refresh){
+            let txt = await app.vault.cachedRead(tfile);
+            txt = txt.replace('```css\n','').replace('\n```','');
+            link.innerHTML=txt;
+        }
+        // link.disable = !link.disable;
+    }else{
+        let txt = await app.vault.cachedRead(tfile);
+        txt = txt.replace('```css\n','').replace('\n```','');
+        let styleElement = document.createElement('style')
+        styleElement.innerHTML=txt;
+        styleElement.id = tfile.basename;
+        document.head.appendChild(styleElement);
+    }
 }

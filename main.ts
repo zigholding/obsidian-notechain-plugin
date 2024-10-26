@@ -11,7 +11,7 @@ import {NoteChain} from './src/NoteChain';
 import {NCFileExplorer} from './src/NCFileExplorer';
 import { Strings } from 'src/strings';
 import { WordCount } from 'src/WordCount';
-import { MermaidGraph } from 'src/graph';
+import { MermaidGraph,CanvasGraph } from 'src/graph';
 import { NCSettingTab,NCSettings,DEFAULT_SETTINGS } from 'src/setting';
 import { addCommands } from 'src/commands';
 
@@ -22,6 +22,7 @@ export default class NoteChainPlugin extends Plugin {
 	editor : NCEditor; 
 	explorer : NCFileExplorer;
 	mermaid : MermaidGraph;
+	canvas : CanvasGraph;
 	wordcout : WordCount;
 	strings : Strings;
 	debug:boolean;
@@ -40,6 +41,7 @@ export default class NoteChainPlugin extends Plugin {
 		this.chain = new NoteChain(this,this.editor);
 		this.explorer = new NCFileExplorer(this);
 		this.mermaid = new MermaidGraph(this);
+		this.canvas = new CanvasGraph(this);
 		this.strings = new Strings();
 
 		addCommands(this);
