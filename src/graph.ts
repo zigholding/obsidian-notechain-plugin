@@ -102,7 +102,6 @@ export class MermaidGraph{
 		this.plugin = plugin;
 		this.app = plugin.app;
 		this.editor = plugin.editor;
-		this.editor = new NCEditor(this.app);
 	}
 
 	get_note_node(tfile:TFile){
@@ -539,7 +538,6 @@ export class EchartGraph{
 		this.plugin = plugin;
 		this.app = plugin.app;
 		this.editor = plugin.editor;
-		this.editor = new NCEditor(this.app);
 	}
 
 
@@ -729,7 +727,6 @@ export class CanvasGraph{
 		this.plugin = plugin;
 		this.app = plugin.app;
 		this.editor = plugin.editor;
-		this.editor = new NCEditor(this.app);
 	}
 
 	gen_random_string(length:number) {
