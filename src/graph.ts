@@ -73,6 +73,17 @@ class NoteNode {
 		return `${newId}("${node}")`;
 	}
 
+	get_canvas_node(node:string){
+		if (node in this.note2id) {
+			return this.note2id[node];
+		}
+		let newId = `ID${this.id.toString().padStart(4, '0')}`;
+		this.note2id[node] = newId;
+		this.id = this.id+1;
+		return newId;
+
+	}
+
 	notes2class(){
 		let msg = '\n';
 		for(let tfile in this.note2id){
@@ -707,8 +718,118 @@ export class EchartGraph{
 		);
 		return msg;
 	}
+}
 
+export class CanvasGraph{
+	plugin:NoteChainPlugin;
+	app:App;
+	editor:NCEditor;
 
-	
+	constructor(plugin:NoteChainPlugin) {
+		this.plugin = plugin;
+		this.app = plugin.app;
+		this.editor = plugin.editor;
+		this.editor = new NCEditor(this.app);
+	}
 
+	gen_random_string(length:number) {
+		let characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+		let randomString = '';
+		
+		for (let i = 0; i < length; i++) {
+		  let randomIndex = Math.floor(Math.random() * characters.length);
+		  randomString += characters.charAt(randomIndex);
+		}
+		
+		return randomString;
+	  }
+
+	new_note_node(tfile:TFile){
+		let node = new NoteNode(tfile,this.plugin);
+		return node;
+	}
+
+	gen_node(NN:NoteNode,tfile:TAbstractFile|string,x=0,y=0,width=400,height=400){
+		let rsp:{[key:string]:any} = {};
+		if(typeof(tfile) == 'string'){
+			rsp['type'] = 'text';
+			rsp['text'] = tfile;
+			rsp['id'] = NN.get_canvas_node(rsp['text']);
+		}else{
+			rsp['type'] = 'file';
+			if(tfile instanceof TFolder){
+				rsp['file'] = tfile.path+'/'+tfile.name+'.md';
+			}else{
+				rsp['file'] = tfile.path;
+			}
+			rsp['id'] = NN.get_canvas_node(rsp['file']);
+		}
+
+		rsp['x'] = x;
+		rsp['y'] = y;
+		rsp['height'] = height;
+		rsp['width'] = width;
+
+		return rsp;
+	}
+
+	rc_of_sequence(i:number,r:number,c:number){
+		/*
+		如 r 行 c 列排序，第 i 个卡片对应的行列号是多少
+		*/
+		let row = Math.floor((i - 1) / c) + 1;
+		let col = row % 2 === 1 ? (i - 1) % c + 1 : c - ((i - 1) % c);
+		return [row, col];
+	}
+
+	async note_to_canvas(tfile:TFile,nrow=1,ncol=1,width=400,height=400,wmarin=100,hmargin=100,write=true){
+		let content = await this.plugin.app.vault.read(tfile);
+		let titles = [...content.matchAll(/^(#+)\s+(.+)/gm)]; // 匹配所有标题
+
+		if(nrow*ncol<titles.length){
+			ncol = Math.ceil(titles.length/nrow);
+		}
+
+		let nodes = [];
+		let i = 0;
+		let NN = this.new_note_node(tfile);
+		for(let match of titles){
+			i = i+1;
+			let title = `![[${tfile.basename}#${match[2]}]]`;
+			let pos = this.rc_of_sequence(i, nrow, ncol);
+			let node = this.gen_node(
+				NN=NN,
+				title,
+				pos[1]*(width+wmarin),
+				pos[0]*(height+hmargin),
+				width=width,
+				height=height
+			)
+			nodes.push(node);
+		}
+		let res = {
+			"nodes":nodes,
+			"edges":[]
+		}
+		if(write){
+			let path = this.path_md2canvas(tfile);
+			await this.write_canvas_file(res,path);
+		}
+		return res;
+	}
+
+	async write_canvas_file(canvas:{},path:string){
+		let msg = JSON.stringify(canvas);
+		let canvasFile = this.plugin.app.vault.getAbstractFileByPath(path);
+		if (canvasFile) {
+			await this.plugin.app.vault.modify(canvasFile as TFile, msg);
+		} else {
+			// 如果画布文件不存在，创建新文件并写入内容
+			await this.plugin.app.vault.create(path, msg);
+		}
+	}
+
+	path_md2canvas(tfile:TFile){
+		return tfile.path.replace('.md','.canvas')
+	}
 }
