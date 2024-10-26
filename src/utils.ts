@@ -157,7 +157,6 @@ export async function toogle_note_css(app:App,document:any,name:string,refresh=f
     let tfile = nc.chain.get_tfile(name);
     if(!tfile){
         let folder = nc.chain.get_all_folders().filter((x:TFolder)=>x.name==name)
-        console.log(folder)
         if(folder.length==0){
             return;
         }
@@ -174,20 +173,20 @@ export async function toogle_note_css(app:App,document:any,name:string,refresh=f
     }
 
     let link = document.getElementById(tfile.basename);
-    if(link){
+    if(link && !refresh){
         link.remove()
-        if(refresh){
-            let txt = await app.vault.cachedRead(tfile);
-            txt = txt.replace('```css\n','').replace('\n```','');
-            link.innerHTML=txt;
-        }
-        // link.disable = !link.disable;
     }else{
-        let txt = await app.vault.cachedRead(tfile);
-        txt = txt.replace('```css\n','').replace('\n```','');
-        let styleElement = document.createElement('style')
-        styleElement.innerHTML=txt;
-        styleElement.id = tfile.basename;
-        document.head.appendChild(styleElement);
+        let css = await nc.editor.extract_code_block(tfile,'css')
+        let inner = css.join('\n')
+        if(link){
+            link.innerHTML = inner
+        }else{
+            if(inner!=''){
+                let styleElement = document.createElement('style')
+                styleElement.innerHTML=inner;
+                styleElement.id = tfile.basename;
+                document.head.appendChild(styleElement);
+            }
+        }
     }
 }

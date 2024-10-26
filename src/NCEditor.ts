@@ -108,4 +108,19 @@ export class NCEditor{
 			})
 		}
 	}
+
+	async extract_code_block(tfile:TFile,btype:string){
+		
+		if(!tfile){
+			return [];
+		}
+		let cssCodeBlocks = [];
+		let txt = await this.app.vault.cachedRead(tfile);
+		let reg = new RegExp(`\`\`\`${btype}\\n([\\s\\S]*?)\n\`\`\``,'g');;
+		let matches;
+		while ((matches = reg.exec(txt)) !== null) {
+			cssCodeBlocks.push(matches[1].trim()); // Extract the CSS code without backticks
+		}
+		return cssCodeBlocks;
+	}
 }
