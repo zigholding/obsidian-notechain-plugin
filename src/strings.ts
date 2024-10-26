@@ -165,6 +165,14 @@ export class Strings{
         }
     }
 
+    get cmd_execute_template_modal(){
+        if(this.language=='zh'){
+            return '执行脚本笔记'
+        }else{
+            return "Execute Templater modal";
+        }
+    }
+
     get filemenu_create_next_note(){
         if(this.language=='zh'){
             return '创建后置笔记'

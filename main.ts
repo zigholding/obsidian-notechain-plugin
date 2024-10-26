@@ -37,7 +37,7 @@ export default class NoteChainPlugin extends Plugin {
 		this.utils = require('./src/utils');
 		this.ob = require('obsidian');
 		
-		this.editor = new NCEditor(this.app);
+		this.editor = new NCEditor(this);
 		this.chain = new NoteChain(this,this.editor);
 		this.explorer = new NCFileExplorer(this);
 		this.mermaid = new MermaidGraph(this);

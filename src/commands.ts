@@ -446,6 +446,32 @@ const cmd_mermaid_flowchart_auto = (plugin: NoteChainPlugin) => ({
     }
 });
 
+const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
+    id: 'cmd_execute_template_modal',
+    name: plugin.strings.cmd_execute_template_modal,
+    callback: async () => {
+		let tpl = (plugin.app as any).plugins.plugins['templater-obsidian']
+		if(!tpl){return}
+
+		let folder = plugin.app.vault.getFolderByPath(tpl.settings.templates_folder);
+		let tfiles;
+		if(folder){
+			tfiles = plugin.chain.get_tfiles_of_folder(folder,true)
+			tfiles = plugin.chain.sort_tfiles_by_chain(tfiles)
+		}else{
+			tfiles = plugin.chain.get_all_tfiles()
+		}
+		let tfile = await plugin.chain.sugguster_note(tfiles as any)
+		if(tfile){
+			let res = await plugin.utils.parse_templater(plugin.app,tfile.basename);
+			let txt = res.join('\n').trim()
+			let view = (plugin.app.workspace as any).getActiveFileView()
+			if(view){
+				view.editor.replaceSelection(txt);
+			}
+		}
+    }
+});
 
 
 const commandBuilders = [
@@ -471,7 +497,8 @@ const commandBuilders = [
 	cmd_file_rename,
 	cmd_mermaid_flowchart_link,
 	cmd_mermaid_flowchart_folder,
-	cmd_mermaid_flowchart_auto
+	cmd_mermaid_flowchart_auto,
+	cmd_execute_template_modal
 ];
 
 const commandBuildersDesktop = [

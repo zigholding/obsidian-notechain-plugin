@@ -5,14 +5,17 @@ import {
 	TFile,TFolder
 } from 'obsidian';
 import * as internal from 'stream';
+import NoteChainPlugin from "../main";
 
 
 export class NCEditor{
 	app:App;
 	nretry:number;
+	plugin:NoteChainPlugin;
 
-	constructor(app:App){
-		this.app = app;
+	constructor(plugin:NoteChainPlugin){
+		this.plugin = plugin;
+		this.app = this.plugin.app;
 		this.nretry=100;
 	}
 
@@ -109,17 +112,51 @@ export class NCEditor{
 		}
 	}
 
-	async extract_code_block(tfile:TFile,btype:string){
-		
-		if(!tfile){
-			return [];
+	async remove_metadata(tfile:TFile|string){
+		if(tfile instanceof TFile){
+			tfile = await this.plugin.app.vault.cachedRead(tfile);
+		}
+		if(typeof(tfile)!='string'){
+			return ''
+		}
+
+		let headerRegex = /^---\s*([\s\S]*?)\s*---/
+		let match = headerRegex.exec(tfile);
+		if(match){
+			tfile = tfile.slice(match[0].length).trim();
+		}
+		return tfile;
+	}
+
+	async extract_code_block(tfile:TFile|string,btype:string){
+
+		if(tfile instanceof TFile){
+			tfile = await this.plugin.app.vault.cachedRead(tfile);
+		}
+		if(typeof(tfile)!='string'){
+			return ''
 		}
 		let cssCodeBlocks = [];
-		let txt = await this.app.vault.cachedRead(tfile);
 		let reg = new RegExp(`\`\`\`${btype}\\n([\\s\\S]*?)\n\`\`\``,'g');;
 		let matches;
-		while ((matches = reg.exec(txt)) !== null) {
+		while ((matches = reg.exec(tfile)) !== null) {
 			cssCodeBlocks.push(matches[1].trim()); // Extract the CSS code without backticks
+		}
+		return cssCodeBlocks;
+	}
+
+	async extract_templater_block(tfile:TFile|string,reg=/<%\*\s*([\s\S]*?)\s*-%>/g){
+		if(tfile instanceof TFile){
+			tfile = await this.plugin.app.vault.cachedRead(tfile);
+		}
+		if(typeof(tfile)!='string'){
+			return ''
+		}
+
+		let cssCodeBlocks = [];
+		let matches;
+		while ((matches = reg.exec(tfile)) !== null) {
+			cssCodeBlocks.push(matches[0].trim());
 		}
 		return cssCodeBlocks;
 	}
