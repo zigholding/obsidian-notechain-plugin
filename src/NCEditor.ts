@@ -58,6 +58,7 @@ export class NCEditor{
 	async set_multi_frontmatter(tfile:TFile,kv:{[key:string]:any},nretry=this.nretry):Promise<boolean>{
 		let flag = this.check_frontmatter(tfile,kv);
 		while(!flag && nretry>0){
+			
 			await this.app.fileManager.processFrontMatter(tfile, (fm) =>{
 				for(let k in kv){
 					fm[k] = kv[k];
