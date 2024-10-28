@@ -473,6 +473,14 @@ const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
     }
 });
 
+const cmd_toogle_css_block_in_note = (plugin: NoteChainPlugin) => ({
+    id: 'cmd_toogle_css_block_in_note',
+    name: plugin.strings.cmd_toogle_css_block_in_note,
+    callback: async () => {
+		await plugin.utils.toogle_note_css(plugin.app,document,'/')
+    }
+});
+
 
 const commandBuilders = [
 	cmd_open_note,
@@ -498,7 +506,8 @@ const commandBuilders = [
 	cmd_mermaid_flowchart_link,
 	cmd_mermaid_flowchart_folder,
 	cmd_mermaid_flowchart_auto,
-	cmd_execute_template_modal
+	cmd_execute_template_modal,
+	cmd_toogle_css_block_in_note
 ];
 
 const commandBuildersDesktop = [

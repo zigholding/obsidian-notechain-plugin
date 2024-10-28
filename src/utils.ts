@@ -129,7 +129,7 @@ async function templater$1(app:App,template:string, active_file:TFile, target_fi
 	};
 }
 
-export async function parse_templater(app:App,template:string,without_meta=true,only_body=true) {
+export async function parse_templater(app:App,template:string) {
     let nc =(app as any).plugins.getPlugin('note-chain');
     if(!nc){return;}
 
@@ -147,7 +147,6 @@ export async function parse_templater(app:App,template:string,without_meta=true,
             let item = await templateFunc(block);
             res.push(item)
         }
-        console.log(res)
         return res;
     }else{
         return []
@@ -158,13 +157,19 @@ export async function toogle_note_css(app:App,document:any,name:string,refresh=f
     let nc = (app as any).plugins.getPlugin('note-chain');
     let tfile = nc.chain.get_tfile(name);
     if(!tfile){
-        let folder = nc.chain.get_all_folders().filter((x:TFolder)=>x.name==name)
-        if(folder.length==0){
-            return;
+        let tfiles;
+        if(name=='/'){
+            tfiles = nc.chain.get_all_tfiles()
+        }else{
+            let folder = nc.chain.get_all_folders().filter((x:TFolder)=>x.name==name)
+            if(folder.length==0){
+                return;
+            }
+            tfiles = nc.utils.concat_array(
+                folder.map((x:TFolder)=>nc.chain.get_tfiles_of_folder(x))
+            );
         }
-        let tfiles = nc.utils.concat_array(
-            folder.map((x:TFolder)=>nc.chain.get_tfiles_of_folder(x))
-        );
+        
         if(tfiles.length==0){
             return;
         }

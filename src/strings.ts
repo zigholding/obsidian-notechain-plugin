@@ -173,6 +173,16 @@ export class Strings{
         }
     }
 
+    get cmd_toogle_css_block_in_note(){
+        if(this.language=='zh'){
+            return '启用/关闭 css 代码块'
+        }else{
+            return "Toogle css block in note";
+        }
+    }
+    
+
+
     get filemenu_create_next_note(){
         if(this.language=='zh'){
             return '创建后置笔记'
