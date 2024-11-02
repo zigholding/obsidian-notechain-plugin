@@ -159,6 +159,164 @@ export class NCEditor{
 		while ((matches = reg.exec(tfile)) !== null) {
 			cssCodeBlocks.push(matches[0].trim());
 		}
+		
+		let tpls = await this.extract_code_block(tfile,'js //templater');
+		for(let tpl of tpls){
+			cssCodeBlocks.push(`<%*\n${tpl}\n-%>`)
+		}
+
 		return cssCodeBlocks;
 	}
+
+	async extract_yaml_block(tfile:TFile|string){
+		
+		if(tfile instanceof TFile){
+			tfile = await this.plugin.app.vault.cachedRead(tfile);
+		}
+		if(typeof(tfile)!='string'){
+			return ''
+		}
+
+		let headerRegex = /^---\s*([\s\S]*?)\s*---/
+		let match = headerRegex.exec(tfile);
+        if(match){
+			return match[0]
+        }
+		return ''
+	}
+
+	_extract_block_id_(para:string){
+		let reg = /\s+\^[a-zA-Z0-9]+\r?\n?$/
+		let match = reg.exec(para)
+		if(match){
+			return match[0].trim()
+		}else{
+			return ''
+		}
+	}
+
+	_generate_random_string_(length:number) {
+		let characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+		let result = '';
+	
+		for (let i = 0; i < length; i++) {
+			let randomIndex = Math.floor(Math.random() * characters.length);
+			result += characters[randomIndex];
+		}
+	
+		return result;
+	}
+
+	async extract_all_blocks(tfile:TFile|string){
+		
+		if(tfile instanceof TFile){
+			tfile = await this.plugin.app.vault.cachedRead(tfile);
+		}
+		if(typeof(tfile)!='string'){
+			return ''
+		}
+
+		let ctx = tfile;
+		let blocks = [];
+
+		let head = await nc.editor.extract_yaml_block(ctx);
+		if(head!=''){
+			blocks.push(['YAML',head])
+			ctx=ctx.slice(head.length)
+		}
+
+		let kvgets:{[key:string]:any} = {
+			'空白段落':/^(\s*\n)*/,
+			'代码块': /^[ \t]*```[\s\S]*?\n[ \t]*```[ \t]*\n(\s*\^[a-zA-Z0-9]+\r?[\n$])?/,
+			'tpl代码块':/^<%\*[\s\S]*?\n-?\*?%>[ \t]*\n(\s+\^[a-zA-Z0-9]+\r?[\n$])?/,
+			'任务': /^[ \t]*- \[.\].*\n?(\s+\^[a-zA-Z0-9]+\r?[\n$])?/,
+			'无序列表': /^[ \t]*- .*\n?(\s+\^[a-zA-Z0-9]+\r?[\n$])?/,
+			'有序列表': /^[ \t]*\d\. .*\n?(\s+[ \t]*\^[a-zA-Z0-9]+\r?[\n$])?/,
+			'引用': /^(>.*\n)+(\s*\^[a-zA-Z0-9]+\r?[\n$])?/,
+			'标题': /^#+ .*\n(\s*\^[a-zA-Z0-9]+\r?[\n$])?/,
+			'段落': /^(.*\n?)(\s*\^[a-zA-Z0-9]+\r?[\n$])?/
+		}
+		while(ctx.length>0){
+			let flag = true
+			for(let key of Object.keys(kvgets)){
+				let reg = kvgets[key];
+				let match = reg.exec(ctx);
+				if(match){
+					let curr = match[0];
+					if(curr.length>0){
+						let bid = this._extract_block_id_(curr)
+						if(key=='段落' && blocks.length>0 && blocks[blocks.length-1][0]=='段落'){
+							blocks[blocks.length-1][1] = blocks[blocks.length-1][1]+curr
+							blocks[blocks.length-1][2] = bid
+						}else{
+							blocks.push([key,curr,bid])
+						}
+						flag = false
+						ctx=ctx.slice(curr.length)
+						break
+					}
+				}
+			}
+			if(flag){
+				break
+			}
+		}
+
+		if(ctx.length>0){
+			let bid = this._extract_block_id_(ctx)
+			blocks.push(['段落',ctx,bid])
+		}
+		return blocks
+	}
+
+	async append_block_ids(tfile:TFile){
+		let blocks = await this.extract_all_blocks(tfile);
+		let items = []
+		for(let block of blocks){
+			if(['空白段落','YAML'].contains(block[0])){
+				items.push(block[1])
+			}else if(!block[2]){
+				let bid = this._generate_random_string_(6)
+				
+				if(['任务','无序列表','有序列表'].contains(block[0])){
+					items.push(block[1].slice(0,-1)+' ^'+bid+'\n')
+				}else{
+					if(block[1].endsWith('\n')){
+						items.push(block[1]+'^'+bid+'\n')
+					}else{
+						items.push(block[1]+'\n^'+bid+'\n')
+					}
+				}
+			}else{
+				items.push(block[1])
+			}
+		}
+		let res = items.join('')
+		await this.app.vault.modify(tfile,res)
+		return res;
+	}
+
+	async remove_block_ids(tfile:TFile){
+		let blocks = await this.extract_all_blocks(tfile);
+		let items = []
+		for(let block of blocks){
+			if(['空白段落','YAML'].contains(block[0])){
+				items.push(block[1])
+			}else{
+				let reg = /\s+\^[a-zA-Z0-9]+\r?\n?$/
+				let match = reg.exec(block[1])
+				if(match){
+					items.push(block[1].replace(reg,'\n'))
+				}else{
+					items.push(block[1])
+				}
+			}
+		}
+		let res = items.join('')
+		await this.app.vault.modify(tfile,res)
+		return res;
+	}
+
+	
 }
+
