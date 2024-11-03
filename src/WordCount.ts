@@ -35,13 +35,8 @@ export class WordCount{
         return true;
     }
 
+    // 统计字数
     count_words(ctx:string,ignore=/[\s!"#$%&'()*+,./:;<=>?@[\]^_`{|}，。！？【】、；：“”‘’《》（）［］—…￥]/g){
-        let headerRegex = /^---\s*([\s\S]*?)\s*---/
-        let match = headerRegex.exec(ctx);
-        if(match){
-            ctx = ctx.slice(match[0].length).trim();
-        }
-        
         let N = ctx.replace(ignore, '').length;
         let enregex = /[a-zA-Z0-9-]+/g;
         let matches = ctx.match(enregex);
@@ -152,6 +147,10 @@ export class WordCount{
     async update_word_count(tfile:TFile){
         if(!this.filter(tfile)){return;}
         let ctx = await this.app.vault.cachedRead(tfile);
+        let mcache = this.app.metadataCache.getFileCache(tfile)
+        if(mcache?.frontmatterPosition){
+            ctx = ctx.slice(mcache.frontmatterPosition.end.offset)
+        }
         let N = this.count_words(ctx);
         await this.set_mtime_value(tfile,'words',N);
     }
