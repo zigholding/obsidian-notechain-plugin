@@ -217,9 +217,55 @@ export class NoteChain{
 	}
 
 
-	get_tfile(path:string){
+	get_tfile(path:string,only_first=true){
 		let name = path.split('|')[0].replace('[[','').replace(']]','');
-		return this.tp_find_tfile(name);
+		let tfile = this.app.vault.getFileByPath(name)
+		if(tfile){
+			return tfile;
+		}
+
+		if(only_first){
+			return (this.app.metadataCache as any).getFirstLinkpathDest(name)
+		}
+
+		let tfiles = (this.app.metadataCache as any).getLinkpathDest(name)
+		if(tfiles.length==0){
+			return null;
+		}else if (tfiles.length==1){
+			return tfiles[0]
+		}else{
+			return tfiles;
+		}
+	}
+
+	get_tags(tfile=this.current_note){
+		if(!tfile){return []}
+		let mcache= this.app.metadataCache.getFileCache(tfile);
+		let tags:Array<string> = []
+		if(mcache?.tags){
+			for(let curr of mcache.tags){
+				if(!tags.contains(curr.tag)){
+					tags.push(curr.tag)
+				}
+			}
+		}
+		if(mcache?.frontmatter?.tags){
+			if(Array.isArray(mcache.frontmatter.tags)){
+				for(let curr of mcache.frontmatter.tags){
+					let tag = '#'+curr;
+					if(!tags.contains(tag)){
+						tags.push(tag)
+					}
+				}
+			}else if(typeof mcache.frontmatter.tags === 'string'){
+				let tag = `#`+mcache.frontmatter.tags
+				if(!tags.contains(tag)){
+					tags.push(tag)
+				}
+			}
+			
+		}
+		return tags
 	}
 
 	get_last_daily_note(){
@@ -285,15 +331,9 @@ export class NoteChain{
 		leaves = leaves.filter(x=>x.getViewState().state.file);
 		leaves = leaves.sort((a,b)=>b.activeTime - a.activeTime);
 
-		let dv = (this.app as any).plugins.getPlugin('dataview')?.api;
-		if(!dv){
-			new Notice("Need Plugin dataview",5000);
-			return;
-		}
-		
 		for(let leaf of leaves){
 			let file = leaf.getViewState().state.file;
-			if(skip_conote && dv.index.tags.delegate.map.get(file)?.has('#conote')){
+			if(skip_conote && !this.get_tags(file).contains('#conote')){
 				continue;
 			}
 			return leaf;
@@ -309,57 +349,55 @@ export class NoteChain{
 		return null;
 	}
 
-	get current_note(){
+	get current_note():TFile|null{
 		return this.app.workspace.getActiveFile();
 	}
 
-	get_inlinks(tfile=this.current_note,only_md=false){
+	get_inlinks(tfile=this.current_note,only_md=false):Array<TFile>{
 		if(tfile==null){return [];}
+		let res:Array<TFile> = []
 
-		let res = new Array();
-
-		let dv_api = (this.app as any).plugins.getPlugin("dataview");
-
-		let inlinks = dv_api.index.links.invMap.get(tfile.path);
-		if(inlinks==undefined){
-			return [];
-		}else{
-			return Array.from(inlinks).map(
-				(path:string)=>((this.app.vault as any).fileMap[path])
-			).filter(
-				(item:TFile)=>(item)
-			).filter(
-				(item:TFile)=>{
-					return !only_md || item.extension=='md'
-				}
-			)
+		let inlinks = (this.app.metadataCache as any).getBacklinksForFile(tfile);
+		for(let [k,v] of inlinks.data){
+			let curr = this.app.vault.getFileByPath(k);
+			if(curr){
+				res.push(curr)
+			}
 		}
+		return res;
 	}
 
-	get_outlinks(tfile=this.current_note,only_md=false){
+	get_outlinks(tfile=this.current_note,only_md=false):Array<TFile>{
 		if(tfile==null){return [];}
-		let dv_api = (this.app as any).plugins.getPlugin("dataview");
-		let inlinks = dv_api.index.links.map.get(tfile.path);
-		if(inlinks==undefined){
-			return [];
-		}else{
-			return Array.from(inlinks).map(
-				(path:string)=>((this.app.vault as any).fileMap[path])
-			).filter(
-				(item:string)=>(item)
-			).filter(
-				(item:TFile)=>{
-					return !only_md || item.extension=='md'
+
+		let mcache = this.app.metadataCache.getFileCache(tfile);
+		if(!mcache){return [];}
+
+		let res:Array<TFile> = [];
+		if(mcache.links){
+			for(let link of mcache.links){
+				let tfile = this.get_tfile(link.link);
+				if(tfile && !res.contains(tfile) && !(only_md && tfile.extension!='md')){
+					res.push(tfile);
 				}
-			)
+			}
 		}
+		if(mcache.frontmatterLinks){
+			for(let link of mcache.frontmatterLinks){
+				let tfile = this.get_tfile(link.link);
+				if(tfile && !res.contains(tfile) && !(only_md && tfile.extension!='md')){
+					res.push(tfile);
+				}
+			}
+		}
+		return res;
 	}
 
 	get_links(tfile=this.current_note,only_md=false){
 		let inlinks = this.get_inlinks(tfile,only_md);
 		let outlinks = this.get_outlinks(tfile,only_md);
 		for(let link of inlinks){
-			if(!outlinks.includes(link)){
+			if(!outlinks.contains(link)){
 				outlinks.push(link)
 			}
 		}
@@ -583,7 +621,6 @@ export class NoteChain{
 			let note = this.get_tfile(name);
 			return note?note:null;
 		}
-		
 	}
 
 	open_prev_notes(tfile=this.current_note){
