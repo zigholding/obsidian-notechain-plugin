@@ -219,8 +219,8 @@ export class NoteChain{
 
 	get_tfile(path:string,only_first=true){
 		try{
-			let name = path.split('|')[0].replace('[[','').replace(']]','');
-			let tfile = this.app.vault.getFileByPath(name)
+			path = path.split('|')[0].replace('[[','').replace(']]','');
+			let tfile = this.app.vault.getFileByPath(path)
 			if(tfile){
 				return tfile;
 			}
