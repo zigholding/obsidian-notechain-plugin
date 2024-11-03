@@ -218,23 +218,43 @@ export class NoteChain{
 
 
 	get_tfile(path:string,only_first=true){
-		let name = path.split('|')[0].replace('[[','').replace(']]','');
-		let tfile = this.app.vault.getFileByPath(name)
-		if(tfile){
-			return tfile;
-		}
+		try{
+			let name = path.split('|')[0].replace('[[','').replace(']]','');
+			let tfile = this.app.vault.getFileByPath(name)
+			if(tfile){
+				return tfile;
+			}
 
-		if(only_first){
-			return (this.app.metadataCache as any).getFirstLinkpathDest(name)
-		}
+			let tfiles = (this.app.metadataCache as any).uniqueFileLookup.get(path.toLowerCase());
+			if(!tfiles){
+				tfiles = (this.app.metadataCache as any).uniqueFileLookup.get(path.toLowerCase()+'.md');
+				if(!tfiles){
+					return null;
+				}else{
+					path = path+'.md'
+				}
+			}
 
-		let tfiles = (this.app.metadataCache as any).getLinkpathDest(name)
-		if(tfiles.length==0){
+			let ctfiles = tfiles.filter((x:TFile)=>x.name==path)
+			if(ctfiles.length>0){
+				if(only_first){
+					return ctfiles[0]
+				}else{
+					return ctfiles
+				}
+			}
+
+			if(tfiles.length>0){
+				if(only_first){
+					return tfiles[0]
+				}else{
+					return tfiles
+				}
+			}
 			return null;
-		}else if (tfiles.length==1){
-			return tfiles[0]
-		}else{
-			return tfiles;
+		}catch{
+			// console.log(path)
+			return null
 		}
 	}
 
