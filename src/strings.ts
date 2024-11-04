@@ -434,9 +434,9 @@ export class Strings{
 
     get item_recent(){
         if(this.language=='zh'){
-            return '近期笔记（基于插件：recent-files-obsidian）'
+            return '近期笔记'
         }else{
-            return "Recent (Based on recent files plugin)";
+            return "Recent";
         }
     }
 

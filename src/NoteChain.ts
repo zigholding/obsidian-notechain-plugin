@@ -288,43 +288,44 @@ export class NoteChain{
 		return tags
 	}
 
+	get_recent_tfiles(only_md=true):Array<TFile>{
+		let recent = []
+		let files = (this.app.workspace as any).recentFileTracker?.lastOpenFiles
+		if(files  && files.length>0){
+			recent = files.map((x:string)=>this.get_tfile(x)).filter((x:TFile)=>x)
+		}
+		let tfile = this.app.workspace.getActiveFile()
+		if(tfile){
+			recent.unshift(tfile)
+		}
+		if(only_md){
+			recent = recent.filter((x:TFile)=>x.extension=='md')
+		}
+		return recent
+	}
+
 	get_last_daily_note(){
 		let pattern=/^\d{4}-\d{2}-\d{2}$/;
-		let tfile = this.app.workspace.getActiveFile();
-		if(tfile && tfile.basename?.match(pattern)){
-			return tfile;
-		}
-		
-		let leaf = this.get_neighbor_leaf();
-		tfile = (leaf?.view as any)?.file;
-		if(tfile?.basename?.match(pattern)){
-			return tfile;
-		}
-		
-		let recent = (this.app as any).plugins.getPlugin('recent-files-obsidian');
-		if(recent){
-			let files = recent.data.recentFiles.filter(
-				(x:TFile)=>x.basename?.match(pattern)
-			);
-			if(files.length>0){
-				tfile = this.get_tfile(files[0].basename);
+
+		let recent = this.get_recent_tfiles()
+		for(let tfile of recent){
+			if(tfile.basename.match(pattern)){
 				return tfile;
 			}
-		}else{
-			let fname = moment().format('YYYY-MM-DD');
-			tfile = this.get_tfile(fname);
-			if(tfile){
-				return tfile;
-			}
-			
-			let files = this.app.vault.getMarkdownFiles().filter(
-				(x:TFile)=>x.basename.match(pattern)
-			);
-			files = this.sort_tfiles(files,'name');
-			if(files.length>0){
-				return files[files.length-1];
-			}
-			
+		}
+		
+		// 库中所有文件
+		let fname = moment().format('YYYY-MM-DD');
+		tfile = this.get_tfile(fname);
+		if(tfile){
+			return tfile;
+		}
+		let files = this.app.vault.getMarkdownFiles().filter(
+			(x:TFile)=>x.basename.match(pattern)
+		);
+		files = this.sort_tfiles(files,'name');
+		if(files.length>0){
+			return files[files.length-1];
 		}
 		return null;
 	}
@@ -600,6 +601,7 @@ export class NoteChain{
 		}else if(mode===this.plugin.strings.item_all_noes){
 			return this.get_all_tfiles();
 		}else if(mode===this.plugin.strings.item_recent){
+			return this.get_recent_tfiles()
 			let r = (this.app as any).plugins.getPlugin("recent-files-obsidian");
 			if(!r){return [];}
 			return Object.values(
