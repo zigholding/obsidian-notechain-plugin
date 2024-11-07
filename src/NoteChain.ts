@@ -345,16 +345,13 @@ export class NoteChain{
 	}
 
 	get_last_activate_leaf(skip_conote=true){
-		let leaves:Array<any> = []
-		this.app.workspace.iterateAllLeaves((leaf) => {
-			leaves.push(leaf)
-		});
+		let leaves:Array<any> = this.app.workspace.getLeavesOfType('markdown');
 		leaves = leaves.filter(x=>x.getViewState().state.file);
 		leaves = leaves.sort((a,b)=>b.activeTime - a.activeTime);
 
 		for(let leaf of leaves){
 			let file = leaf.getViewState().state.file;
-			if(skip_conote && !this.get_tags(file).contains('#conote')){
+			if(skip_conote && this.get_tags(file).contains('#conote')){
 				continue;
 			}
 			return leaf;
@@ -602,11 +599,6 @@ export class NoteChain{
 			return this.get_all_tfiles();
 		}else if(mode===this.plugin.strings.item_recent){
 			return this.get_recent_tfiles()
-			let r = (this.app as any).plugins.getPlugin("recent-files-obsidian");
-			if(!r){return [];}
-			return Object.values(
-				r.data.recentFiles).map((f:TAbstractFile)=>(this.app.vault as any).fileMap[f.path]
-			).filter(f=>f);
 		}else if(mode===this.plugin.strings.item_uncle_notes){
 			if(tfile){
 				return this.get_uncles(tfile);
