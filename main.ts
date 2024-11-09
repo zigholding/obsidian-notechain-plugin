@@ -254,7 +254,7 @@ export default class NoteChainPlugin extends Plugin {
 				if(target==null){
 					return;
 				}
-				target = target.trim().replace(
+				target = target.replace(
 					/\\n/g,'\n'
 				);
 				for(let note of notes){
