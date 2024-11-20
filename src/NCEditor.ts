@@ -317,6 +317,31 @@ export class NCEditor{
 		return res;
 	}
 
-	
+	async get_current_section(){
+		let view = (this.app.workspace as any).getActiveFileView()
+		let editor = view.editor;
+		let tfile = view.file;
+		if(!view || !editor || !tfile){return null}
+		let cursor = editor.getCursor();
+		console.log('cursor',cursor)
+		let cache = this.app.metadataCache.getFileCache(tfile)
+		if(!cache){return}
+		if(!cursor){
+			let ctx = await this.app.vault.cachedRead(tfile);
+			let items = cache?.sections?.map(
+				section=>ctx.slice(section.position.start.offset,section.position.end.offset)
+			)
+			if(!items){return null}
+			let section = await this.plugin.chain.tp_suggester(items,cache.sections)
+			return section
+
+		}else{
+			console.log('sf')
+			let sections = cache?.sections?.filter(
+				x=>{return x.position.start.line<=cursor.line && x.position.end.line>=cursor.line}
+			)[0]
+			return sections
+		}
+	}
 }
 

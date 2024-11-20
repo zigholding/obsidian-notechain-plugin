@@ -9,7 +9,7 @@ import {
 import NoteChainPlugin from "../main";
 import {NCEditor} from './NCEditor';
 import {get_tp_func} from './utils';
-import {NoteContentModal} from './NCModal'
+import {NoteContentModal,NoteEditorModal} from './NCModal'
 import { strings } from './strings';
 import { off } from 'process';
 
@@ -22,16 +22,20 @@ export class NoteChain{
 	next:string;
 	editor:NCEditor;
 	children:{[key:string]:any};
+	NoteEditorModal:any
 
 	constructor(plugin:NoteChainPlugin,editor:NCEditor,prev="PrevNote",next="NextNote") {
 		this.plugin = plugin;
 		this.app = plugin.app;
 		this.editor = new NCEditor(plugin);
+		this.NoteEditorModal = NoteEditorModal
 		
 		this.prev = prev;
 		this.next = next;
 		this.init_children();
 	}
+
+
 
     async open_note_in_modal(notePath: string) {
         try {
@@ -304,22 +308,29 @@ export class NoteChain{
 		return recent
 	}
 
-	get_last_daily_note(){
+	get_last_daily_note(recent_first=true){
 		let pattern=/^\d{4}-\d{2}-\d{2}$/;
 
-		let recent = this.get_recent_tfiles()
-		for(let tfile of recent){
-			if(tfile.basename.match(pattern)){
+		if(recent_first){
+			let recent = this.get_recent_tfiles()
+			for(let tfile of recent){
+				if(tfile.basename.match(pattern)){
+					return tfile;
+				}
+			}
+		}
+		
+		let t = moment()
+		for(let i=0;i<20;i++){
+			let xt = t.clone().add(-i,'days')
+			// 库中所有文件
+			let fname = xt.format('YYYY-MM-DD');
+			let tfile = this.get_tfile(fname);
+			if(tfile){
 				return tfile;
 			}
 		}
 		
-		// 库中所有文件
-		let fname = moment().format('YYYY-MM-DD');
-		tfile = this.get_tfile(fname);
-		if(tfile){
-			return tfile;
-		}
 		let files = this.app.vault.getMarkdownFiles().filter(
 			(x:TFile)=>x.basename.match(pattern)
 		);
