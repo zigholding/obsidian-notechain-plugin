@@ -1,6 +1,7 @@
 
 import { 
-	App, Modal, Notice,MarkdownRenderer,Component
+	App, Modal, Notice,MarkdownRenderer,Component,
+    TFile
 } from 'obsidian';
 
 import NoteChainPlugin from "../main";
@@ -81,7 +82,7 @@ export class NoteEditorModal extends Modal {
 
         if (this.isEditMode) {
             // 获取文件对象
-            const file = this.app.vault.getAbstractFileByPath(this.filePath) as TFile;
+            let file = this.app.vault.getAbstractFileByPath(this.filePath) as TFile;
             if (file) {
                 // 创建一个新的工作区叶子并打开文件
                 const leaf = this.app.workspace.getLeaf(true);

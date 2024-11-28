@@ -219,7 +219,7 @@ export class NCEditor{
 		let ctx = tfile;
 		let blocks = [];
 
-		let head = await nc.editor.extract_yaml_block(ctx);
+		let head = await this.plugin.editor.extract_yaml_block(ctx);
 		if(head!=''){
 			blocks.push(['YAML',head])
 			ctx=ctx.slice(head.length)
