@@ -325,6 +325,7 @@ export class NCEditor{
 		let cursor = editor.getCursor();
 		console.log('cursor',cursor)
 		let cache = this.app.metadataCache.getFileCache(tfile)
+		console.log('cache',cache)
 		if(!cache){return}
 		if(!cursor){
 			let ctx = await this.app.vault.cachedRead(tfile);
@@ -336,7 +337,6 @@ export class NCEditor{
 			return section
 
 		}else{
-			console.log('sf')
 			let sections = cache?.sections?.filter(
 				x=>{return x.position.start.line<=cursor.line && x.position.end.line>=cursor.line}
 			)[0]

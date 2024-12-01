@@ -293,19 +293,27 @@ export class NoteChain{
 	}
 
 	get_recent_tfiles(only_md=true):Array<TFile>{
-		let recent = []
-		let files = (this.app.workspace as any).recentFileTracker?.lastOpenFiles
-		if(files  && files.length>0){
-			recent = files.map((x:string)=>this.get_tfile(x)).filter((x:TFile)=>x)
+		let recent = (this.app as any).plugins.getPlugin('recent-files-obsidian');
+		if(recent){
+			let files = recent.data.recentFiles.map(
+				(x:any)=>this.get_tfile(x.path)
+			).filter((x:any)=>x)
+			return files
+		}else{
+			let recent = []
+			let files = (this.app.workspace as any).recentFileTracker?.lastOpenFiles
+			if(files  && files.length>0){
+				recent = files.map((x:string)=>this.get_tfile(x)).filter((x:TFile)=>x)
+			}
+			let tfile = this.app.workspace.getActiveFile()
+			if(tfile){
+				recent.unshift(tfile)
+			}
+			if(only_md){
+				recent = recent.filter((x:TFile)=>x.extension=='md')
+			}
+			return recent
 		}
-		let tfile = this.app.workspace.getActiveFile()
-		if(tfile){
-			recent.unshift(tfile)
-		}
-		if(only_md){
-			recent = recent.filter((x:TFile)=>x.extension=='md')
-		}
-		return recent
 	}
 
 	get_last_daily_note(recent_first=true){
@@ -382,7 +390,7 @@ export class NoteChain{
 		return this.app.workspace.getActiveFile();
 	}
 
-	get_inlinks(tfile=this.current_note,only_md=false):Array<TFile>{
+	get_inlinks(tfile=this.current_note,only_md=true):Array<TFile>{
 		if(tfile==null){return [];}
 		let res:Array<TFile> = []
 
@@ -396,7 +404,7 @@ export class NoteChain{
 		return res;
 	}
 
-	get_outlinks(tfile=this.current_note,only_md=false):Array<TFile>{
+	get_outlinks(tfile=this.current_note,only_md=true):Array<TFile>{
 		if(tfile==null){return [];}
 
 		let mcache = this.app.metadataCache.getFileCache(tfile);
@@ -419,10 +427,18 @@ export class NoteChain{
 				}
 			}
 		}
+		if(!only_md && mcache.embeds){
+			for(let link of mcache.embeds){
+				let tfile = this.get_tfile(link.link);
+				if(tfile && !res.contains(tfile)){
+					res.push(tfile);
+				}
+			}
+		}
 		return res;
 	}
 
-	get_links(tfile=this.current_note,only_md=false){
+	get_links(tfile=this.current_note,only_md=true){
 		let inlinks = this.get_inlinks(tfile,only_md);
 		let outlinks = this.get_outlinks(tfile,only_md);
 		for(let link of inlinks){
