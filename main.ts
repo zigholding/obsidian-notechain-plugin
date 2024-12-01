@@ -195,9 +195,12 @@ export default class NoteChainPlugin extends Plugin {
 			for(let item of xfolders){
 				if(file.path.startsWith(item)){
 					return false;
+				}else if(item=='/'){
+					if(file.parent?.path=='/'){
+						return false;
+					}
 				}
 			}
-
 			if(this.explorer?.file_explorer){
 				notes = this.chain.sort_tfiles(notes,(this.explorer.file_explorer as any).sortOrder);
 				notes = this.chain.sort_tfiles(notes,'chain');

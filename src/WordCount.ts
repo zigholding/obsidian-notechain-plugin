@@ -30,6 +30,10 @@ export class WordCount{
         for(let item of xfolders){
             if(tfile.path.startsWith(item)){
                 return false;
+            }else if(item=='/'){
+                if(tfile.parent?.path=='/'){
+                    return false;
+                }
             }
         }
         return true;
