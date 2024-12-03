@@ -9,6 +9,7 @@ export interface NCSettings {
 	PrevChain:string;
 	NextChain:string;
 	auto_notechain:boolean;
+	notice_while_modify_chain:boolean;
 	refreshDataView:boolean;
 	refreshTasks:boolean,
 	isSortFileExplorer:boolean,
@@ -25,6 +26,7 @@ export const DEFAULT_SETTINGS: NCSettings = {
 	PrevChain : "10",
 	NextChain : "10",
 	auto_notechain : false,
+	notice_while_modify_chain:false,
 	refreshDataView : true,
 	refreshTasks : true,
 	isSortFileExplorer : true,
@@ -118,6 +120,16 @@ export class NCSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.auto_notechain)
 					.onChange(async (value) => {
 						this.plugin.settings.auto_notechain = value;
+						await this.plugin.saveSettings();
+					})
+				);
+
+		new Setting(containerEl)  
+				.setName(this.plugin.strings.setting_notice_while_modify_chain)
+				.addToggle(text => text
+					.setValue(this.plugin.settings.notice_while_modify_chain)
+					.onChange(async (value) => {
+						this.plugin.settings.notice_while_modify_chain = value;
 						await this.plugin.saveSettings();
 					})
 				);

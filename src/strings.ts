@@ -336,6 +336,14 @@ export class Strings{
         }
     }
 
+    get setting_notice_while_modify_chain(){
+        if(this.language=='zh'){
+            return '修改笔记链时显示通知？'
+        }else{
+            return "Notice while modify note chain?";
+        }
+    }
+
     get item_insert_suggester(){
         if(this.language=='zh'){
             return '插入模式（相对于锚点）'
