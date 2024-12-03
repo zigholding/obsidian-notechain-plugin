@@ -153,6 +153,36 @@ export default class NoteChainPlugin extends Plugin {
 						});
 					});
 				}
+				let selector = document.querySelectorAll(
+					'.tree-item-self.is-selected'
+				)
+				let items = Object.values(selector).map((x:any)=>x.dataset?.path)
+				let tfiles = items.map(x=>this.chain.get_tfile(x)).filter(x=>x.extension=='md')
+				if(tfiles.length>1){
+					menu.addItem((item) => {
+						item
+						.setTitle(this.strings.filemenu_move_as_next_notes)
+						.setIcon("hand")
+						.onClick(async () => {
+							tfiles = this.chain.sort_tfiles_by_chain(tfiles)
+							let notes = this.chain.get_all_tfiles()
+							notes = notes.filter((x:TFile)=>!tfiles.contains(x))
+							let anchor = await this.chain.sugguster_note(notes)
+							if(!anchor){return}
+							for(let tfile of tfiles){
+								if(tfile.parent.path!=anchor.parent.path){
+									let dst = anchor.parent.path+"/"+tfile.name;
+									await this.app.fileManager.renameFile(tfile,dst);
+								}
+								await this.chain.chain_pop_node(tfile)
+							}
+							tfiles.unshift(anchor)
+							let anchor_next = this.chain.get_next_note(anchor);
+							if(anchor_next){tfiles.push(anchor_next)}
+							await this.chain.chain_concat_tfiles(tfiles);
+						});
+					});
+				}
 			})
 		);
 		

@@ -199,6 +199,14 @@ export class Strings{
         }
     }
 
+    get filemenu_move_as_next_notes(){
+        if(this.language=='zh'){
+            return '移动为后置笔记（选中笔记）'
+        }else{
+            return "Move as next notes(selected)";
+        }
+    }
+
     get clear_inlinks(){
         if(this.language=='zh'){
             return '清理笔记入链'
