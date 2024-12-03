@@ -175,7 +175,7 @@ export class NoteChain{
 		return true;
 	}
 
-	async sugguster_note(notes=null){
+	async sugguster_note(notes : null | Array<TFile> = null){
 		// 从库中选择一个笔记
 		if(notes==null){
 			notes = this.sort_tfiles(
