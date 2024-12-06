@@ -71,18 +71,59 @@ export class NCEditor{
 		return flag;
 	}
 
-	get_frontmatter(tfile:TFile,key:any){
+	get_frontmatter(tfile:TFile,key:string){
 		try {
 			if(!tfile){return null;}
 			let meta = this.app.metadataCache.getFileCache(tfile);
 			if(meta?.frontmatter){
-				return meta.frontmatter[key];
+				let keys = key.split('.')
+				let cfm = meta.frontmatter
+				for(let k of keys){
+					let items =k.match(/^(.*?)(\[\d+\])?$/)
+					if(!items){return null}
+					if(items[1]){
+						cfm = cfm[items[1]]
+					}
+					if(!cfm){return null}
+					if(Array.isArray(cfm) && items[2]){
+						cfm = cfm[parseInt(items[2].slice(1,items[2].length-1))]
+					}
+				}
+				return cfm
 			}
 		} catch (error) {
 			return null;
 		}
 	}
 
+	get_vault_name(){
+		let items = (this.plugin.app.vault.adapter as any).basePath.split('\\')
+		items = items[items.length-1].split('/')
+		return items[items.length-1]
+	}
+
+	get_frontmatter_config(tfile:TFile,key:string){
+		let config = this.get_frontmatter(tfile,key)
+		if(config){return config}
+		let dir = tfile.parent
+		while(dir){
+			let cfile;
+			if(dir.parent){
+				cfile = this.plugin.chain.get_tfile(
+					dir.path+'/'+dir.name+'.md'
+				)
+			}else{
+				cfile = this.plugin.chain.get_tfile(
+					this.get_vault_name()
+				)
+			}
+			let config = this.get_frontmatter(cfile,key)
+			if(config){return config}
+			dir = dir.parent
+		}
+		return null
+
+	}
 	regexp_link(tfile:TFile,mode:string){
 		//[[note||alias]]
 		if(mode==='link'){
