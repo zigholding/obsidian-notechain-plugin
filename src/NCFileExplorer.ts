@@ -1,5 +1,5 @@
 import { 
-	App,TAbstractFile,TFile,TFolder,Vault
+	App,TAbstractFile,TFile,TFolder,Vault,CachedMetadata
 } from 'obsidian';
 
 import NoteChainPlugin from "../main";

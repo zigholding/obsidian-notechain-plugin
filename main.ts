@@ -207,12 +207,45 @@ export default class NoteChainPlugin extends Plugin {
 				'changed',(file: TFile, data: string, cache: CachedMetadata)=>{
 					clearTimeout(this.timerId);
 					this.timerId = setTimeout(()=>{
+						// 文件列表排序
 						if(file.parent){
 							this.chain.children[file.parent.path]= this.chain.sort_tfiles_by_chain(
 								file.parent.children
 							);
 						}
 						this.explorer.sort(0,false);
+
+						// 文件名称
+						if(this.settings.field_of_display_text){
+							let txt = this.explorer.get_display_text(file)
+							let items = (this.explorer.file_explorer as any).fileItems
+							items[file.path].innerEl.setText(txt)
+
+							// 如果是目录
+							if(file.parent && file.basename==file.parent.name){
+								let field = cache.frontmatter ? cache.frontmatter[this.settings.field_of_display_text] : undefined
+								if(field){
+									let prev = (file as any).note_chain_display_field
+									if(!prev || prev!=field){
+										for(let key in items){
+											let item = items[key]
+											let ppath = ''
+											if(file.parent.path=='/'){
+												ppath == ''
+											}else{
+												ppath = file.parent.path+'/'
+											}
+											if(item.file.extension=='md' && item.file.path.startsWith(ppath)){
+												let txt = this.explorer.get_display_text(item.file)
+												item.innerEl.setText(txt)
+											}
+										}
+									}
+									(file as any).note_chain_display_field = field
+								}
+							}
+						}
+
 					},500)
 			})
 		);
