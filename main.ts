@@ -69,6 +69,7 @@ export default class NoteChainPlugin extends Plugin {
 			this.app.workspace.on('file-open', this.ufunc_on_file_open.bind(this))
 		);
 
+		// 删除文件
 		this.registerEvent(this.app.vault.on(
 			"delete", async (file: TFile) => {
 				await this.chain.chain_pop_node(file);
@@ -76,6 +77,7 @@ export default class NoteChainPlugin extends Plugin {
 			}
 		));
 
+		// 创建文件
 		this.registerEvent(this.app.vault.on(
 			"create", async () => {
 				await sleep(500);
@@ -83,6 +85,7 @@ export default class NoteChainPlugin extends Plugin {
 			}
 		));
 
+		// 重命名文件
 		this.registerEvent(this.app.vault.on(
 			"rename", async (file: TFile,oldPath:string) => {
 				let oldFolder = this.app.vault.getFolderByPath(
@@ -91,6 +94,7 @@ export default class NoteChainPlugin extends Plugin {
 				oldFolder && this.chain.refresh_folder(oldFolder);
 				this.chain.refresh_tfile(file);
 				this.explorer.sort();
+				this.explorer.set_background_color_of_file(file)
 			}
 		));
 
@@ -223,7 +227,7 @@ export default class NoteChainPlugin extends Plugin {
 
 							// 如果是目录
 							if(file.parent && file.basename==file.parent.name){
-								let field = cache.frontmatter ? cache.frontmatter[this.settings.field_of_display_text] : undefined
+								let field = this.editor.get_frontmatter(file,this.settings.field_of_display_text)
 								if(field){
 									let prev = (file as any).note_chain_display_field
 									if(!prev || prev!=field){
@@ -242,6 +246,36 @@ export default class NoteChainPlugin extends Plugin {
 										}
 									}
 									(file as any).note_chain_display_field = field
+								}
+							}
+						}
+
+						// 文件颜色
+						if(this.settings.field_of_background_color){
+							let color = this.explorer.get_background_color(file)
+							let items = (this.explorer.file_explorer as any).fileItems
+							items[file.path].el.style.background = color
+							// 如果是目录
+							if(file.parent && file.basename==file.parent.name){
+								let field = this.editor.get_frontmatter(file,this.settings.field_of_background_color)
+								if(field){
+									let prev = (file as any).note_chain_bgcolor
+									if(!prev || prev!=field){
+										for(let key in items){
+											let item = items[key]
+											let ppath = ''
+											if(file.parent.path=='/'){
+												ppath == ''
+											}else{
+												ppath = file.parent.path+'/'
+											}
+											if(item.file.path.startsWith(ppath)||item.file.path==file.parent.path){
+												let color = this.explorer.get_background_color(item.file)
+												item.el.style.background = color
+											}
+										}
+									}
+									(file as any).note_chain_bgcolor = field
 								}
 							}
 						}

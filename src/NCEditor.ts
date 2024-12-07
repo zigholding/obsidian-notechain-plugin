@@ -2,6 +2,7 @@ import { time } from 'console';
 import { 
 	App, Editor, MarkdownView, Modal, Notice, 
 	Plugin, PluginSettingTab, Setting,
+	TAbstractFile,
 	TFile,TFolder
 } from 'obsidian';
 import * as internal from 'stream';
@@ -102,9 +103,18 @@ export class NCEditor{
 		return items[items.length-1]
 	}
 
-	get_frontmatter_config(tfile:TFile,key:string){
-		let config = this.get_frontmatter(tfile,key)
-		if(config){return config}
+	get_frontmatter_config(tfile:TAbstractFile,key:string){
+		if(tfile instanceof TFile){
+			let config = this.get_frontmatter(tfile,key)
+			if(config){return config}
+		}else{
+			let file = this.plugin.chain.get_tfile(tfile.path+'/'+tfile.name+'.md')
+			if(file){
+				let config = this.get_frontmatter(file,key)
+				if(config){return config}
+			}
+		}
+		
 		let dir = tfile.parent
 		while(dir){
 			let cfile;

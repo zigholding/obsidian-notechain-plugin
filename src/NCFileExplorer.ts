@@ -114,6 +114,7 @@ export class NCFileExplorer{
 		
 		this.sort(0,true);
 		this.set_display_text()
+		this.set_background_color()
 	}
 
 	unregister(){
@@ -209,6 +210,37 @@ export class NCFileExplorer{
 				let txt = this.get_display_text(item.file)
 				item.innerEl.setText(txt)
 			}
+		}
+	}
+
+	get_background_color(tfile:TAbstractFile):string|null|undefined{
+		if(this.plugin.settings.field_of_background_color){
+			let color = this.plugin.editor.get_frontmatter_config(tfile,this.plugin.settings.field_of_background_color)
+			if(!color){
+				return null
+			}else if(typeof(color)!='string'){
+				return null
+			}else{
+				return color
+			}
+		}
+		return null
+	}
+
+	set_background_color(){
+		let items = (this.file_explorer as any).fileItems
+		for(let key in items){
+			let item = items[key]
+			let color = this.get_background_color(item.file)
+			item.el.style.background = color
+		}
+	}
+
+	set_background_color_of_file(tfile:TAbstractFile){
+		let color = this.get_background_color(tfile)
+		let items = (this.file_explorer as any).fileItems
+		if(items[tfile.path]){
+			items[tfile.path].el.style.background = color
 		}
 	}
 }

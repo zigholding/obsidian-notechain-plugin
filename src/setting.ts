@@ -7,6 +7,7 @@ import NoteChainPlugin from '../main';
 
 export interface NCSettings {
 	field_of_display_text:string;
+	field_of_background_color:string;
 	PrevChain:string;
 	NextChain:string;
 	auto_notechain:boolean;
@@ -27,6 +28,7 @@ export const DEFAULT_SETTINGS: NCSettings = {
 	PrevChain : "10",
 	NextChain : "10",
 	field_of_display_text: '',
+	field_of_background_color:'',
 	auto_notechain : false,
 	notice_while_modify_chain:false,
 	refreshDataView : true,
@@ -135,6 +137,18 @@ export class NCSettingTab extends PluginSettingTab {
 						this.plugin.explorer.set_display_text()
 						await this.plugin.saveSettings();
 					}));
+
+
+		new Setting(containerEl)
+					.setName(this.plugin.strings.setting_field_of_background_color)
+					.addText(text => text
+						.setValue(this.plugin.settings.field_of_background_color)
+						.onChange(async (value) => {
+							this.plugin.settings.field_of_background_color = value;
+							this.plugin.explorer.set_background_color()
+							await this.plugin.saveSettings();
+						}));
+
 
 		new Setting(containerEl)  
 				.setName(this.plugin.strings.setting_notice_while_modify_chain)

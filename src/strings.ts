@@ -361,6 +361,14 @@ export class Strings{
         }
     }
 
+    get setting_field_of_background_color(){
+        if(this.language=='zh'){
+            return '文件列表背景色'
+        }else{
+            return "Background color for notes in file-explorer?";
+        }
+    }
+
 
     get item_insert_suggester(){
         if(this.language=='zh'){
