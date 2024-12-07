@@ -149,7 +149,7 @@ export class NCFileExplorer{
 		}	
 	}
 
-	get_field_of_display_text(tfile:TFile):string{
+	get_field_of_display_text(tfile:TAbstractFile):string{
 		if(this.plugin.settings.field_of_display_text){
 			let item =  this.plugin.editor.get_frontmatter_config(tfile,this.plugin.settings.field_of_display_text)
 			if(typeof(item) != 'string'){
@@ -160,23 +160,8 @@ export class NCFileExplorer{
 		return ''
 	}
 
-	get_item(tfile:TFile,field:string){
-		let fields = field.split('|')
-		for(let f of fields){
-			if(f=='$0'){
-				return tfile.basename
-			}
-			let s = this.plugin.editor.get_frontmatter(tfile,f)
-			if(typeof(s)!='string' || s==''){
-				continue
-			}
-			return s
-		}
-		return ''
-	}
-
-	get_display_text(tfile:TFile) {
-		function get_origin_text(tfile:TFile){
+	get_origin_text(tfile:TAbstractFile){
+		if(tfile instanceof TFile){
 			if(tfile.extension=='md'){
 				return tfile.basename
 			}else if(tfile.extension=='canvas'){
@@ -184,11 +169,34 @@ export class NCFileExplorer{
 			}else{
 				return tfile.name
 			}
+		}else{
+			return tfile.name
 		}
+	}
 
+	get_item(tfile:TAbstractFile,field:string){
+		let fields = field.split('|')
+		for(let f of fields){
+			if(f=='$0'){
+				return this.get_origin_text(tfile)
+			}
+			if(tfile instanceof TFile){
+				let s = this.plugin.editor.get_frontmatter(tfile,f)
+				if(typeof(s)!='string' || s==''){
+					continue
+				}
+				return s
+			}else{
+				return ''
+			}
+		}
+		return ''
+	}
+
+	get_display_text(tfile:TAbstractFile) {
 		let str = this.get_field_of_display_text(tfile)
 		if(!str || str=='$0' || str=='{$0}'){
-			return get_origin_text(tfile)
+			return this.get_origin_text(tfile)
 		}
 	  
 		let mstr = str.replace(/\{(.+?)?\}/g, (match:string, field:string) => {
@@ -196,7 +204,7 @@ export class NCFileExplorer{
 		})
 		mstr = mstr.trim()
 		if(mstr==''){
-			return tfile.basename
+			return this.get_origin_text(tfile)
 		}else{
 			return mstr
 		}
