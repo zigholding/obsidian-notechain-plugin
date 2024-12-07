@@ -326,7 +326,7 @@ export class Strings{
             return "Register daily word count?";
         }
     }
-
+    
     get setting_avata(){
         if(this.language=='zh'){
             return '头像'
@@ -351,6 +351,16 @@ export class Strings{
             return "Notice while modify note chain?";
         }
     }
+
+
+    get setting_field_of_display_text(){
+        if(this.language=='zh'){
+            return '文件列表显示文件名'
+        }else{
+            return "Display text for notes in file-explorer?";
+        }
+    }
+
 
     get item_insert_suggester(){
         if(this.language=='zh'){

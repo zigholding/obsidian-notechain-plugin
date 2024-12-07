@@ -80,7 +80,6 @@ export class NCFileExplorer{
 		this.register();
 	}
 
-
 	register(){
 		this.app.workspace.onLayoutReady(()=>{
 			let folder = (this.app.vault as any).getAllFolders()[0];
@@ -132,6 +131,71 @@ export class NCFileExplorer{
 				(this.file_explorer as any).sort();
 			}
 		}	
+	}
+
+	get_field_of_display_text(tfile:TFile):string{
+		if(this.plugin.settings.field_of_display_text){
+			let item =  this.plugin.editor.get_frontmatter_config(tfile,this.plugin.settings.field_of_display_text)
+			if(typeof(item) != 'string'){
+				return ''
+			}
+			return item
+		}
+		return ''
+	}
+
+	get_item(tfile:TFile,field:string){
+		let fields = field.split('|')
+		console.log(fields)
+		for(let f of fields){
+			if(f=='$0'){
+				return tfile.basename
+			}
+			let s = this.plugin.editor.get_frontmatter(tfile,f)
+			if(typeof(s)!='string' || s==''){
+				continue
+			}
+			return s
+		}
+		return ''
+	}
+
+	get_display_text(tfile:TFile) {
+		function get_origin_text(tfile:TFile){
+			if(tfile.extension=='md'){
+				return tfile.basename
+			}else if(tfile.extension=='canvas'){
+				return tfile.basename
+			}else{
+				return tfile.name
+			}
+		}
+
+		let str = this.get_field_of_display_text(tfile)
+		if(!str || str=='$0' || str=='{$0}'){
+			return get_origin_text(tfile)
+		}
+	  
+		let mstr = str.replace(/\{(.+?)?\}/g, (match:string, field:string) => {
+			return this.get_item(tfile,field)
+		})
+		mstr = mstr.trim()
+		if(mstr==''){
+			return tfile.basename
+		}else{
+			return mstr
+		}
+	}
+
+	set_display_text(){
+		let items = (this.file_explorer as any).fileItems
+		for(let key in items){
+			let item = items[key]
+			if(item.file.extension=='md'){
+				let txt = this.get_display_text(item.file)
+				item.innerEl.setText(txt)
+			}
+		}
 	}
 }
 
