@@ -182,7 +182,9 @@ export class NCFileExplorer{
 			}
 			if(tfile instanceof TFile){
 				let s = this.plugin.editor.get_frontmatter(tfile,f)
-				if(typeof(s)!='string' || s==''){
+				if(typeof s === 'number'){
+					return `${s}`
+				}else if(typeof(s)!='string' || s==''){
 					continue
 				}
 				return s

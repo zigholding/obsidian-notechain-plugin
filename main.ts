@@ -232,27 +232,25 @@ export default class NoteChainPlugin extends Plugin {
 							}
 
 							// 如果是目录
-							if(file.parent && file.basename==file.parent.name){
+							if((file.parent && file.basename==file.parent.name) || (file.parent && file.parent.path=='/')){
 								let field = this.editor.get_frontmatter(file,this.settings.field_of_display_text)
-								if(field){
-									let prev = (file as any).note_chain_display_field
-									if(!prev || prev!=field){
-										for(let key in items){
-											let item = items[key]
-											let ppath = ''
-											if(file.parent.path=='/'){
-												ppath == ''
-											}else{
-												ppath = file.parent.path+'/'
-											}
-											if(item.file.path.startsWith(ppath)||item.file.path==file.parent.path){
-												let txt = this.explorer.get_display_text(item.file)
-												item.innerEl.setText(txt)
-											}
+								let prev = (file as any).note_chain_display_field
+								if(!prev || prev!=field){
+									for(let key in items){
+										let item = items[key]
+										let ppath = ''
+										if(file.parent.path=='/'){
+											ppath == ''
+										}else{
+											ppath = file.parent.path+'/'
+										}
+										if(item.file.path.startsWith(ppath)||item.file.path==file.parent.path){
+											let txt = this.explorer.get_display_text(item.file)
+											item.innerEl.setText(txt)
 										}
 									}
-									(file as any).note_chain_display_field = field
 								}
+								(file as any).note_chain_display_field = field
 							}
 						}
 
@@ -268,27 +266,25 @@ export default class NoteChainPlugin extends Plugin {
 							}
 
 							// 如果是目录
-							if(file.parent && file.basename==file.parent.name){
+							if((file.parent && file.basename==file.parent.name) || (file.parent && file.parent.path=='/')){
 								let field = this.editor.get_frontmatter(file,this.settings.field_of_background_color)
-								if(field){
-									let prev = (file as any).note_chain_bgcolor
-									if(!prev || prev!=field){
-										for(let key in items){
-											let item = items[key]
-											let ppath = ''
-											if(file.parent.path=='/'){
-												ppath == ''
-											}else{
-												ppath = file.parent.path+'/'
-											}
-											if(item.file.path.startsWith(ppath)||item.file.path==file.parent.path){
-												let color = this.explorer.get_background_color(item.file)
-												item.el.style.background = color
-											}
+								let prev = (file as any).note_chain_bgcolor
+								if(!prev || prev!=field){
+									for(let key in items){
+										let item = items[key]
+										let ppath = ''
+										if(file.parent.path=='/'){
+											ppath == ''
+										}else{
+											ppath = file.parent.path+'/'
+										}
+										if(item.file.path.startsWith(ppath)||item.file.path==file.parent.path){
+											let color = this.explorer.get_background_color(item.file)
+											item.el.style.background = color
 										}
 									}
-									(file as any).note_chain_bgcolor = field
 								}
+								(file as any).note_chain_bgcolor = field
 							}
 						}
 
