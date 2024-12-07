@@ -332,7 +332,7 @@ export class MermaidGraph{
 		let items:{[key:string]:string} = {}
 		for(let cfile of tfiles){
 			let cgroup = nc.editor.get_frontmatter(cfile,name)
-			if(cgroup){
+			if(cgroup && Array.isArray(cgroup)){
 				for(let cg of cgroup){
 					let tmp = cg.split('/');
 					if(tmp[0]==group_name){
@@ -359,7 +359,7 @@ export class MermaidGraph{
 
 		
 		let group = nc.editor.get_frontmatter(anchor,name);
-		if(!group){return [];}
+		if(!group||!Array.isArray(group)){return [];}
 		let res:Array<string> = [];
 		for(let g of group){
 			g = g.split('/')[0]
@@ -473,7 +473,7 @@ export class MermaidGraph{
 		for (let currentFile of tfiles) {
 			let src = `[[${currentFile.basename}]]`
 			let links = nc.editor.get_frontmatter(currentFile, key);
-			if (links) {
+			if (links && Array.isArray(links)) {
 				for(let link of links){
 					if(link['edge']!=null && link['node']!=null){
 						let cedge = link['edge'];
