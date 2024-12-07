@@ -81,21 +81,10 @@ export class NCFileExplorer{
 	}
 
 	register(){
-		this.app.workspace.onLayoutReady(()=>{
-			let folder = (this.app.vault as any).getAllFolders()[0];
-			// let dom = (this.file_explorer as any).createFolderDom(folder).constructor;
-			// this._FolderDom_ = dom;
-			// this.org_sort = dom.prototype.sort;
-			// this.new_sort = chain_sort(this.org_sort);
-			// this._FolderDom_.prototype.sort = this.new_sort;
-
-			this.getSortedFolderItems = this.file_explorer.constructor.prototype.getSortedFolderItems;
-			this.getSortedFolderItems_new = getSortedFolderItems(this.getSortedFolderItems);
-			this.file_explorer.constructor.prototype.getSortedFolderItems = this.getSortedFolderItems_new;
-
-
-			this.sort(0,true);
-		})
+		this.getSortedFolderItems = this.file_explorer.constructor.prototype.getSortedFolderItems;
+		this.getSortedFolderItems_new = getSortedFolderItems(this.getSortedFolderItems);
+		this.file_explorer.constructor.prototype.getSortedFolderItems = this.getSortedFolderItems_new;
+		this.sort(0,true);
 	}
 
 	unregister(){
@@ -198,6 +187,3 @@ export class NCFileExplorer{
 		}
 	}
 }
-
-
-	

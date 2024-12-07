@@ -32,60 +32,22 @@ export default class NoteChainPlugin extends Plugin {
 	timerId:any;
 	ob:any;
 
-	waiting_for_read(): Promise<void> {
-		let nc = this;
-		let app = this.app;
-		nc.status = '';
-		let t0 = moment();
-	
-		return new Promise<void>((resolve) => {
-			let intervalId = setInterval(() => {
-				let t1 = moment();
-				
-				// 超时处理
-				if ((t1.valueOf() - t0.valueOf()) > 5 * 1000) {
-					nc.status = 'timeout';
-					console.log('Operation timed out.');
-					clearInterval(intervalId);
-					resolve();
-					return;
-				}
-	
-				// 检查 layoutReady 状态
-				if (!app.workspace.layoutReady) {
-					console.log('workspace.layoutReady is not ready');
-					clearInterval(intervalId);
-					resolve();
-					return;
-				}
-	
-				// 检查 file-explorer view
-				let view = app.workspace.getLeavesOfType("file-explorer")[0]?.view;
-				if (!view) {
-					console.log('file-explorer is not ready');
-					clearInterval(intervalId);
-					resolve();
-					return;
-				}
-	
-				// 条件都满足后，完成操作
-				console.log('workspace.layoutReady and file-explorer are ready');
-				clearInterval(intervalId);
-				resolve();
-			}, 100); // 每 100 毫秒检查一次
-		});
-	}
-	
-	
-
 	async onload() {
-		this.debug=true;
-		// await this.waiting_for_read()
-		// console.log('layoutReady:',this.app.workspace.layoutReady)
-		if(this.status=='timeout'){
-			new Notice('NoteChain: Timeout')
-			return
+		this.status = 'waiting'
+		if(this.app.workspace.layoutReady){
+			await this._onload_()
+		}else{
+			this.app.workspace.onLayoutReady(
+				async()=>{
+					await this._onload_()
+				}
+			)
 		}
+	}
+
+	async _onload_() {
+		this.status = 'loading'
+		this.debug=true;
 		await this.loadSettings();
 		
 		this.utils = require('./src/utils');
@@ -255,6 +217,7 @@ export default class NoteChainPlugin extends Plugin {
 			})
 		);
 		this.wordcout = new WordCount(this,this.app);
+		this.status = 'loaded'
 	}
 
 
