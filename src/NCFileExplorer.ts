@@ -63,14 +63,30 @@ let getSortedFolderItems = function(org_sort:Function) {
 	}
 }
 
+let getTtitle = function(org_getTtile:Function) {
+	let plugin = (this.app as any).plugins.getPlugin('note-chain');
+	return function(e:any){
+		if(plugin){
+			try{
+				let res = plugin.explorer.get_display_text(this.file)
+				return res;
+			}catch(e){
+				return org_getTtile.call(this);
+			}
+		}else{
+			return org_getTtile.call(this);
+		}
+	}
+}
+
 export class NCFileExplorer{
 	plugin:NoteChainPlugin;
 	app:App;
 	chain:NoteChain;
-	org_sort:Function;
-	new_sort:Function;
 	getSortedFolderItems:Function;
 	getSortedFolderItems_new:Function;
+	getTitle:Function;
+	getTitle_new:Function;
 	_FolderDom_:any;
 
 	constructor(plugin:NoteChainPlugin){
@@ -84,13 +100,23 @@ export class NCFileExplorer{
 		this.getSortedFolderItems = this.file_explorer.constructor.prototype.getSortedFolderItems;
 		this.getSortedFolderItems_new = getSortedFolderItems(this.getSortedFolderItems);
 		this.file_explorer.constructor.prototype.getSortedFolderItems = this.getSortedFolderItems_new;
+
+
+		let item = (this.file_explorer as any).fileItems[
+			this.plugin.chain.get_all_tfiles()[0].path
+		]
+
+		if(item){
+			this.getTitle = item.constructor.prototype.getTitle
+			this.getTitle_new = getTtitle(this.getTitle)
+			item.constructor.prototype.getTitle = this.getTitle_new
+		}
+		
 		this.sort(0,true);
+		this.set_display_text()
 	}
 
 	unregister(){
-		if(this.org_sort){
-			this._FolderDom_.prototype.sort = this.org_sort;
-		}
 		if(this.getSortedFolderItems){
 			this.file_explorer.constructor.prototype.getSortedFolderItems = this.getSortedFolderItems;
 		}
@@ -135,7 +161,6 @@ export class NCFileExplorer{
 
 	get_item(tfile:TFile,field:string){
 		let fields = field.split('|')
-		console.log(fields)
 		for(let f of fields){
 			if(f=='$0'){
 				return tfile.basename
