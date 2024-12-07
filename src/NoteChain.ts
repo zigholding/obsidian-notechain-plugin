@@ -551,14 +551,15 @@ export class NoteChain{
 		let msg = this.plugin.editor.get_frontmatter(
 			fnote,"FolderPrevNote"
 		);
-		if(!msg){return -1;}
-		let anchor = this.get_tfile(msg);
+		if(!msg||typeof(msg)!='string'){return -1;}
+		let anchor = this.get_tfile(msg)
 		if(!anchor){return -1;}
 		let idx = tfiles.indexOf(anchor);
 		let offset = this.plugin.editor.get_frontmatter(
 			fnote,"FolderPrevNoteOffset"
 		);
-		if(offset){
+
+		if(typeof(offset)=='string'){
 			idx = idx + parseFloat(offset);
 		}else{
 			idx = idx + 0.5;
@@ -648,8 +649,17 @@ export class NoteChain{
 		if((tfile as any).deleted){
 			let tfiles = this.app.vault.getMarkdownFiles();
 			
-			tfiles.filter(f=>`[[${tfile.basename}]]`===this.plugin.editor.get_frontmatter(f,"NextNote"))
-			tfiles = tfiles.filter(f=>`[[${tfile.basename}]]`===this.editor.get_frontmatter(f,this.next));
+			tfiles = tfiles.filter(f=>{
+				if(!f){
+					return false
+				}
+				let next = this.editor.get_frontmatter(f,this.next)
+				if(typeof(next)!='string'){
+					return false
+				}
+				return `[[${tfile.basename}]]`== next
+			})
+
 			if(tfiles.length>0){
 				return tfiles[0];
 			}else{
@@ -657,8 +667,7 @@ export class NoteChain{
 			}
 		}else{
 			let name = this.editor.get_frontmatter(tfile,this.prev);
-			if(!name){return null;}
-
+			if(!name||typeof(name)!='string'){return null;}
 			let note = this.get_tfile(name);
 			return note?note:null;
 		}
@@ -673,7 +682,17 @@ export class NoteChain{
 		if(!tfile){return null;}
 		if((tfile as any).deleted){
 			let tfiles = this.app.vault.getMarkdownFiles();
-			tfiles = tfiles.filter(f=>`[[${tfile.basename}]]`===this.editor.get_frontmatter(f,this.prev));
+			let prev = 
+			tfiles = tfiles.filter(f=>{
+				if(!f){
+					return false
+				}
+				let prev = this.editor.get_frontmatter(f,this.prev)
+				if(typeof(prev)!='string'){
+					return false
+				}
+				return `[[${tfile.basename}]]`== prev
+			});
 			if(tfiles.length>0){
 				return tfiles[0];
 			}else{
@@ -681,8 +700,7 @@ export class NoteChain{
 			}
 		}else{
 			let name = this.editor.get_frontmatter(tfile,this.next);
-			if(!name){return null;}
-
+			if(!name||typeof(name)!='string'){return null;}
 			let note = this.get_tfile(name);
 			return note?note:null;
 		}
@@ -707,9 +725,6 @@ export class NoteChain{
 			if(!note){
 				break;
 			}else if(res.includes(note)){
-				// // 每次自动删除循环链接
-				// this.editor.set_frontmatter(note,this.next,"");
-				// this.editor.set_frontmatter(tmp,this.prev,"");
 				break;
 			}else{
 				res.unshift(note);
@@ -723,9 +738,6 @@ export class NoteChain{
 			if(!note){
 				break;
 			}else if(res.includes(note)){
-				// // 每次自动删除循环链接
-				// this.editor.set_frontmatter(note,this.prev,"");
-				// this.editor.set_frontmatter(tmp,this.next,"");
 				break;
 			}else{
 				res.push(note);
@@ -1026,7 +1038,17 @@ export class NoteChain{
 			(a,b)=>{
 				let av = this.editor.get_frontmatter(a,field);
 				let bv = this.editor.get_frontmatter(b,field);
-				return av - bv;
+				if(typeof(av)!=typeof(bv)){
+					return 0
+				}
+				if(typeof(av)=='number' && typeof(bv)=='number'){
+					return av - bv;
+				}
+				if(typeof(av)=='string' && typeof(bv)=='string'){
+					let v = (av as string).localeCompare(bv as string)
+					return v
+				}
+				return 0
 			}
 		)
 		return res;

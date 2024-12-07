@@ -234,7 +234,6 @@ export default class NoteChainPlugin extends Plugin {
 							// 如果是目录
 							if(file.parent && file.basename==file.parent.name){
 								let field = this.editor.get_frontmatter(file,this.settings.field_of_display_text)
-								console.log('field?',field)
 								if(field){
 									let prev = (file as any).note_chain_display_field
 									if(!prev || prev!=field){
