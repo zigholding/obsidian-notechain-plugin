@@ -206,10 +206,8 @@ export class NCFileExplorer{
 		let items = (this.file_explorer as any).fileItems
 		for(let key in items){
 			let item = items[key]
-			if(item.file.extension=='md'){
-				let txt = this.get_display_text(item.file)
-				item.innerEl.setText(txt)
-			}
+			let txt = this.get_display_text(item.file)
+			item.innerEl.setText(txt)
 		}
 	}
 

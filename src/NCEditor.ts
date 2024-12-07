@@ -105,8 +105,19 @@ export class NCEditor{
 
 	get_frontmatter_config(tfile:TAbstractFile,key:string){
 		if(tfile instanceof TFile){
-			let config = this.get_frontmatter(tfile,key)
-			if(config){return config}
+			if(tfile.extension=='md'){
+				let config = this.get_frontmatter(tfile,key)
+				if(config){return config}
+			}else{
+				let file = this.plugin.chain.get_tfile(
+					tfile.path.slice(0,tfile.path.length-tfile.extension.length)+'md'
+				)
+				if(file){
+					let config = this.get_frontmatter(file,key)
+					if(config){return config}
+				}
+			}
+			
 		}else{
 			let file = this.plugin.chain.get_tfile(tfile.path+'/'+tfile.name+'.md')
 			if(file){

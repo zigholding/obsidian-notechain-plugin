@@ -225,9 +225,16 @@ export default class NoteChainPlugin extends Plugin {
 							let items = (this.explorer.file_explorer as any).fileItems
 							items[file.path].innerEl.setText(txt)
 
+							let canvas = items[file.path.slice(0,file.path.length-2)+'canvas']
+							if(canvas){
+								let txt = this.explorer.get_display_text(canvas.file)
+								canvas.innerEl.setText(txt)
+							}
+
 							// 如果是目录
 							if(file.parent && file.basename==file.parent.name){
 								let field = this.editor.get_frontmatter(file,this.settings.field_of_display_text)
+								console.log('field?',field)
 								if(field){
 									let prev = (file as any).note_chain_display_field
 									if(!prev || prev!=field){
@@ -239,7 +246,7 @@ export default class NoteChainPlugin extends Plugin {
 											}else{
 												ppath = file.parent.path+'/'
 											}
-											if(item.file.extension=='md' && item.file.path.startsWith(ppath)){
+											if(item.file.path.startsWith(ppath)){
 												let txt = this.explorer.get_display_text(item.file)
 												item.innerEl.setText(txt)
 											}
@@ -255,6 +262,12 @@ export default class NoteChainPlugin extends Plugin {
 							let color = this.explorer.get_background_color(file)
 							let items = (this.explorer.file_explorer as any).fileItems
 							items[file.path].el.style.background = color
+
+							let canvas = items[file.path.slice(0,file.path.length-2)+'canvas']
+							if(canvas){
+								canvas.el.style.background = color
+							}
+
 							// 如果是目录
 							if(file.parent && file.basename==file.parent.name){
 								let field = this.editor.get_frontmatter(file,this.settings.field_of_background_color)
