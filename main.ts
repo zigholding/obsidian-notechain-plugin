@@ -245,7 +245,7 @@ export default class NoteChainPlugin extends Plugin {
 											}else{
 												ppath = file.parent.path+'/'
 											}
-											if(item.file.path.startsWith(ppath)){
+											if(item.file.path.startsWith(ppath)||item.file.path==file.parent.path){
 												let txt = this.explorer.get_display_text(item.file)
 												item.innerEl.setText(txt)
 											}
