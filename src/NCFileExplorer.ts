@@ -117,9 +117,16 @@ export class NCFileExplorer{
 		this.set_background_color()
 	}
 
-	unregister(){
+	async unregister(){
 		if(this.getSortedFolderItems){
 			this.file_explorer.constructor.prototype.getSortedFolderItems = this.getSortedFolderItems;
+		}
+
+		let items = (this.file_explorer as any).fileItems
+		for(let key in items){
+			let item = items[key]
+			await this._set_display_text_(item,this.get_origin_text(item.file))
+			item.el.style.background = null
 		}
 	}
 
@@ -175,28 +182,40 @@ export class NCFileExplorer{
 	}
 
 	get_item(tfile:TAbstractFile,field:string){
+		if(!field){return ''}
 		let fields = field.split('|')
+		let item = ''
 		for(let f of fields){
 			if(f=='$0'){
 				return this.get_origin_text(tfile)
 			}
+			if(f.startsWith('?')){
+				break
+			}
 			if(tfile instanceof TFile){
 				let s = this.plugin.editor.get_frontmatter(tfile,f)
 				if(typeof s === 'number'){
-					return `${s}`
+					item = `${s}`
 				}else if(typeof(s)!='string' || s==''){
 					continue
 				}
-				return s
-			}else{
-				return ''
+				item = s
+				break
 			}
 		}
-		return ''
+		if(fields.last()?.startsWith('?') && item){
+			return fields.last()?.slice(1).replace(/\$1/g,item)  || ''
+		}
+		return item
 	}
 
-	get_display_text(tfile:TAbstractFile) {
+	async get_display_text(tfile:TAbstractFile) {
 		let str = this.get_field_of_display_text(tfile)
+		let func = this.plugin.utils.get_str_func(this.app,str)
+		if(func){
+			return func
+		}
+		
 		if(!str || str=='$0' || str=='{$0}'){
 			return this.get_origin_text(tfile)
 		}
@@ -204,7 +223,7 @@ export class NCFileExplorer{
 		let mstr = str.replace(/\{(.+?)?\}/g, (match:string, field:string) => {
 			return this.get_item(tfile,field)
 		})
-		mstr = mstr.trim()
+		mstr = mstr
 		if(mstr==''){
 			return this.get_origin_text(tfile)
 		}else{
@@ -212,12 +231,25 @@ export class NCFileExplorer{
 		}
 	}
 
-	set_display_text(){
+	async _set_display_text_(item:any,txt:any){
+		if(item && txt){
+			if(typeof(txt)=='string'){
+				item.innerEl.setText(txt)
+			}else if(typeof(txt)=='function'){
+				let tmp = await txt(item.file)
+				if(tmp){
+					item.innerEl.setText(tmp)		
+				}
+			}
+			// console.log(item.file.path,'-->',txt)
+		}
+	}
+	async set_display_text(){
 		let items = (this.file_explorer as any).fileItems
 		for(let key in items){
 			let item = items[key]
-			let txt = this.get_display_text(item.file)
-			item.innerEl.setText(txt)
+			let txt = await this.get_display_text(item.file)
+			await this._set_display_text_(item,txt)
 		}
 	}
 

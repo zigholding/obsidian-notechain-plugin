@@ -78,7 +78,9 @@ export function get_tp_func(app:App,target:string) {
 export async function get_tp_user_func(app:App,target:string) {
 	// 获取  templater 函数
 	// get_tp_func("tp.system.prompt")
-
+    if(!target.match(/^tp\.user\.\w+$/)){
+        return null
+    }
 	let templater = (app as any).plugins.getPlugin(
 		"templater-obsidian"
 	);
@@ -93,6 +95,41 @@ export async function get_tp_user_func(app:App,target:string) {
         generate_user_script_functions();
     return funcs.get(items[2])
 }
+
+export async function get_customjs_func(target:string) {
+	// 获取  templater 函数
+	// get_tp_func("tp.system.prompt")
+    if(!target.match(/^(cJS|customJS|customjs|customJs)(\.\w+)+$/)){
+        return null
+    }
+    let items = target.split('.')
+    if(window.hasOwnProperty('cJS')){
+        let cJS = (window as any)['cJS']
+        let tmp = await cJS()
+        for(let field of items.slice(1)){
+            tmp = tmp[field]
+            if(!tmp){
+                return null
+            }
+        }
+        return tmp
+    }
+}
+
+export async function get_str_func(app:App,target:string) {
+
+    let ufunc = await get_tp_func(app,target)
+    if(ufunc){return ufunc}
+
+    ufunc = await get_tp_user_func(app,target)
+    if(ufunc){return ufunc}
+
+    ufunc = await get_customjs_func(target)
+    if(ufunc){return ufunc}
+
+    return null
+}
+
 
 async function templater$1(app:App,template:string, active_file:TFile, target_file:TFile) {
 	const config = {
