@@ -363,9 +363,9 @@ export class Strings{
 
     get setting_field_of_background_color(){
         if(this.language=='zh'){
-            return '文件列表背景色'
+            return '文件列表元素风格'
         }else{
-            return "Background color for notes in file-explorer?";
+            return "File-item style for notes in file-explorer?";
         }
     }
 

@@ -94,7 +94,7 @@ export default class NoteChainPlugin extends Plugin {
 				oldFolder && this.chain.refresh_folder(oldFolder);
 				this.chain.refresh_tfile(file);
 				this.explorer.sort();
-				this.explorer.set_background_color_of_file(file)
+				this.explorer.set_fileitem_style_of_file(file)
 			}
 		));
 
@@ -253,13 +253,13 @@ export default class NoteChainPlugin extends Plugin {
 
 						// 文件颜色
 						if(this.settings.field_of_background_color){
-							let color = this.explorer.get_background_color(file)
+							let style = await this.explorer.get_fileitem_style(file)
+							await this.explorer.set_fileitem_style_of_file(file,style)
 							let items = (this.explorer.file_explorer as any).fileItems
-							items[file.path].el.style.background = color
 
 							let canvas = items[file.path.slice(0,file.path.length-2)+'canvas']
 							if(canvas){
-								canvas.el.style.background = color
+								await this.explorer.set_fileitem_style_of_file(canvas.file,style)
 							}
 
 							// 如果是目录
@@ -276,8 +276,8 @@ export default class NoteChainPlugin extends Plugin {
 											ppath = file.parent.path+'/'
 										}
 										if(item.file.path.startsWith(ppath)||item.file.path==file.parent.path){
-											let color = this.explorer.get_background_color(item.file)
-											item.el.style.background = color
+											let style = await this.explorer.get_fileitem_style(item.file)
+											await this.explorer.set_fileitem_style_of_file(item.file,style)
 										}
 									}
 								}

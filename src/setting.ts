@@ -145,7 +145,7 @@ export class NCSettingTab extends PluginSettingTab {
 						.setValue(this.plugin.settings.field_of_background_color)
 						.onChange(async (value) => {
 							this.plugin.settings.field_of_background_color = value;
-							this.plugin.explorer.set_background_color()
+							this.plugin.explorer.set_fileitem_style()
 							await this.plugin.saveSettings();
 						}));
 

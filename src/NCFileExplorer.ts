@@ -4,6 +4,7 @@ import {
 
 import NoteChainPlugin from "../main";
 import {NoteChain} from "./NoteChain";
+import { symlink } from 'fs';
 
 
 let chain_sort = function(org_sort:Function) {
@@ -114,7 +115,7 @@ export class NCFileExplorer{
 		
 		this.sort(0,true);
 		this.set_display_text()
-		this.set_background_color()
+		this.set_fileitem_style()
 	}
 
 	async unregister(){
@@ -127,6 +128,7 @@ export class NCFileExplorer{
 			let item = items[key]
 			await this._set_display_text_(item,this.get_origin_text(item.file))
 			item.el.style.background = null
+			item.el.style.border = null
 		}
 	}
 
@@ -211,7 +213,7 @@ export class NCFileExplorer{
 
 	async get_display_text(tfile:TAbstractFile) {
 		let str = this.get_field_of_display_text(tfile)
-		let func = this.plugin.utils.get_str_func(this.app,str)
+		let func = await this.plugin.utils.get_str_func(this.app,str)
 		if(func){
 			return func
 		}
@@ -241,7 +243,6 @@ export class NCFileExplorer{
 					item.innerEl.setText(tmp)		
 				}
 			}
-			// console.log(item.file.path,'-->',txt)
 		}
 	}
 	async set_display_text(){
@@ -253,34 +254,51 @@ export class NCFileExplorer{
 		}
 	}
 
-	get_background_color(tfile:TAbstractFile):string|null|undefined{
+	async get_fileitem_style(tfile:TAbstractFile){
 		if(this.plugin.settings.field_of_background_color){
-			let color = this.plugin.editor.get_frontmatter_config(tfile,this.plugin.settings.field_of_background_color)
-			if(!color){
-				return null
-			}else if(typeof(color)!='string'){
-				return null
-			}else{
-				return color
+			let style = this.plugin.editor.get_frontmatter_config(tfile,this.plugin.settings.field_of_background_color)
+			if(typeof(style)=='string'){
+				let func = await this.plugin.utils.get_str_func(this.app,style)
+				if(func){
+					return func
+				}
 			}
+			return style
 		}
 		return null
 	}
 
-	set_background_color(){
+	async set_fileitem_style(){
 		let items = (this.file_explorer as any).fileItems
 		for(let key in items){
 			let item = items[key]
-			let color = this.get_background_color(item.file)
-			item.el.style.background = color
+			let style = await this.get_fileitem_style(item.file)
+			await this.set_fileitem_style_of_file(item.file,style)
 		}
 	}
 
-	set_background_color_of_file(tfile:TAbstractFile){
-		let color = this.get_background_color(tfile)
+	async set_fileitem_style_of_file(tfile:TAbstractFile,style=null){
+		if(!tfile){return}
+		if(!style){
+			style = await this.get_fileitem_style(tfile)
+		}
 		let items = (this.file_explorer as any).fileItems
-		if(items[tfile.path]){
-			items[tfile.path].el.style.background = color
+		let item = items[tfile.path]
+		if(item){
+			if(typeof(style)=='function'){
+				style = await (style as any)(tfile)
+			}
+			if(style==null){
+				return
+			}else if (typeof(style)=='string'){
+				item.el.style.background = style
+			}else if(typeof(style)=='object'){
+				for(let k in (style as any)){
+					(item as any).el.style[k] = (style as any)[k]
+				}
+			}else if(typeof(style)=='function'){
+				await (style as any)(tfile)
+			}
 		}
 	}
 }
