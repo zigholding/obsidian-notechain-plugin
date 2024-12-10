@@ -211,18 +211,14 @@ export class NCFileExplorer{
 		return item
 	}
 
-	async get_display_text(tfile:TAbstractFile) {
+	get_display_text(tfile:TAbstractFile) {
 		let str = this.get_field_of_display_text(tfile)
-		let func = await this.plugin.utils.get_str_func(this.app,str)
-		if(func){
-			return func
-		}
 		
 		if(!str || str=='$0' || str=='{$0}'){
 			return this.get_origin_text(tfile)
 		}
 	  
-		let mstr = str.replace(/\{(.+?)?\}/g, (match:string, field:string) => {
+		let mstr = str.replace(/\<(.+?)?\>/g, (match:string, field:string) => {
 			return this.get_item(tfile,field)
 		})
 		mstr = mstr
@@ -233,24 +229,19 @@ export class NCFileExplorer{
 		}
 	}
 
-	async _set_display_text_(item:any,txt:any){
+	_set_display_text_(item:any,txt:any){
 		if(item && txt){
 			if(typeof(txt)=='string'){
 				item.innerEl.setText(txt)
-			}else if(typeof(txt)=='function'){
-				let tmp = await txt(item.file)
-				if(tmp){
-					item.innerEl.setText(tmp)		
-				}
 			}
 		}
 	}
-	async set_display_text(){
+	set_display_text(){
 		let items = (this.file_explorer as any).fileItems
 		for(let key in items){
 			let item = items[key]
-			let txt = await this.get_display_text(item.file)
-			await this._set_display_text_(item,txt)
+			let txt = this.get_display_text(item.file)
+			this._set_display_text_(item,txt)
 		}
 	}
 

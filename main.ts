@@ -221,12 +221,12 @@ export default class NoteChainPlugin extends Plugin {
 
 						// 文件名称
 						if(this.settings.field_of_display_text){
-							let txt = await this.explorer.get_display_text(file)
+							let txt = this.explorer.get_display_text(file)
 							let items = (this.explorer.file_explorer as any).fileItems
-							await this.explorer._set_display_text_(items[file.path],txt)
+							this.explorer._set_display_text_(items[file.path],txt)
 
 							let canvas = items[file.path.slice(0,file.path.length-2)+'canvas']
-							await this.explorer._set_display_text_(canvas,txt)
+							this.explorer._set_display_text_(canvas,txt)
 
 							// 如果是目录
 							if((file.parent && file.basename==file.parent.name) || (file.parent && file.parent.path=='/')){
@@ -242,8 +242,8 @@ export default class NoteChainPlugin extends Plugin {
 											ppath = file.parent.path+'/'
 										}
 										if(item.file.path.startsWith(ppath)||item.file.path==file.parent.path){
-											let txt = await this.explorer.get_display_text(item.file)
-											await this.explorer._set_display_text_(item,txt)
+											let txt = this.explorer.get_display_text(item.file)
+											this.explorer._set_display_text_(item,txt)
 										}
 									}
 								}
