@@ -278,9 +278,13 @@ export class NCFileExplorer{
 		if(item){
 			if(typeof(style)=='function'){
 				style = await (style as any)(tfile)
+				if(!style){
+					return
+				}
 			}
 			if(style==null){
-				return
+				item.el.style.background = null
+				item.el.style.border = null
 			}else if (typeof(style)=='string'){
 				item.el.style.background = style
 			}else if(typeof(style)=='object'){

@@ -27,8 +27,8 @@ export interface NCSettings {
 export const DEFAULT_SETTINGS: NCSettings = {
 	PrevChain : "10",
 	NextChain : "10",
-	field_of_display_text: '',
-	field_of_background_color:'',
+	field_of_display_text: 'notechain.display',
+	field_of_background_color:'notechain.style',
 	auto_notechain : false,
 	notice_while_modify_chain:false,
 	refreshDataView : true,
