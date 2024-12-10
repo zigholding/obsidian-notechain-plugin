@@ -390,6 +390,26 @@ export class NoteChain{
 		return this.app.workspace.getActiveFile();
 	}
 
+	get_selected_files(current_if_no_selected=true){
+		let selector = document.querySelectorAll(
+		  ".tree-item-self.is-selected"
+		);
+		let items = Object.values(selector).map((x:any) => {
+		  var _a;
+		  return (_a = x.dataset) == null ? void 0 : _a.path;
+		});
+		let tfiles = items.map(
+			(x) => this.get_tfile(x)).filter((x) => x.extension == "md"
+		)
+		if(tfiles.length>0){
+			return tfiles
+		}else if(current_if_no_selected && this.current_note){
+			return [this.current_note]
+		}else{
+			return []
+		}
+	}
+
 	get_inlinks(tfile=this.current_note,only_md=true):Array<TFile>{
 		if(tfile==null){return [];}
 		let res:Array<TFile> = []

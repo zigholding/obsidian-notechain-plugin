@@ -209,8 +209,10 @@ export default class NoteChainPlugin extends Plugin {
 		this.registerEvent(
 			this.app.metadataCache.on(
 				'changed',async (file: TFile, data: string, cache: CachedMetadata)=>{
-					clearTimeout(this.timerId);
-					this.timerId = setTimeout(async ()=>{
+					if(file==this.chain.current_note){
+						clearTimeout(this.timerId);
+					}
+					let timerId = setTimeout(async ()=>{
 						// 文件列表排序
 						if(file.parent){
 							this.chain.children[file.parent.path]= this.chain.sort_tfiles_by_chain(
@@ -286,6 +288,10 @@ export default class NoteChainPlugin extends Plugin {
 						}
 
 					},500)
+					if(file==this.chain.current_note){
+						this.timerId = this.timerId
+					}
+					
 			})
 		);
 		this.wordcout = new WordCount(this,this.app);
