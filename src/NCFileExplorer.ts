@@ -186,7 +186,7 @@ export class NCFileExplorer{
 	get_item(tfile:TAbstractFile,field:string){
 		if(!field){return ''}
 		let fields = field.split('|')
-		let item = ''
+		let item:any = ''
 		for(let f of fields){
 			if(f=='$0'){
 				return this.get_origin_text(tfile)
