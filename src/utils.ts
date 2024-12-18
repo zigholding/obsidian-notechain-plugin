@@ -131,7 +131,7 @@ export async function get_str_func(app:App,target:string) {
 }
 
 
-async function templater$1(app:App,template:string, active_file:TFile, target_file:TFile) {
+export async function templater$1(app:App,template:string, active_file:TFile, target_file:TFile) {
 	const config = {
 		template_file: template,
 		active_file: active_file,

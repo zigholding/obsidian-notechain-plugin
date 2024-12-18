@@ -181,6 +181,13 @@ export class Strings{
         }
     }
     
+    get cmd_set_frontmatter(){
+        if(this.language=='zh'){
+            return '所选笔记设置属性'
+        }else{
+            return "Set fronmatter for selected notes";
+        }
+    }
 
 
     get filemenu_create_next_note(){

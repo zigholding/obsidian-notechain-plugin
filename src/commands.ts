@@ -481,6 +481,50 @@ const cmd_toogle_css_block_in_note = (plugin: NoteChainPlugin) => ({
     }
 });
 
+const cmd_set_frontmatter = (plugin: NoteChainPlugin) => ({
+    id: 'cmd_set_frontmatter',
+    name: plugin.strings.cmd_set_frontmatter,
+    callback: async () => {
+		let files = plugin.chain.get_selected_files(true)
+		if(files.length==0){return}
+		let field = await plugin.chain.tp_prompt('Frontmatter name')
+		if(!field){return}
+		let prev = plugin.editor.get_frontmatter(files[0],field)
+		if(prev){
+			if(Array.isArray(prev)){
+				prev = prev.map(x=>x.toString()).join('\n')
+			}else{
+				prev = prev.toString()
+			}
+		}else{
+			prev = ''
+		}
+		let api = (plugin.app as any).plugins.plugins['quickadd'].api
+		let value;
+		if(api){
+			value = await api.wideInputPrompt(
+				'Frontmatter value', // 标题，默认为空
+				'', // 提示词，默认为空
+				prev
+			)
+			if(!value){return}
+		}else{
+			value = await plugin.chain.tp_prompt('Frontmatter value',prev)
+			value = value.trim()
+			if(!value){return}
+			
+		}
+		value = value.replace(/\\n/g,'\n').replace(/\\t/g,'\t')
+		value = value.split('\n')
+		if(value.length==1){
+			value = value[0]
+		}
+		for(let tfile of files){
+			await plugin.editor.set_frontmatter(tfile,field,value)
+		}
+    }
+});
+
 
 const commandBuilders = [
 	cmd_open_note,
@@ -507,7 +551,8 @@ const commandBuilders = [
 	cmd_mermaid_flowchart_folder,
 	cmd_mermaid_flowchart_auto,
 	cmd_execute_template_modal,
-	cmd_toogle_css_block_in_note
+	cmd_toogle_css_block_in_note,
+	cmd_set_frontmatter
 ];
 
 const commandBuildersDesktop = [

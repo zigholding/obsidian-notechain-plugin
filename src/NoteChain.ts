@@ -1177,7 +1177,7 @@ export class NoteChain{
 			}
 		}
 		if(inlinks){
-	        let links = this.get_inlinks();
+	        let links = this.get_inlinks(tfile,false);
 	        for(let i of links){
 	            if(onlymd&& !(i.extension==='md')){continue;}
 				if(i.extension==='md'){
@@ -1188,7 +1188,7 @@ export class NoteChain{
 	        }
 	    }
 	    if(outlinks){
-	        let links = this.get_outlinks();
+	        let links = this.get_outlinks(tfile,false);
 	        for(let i of links){
 	            if(onlymd&& !(i.extension==='md')){continue;}
 				if(i.extension==='md'){
