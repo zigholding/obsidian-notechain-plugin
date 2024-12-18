@@ -20,7 +20,7 @@ export class NCEditor{
 		this.nretry=100;
 	}
 
-	async set_frontmatter(tfile:TFile,key:string,value:any,nretry=this.nretry){
+	async set_frontmatter(tfile:TFile|string|Array<TFile|string>,key:string,value:any,nretry=this.nretry){
 		let kv:{[key:string]:string} = {};
 		kv[key] = value;
 		let flag = await this.set_multi_frontmatter(tfile,kv,nretry);
@@ -124,7 +124,19 @@ export class NCEditor{
 		}
 	}
 
-	async set_multi_frontmatter(tfile:TFile,kv:{[key:string]:any},nretry=this.nretry):Promise<boolean>{
+	async set_multi_frontmatter(tfile:TFile|string|Array<TFile|string>,kv:{[key:string]:any},nretry=this.nretry):Promise<boolean>{
+		if(Array.isArray(tfile)){
+			for(let item of tfile){
+				this.set_multi_frontmatter(item,kv,nretry)
+			}
+			return true
+		}
+		if(typeof(tfile)=='string'){
+			tfile = this.plugin.chain.get_tfile(tfile)
+		}
+		if(!tfile || !(tfile instanceof TFile)){
+			return false
+		}
 		let flag = this.check_frontmatter(tfile,kv);
 		while(!flag && nretry>0){
 			await this.app.fileManager.processFrontMatter(tfile, (fm) =>{
