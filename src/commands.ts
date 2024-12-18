@@ -502,11 +502,20 @@ const cmd_set_frontmatter = (plugin: NoteChainPlugin) => ({
 		let api = (plugin.app as any).plugins.plugins['quickadd'].api
 		let value;
 		if(api){
-			value = await api.wideInputPrompt(
-				'Frontmatter value', // 标题，默认为空
-				'', // 提示词，默认为空
-				prev
-			)
+			if((plugin.app as any).isMobile){
+				value = await api.inputPrompt(
+					'Frontmatter value', // 标题，默认为空
+					'', // 提示词，默认为空
+					prev
+				)
+			}else{
+				value = await api.wideInputPrompt(
+					'Frontmatter value', // 标题，默认为空
+					'', // 提示词，默认为空
+					prev
+				)
+			}
+			
 			if(!value){return}
 		}else{
 			value = await plugin.chain.tp_prompt('Frontmatter value',prev)
