@@ -137,7 +137,10 @@ export class NCEditor{
 		if(!tfile || !(tfile instanceof TFile)){
 			return false
 		}
-		let flag = this.check_frontmatter(tfile,kv);
+		let flag= false
+		if(nretry>1){
+			flag = this.check_frontmatter(tfile,kv);
+		}
 		while(!flag && nretry>0){
 			await this.app.fileManager.processFrontMatter(tfile, (fm) =>{
 				for(let k in kv){

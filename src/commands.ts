@@ -499,37 +499,25 @@ const cmd_set_frontmatter = (plugin: NoteChainPlugin) => ({
 		}else{
 			prev = ''
 		}
-		let api = (plugin.app as any).plugins.plugins['quickadd'].api
-		let value;
-		if(api){
-			if((plugin.app as any).isMobile){
-				value = await api.inputPrompt(
-					'Frontmatter value', // 标题，默认为空
-					'', // 提示词，默认为空
-					prev
-				)
-			}else{
-				value = await api.wideInputPrompt(
-					'Frontmatter value', // 标题，默认为空
-					'', // 提示词，默认为空
-					prev
-				)
-			}
-			
-			if(!value){return}
-		}else{
-			value = await plugin.chain.tp_prompt('Frontmatter value',prev)
-			value = value.trim()
-			if(!value){return}
-			
-		}
+		let value = await plugin.chain.tp_prompt('Frontmatter value',prev)
+		value = value.trim()
+		if(!value){return}
 		value = value.replace(/\\n/g,'\n').replace(/\\t/g,'\t')
 		value = value.split('\n')
+		value = value.map((x:string)=>{
+			if(x.match(/^-?\d+$/)){
+				return parseInt(x)
+			}else if(x.match(/^-?\d+(\.\d*)?$/)){
+				return parseFloat(x)
+			}else{
+				return x
+			}
+		})
 		if(value.length==1){
 			value = value[0]
 		}
 		for(let tfile of files){
-			await plugin.editor.set_frontmatter(tfile,field,value)
+			await plugin.editor.set_frontmatter(tfile,field,value,1)
 		}
     }
 });
