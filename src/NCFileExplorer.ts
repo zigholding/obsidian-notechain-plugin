@@ -97,25 +97,29 @@ export class NCFileExplorer{
 		this.register();
 	}
 
-	register(){
+	async register(){
+		await this.waitForFileExplorer()
 		this.getSortedFolderItems = this.file_explorer.constructor.prototype.getSortedFolderItems;
 		this.getSortedFolderItems_new = getSortedFolderItems(this.getSortedFolderItems);
 		this.file_explorer.constructor.prototype.getSortedFolderItems = this.getSortedFolderItems_new;
-
-
-		let item = (this.file_explorer as any).fileItems[
-			this.plugin.chain.get_all_tfiles()[0].path
-		]
-
-		if(item){
-			this.getTitle = item.constructor.prototype.getTitle
-			this.getTitle_new = getTtitle(this.getTitle)
-			item.constructor.prototype.getTitle = this.getTitle_new
+		try {
+			let item = (this.file_explorer as any).fileItems[
+				this.plugin.chain.get_all_tfiles()[0].path
+			]
+	
+			if(item){
+				this.getTitle = item.constructor.prototype.getTitle
+				this.getTitle_new = getTtitle(this.getTitle)
+				item.constructor.prototype.getTitle = this.getTitle_new
+			}
+			
+			this.sort(0,true);
+			this.set_display_text()
+			this.set_fileitem_style()
+			
+		} catch (error) {
+			
 		}
-		
-		this.sort(0,true);
-		this.set_display_text()
-		this.set_fileitem_style()
 	}
 
 	async unregister(){
@@ -132,10 +136,19 @@ export class NCFileExplorer{
 		}
 	}
 
+	async waitForFileExplorer() {
+
+		while (!(this.file_explorer as any).fileItems) {
+		  await new Promise(resolve => setTimeout(resolve, 100)); // 等待100ms再检查
+		}
+		return (this.file_explorer as any).fileItems
+	  }
+
 	get file_explorer(){
-		let view = this.app.workspace.getLeavesOfType(
+		let a = this.app.workspace.getLeavesOfType(
 			"file-explorer"
-		)[0]?.view;
+		)
+		let view = a[0]?.view;
 		return view;
 	}
 	
