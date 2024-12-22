@@ -36,13 +36,30 @@ export default class NoteChainPlugin extends Plugin {
 		this.status = 'waiting'
 		if(this.app.workspace.layoutReady){
 			await this._onload_()
+			this._after_loading_()
 		}else{
 			this.app.workspace.onLayoutReady(
 				async()=>{
-					await this._onload_()
+					await this._onload_();
+					this._after_loading_()
 				}
 			)
 		}
+	}
+
+	async _after_loading_() {
+		while (!(this.app as any).plugins?.plugins['note-chain']) {
+			await new Promise(resolve => setTimeout(resolve, 100)); // 等待100ms再检查
+		}
+
+		(this.app as any).commands.executeCommandById(
+			"dataview:dataview-force-refresh-views"
+		);
+
+		let target = await (this.app as any).plugins.getPlugin("obsidian-tasks-plugin");
+		target && target.cache.notifySubscribers();
+		//new Notice('Note Chain is ready!',3000)
+		return (this.app as any).plugins?.plugins['note-chain']
 	}
 
 	async _onload_() {

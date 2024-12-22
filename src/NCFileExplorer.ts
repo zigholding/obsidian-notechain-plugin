@@ -137,12 +137,11 @@ export class NCFileExplorer{
 	}
 
 	async waitForFileExplorer() {
-
 		while (!(this.file_explorer as any).fileItems) {
-		  await new Promise(resolve => setTimeout(resolve, 100)); // 等待100ms再检查
+			await new Promise(resolve => setTimeout(resolve, 100)); // 等待100ms再检查
 		}
 		return (this.file_explorer as any).fileItems
-	  }
+	}
 
 	get file_explorer(){
 		let a = this.app.workspace.getLeavesOfType(
