@@ -259,6 +259,7 @@ const cmd_reveal_note = (plugin:NoteChainPlugin) => ({
 				let xtop = panel.scrollTop+((itemEl as any).offsetTop-(panel.scrollTop+panel.clientHeight/2))
 				panel.scrollTo({ top: xtop, behavior: 'smooth' });
 			}
+			await (plugin.app as any).commands.executeCommandById('file-explorer:open')
 		}
 	}
 });

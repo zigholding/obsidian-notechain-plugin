@@ -27,7 +27,12 @@ export class NoteChain{
 	constructor(plugin:NoteChainPlugin,editor:NCEditor,prev="PrevNote",next="NextNote") {
 		this.plugin = plugin;
 		this.app = plugin.app;
-		this.editor = new NCEditor(plugin);
+		if(editor){
+			this.editor = editor;
+		}else{
+			this.editor = new NCEditor(plugin);
+		}
+		
 		this.NoteEditorModal = NoteEditorModal
 		
 		this.prev = prev;
