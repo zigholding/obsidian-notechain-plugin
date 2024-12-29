@@ -522,6 +522,61 @@ const cmd_set_frontmatter = (plugin: NoteChainPlugin) => ({
     }
 });
 
+const cmd_move_next_level = (plugin: NoteChainPlugin) => ({
+    id: 'move_next_level',
+    name: plugin.strings.cmd_move_next_level,
+	hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'L' }],
+	icon: 'arrow-right-from-line',
+    callback: async () => {
+		let key = plugin.settings.field_of_confluence_tab_format
+		if(!key){return}
+		let tfiles = plugin.chain.get_selected_files()
+		for(let tfile of tfiles){
+			let level = plugin.editor.get_frontmatter(tfile,key)
+			if(!level){
+				await plugin.editor.set_frontmatter(tfile,key,"\t",1)
+			}else{
+				await plugin.editor.set_frontmatter(tfile,key,level+"\t",1)
+			}
+		}
+    }
+});
+
+const cmd_move_none_level = (plugin: NoteChainPlugin) => ({
+    id: 'move_none_level',
+    name: plugin.strings.cmd_move_none_level,
+	hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'K' }],
+	icon:'align-justify',
+    callback: async () => {
+		let key = plugin.settings.field_of_confluence_tab_format
+		if(!key){return}
+		let tfiles = plugin.chain.get_selected_files()
+		for(let tfile of tfiles){
+			let level = plugin.editor.get_frontmatter(tfile,key)
+			if(level){
+				await plugin.editor.set_frontmatter(tfile,key,"",1)
+			}
+		}
+    }
+});
+
+const cmd_move_prev_level = (plugin: NoteChainPlugin) => ({
+    id: 'move_prev_level',
+    name: plugin.strings.cmd_move_prev_level,
+	hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'J' }],
+	icon:'arrow-right-from-line',
+    callback: async () => {
+		let key = plugin.settings.field_of_confluence_tab_format
+		if(!key){return}
+		let tfiles = plugin.chain.get_selected_files()
+		for(let tfile of tfiles){
+			let level = plugin.editor.get_frontmatter(tfile,key)
+			if(level){
+				await plugin.editor.set_frontmatter(tfile,key,level.slice(1),1)
+			}
+		}
+    }
+});
 
 const commandBuilders = [
 	cmd_open_note,
@@ -549,7 +604,10 @@ const commandBuilders = [
 	cmd_mermaid_flowchart_auto,
 	cmd_execute_template_modal,
 	cmd_toogle_css_block_in_note,
-	cmd_set_frontmatter
+	cmd_set_frontmatter,
+	cmd_move_next_level,
+	cmd_move_none_level,
+	cmd_move_prev_level,
 ];
 
 const commandBuildersDesktop = [

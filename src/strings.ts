@@ -189,6 +189,30 @@ export class Strings{
         }
     }
 
+    get cmd_move_next_level(){
+        if(this.language=='zh'){
+            return '提高缩进层级'
+        }else{
+            return "Increase the indentation level";
+        }
+    }
+
+    get cmd_move_none_level(){
+        if(this.language=='zh'){
+            return '删除缩进层级'
+        }else{
+            return "Remove the indentation level";
+        }
+    }
+
+    get cmd_move_prev_level(){
+        if(this.language=='zh'){
+            return '降低缩进层级'
+        }else{
+            return "Decrease the indentation level";
+        }
+    }
+
 
     get filemenu_create_next_note(){
         if(this.language=='zh'){
@@ -365,6 +389,14 @@ export class Strings{
             return '文件列表显示文件名'
         }else{
             return "Display text for notes in file-explorer?";
+        }
+    }
+
+    get setting_confluence_tab_format(){
+        if(this.language=='zh'){
+            return '使用Confluence缩进格式'
+        }else{
+            return "Use confluence indentation format";
         }
     }
 

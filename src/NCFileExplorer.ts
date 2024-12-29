@@ -225,8 +225,15 @@ export class NCFileExplorer{
 
 	get_display_text(tfile:TAbstractFile) {
 		let str = this.get_field_of_display_text(tfile)
+
 		
-		if(!str || str=='$0' || str=='{$0}'){
+		if(!str && this.plugin.settings.field_of_confluence_tab_format){
+			str = `<${this.plugin.settings.field_of_confluence_tab_format}><$0>`
+		}else{
+			str = `<${this.plugin.settings.field_of_confluence_tab_format}>${str}`
+		}
+		
+		if(!str || str=='$0' || str=='<$0>'){
 			return this.get_origin_text(tfile)
 		}
 	  
