@@ -15,6 +15,8 @@ import { WordCount } from 'src/WordCount';
 import { MermaidGraph,CanvasGraph } from 'src/graph';
 import { NCSettingTab,NCSettings,DEFAULT_SETTINGS } from 'src/setting';
 import { addCommands } from 'src/commands';
+import {dialog_suggest} from 'src/gui/inputSuggester'
+import {dialog_prompt} from 'src/gui/inputPrompt'
 
 
 export default class NoteChainPlugin extends Plugin {
@@ -31,20 +33,20 @@ export default class NoteChainPlugin extends Plugin {
 	utils:any;
 	timerId:any;
 	ob:any;
+	dialog_suggest: Function
+	dialog_prompt: Function
+
 
 	async onload() {
+		this.dialog_suggest = dialog_suggest
+		this.dialog_prompt = dialog_prompt
 		this.status = 'waiting'
-		if(this.app.workspace.layoutReady){
-			await this._onload_()
-			this._after_loading_()
-		}else{
-			this.app.workspace.onLayoutReady(
-				async()=>{
-					await this._onload_();
-					this._after_loading_()
-				}
-			)
-		}
+		this.app.workspace.onLayoutReady(
+			async()=>{
+				await this._onload_();
+				this._after_loading_()
+			}
+		)
 	}
 
 	async _after_loading_() {
