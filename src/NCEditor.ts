@@ -484,7 +484,7 @@ export class NCEditor{
 				section=>ctx.slice(section.position.start.offset,section.position.end.offset)
 			)
 			if(!items){return null}
-			let section = await this.plugin.chain.tp_suggester(items,cache.sections)
+			let section = await this.plugin.dialog_suggest(items,cache.sections)
 			return section
 
 		}else{

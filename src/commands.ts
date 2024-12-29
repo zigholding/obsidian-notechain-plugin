@@ -20,7 +20,7 @@ const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 				let ignoredFiles = plugin.utils.concat_array(fm.longform.ignoredFiles);
 				ignoredFiles = ignoredFiles.filter((f:string)=>!scenes.contains(f));
 				let notes = plugin.utils.concat_array([scenes,ignoredFiles]);
-				notes = notes.map((f:string)=>plugin.chain.tp_find_tfile(f));
+				notes = notes.map((f:string)=>plugin.chain.get_tfile(f));
 				if(curr.parent==null){return};
 				let tfiles = plugin.chain.get_tfiles_of_folder(curr.parent).filter((f:any)=>!notes.contains(f));
 				notes = plugin.utils.concat_array([tfiles,notes]);
@@ -42,11 +42,10 @@ const cmd_longform4notechain = (plugin:NoteChainPlugin) => ({
 		let path = curr.parent.path+'/'+curr.parent.name+'.md';
 		let dst = await nc.chain.get_tfile(path);
 		if(dst==null){
-			let ufunc = nc.utils.get_tp_func(nc.app,'tp.file.create_new');
-			dst = await ufunc(
-				'',curr.parent.name,
-				false,curr.parent
-			);
+			dst = await plugin.app.vault.create(
+				curr.parent.path+'/'+curr.parent.name+'.md', 
+				''
+			)
 		}
 
 		await nc.app.fileManager.processFrontMatter(
@@ -210,25 +209,23 @@ const create_new_note = (plugin:NoteChainPlugin) => ({
 		targets[plugin.strings.item_chain_insert_node_as_head] = 'chain_insert_node_as_head';
 		targets[plugin.strings.item_item_chain_insert_null] = 'null';
 
-		let target = await plugin.chain.tp_suggester(
+		let target = await plugin.dialog_suggest(
 			plugin.utils.array_prefix_id(Object.keys(targets)), 
 			Object.values(targets), 
 			true
 		);
 		if(!target){return;}
-		let name = await plugin.chain.tp_prompt(plugin.strings.prompt_notename);
+		let name = await plugin.dialog_prompt(plugin.strings.prompt_notename);
 		if(name){
 			let curr = plugin.chain.current_note;
 			if(curr && curr.parent){
 				let path = curr.parent.path+'/'+name+'.md';
 				let dst = await plugin.chain.get_tfile(path);
 				if(dst==null){
-					let func = plugin.utils.get_tp_func(plugin.app,'tp.file.create_new')
-					dst = await func(
-						'',name,
-						false,curr.parent
-					);
-					await sleep(300);
+					dst = await plugin.app.vault.create(
+						curr.parent.path+'/'+name+'.md',
+						''
+					)
 					if(!(target==='null')){
 						await (plugin.chain as any)[target](dst,curr);
 					}
@@ -331,7 +328,7 @@ const cmd_file_open_with_system_app = (plugin:NoteChainPlugin) => ({
 			let items = await nc.chain.get_file_links(tfile);
 
 			let keys = Object.keys(items);
-			let key = await nc.chain.tp_suggester(
+			let key = await nc.dialog_suggest(
 				nc.utils.array_prefix_id(keys),
 				keys
 			)
@@ -355,7 +352,7 @@ const cmd_file_show_in_system_explorer = (plugin:NoteChainPlugin) => ({
 		if(tfile){
 			let items = await nc.chain.get_file_links(tfile);
 			let keys = Object.keys(items);
-			let key = await nc.chain.tp_suggester(
+			let key = await nc.dialog_suggest(
 				nc.utils.array_prefix_id(keys),
 				keys
 			)
@@ -398,14 +395,14 @@ const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 
 			let keys = Object.keys(items);
 			
-			let key = await nc.chain.tp_suggester(
+			let key = await nc.dialog_suggest(
 				nc.utils.array_prefix_id(keys),
 				keys,
 			)
 
 			if(key){
 				let note = items[key];
-				let res = await nc.chain.tp_prompt('New Name',note.basename);
+				let res = await nc.dialog_prompt('New Name',note.basename);
 				if(res && !(res===note.basename) && !(res==='')){
 					let npath = note.parent.path+'/'+res+'.'+note.extension;
 					let dst = nc.chain.get_tfile(res+'.'+note.extension);
@@ -488,7 +485,7 @@ const cmd_set_frontmatter = (plugin: NoteChainPlugin) => ({
     callback: async () => {
 		let files = plugin.chain.get_selected_files(true)
 		if(files.length==0){return}
-		let field = await plugin.chain.tp_prompt('Frontmatter name')
+		let field = await plugin.dialog_prompt('Frontmatter name')
 		if(!field){return}
 		let prev = plugin.editor.get_frontmatter(files[0],field)
 		if(prev){
@@ -500,7 +497,7 @@ const cmd_set_frontmatter = (plugin: NoteChainPlugin) => ({
 		}else{
 			prev = ''
 		}
-		let value = await plugin.chain.tp_prompt('Frontmatter value',prev)
+		let value = await plugin.dialog_prompt('Frontmatter value',prev)
 		value = value.trim()
 		if(!value){return}
 		value = value.replace(/\\n/g,'\n').replace(/\\t/g,'\t')

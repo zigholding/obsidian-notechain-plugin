@@ -61,7 +61,7 @@ export function get_tp_func(app:App,target:string) {
 	let templater = (app as any).plugins.getPlugin(
 		"templater-obsidian"
 	);
-
+    if(!templater){return null}
 	let items = target.split(".");
 	if(items[0].localeCompare("tp")!=0 || items.length!=3){return undefined;}
 	
@@ -84,6 +84,7 @@ export async function get_tp_user_func(app:App,target:string) {
 	let templater = (app as any).plugins.getPlugin(
 		"templater-obsidian"
 	);
+    if(!templater){return null}
 
 	let items = target.split(".");
 	if(items[0].localeCompare("tp")!=0 || items[1].localeCompare("user")!=0 || items.length!=3){return undefined;}

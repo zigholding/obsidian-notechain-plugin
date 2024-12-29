@@ -149,7 +149,7 @@ export class NoteChain{
 			folders = folders.filter((f:TFile)=>this.filter_user_ignore(f));
 		}
 		try {
-			let folder = await this.tp_suggester(
+			let folder = await this.plugin.dialog_suggest(
 				this.plugin.utils.array_prefix_id(
 					folders.map((f:TFile)=>f.path)
 				),folders
@@ -190,7 +190,7 @@ export class NoteChain{
 		}
 		try {
 			let msg = this.plugin.utils.array_prefix_id((notes as any).map((f:TFile)=>f.path));
-			let note = await this.tp_suggester(msg,notes);
+			let note = await this.plugin.dialog_suggest(msg,notes);
 			return note;
 		} catch (error) {
 			return null;
@@ -571,7 +571,7 @@ export class NoteChain{
 	}
 
 	indexOfFolder(tfile:TFolder,tfiles:Array<TFile>){
-		let fnote = this.tp_find_tfile(tfile.name+'.md');
+		let fnote = this.get_tfile(tfile.name+'.md');
 		if(!fnote){return -1;}
 		let msg = this.plugin.editor.get_frontmatter(
 			fnote,"FolderPrevNote"
@@ -632,7 +632,7 @@ export class NoteChain{
 		if(kv.contains(smode)){
 			mode = smode;
 		}else{
-			mode = await this.tp_suggester(this.plugin.utils.array_prefix_id(kv),kv);
+			mode = await this.plugin.dialog_suggest(this.plugin.utils.array_prefix_id(kv),kv);
 		}
 		if(mode===this.plugin.strings.item_currentnote){
 			return [tfile];
@@ -1091,7 +1091,7 @@ export class NoteChain{
 			'ctime (new to old)':['ctime','x'],
 			'mtime (new to old)':['mtime','x'],
 		}
-		let field = await this.tp_suggester(
+		let field = await this.plugin.dialog_suggest(
 			Object.keys(kv),
 			Object.values(kv)
 		);

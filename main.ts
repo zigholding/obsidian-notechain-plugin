@@ -125,7 +125,7 @@ export default class NoteChainPlugin extends Plugin {
 						.setTitle(this.strings.filemenu_create_next_note)
 						.setIcon("file-plus")
 						.onClick(async () => {
-							let filename = await this.chain.tp_prompt('File name');
+							let filename = await this.dialog_prompt('File name');
 							if(!filename){return}
 							let dst = file.parent?file.parent.path + '/' + filename+'.md':filename+'.md';
 							if(this.chain.get_tfile(dst)){
@@ -392,13 +392,13 @@ export default class NoteChainPlugin extends Plugin {
 		let notes = await this.chain.suggester_notes();
 		if(notes?.length>0){
 			try {
-				let regs = await this.chain.tp_prompt('Enter the regular expression to replace.');
+				let regs = await this.dialog_prompt('Enter the regular expression to replace.');
 				if(regs==null){
 					return;
 				}
 				let reg = new RegExp(regs,'g');
 				
-				let target = await this.chain.tp_prompt('Enter the target string.');
+				let target = await this.dialog_prompt('Enter the target string.');
 				if(target==null){
 					return;
 				}
