@@ -34,7 +34,7 @@ export default class InputSuggester extends FuzzySuggestModal<string> {
 	private rejectPromise: (reason?: unknown) => void;
 	public promise: Promise<string>;
 	private resolved: boolean;
-	private new_value: boolean;
+	public new_value: boolean;
 	inputEl: any;
 
 	public static Suggest(
@@ -42,14 +42,14 @@ export default class InputSuggester extends FuzzySuggestModal<string> {
 		displayItems: string[],
 		items: string[],
 		options: Partial<Options> = {},
-		new_value=false
+		new_value:boolean=false
 	) {
 		const newSuggester = new InputSuggester(
 			app,
 			displayItems,
 			items,
 			options,
-			new_value,
+			new_value
 		);
 		return newSuggester.promise;
 	}
@@ -59,7 +59,7 @@ export default class InputSuggester extends FuzzySuggestModal<string> {
 		private displayItems: string[],
 		private items: string[],
 		options: Partial<Options> = {},
-		new_value:false
+		new_value: boolean = false
 	) {
 		super(app);
 		this.new_value = new_value
