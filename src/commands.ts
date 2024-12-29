@@ -245,6 +245,7 @@ const cmd_reveal_note = (plugin:NoteChainPlugin) => ({
 		let nc = plugin;
 		let note = nc.chain.current_note;
 		if(note){
+			await (plugin.app as any).commands.executeCommandById('file-explorer:open')
 			await (nc.explorer.file_explorer as any).tree.setCollapseAll(true);
 			await (nc.explorer.file_explorer as any).revealInFolder(note);
 			await sleep(100);
@@ -256,7 +257,6 @@ const cmd_reveal_note = (plugin:NoteChainPlugin) => ({
 				let xtop = panel.scrollTop+((itemEl as any).offsetTop-(panel.scrollTop+panel.clientHeight/2))
 				panel.scrollTo({ top: xtop, behavior: 'smooth' });
 			}
-			await (plugin.app as any).commands.executeCommandById('file-explorer:open')
 		}
 	}
 });
@@ -402,7 +402,7 @@ const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 
 			if(key){
 				let note = items[key];
-				let res = await nc.dialog_prompt('New Name',note.basename);
+				let res = await nc.dialog_prompt('New Name','',note.basename);
 				if(res && !(res===note.basename) && !(res==='')){
 					let npath = note.parent.path+'/'+res+'.'+note.extension;
 					let dst = nc.chain.get_tfile(res+'.'+note.extension);
@@ -452,14 +452,16 @@ const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
 		if(!tpl){return}
 
 		let folder = plugin.app.vault.getFolderByPath(tpl.settings.templates_folder);
+		let slice = 0
 		let tfiles;
 		if(folder){
+			slice = folder.path.length+1
 			tfiles = plugin.chain.get_tfiles_of_folder(folder,true)
 			tfiles = plugin.chain.sort_tfiles_by_chain(tfiles)
 		}else{
 			tfiles = plugin.chain.get_all_tfiles()
 		}
-		let tfile = await plugin.chain.sugguster_note(tfiles as any)
+		let tfile = await plugin.chain.sugguster_note(tfiles as any,slice)
 		if(tfile){
 			let res = await plugin.utils.parse_templater(plugin.app,tfile.basename);
 			let txt = res.join('\n').trim()
@@ -497,7 +499,7 @@ const cmd_set_frontmatter = (plugin: NoteChainPlugin) => ({
 		}else{
 			prev = ''
 		}
-		let value = await plugin.dialog_prompt('Frontmatter value',prev)
+		let value = await plugin.dialog_prompt('Frontmatter value','',prev)
 		value = value.trim()
 		if(!value){return}
 		value = value.replace(/\\n/g,'\n').replace(/\\t/g,'\t')
