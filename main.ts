@@ -60,7 +60,8 @@ export default class NoteChainPlugin extends Plugin {
 
 		let target = await (this.app as any).plugins.getPlugin("obsidian-tasks-plugin");
 		target && target.cache.notifySubscribers();
-		//new Notice('Note Chain is ready!',3000)
+
+		new Notice('Note Chain is ready!',3000)
 		return (this.app as any).plugins?.plugins['note-chain']
 	}
 
@@ -168,7 +169,7 @@ export default class NoteChainPlugin extends Plugin {
 						.onClick(async () => {
 							let notes = file.parent?.children;
 							if(notes){
-								let anchor = await this.chain.tp_suggester(
+								let anchor = await this.dialog_suggest(
 									(f:TAbstractFile)=>f.name,
 									notes.filter((x:TAbstractFile)=>x instanceof TFile)
 								)
@@ -368,7 +369,7 @@ export default class NoteChainPlugin extends Plugin {
 		let notes = this.chain.get_inlinks(tfile);
 		if(notes.length){
 			if(mode==='suggester'){
-				mode = await this.chain.tp_suggester(
+				mode = await this.dialog_suggest(
 					["delete links",'replace links',"delete paragraph with links",],
 					[['link','del'],['link','rep'],['para','del']]
 				);
@@ -452,7 +453,7 @@ export default class NoteChainPlugin extends Plugin {
 		//notes = notes.filter(f=>f!=curr);
 		//为0时也显示，否则以为是bug
 		//if(notes.length==0){return;}
-		const note = await this.chain.tp_suggester(
+		const note = await this.dialog_suggest(
 			this.utils.array_prefix_id(
 				notes.map((file:TFile) => this.tfile_to_string(file,[],""))
 			), 
@@ -468,7 +469,7 @@ export default class NoteChainPlugin extends Plugin {
 			this.strings.item_insert_node_as_tail,
 			this.strings.item_insert_folder_after,
 		];
-		let mode = await this.chain.tp_suggester(
+		let mode = await this.dialog_suggest(
 			this.utils.array_prefix_id(sitems),
 			sitems,false,this.strings.item_insert_suggester
 		);
@@ -516,7 +517,7 @@ export default class NoteChainPlugin extends Plugin {
 		notes = this.chain.sort_tfiles(notes,['mtime','x']);
 		notes = this.chain.sort_tfiles_by_chain(notes);
 		if(notes.length>0){
-			let note = await this.chain.tp_suggester(
+			let note = await this.dialog_suggest(
 				this.utils.array_prefix_id(
 					notes.map((file:TFile) => this.chain.tfile_to_string(file))
 				),
