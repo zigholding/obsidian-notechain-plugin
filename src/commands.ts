@@ -379,7 +379,7 @@ const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 
 		if(tfile){
 			let items:{[key:string]:any} = {}
-			let links = nc.chain.get_inlinks();
+			let links = nc.chain.get_inlinks(tfile,false);
 			for(let i of links){
 				if(i.extension==='md'){
 					items['ℹ️ '+i.basename] = i;
@@ -387,7 +387,7 @@ const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 					items['ℹ️ '+i.name] = i;
 				}
 			}
-			links = nc.chain.get_outlinks();
+			links = nc.chain.get_outlinks(tfile,false);
 			for(let i of links){
 				if(i.extension==='md'){
 					items['🅾️ '+i.basename] = i;
