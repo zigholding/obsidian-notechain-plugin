@@ -243,8 +243,23 @@ const create_new_note = (plugin:NoteChainPlugin) => ({
 					)
 					if(!(target==='null')){
 						await (plugin.chain as any)[target](dst,curr);
+						if(target=='chain_insert_node_after'||target=='chain_insert_node_before'){
+							if(plugin.settings.field_of_confluence_tab_format){
+								let value = plugin.editor.get_frontmatter(
+									curr,
+									plugin.settings.field_of_confluence_tab_format
+								)
+								if(value){
+									await plugin.editor.set_frontmatter(
+										dst,
+										plugin.settings.field_of_confluence_tab_format,
+										value,
+										1
+									)
+								}
+							}
+						}
 					}
-					await sleep(300);
 					await plugin.chain.open_note(dst);
 					await plugin.explorer.sort();
 				}
