@@ -8,6 +8,7 @@ import NoteChainPlugin from '../main';
 const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 	id: "longform2notechain",
     name: plugin.strings.cmd_longform2notechain,
+	icon:'git-pull-request-create-arrow',
 	callback: async () => {
 		let curr = plugin.chain.current_note;
 		if(curr == null){return;}
@@ -34,6 +35,7 @@ const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 const cmd_longform4notechain = (plugin:NoteChainPlugin) => ({
 	id: "longform4notechain",
     name: plugin.strings.cmd_longform4notechain,
+	icon:'git-pull-request-draft',
 	callback: async () => {
 		let nc = plugin;
 		let curr = plugin.chain.current_note;
@@ -84,6 +86,7 @@ const cmd_longform4notechain = (plugin:NoteChainPlugin) => ({
 const cmd_sort_file_explorer = (plugin:NoteChainPlugin) => ({
 	id: "sort_file_explorer",
     name: plugin.strings.cmd_sort_file_explorer,
+	icon:'arrow-down-wide-narrow',
 	callback: async () => {
 		await plugin.explorer.sort(0,true);
 	}
@@ -92,6 +95,7 @@ const cmd_sort_file_explorer = (plugin:NoteChainPlugin) => ({
 const cmd_open_notes_smarter = (plugin:NoteChainPlugin) => ({
 	id: 'open_notes_smarter',
 	name: plugin.strings.cmd_open_notes_smarter,
+	icon:'binoculars',
 	callback: () => {
 		plugin.open_note_smarter();
 	}
@@ -100,6 +104,7 @@ const cmd_open_notes_smarter = (plugin:NoteChainPlugin) => ({
 const cmd_open_note = (plugin:NoteChainPlugin) => ({
 	id: 'suggestor_open_note',
 	name: plugin.strings.cmd_open_note,
+	icol: 'square-arrow-out-up-right',
 	callback: () => {
 		plugin.chain.sugguster_open_note();
 	}
@@ -108,6 +113,7 @@ const cmd_open_note = (plugin:NoteChainPlugin) => ({
 const cmd_open_prev_note = (plugin:NoteChainPlugin) => ({
 	id: 'open_prev_notes',
 	name: plugin.strings.cmd_open_prev_note,
+	icon: 'file-output',
 	callback: () => {
 		plugin.chain.open_prev_notes();
 	}
@@ -116,6 +122,7 @@ const cmd_open_prev_note = (plugin:NoteChainPlugin) => ({
 const cmd_open_next_note = (plugin:NoteChainPlugin) => ({
 	id: 'open_next_notes',
 	name: plugin.strings.cmd_open_next_note,
+	icon: 'file-input',
 	callback: () => {
 		plugin.chain.open_next_notes();
 	}
@@ -125,6 +132,7 @@ const cmd_open_next_note = (plugin:NoteChainPlugin) => ({
 const clear_inlinks = (plugin:NoteChainPlugin) => ({
 	id: 'clear_inlinks',
 	name: plugin.strings.clear_inlinks,
+	icon:'unlink',
 	callback: () => {
 		plugin.clear_inlinks();
 	}
@@ -133,6 +141,7 @@ const clear_inlinks = (plugin:NoteChainPlugin) => ({
 const move_file_to_another_folder = (plugin:NoteChainPlugin) => ({
 	id: 'move_file_to_another_folder',
 	name: plugin.strings.move_file_to_another_folder,
+	icon:'folder-tree',
 	callback: () => {
 		plugin.chain.cmd_move_file_to_another_folder();
 	}
@@ -141,6 +150,7 @@ const move_file_to_another_folder = (plugin:NoteChainPlugin) => ({
 const replace_notes_with_regx = (plugin:NoteChainPlugin) => ({
 	id: 'replace_notes_with_regx',
 	name: plugin.strings.replace_notes_with_regx,
+	icon:'regex',
 	callback: () => {
 		plugin.replace_notes_with_regx();
 	}
@@ -149,6 +159,7 @@ const replace_notes_with_regx = (plugin:NoteChainPlugin) => ({
 const chain_insert_node = (plugin:NoteChainPlugin) => ({
 	id: 'chain_insert_node',
 	name: plugin.strings.chain_insert_node,
+	icon: 'git-branch-plus',
 	callback: async () => {
 		await plugin.cmd_chain_insert_node();
 		await plugin.explorer.sort(500);
@@ -158,6 +169,7 @@ const chain_insert_node = (plugin:NoteChainPlugin) => ({
 const chain_set_seq_note = (plugin:NoteChainPlugin) => ({
 	id: 'chain_set_seq_note',
 	name: plugin.strings.chain_set_seq_note,
+	icon:'wind-arrow-down',
 	callback: async () => {
 		await plugin.chain.chain_suggester_tfiles();
 		plugin.explorer.sort();
@@ -167,6 +179,7 @@ const chain_set_seq_note = (plugin:NoteChainPlugin) => ({
 const chain_move_up_node = (plugin:NoteChainPlugin) => ({
 	id: 'chain_move_up_node',
 	name: plugin.strings.chain_move_up_node,
+	icon: 'arrow-up-from-line',
 	callback: async () => {
 		let tfile = plugin.chain.current_note;
 		if(tfile){
@@ -184,6 +197,7 @@ const chain_move_up_node = (plugin:NoteChainPlugin) => ({
 const chain_move_down_node = (plugin:NoteChainPlugin) => ({
 	id: 'chain_move_donw_node',
 	name: plugin.strings.chain_move_down_node,
+	icon: 'arrow-down-from-line',
 	callback: async () => {
 		let tfile = plugin.chain.current_note;
 		if(tfile){
@@ -201,6 +215,7 @@ const chain_move_down_node = (plugin:NoteChainPlugin) => ({
 const create_new_note = (plugin:NoteChainPlugin) => ({
 	id: 'create_new_note',
 	name: plugin.strings.create_new_note,
+	icon: 'file-plus',
 	callback: async () => {
 		let targets :{[key:string]:string} = {}
 		targets[plugin.strings.item_chain_insert_node_after] = 'chain_insert_node_after';
@@ -241,6 +256,7 @@ const create_new_note = (plugin:NoteChainPlugin) => ({
 const cmd_reveal_note = (plugin:NoteChainPlugin) => ({
 	id: 'cmd_reveal_note',
 	name: plugin.strings.cmd_reveal_note,
+	icon: 'locate',
 	callback: async () => {
 		let nc = plugin;
 		let note = nc.chain.current_note;
@@ -265,6 +281,7 @@ const cmd_reveal_note = (plugin:NoteChainPlugin) => ({
 const cmd_open_and_reveal_note = (plugin:NoteChainPlugin) => ({
 	id: 'cmd_open_and_reveal_note',
 	name: plugin.strings.cmd_open_and_reveal_note,
+	icon:'map-pin-house',
 	callback: async () => {
 		let nc = plugin;
 		let note = await nc.chain.sugguster_note();
@@ -288,6 +305,7 @@ const cmd_open_and_reveal_note = (plugin:NoteChainPlugin) => ({
 const cmd_open_prev_note_of_right_leaf = (plugin:NoteChainPlugin) => ({
 	id: 'cmd_open_prev_note_of_right_leaf',
 	name: plugin.strings.cmd_open_prev_note_of_right_leaf,
+	icon: 'file-output',
 	callback: async () => {
 		let nc = plugin;
 		let leaf = nc.chain.get_last_activate_leaf();
@@ -304,6 +322,7 @@ const cmd_open_prev_note_of_right_leaf = (plugin:NoteChainPlugin) => ({
 const cmd_open_next_note_of_right_leaf = (plugin:NoteChainPlugin) => ({
 	id: 'cmd_open_next_note_of_right_leaf',
 	name: plugin.strings.cmd_open_next_note_of_right_leaf,
+	icon: 'file-input',
 	callback: async () => {
 		let nc = plugin;
 		let leaf = nc.chain.get_last_activate_leaf();
@@ -320,6 +339,7 @@ const cmd_open_next_note_of_right_leaf = (plugin:NoteChainPlugin) => ({
 const cmd_file_open_with_system_app = (plugin:NoteChainPlugin) => ({
 	id: 'cmd_file_open_with_system_app',
 	name: plugin.strings.cmd_file_open_with_system_app,
+	icon:'book-open',
 	callback: async () => {
 		let nc = plugin;
 		if((nc.app as any).isMobile){return;}
@@ -345,6 +365,7 @@ const cmd_file_open_with_system_app = (plugin:NoteChainPlugin) => ({
 const cmd_file_show_in_system_explorer = (plugin:NoteChainPlugin) => ({
 	id: 'cmd_file_show_in_system_explorer',
 	name: plugin.strings.cmd_file_show_in_system_explorer,
+	icon:'book-open-text',
 	callback: async () => {
 		let nc = plugin;
 		if((nc.app as any).isMobile){return;}
@@ -369,6 +390,7 @@ const cmd_file_show_in_system_explorer = (plugin:NoteChainPlugin) => ({
 const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 	id: 'cmd_file_rename',
 	name: plugin.strings.cmd_file_rename,
+	icon: 'pen-line',
 	callback: async () => {
 		let nc = plugin;
 		if((nc.app as any).isMobile){return;}
@@ -420,6 +442,7 @@ const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 const cmd_mermaid_flowchart_link = (plugin: NoteChainPlugin) => ({
     id: 'cmd_mermaid_flowchart_link',
     name: plugin.strings.cmd_mermaid_flowchart_link,
+	icon:'file-heart',
     callback: async () => {
         const content = "```dataviewjs\nlet nc=app.plugins.getPlugin('note-chain');\nlet msg =nc.mermaid.get_flowchart(null,2);\ndv.span(msg)\n```";
         await plugin.chain.open_note_in_modal(content);
@@ -429,6 +452,7 @@ const cmd_mermaid_flowchart_link = (plugin: NoteChainPlugin) => ({
 const cmd_mermaid_flowchart_folder = (plugin: NoteChainPlugin) => ({
     id: 'cmd_mermaid_flowchart_folder',
     name: plugin.strings.cmd_mermaid_flowchart_folder,
+	icon:'folder-heart',
     callback: async () => {
         const content = "```dataviewjs\nlet nc=app.plugins.getPlugin('note-chain');\nlet msg =nc.mermaid.flowchart_folder(null,'Folder');\ndv.span(msg)\n```";
         await plugin.chain.open_note_in_modal(content);
@@ -438,6 +462,7 @@ const cmd_mermaid_flowchart_folder = (plugin: NoteChainPlugin) => ({
 const cmd_mermaid_flowchart_auto = (plugin: NoteChainPlugin) => ({
     id: 'cmd_mermaid_flowchart_auto',
     name: plugin.strings.cmd_mermaid_flowchart_auto,
+	icon:'heart',
     callback: async () => {
         const content = "```dataviewjs\nlet nc=app.plugins.getPlugin('note-chain');\nlet msg =nc.mermaid.get_mehrmaid_graph(null,4,'mermaid');\ndv.span(msg)\n```";
         await plugin.chain.open_note_in_modal(content);
@@ -447,6 +472,7 @@ const cmd_mermaid_flowchart_auto = (plugin: NoteChainPlugin) => ({
 const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
     id: 'cmd_execute_template_modal',
     name: plugin.strings.cmd_execute_template_modal,
+	icon:'file-terminal',
     callback: async () => {
 		let tpl = (plugin.app as any).plugins.plugins['templater-obsidian']
 		if(!tpl){return}
@@ -476,6 +502,7 @@ const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
 const cmd_toogle_css_block_in_note = (plugin: NoteChainPlugin) => ({
     id: 'cmd_toogle_css_block_in_note',
     name: plugin.strings.cmd_toogle_css_block_in_note,
+	icon:'atom',
     callback: async () => {
 		await plugin.utils.toogle_note_css(plugin.app,document,'/')
     }
@@ -484,6 +511,7 @@ const cmd_toogle_css_block_in_note = (plugin: NoteChainPlugin) => ({
 const cmd_set_frontmatter = (plugin: NoteChainPlugin) => ({
     id: 'cmd_set_frontmatter',
     name: plugin.strings.cmd_set_frontmatter,
+	icon: 'database',
     callback: async () => {
 		let files = plugin.chain.get_selected_files(true)
 		if(files.length==0){return}
@@ -564,7 +592,7 @@ const cmd_move_prev_level = (plugin: NoteChainPlugin) => ({
     id: 'move_prev_level',
     name: plugin.strings.cmd_move_prev_level,
 	hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'J' }],
-	icon:'arrow-right-from-line',
+	icon:'arrow-left-from-line',
     callback: async () => {
 		let key = plugin.settings.field_of_confluence_tab_format
 		if(!key){return}
