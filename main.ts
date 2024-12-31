@@ -118,6 +118,7 @@ export default class NoteChainPlugin extends Plugin {
 			}
 		));
 
+		// 创建后置文件
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
 				if(file instanceof TFile){
@@ -134,6 +135,11 @@ export default class NoteChainPlugin extends Plugin {
 							}else{
 								let tfile = await this.app.vault.create(dst,'');
 								await this.chain.chain_insert_node_after(tfile,file);
+
+								await this.editor.set_frontmatter_align_file(
+									file,tfile,this.settings.field_of_confluence_tab_format
+								)
+
 								await this.chain.open_note(tfile,false,false);
 							}
 						});
@@ -153,6 +159,11 @@ export default class NoteChainPlugin extends Plugin {
 							let anchor = await this.chain.sugguster_note();
 							if(anchor){
 								await this.chain.chain_insert_node_after(file,anchor);
+								// 和前置笔记相同层级
+								await this.editor.set_frontmatter_align_file(
+									anchor,file,this.settings.field_of_confluence_tab_format
+								)
+
 								if(file.parent!=anchor.parent){
 									let dst = anchor.parent.path+'/'+file.name;
 									await this.app.fileManager.renameFile(file,dst);
@@ -220,6 +231,11 @@ export default class NoteChainPlugin extends Plugin {
 							let anchor_next = this.chain.get_next_note(anchor);
 							if(anchor_next){tfiles.push(anchor_next)}
 							await this.chain.chain_concat_tfiles(tfiles);
+							for(let dst of tfiles.slice(1,tfiles.length-1)){
+								await this.editor.set_frontmatter_align_file(
+									anchor,dst,this.settings.field_of_confluence_tab_format
+								)
+							}
 						});
 					});
 				}
