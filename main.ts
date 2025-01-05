@@ -61,7 +61,7 @@ export default class NoteChainPlugin extends Plugin {
 		let target = await (this.app as any).plugins.getPlugin("obsidian-tasks-plugin");
 		target && target.cache.notifySubscribers();
 
-		new Notice('Note Chain is ready!',3000)
+		// new Notice('Note Chain is ready!',3000)
 		return (this.app as any).plugins?.plugins['note-chain']
 	}
 
@@ -498,8 +498,18 @@ export default class NoteChainPlugin extends Plugin {
 			await this.chain.chain_insert_node_as_tail(curr,note);
 		}else if(mode===this.strings.item_insert_node_before){
 			await this.chain.chain_insert_node_before(curr,note);
+			await this.editor.set_frontmatter_align_file(
+				note,
+				curr,
+				this.settings.field_of_confluence_tab_format
+			)
 		}else if(mode===this.strings.item_insert_node_after){
 			await this.chain.chain_insert_node_after(curr,note);
+			await this.editor.set_frontmatter_align_file(
+				note,
+				curr,
+				this.settings.field_of_confluence_tab_format
+			)
 		}else if(mode===this.strings.item_insert_folder_after){
 			await this.chain.chain_insert_folder_after(curr,note);
 		}else{
