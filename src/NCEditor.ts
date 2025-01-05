@@ -17,7 +17,7 @@ export class NCEditor{
 	constructor(plugin:NoteChainPlugin){
 		this.plugin = plugin;
 		this.app = this.plugin.app;
-		this.nretry=100;
+		this.nretry=1;
 	}
 
 	async set_frontmatter(tfile:TFile|string|Array<TFile|string>,key:string,value:any,nretry=this.nretry){
