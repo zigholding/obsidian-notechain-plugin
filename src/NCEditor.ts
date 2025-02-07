@@ -474,9 +474,7 @@ export class NCEditor{
 		let tfile = view.file;
 		if(!view || !editor || !tfile){return null}
 		let cursor = editor.getCursor();
-		console.log('cursor',cursor)
 		let cache = this.app.metadataCache.getFileCache(tfile)
-		console.log('cache',cache)
 		if(!cache){return}
 		if(!cursor){
 			let ctx = await this.app.vault.cachedRead(tfile);

@@ -132,11 +132,12 @@ export async function get_str_func(app:App,target:string) {
 }
 
 
-export async function templater$1(app:App,template:string|TFile, active_file:TFile|null, target_file:TFile|null) {
+export async function templater$1(app:App,template:string|TFile, active_file:TFile|null, target_file:TFile|null,extra=null) {
 	const config = {
 		template_file: template,
 		active_file: active_file,
 		target_file: target_file,
+        extra: extra,
 		run_mode: "DynamicProcessor",
 	};
 	const plugins = (app as any).plugins.plugins;
@@ -167,7 +168,7 @@ export async function templater$1(app:App,template:string|TFile, active_file:TFi
 	};
 }
 
-export async function parse_templater(app:App,template:string|TFile,extract=true) {
+export async function parse_templater(app:App,template:string|TFile,extract=true,extra=null) {
     let nc =(app as any).plugins.getPlugin('note-chain');
     if(!nc){return;}
     
@@ -203,7 +204,7 @@ export async function parse_templater(app:App,template:string|TFile,extract=true
     let notes = app.vault.getMarkdownFiles();
     if(notes.length==0){return;}
     let target_file =  notes[0];
-    let templateFunc = await templater$1(app,template_file,active_file,target_file);
+    let templateFunc = await templater$1(app,template_file,active_file,target_file,extra=extra);
     if(templateFunc){
         let res = []
         for(let block of blocks){

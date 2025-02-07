@@ -9,6 +9,7 @@ import {
 
 import {NCEditor} from './src/NCEditor';
 import {NoteChain} from './src/NoteChain';
+import {NCTextarea} from './src/NCTextarea';
 import {NCFileExplorer} from './src/NCFileExplorer';
 import { Strings } from 'src/strings';
 import { WordCount } from 'src/WordCount';
@@ -22,6 +23,7 @@ import {dialog_prompt} from 'src/gui/inputPrompt'
 export default class NoteChainPlugin extends Plugin {
 	settings: NCSettings;
 	chain : NoteChain;
+	textarea : NCTextarea;
 	editor : NCEditor; 
 	explorer : NCFileExplorer;
 	mermaid : MermaidGraph;
@@ -331,6 +333,7 @@ export default class NoteChainPlugin extends Plugin {
 			})
 		);
 		this.wordcout = new WordCount(this,this.app);
+		this.textarea = new NCTextarea(this,this.editor)
 		this.status = 'loaded'
 	}
 

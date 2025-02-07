@@ -262,7 +262,6 @@ export class NoteChain{
 			}
 			return null;
 		}catch{
-			// console.log(path)
 			return null
 		}
 	}
