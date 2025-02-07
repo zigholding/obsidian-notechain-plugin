@@ -47,7 +47,7 @@ export class NCTextarea{
 
 			let container = el.createEl("div", { cls: 'textarea-container' });
 
-			let area = null;
+			let area:any=null;
 			if(config['textarea']!=false){
 				let cls = 'code_block_textarea'
 				if(config.textarea?.cls){

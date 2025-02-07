@@ -333,7 +333,7 @@ export default class NoteChainPlugin extends Plugin {
 			})
 		);
 		this.wordcout = new WordCount(this,this.app);
-		this.textarea = new NCTextarea(this,this.editor)
+		this.textarea = new NCTextarea(this)
 		this.status = 'loaded'
 	}
 
