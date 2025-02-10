@@ -198,6 +198,7 @@ export class NCSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.wordcout = value;
 						await this.plugin.saveSettings();
+						this.plugin.wordcout.register();
 					})
 				);
 		

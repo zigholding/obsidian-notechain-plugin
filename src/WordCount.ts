@@ -14,12 +14,14 @@ export class WordCount{
 	nretry:number;
     timerId:NodeJS.Timeout;
     curr_active_file:TFile;
+    events: Array<object>;
 
 	constructor(plugin:NoteChainPlugin,app:App){
         this.plugin = plugin;
 		this.app = app;
 		this.nretry=100;
-        this.register();
+        this.events = new Array();
+        this.register();   
 	}
 
     filter(tfile:TFile){
@@ -115,17 +117,17 @@ export class WordCount{
         if (activeView && activeView.file === tfile) {
             let editor = activeView.editor;
             if (editor) {
-                if (editorState.scrollInfo) {
-                    editor.scrollTo(editorState.scrollInfo.left, editorState.scrollInfo.top);
-                }
                 if (editorState.selection && editorState.sanchor && editorState.shead) {
                     try {
-                        editor.setSelection(editorState.sanchor,editorState.shead);
+                        await editor.setSelection(editorState.sanchor,editorState.shead);
                     } catch (error) {
                         new Notice(`Error setting selection:${error}`,3000);
                     }
                 }else if (editorState.cursor) {
-                    editor.setCursor(editorState.cursor);
+                    await editor.setCursor(editorState.cursor);
+                }
+                if (editorState.scrollInfo) {
+                    await editor.scrollTo(editorState.scrollInfo.left, editorState.scrollInfo.top);
                 }
             }
         }
@@ -202,49 +204,58 @@ export class WordCount{
 		if(this.plugin.settings.wordcout){
 			this.regeister_editor_change();
 			this.regeister_active_leaf_change();
-		}
+		}else{
+            this.unregister();
+        }
     }
 
-    regeister_editor_change(){
-        this.plugin.registerEvent(
-            this.app.workspace.on('editor-change',async (editor,info)=>{
-                if(info.file?.extension!='md'){
-                    return;
-                }
-                if(this.timerId!==null){
-                    clearTimeout(this.timerId);
-                }
-                if(info.file){
-                    this.timerId = setTimeout(()=>{
-                        this.update_word_count((info as any).file);
-                    }, 3000);
-                }
-            })
-        )
+    regeister_editor_change(){    
+        let e = this.app.workspace.on('editor-change',async (editor,info)=>{
+            if(info.file?.extension!='md'){
+                return;
+            }
+            if(this.timerId!==null){
+                clearTimeout(this.timerId);
+            }
+            if(info.file){
+                this.timerId = setTimeout(()=>{
+                    this.update_word_count((info as any).file);
+                }, 3000);
+            }
+        });
+        this.plugin.registerEvent(e);
+        this.events.push(e);
     }
 
     regeister_active_leaf_change(){
-        this.plugin.registerEvent(
-            this.app.workspace.on('active-leaf-change',async (leaf)=>{
+        let e = this.app.workspace.on('active-leaf-change',async (leaf)=>{
 
-                let tfile = (leaf?.view as any).file;
-                if(!leaf?.view){
-                    return;
-                }
-                if(!((leaf.view as any)?.file?.extension=='md')){
-                    return;
-                }
-                await this.update_word_count(tfile);
-                if(this.curr_active_file==null){
-                    this.curr_active_file = tfile;
-                    return;
-                }
-                if(this.curr_active_file != tfile){
-                    await this.update_word_count(this.curr_active_file);
-                    this.curr_active_file = tfile;
-                }
-            })
-        )
+            let tfile = (leaf?.view as any).file;
+            if(!leaf?.view){
+                return;
+            }
+            if(!((leaf.view as any)?.file?.extension=='md')){
+                return;
+            }
+            await this.update_word_count(tfile);
+            if(this.curr_active_file==null){
+                this.curr_active_file = tfile;
+                return;
+            }
+            if(this.curr_active_file != tfile){
+                await this.update_word_count(this.curr_active_file);
+                this.curr_active_file = tfile;
+            }
+        });
+        this.plugin.registerEvent(e);
+        this.events.push(e);
+    }
+
+    unregister(){
+        for(let e of this.events){
+            (e as any).e.offref(e)
+        }
+        this.events = this.events.slice(-1,0);
     }
 
     get_words_of_tfiles(){
