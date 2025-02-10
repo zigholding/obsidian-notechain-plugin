@@ -258,13 +258,17 @@ export class WordCount{
         this.events = this.events.slice(-1,0);
     }
 
-    get_words_of_tfiles(){
-        return this.plugin.chain.get_all_tfiles().map(
+    get_words_of_tfiles(files:Array<TFile>|null=null){
+        if(!files){
+            files = this.plugin.chain.get_all_tfiles();
+        }
+        return files.map(
             x=>this.plugin.editor.get_frontmatter(x,'words')
         ).filter(x=>x);
     }
 
-    sum_words_of_tifles(files:Array<any>, begt:number|string, endt:number|string) {
+    sum_words_of_tifles(files:Array<TFile>|null=null, begt:number|string=10, endt:number|string=0) {
+        files = this.get_words_of_tfiles(files)
         if(typeof(begt)=='number'){
             begt = moment().add(-begt,'days').format('YYYY-MM-DD')
         }
