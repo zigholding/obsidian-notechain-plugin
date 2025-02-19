@@ -44,7 +44,6 @@ export class NCTextarea{
 				config = nc.textarea.yamljs.load(source);
 			}
 		
-
 			let container = el.createEl("div", { cls: 'textarea-container' });
 
 			let area:any=null;
@@ -74,7 +73,6 @@ export class NCTextarea{
 				}
 			}
 			for(let k in config){
-				console.log(k)
 				if(k.startsWith('buttons')){
 					let btns = config[k];
 					if(btns && Array.isArray(btns)){
@@ -135,6 +133,10 @@ export class NCTextarea{
 						container.appendChild(buttonContainer);
 					}
 				}
+			}
+
+			if(area && config['focus']!=false){
+				area.focus()
 			}
 		});
 	}
