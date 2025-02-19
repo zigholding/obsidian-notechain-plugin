@@ -73,51 +73,68 @@ export class NCTextarea{
 					}
 				}
 			}
-			
-			let btns = config['buttons'];
-			if(btns && Array.isArray(btns)){
-				// 创建一个按钮容器
-				let buttonContainer = container.createEl("div", { cls: 'code_block_textarea_btn_container' });
-				buttonContainer.style.display = 'flex'; // 设置按钮容器为flex布局，使按钮在同一行显示
-				buttonContainer.style.justifyContent = 'flex-start'; // 设置按钮之间的间距均匀分布
-				buttonContainer.style.marginTop = '10px'
-				for(let btn of btns){
-					let name = btn[0]
-					let fname = btn[1]
-					if(!name || !fname){continue}
+			for(let k in config){
+				console.log(k)
+				if(k.startsWith('buttons')){
+					let btns = config[k];
+					if(btns && Array.isArray(btns)){
+						// 创建一个按钮容器
+						let buttonContainer = container.createEl("div", { cls: 'code_block_textarea_btn_container' });
+						buttonContainer.style.display = 'flex'; // 设置按钮容器为flex布局，使按钮在同一行显示
+						buttonContainer.style.justifyContent = 'flex-start'; // 设置按钮之间的间距均匀分布
+						buttonContainer.style.marginTop = '10px'
+						for(let btn of btns){
+							let name = btn[0]
+							let fname = btn[1]
+							if(!name || !fname){continue}
 
-					let cls = 'code_block_textarea_btn'
-					if(btn[2]){
-						cls = btn[2]
-					}
-					let ufunc = (nc.textarea as any)[fname];
-					if(!ufunc){
-						ufunc = await nc.utils.get_str_func(nc.app,fname);
-					}
-					if(ufunc){
-						let xbtn = buttonContainer.createEl('button', { text: name,cls:cls});
-						xbtn.addEventListener('click', () => {
-							ufunc(area,source,el,ctx)
-						});
-						continue
-					}
-					let tfile = nc.chain.get_tfile(fname)
-					if(tfile){
-						let xbtn = buttonContainer.createEl('button', { text: name,cls:cls});
-						xbtn.addEventListener('click', () => {
-							nc.utils.parse_templater(
-								nc.app,fname,true,{
-									area:area,
-									source:source,
-									el:el,
-									ctx:ctx
-								}
-							)
-						});
-						continue
+							let cls = 'code_block_textarea_btn'
+							if(btn[2]){
+								cls = btn[2]
+							}
+							// 库自带函数
+							let ufunc = (nc.textarea as any)[fname];
+							if(!ufunc){
+								// customJS/templater函数
+								ufunc = await nc.utils.get_str_func(nc.app,fname);
+							}
+							if(ufunc){
+								let xbtn = buttonContainer.createEl('button', { text: name,cls:cls});
+								xbtn.addEventListener('click', () => {
+									ufunc(area,source,el,ctx)
+								});
+								continue
+							}
+
+							// 命令
+							let c = (nc.app as any).commands?.findCommand(fname);
+							if(c){
+								let xbtn = buttonContainer.createEl('button', { text: name,cls:cls});
+								xbtn.addEventListener('click', () => {
+									(nc.app as any).commands.executeCommandById(fname)
+								});
+								continue
+							}
+
+							let tfile = nc.chain.get_tfile(fname)
+							if(tfile){
+								let xbtn = buttonContainer.createEl('button', { text: name,cls:cls});
+								xbtn.addEventListener('click', () => {
+									nc.utils.parse_templater(
+										nc.app,fname,true,{
+											area:area,
+											source:source,
+											el:el,
+											ctx:ctx
+										}
+									)
+								});
+								continue
+							}
+						}
+						container.appendChild(buttonContainer);
 					}
 				}
-				container.appendChild(buttonContainer);
 			}
 		});
 	}
