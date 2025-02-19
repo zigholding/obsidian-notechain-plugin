@@ -611,6 +611,35 @@ const cmd_move_prev_level = (plugin: NoteChainPlugin) => ({
     }
 });
 
+const cmd_insert_command_id = (plugin: NoteChainPlugin) => ({
+    id: 'insert_command_id',
+    name: plugin.strings.cmd_insert_command_id,
+	icon:'terminal',
+    callback: async () => {
+		
+		let editor = (plugin.app as any).workspace.getActiveFileView()?.editor;
+		if(!editor){return;}
+
+		let ids :{[key:string]:string} = {}
+		Object.keys(
+			(plugin.app as any).commands.commands
+		).forEach((x)=>{
+			ids[(plugin.app as any).commands.commands[x].name]=x;}
+		)
+
+		let names = Object.keys(ids)
+
+		let msg = plugin.utils.array_prefix_id(names);
+		let cmd = await plugin.dialog_suggest(msg,names);
+		if(cmd){
+			editor.replaceSelection(ids[cmd]);
+		}
+    }
+});
+
+
+
+
 const commandBuilders = [
 	cmd_open_note,
 	cmd_reveal_note,
@@ -641,6 +670,7 @@ const commandBuilders = [
 	cmd_move_next_level,
 	cmd_move_none_level,
 	cmd_move_prev_level,
+	cmd_insert_command_id,
 ];
 
 const commandBuildersDesktop = [

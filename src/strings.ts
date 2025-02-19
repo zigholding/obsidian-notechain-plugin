@@ -213,6 +213,14 @@ export class Strings{
         }
     }
 
+    get cmd_insert_command_id(){
+        if(this.language=='zh'){
+            return '插入命令ID'
+        }else{
+            return "Insert command id";
+        }
+    }
+
 
     get filemenu_create_next_note(){
         if(this.language=='zh'){
