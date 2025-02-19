@@ -1,9 +1,9 @@
 {
 	"id": "note-chain",
 	"name": "Note Chain",
-	"version": "1.1.15",
+	"version": "1.1.16",
 	"minAppVersion": "1.7.7",
-	"description": "Thoughts as river, notes as chain. Add prev and next notes to a notes, and order files by the chain in File Explorer.",
+	"description": "File sorting and hierarchical indentation display in the File Explorer. Provides efficient tools such as word count, text area, buttons, and note graph..",
 	"author": "ZigHolding",
 	"isDesktopOnly": false
 }
