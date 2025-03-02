@@ -483,16 +483,21 @@ const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
 		if(!tpl){return}
 
 		let folder = plugin.app.vault.getFolderByPath(tpl.settings.templates_folder);
-		let slice = 0
 		let tfiles;
 		if(folder){
-			slice = folder.path.length+1
 			tfiles = plugin.chain.get_tfiles_of_folder(folder,true)
+			let tfile = plugin.chain.get_tfile(folder.path+'/'+folder.name+'.md');
+			let infiles = plugin.chain.get_links(tfile);
+			for(let f of infiles){
+				if(!tfiles.contains(f)){
+					tfiles.push(f)
+				}
+			}
 			tfiles = plugin.chain.sort_tfiles_by_chain(tfiles)
 		}else{
 			tfiles = plugin.chain.get_all_tfiles()
 		}
-		let tfile = await plugin.chain.sugguster_note(tfiles as any,slice)
+		let tfile = await plugin.chain.sugguster_note(tfiles as any,0,true)
 		if(tfile){
 			let res = await plugin.utils.parse_templater(plugin.app,tfile.basename);
 			let txt = res.join('\n').trim()
