@@ -180,7 +180,7 @@ export class NoteChain{
 		return true;
 	}
 
-	async sugguster_note(notes : null | Array<TFile> = null,slice=0){
+	async sugguster_note(notes : null | Array<TFile> = null,slice=0,onlyname=false){
 		// 从库中选择一个笔记
 		if(notes==null){
 			notes = this.sort_tfiles(
@@ -189,7 +189,13 @@ export class NoteChain{
 			).filter((f:TFile)=>this.filter_user_ignore(f));
 		}
 		try {
-			let msg = this.plugin.utils.array_prefix_id((notes as any).map((f:TFile)=>f.path.slice(slice)));
+			let items;
+			if(onlyname){
+				items = (notes as any).map((f:TFile)=>f.basename)
+			}else{
+				items = (notes as any).map((f:TFile)=>f.path.slice(slice))
+			}
+			let msg = this.plugin.utils.array_prefix_id(items);
 			let note = await this.plugin.dialog_suggest(msg,notes);
 			return note;
 		} catch (error) {
