@@ -4,81 +4,9 @@ import {
 
 import NoteChainPlugin from "../main";
 import {NoteChain} from "./NoteChain";
-import { symlink } from 'fs';
+import { around } from 'monkey-around';
+import Sortable from 'sortablejs';
 
-
-let chain_sort = function(org_sort:Function) {
-	let plugin = (this.app as any).plugins.getPlugin('note-chain');
-	return function(...d:any){
-		if(plugin){
-			if(plugin?.settings.isSortFileExplorer){
-				let e = this.file
-				, t = this.view
-				, i = e.children.slice();
-				i = i.filter((x:TAbstractFile)=>x);
-				if(i.length>0){
-					let items = plugin.chain.children[i[0].parent.path];
-					if(items){
-						let a = items.filter((x:TAbstractFile)=>i.contains(x));
-						let b = items.filter((x:TAbstractFile)=>!i.contains(x));
-						a.push(...b);
-						i = a;
-					}
-				}
-				if(plugin.settings.isFolderFirst){
-					i = plugin.chain.sort_tfiles_folder_first(i);
-				}
-				let r = [];
-				for (let o = 0, a = i; o < a.length; o++) {
-					let s = a[o]
-					, l = t.fileItems[s.path];
-					l && r.push(l)
-				}
-				this.vChildren.setChildren(r);
-			}else{
-				return org_sort.call(this,...d);
-			}
-		}else{
-			return org_sort.call(this,...d);
-		}
-	}
-}
-
-let getSortedFolderItems = function(org_sort:Function) {
-	let plugin = (this.app as any).plugins.getPlugin('note-chain');
-	return function(e:any){
-		if(plugin){
-			try{
-				let res = org_sort.call(this,e);
-				let tfiles = plugin.chain.children[e.path];
-				if(tfiles){
-					res = res.sort((a:any,b:any)=>tfiles.indexOf(a.file)-tfiles.indexOf(b.file));
-				}
-				return res;
-			}catch(e){
-				return org_sort.call(this,e);
-			}
-		}else{
-			return org_sort.call(this,e);
-		}
-	}
-}
-
-let getTtitle = function(org_getTtile:Function) {
-	let plugin = (this.app as any).plugins.getPlugin('note-chain');
-	return function(e:any){
-		if(plugin){
-			try{
-				let res = plugin.explorer.get_display_text(this.file)
-				return res;
-			}catch(e){
-				return org_getTtile.call(this);
-			}
-		}else{
-			return org_getTtile.call(this);
-		}
-	}
-}
 
 export class NCFileExplorer{
 	plugin:NoteChainPlugin;
@@ -89,6 +17,7 @@ export class NCFileExplorer{
 	getTitle:Function;
 	getTitle_new:Function;
 	_FolderDom_:any;
+	private explorerPatches: Function[] = [];
 
 	constructor(plugin:NoteChainPlugin){
 		this.plugin = plugin;
@@ -98,21 +27,9 @@ export class NCFileExplorer{
 	}
 
 	async register(){
-		await this.waitForFileExplorer()
-		this.getSortedFolderItems = this.file_explorer.constructor.prototype.getSortedFolderItems;
-		this.getSortedFolderItems_new = getSortedFolderItems(this.getSortedFolderItems);
-		this.file_explorer.constructor.prototype.getSortedFolderItems = this.getSortedFolderItems_new;
-		try {
-			let item = (this.file_explorer as any).fileItems[
-				this.plugin.chain.get_all_tfiles()[0].path
-			]
-	
-			if(item){
-				this.getTitle = item.constructor.prototype.getTitle
-				this.getTitle_new = getTtitle(this.getTitle)
-				item.constructor.prototype.getTitle = this.getTitle_new
-			}
-			
+		await this.waitForFileExplorer();
+		await this.patchFileExplorer();
+		try {			
 			this.sort(0,true);
 			this.set_display_text()
 			this.set_fileitem_style()
@@ -122,11 +39,56 @@ export class NCFileExplorer{
 		}
 	}
 
-	async unregister(){
-		if(this.getSortedFolderItems){
-			this.file_explorer.constructor.prototype.getSortedFolderItems = this.getSortedFolderItems;
-		}
+	async patchFileExplorer() {
+		let explorerView = this.file_explorer;
+		this.explorerPatches.push(
+			around(Object.getPrototypeOf(explorerView), {
+				getSortedFolderItems:(original) => function(e:any) {
+					let plugin = (this.app as any).plugins.getPlugin('note-chain');
+					if (plugin) {
+						try {
+							let res = original.call(this, e);
+							let tfiles = plugin.chain.children[e.path];
+							if (tfiles) {
+								res = res.sort((a:any, b:any) => tfiles.indexOf(a.file) - tfiles.indexOf(b.file));
+							}
+							return res;
+						} catch (e) {
+							return original.call(this, e);
+						}
+					} else {
+						return original.call(this, e);
+					}
+				}
+			})
+		);
 
+		let item = (this.file_explorer as any).fileItems[
+			this.plugin.chain.get_all_tfiles()[0].path
+		]
+		if(item){
+			around(Object.getPrototypeOf(item), {
+				getTtitle:(original) => function(e:any) {
+					let plugin = (this.app as any).plugins.getPlugin('note-chain');
+					return function(e:any){
+						if(plugin){
+							try{
+								let res = plugin.explorer.get_display_text(this.file)
+								return res;
+							}catch(e){
+								return original.call(this);
+							}
+						}else{
+							return original.call(this);
+						}
+					}
+				}
+			})
+		}
+	}
+
+
+	async unregister(){
 		let items = (this.file_explorer as any).fileItems
 		for(let key in items){
 			let item = items[key]
@@ -134,6 +96,7 @@ export class NCFileExplorer{
 			item.el.style.background = null
 			item.el.style.border = null
 		}
+		this.explorerPatches.forEach(unpatch => unpatch());
 	}
 
 	async waitForFileExplorer() {
