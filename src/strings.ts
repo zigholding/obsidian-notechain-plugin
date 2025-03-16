@@ -310,6 +310,16 @@ export class Strings{
         }
     }
 
+    get setting_isdraged(){
+        if(this.language=='zh'){
+            return '拖动排序'
+        }else{
+            return "Sort files by drag & drop?";
+        }
+    }
+
+    
+
     get setting_PrevChain(){
         if(this.language=='zh'){
             return '前置笔记数量？'

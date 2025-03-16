@@ -17,6 +17,7 @@ export interface NCSettings {
 	refreshTasks:boolean,
 	isSortFileExplorer:boolean,
 	isFolderFirst:boolean,
+	isdraged:boolean,
 	suggesterNotesMode:string,
 	wordcout:boolean,
 	wordcountxfolder:string,
@@ -37,6 +38,7 @@ export const DEFAULT_SETTINGS: NCSettings = {
 	refreshTasks : true,
 	isSortFileExplorer : true,
 	isFolderFirst : true,
+	isdraged: true,
 	suggesterNotesMode:'',
 	wordcout:true,
 	wordcountxfolder:'',
@@ -76,6 +78,17 @@ export class NCSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.isFolderFirst)
 					.onChange(async (value) => {
 						this.plugin.settings.isFolderFirst = value;
+						await this.plugin.saveSettings();
+						this.plugin.explorer.sort();
+					})
+				);
+		
+		new Setting(containerEl)
+				.setName(this.plugin.strings.setting_isdraged)
+				.addToggle(text => text
+					.setValue(this.plugin.settings.isdraged)
+					.onChange(async (value) => {
+						this.plugin.settings.isdraged = value;
 						await this.plugin.saveSettings();
 						this.plugin.explorer.sort();
 					})

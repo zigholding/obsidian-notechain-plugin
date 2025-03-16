@@ -838,6 +838,49 @@ export class NoteChain{
 		}
 	}
 
+	// 将 tfiles 移动为 anchor 的后置笔记
+	async chain_set_next_files(tfiles:Array<TFile>,anchor:TFile|null,same_folder=true){
+		
+		if(!tfiles){return;}
+
+		tfiles = tfiles.filter(x=>x?.extension=='md');
+		if(tfiles.length==0){return;}
+
+		if(!anchor){return};
+
+		if(tfiles.contains(anchor)){return;}
+
+		let xtfiles = this.sort_tfiles_by_chain(tfiles);
+		
+
+		// 移动文件，打断旧链
+		for(let tfile of xtfiles){
+			if(anchor.parent){
+				if(same_folder && tfile.parent?.path!=anchor.parent?.path){
+					let dst = anchor.parent.path+"/"+tfile.name;
+					try {
+						await this.app.fileManager.renameFile(tfile,dst);
+					} catch (error) {
+						// console.log(error)
+					}
+					
+				}
+				await this.chain_pop_node(tfile as TFile)
+			}
+		}
+
+		tfiles.unshift(anchor)
+		let anchor_next = this.get_next_note(anchor);
+		if(anchor_next){tfiles.push(anchor_next)}
+		await this.chain_concat_tfiles(tfiles);
+		for(let dst of tfiles.slice(1,tfiles.length-1)){
+			await this.editor.set_frontmatter_align_file(
+				anchor,dst,this.plugin.settings.field_of_confluence_tab_format
+			)
+		}
+	}
+	
+
 	async chain_set_prev_next(tfile:TFile,prev:TFile,next:TFile){
 		if(tfile==null || prev==next||tfile==prev||tfile==next){return;}
 

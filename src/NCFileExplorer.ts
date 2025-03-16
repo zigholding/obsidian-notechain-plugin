@@ -39,8 +39,79 @@ export class NCFileExplorer{
 		}
 	}
 
+	
+
 	async patchFileExplorer() {
+
+		// 目录拖动排序
 		let explorerView = this.file_explorer;
+		this.explorerPatches.push(
+			around(Object.getPrototypeOf((this.plugin.app as any).dragManager), {
+				onDragEnd:(original) => function(...args) {
+					console.log('onDragEnd');
+					let dragManager = this;
+					let nc = dragManager.app.plugins.plugins['note-chain'];
+					async function move_file(dragManager:any){
+						try {
+							let hoverEl = dragManager.hoverEl;
+							// console.log('hoverEl:',hoverEl);
+							if (hoverEl && (
+									(hoverEl.classList.contains("tree-item") && hoverEl.classList.contains("nav-folder")) ||
+									(hoverEl.classList.contains("nav-files-container"))
+								)
+							) {									
+								let ghostEl = dragManager.ghostEl;
+								if(!ghostEl){return;}
+
+								let x = parseInt(ghostEl.style.left, 10);
+								let y = parseInt(ghostEl.style.top, 10);
+								let element = document.elementFromPoint(x,y);
+								if(!element){return;}
+								let path;
+								if(element.classList.contains('nav-file-title-content')){
+									element = element.closest('.nav-file-title');
+									if(!element){return;}
+								}
+								
+								path = element.getAttribute("data-path");
+
+								let target = dragManager.app.vault.getAbstractFileByPath(path);
+								if(target instanceof TFolder||target.extension!='md'){
+									return;
+								}
+								let sourceEls = dragManager.sourceEls;
+
+								if(!sourceEls || sourceEls.length==0){return;}
+								let tfiles;
+								if(sourceEls.length==1){
+									tfiles = sourceEls.map((x:any)=>dragManager.app.vault.getAbstractFileByPath(x?.dataset?.path));
+								}else{
+									
+									tfiles = nc.chain.get_selected_files(false);
+								}
+								await original.call(dragManager,...args);
+								
+								// 需要先执行original.call(this,...args);
+								setTimeout(() => {
+									nc.chain.chain_set_next_files(tfiles,target,true);;
+								}, 100);
+								
+							}
+							
+						} catch (error) {
+							// console.log(error)
+						}
+					}
+					if(nc.settings.isdraged){
+						move_file(dragManager);
+					}
+					
+					original.call(this,...args);
+				},
+
+			})
+		);
+		
 		this.explorerPatches.push(
 			around(Object.getPrototypeOf(explorerView), {
 				getSortedFolderItems:(original) => function(e:any) {
@@ -59,13 +130,23 @@ export class NCFileExplorer{
 					} else {
 						return original.call(this, e);
 					}
-				}
+				},
+
+				// dragFiles:(original) => function(...args) {
+				// 	let nc = this.app.plugins.plugins['note-chain'];
+				// 	if(nc.settings.isdraged){
+
+				// 	}else{
+				// 		return original.call(this, ...args);
+				// 	}
+				// }
 			})
 		);
 
-		let item = (this.file_explorer as any).fileItems[
-			this.plugin.chain.get_all_tfiles()[0].path
-		]
+
+		// 文件名称
+		let item = Object.values((this.file_explorer as any).fileItems)[0];
+		
 		if(item){
 			around(Object.getPrototypeOf(item), {
 				getTtitle:(original) => function(e:any) {
