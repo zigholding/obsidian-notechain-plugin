@@ -5,7 +5,6 @@ import {
 import NoteChainPlugin from "../main";
 import {NoteChain} from "./NoteChain";
 import { around } from 'monkey-around';
-import Sortable from 'sortablejs';
 
 
 export class NCFileExplorer{
@@ -47,8 +46,7 @@ export class NCFileExplorer{
 		let explorerView = this.file_explorer;
 		this.explorerPatches.push(
 			around(Object.getPrototypeOf((this.plugin.app as any).dragManager), {
-				onDragEnd:(original) => function(...args) {
-					console.log('onDragEnd');
+				onDragEnd:(original) => function(...args:any[]) {
 					let dragManager = this;
 					let nc = dragManager.app.plugins.plugins['note-chain'];
 					async function move_file(dragManager:any){
@@ -86,14 +84,11 @@ export class NCFileExplorer{
 								if(sourceEls.length==1){
 									tfiles = sourceEls.map((x:any)=>dragManager.app.vault.getAbstractFileByPath(x?.dataset?.path));
 								}else{
-									
 									tfiles = nc.chain.get_selected_files(false);
 								}
-								await original.call(dragManager,...args);
-								
 								// 需要先执行original.call(this,...args);
 								setTimeout(() => {
-									nc.chain.chain_set_next_files(tfiles,target,true);;
+									nc.chain.chain_set_next_files(tfiles as Array<TFile>,target,true);;
 								}, 100);
 								
 							}
