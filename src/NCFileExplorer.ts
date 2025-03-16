@@ -80,7 +80,7 @@ export class NCFileExplorer{
 								let sourceEls = dragManager.sourceEls;
 
 								if(!sourceEls || sourceEls.length==0){return;}
-								let tfiles;
+								let tfiles: TFile[];
 								if(sourceEls.length==1){
 									tfiles = sourceEls.map((x:any)=>dragManager.app.vault.getAbstractFileByPath(x?.dataset?.path));
 								}else{
@@ -88,7 +88,7 @@ export class NCFileExplorer{
 								}
 								// 需要先执行original.call(this,...args);
 								setTimeout(() => {
-									nc.chain.chain_set_next_files(tfiles as Array<TFile>,target,true);;
+									nc.chain.chain_set_next_files(tfiles,target,true);;
 								}, 100);
 								
 							}
