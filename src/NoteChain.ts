@@ -868,7 +868,16 @@ export class NoteChain{
 
 	async chain_set_prev(tfile:TFile,prev:TFile|null){
 		if(tfile==null || tfile==prev){return;}
-		if(this.get_prev_note(tfile)==prev){return;}
+		if(this.get_prev_note(tfile)==prev){
+			if(prev==null){
+				if(this.editor.get_frontmatter(tfile,this.prev)!=null){
+					await this.editor.set_frontmatter(
+						tfile,this.prev,null
+					) 
+				}
+			}
+			return;
+		}
 		let msg = `Note Chain: ${prev?.basename} --> 🏠${tfile.basename}`;
 		if(prev==null ){
 			await this.editor.set_frontmatter(
@@ -886,7 +895,16 @@ export class NoteChain{
 
 	async chain_set_next(tfile:TFile,next:TFile|null){
 		if(tfile==null || tfile==next){return;}
-		if(this.get_next_note(tfile)==next){return;}
+		if(this.get_next_note(tfile)==next){
+			if(next==null){
+				if(this.editor.get_frontmatter(tfile,this.next)!=null){
+					await this.editor.set_frontmatter(
+						tfile,this.next,null
+					) 
+				}
+			}
+			return;
+		}
 		let msg = `Note Chain: 🏠${tfile?.basename} <-- ${next?.basename}`;
 		if(next==null ){
 			await this.editor.set_frontmatter(
