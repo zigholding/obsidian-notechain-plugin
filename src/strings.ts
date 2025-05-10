@@ -383,6 +383,14 @@ export class Strings{
             return "Avata";
         }
     }
+
+    get setting_templater_tag(){
+        if(this.language=='zh'){
+            return '脚本笔记标签或目录'
+        }else{
+            return "Tags or folder of script note";
+        }
+    }
     
 
     get setting_wordcout_xfolder(){

@@ -24,6 +24,7 @@ export interface NCSettings {
 	modal_default_width: number,
     modal_default_height: number,
 	avata:string,
+	tpl_tags_folder:string,
 }
 
 export const DEFAULT_SETTINGS: NCSettings = {
@@ -45,6 +46,7 @@ export const DEFAULT_SETTINGS: NCSettings = {
 	modal_default_width: 800,
     modal_default_height: 600,
 	avata:'avata',
+	tpl_tags_folder:'脚本笔记\nScriptNote',
 }
 
 
@@ -231,6 +233,16 @@ export class NCSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.avata)
 					.onChange(async (value) => {
 						this.plugin.settings.avata = value;
+						await this.plugin.saveSettings();
+					})
+				);
+
+		new Setting(containerEl)
+				.setName(this.plugin.strings.setting_templater_tag)
+				.addTextArea(text => text
+					.setValue(this.plugin.settings.tpl_tags_folder)
+					.onChange(async (value) => {
+						this.plugin.settings.tpl_tags_folder = value;
 						await this.plugin.saveSettings();
 					})
 				);

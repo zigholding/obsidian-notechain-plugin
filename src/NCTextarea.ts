@@ -1,25 +1,25 @@
-import { 
-	App, Editor, MarkdownView, Modal, Notice, 
-	Plugin, PluginSettingTab, Setting,moment,MarkdownRenderer,Component,
+import {
+	App, Editor, MarkdownView, Modal, Notice,
+	Plugin, PluginSettingTab, Setting, moment, MarkdownRenderer, Component,
 	TAbstractFile,
-	TFile,TFolder,
+	TFile, TFolder,
 	MarkdownPostProcessorContext
 } from 'obsidian';
 
 import NoteChainPlugin from "../main";
 import { config } from 'process';
 
-export class NCTextarea{
+export class NCTextarea {
 	yamljs = require('js-yaml')
-	plugin:NoteChainPlugin;
-	app:App;
+	plugin: NoteChainPlugin;
+	app: App;
 
-	constructor(plugin:NoteChainPlugin) {
+	constructor(plugin: NoteChainPlugin) {
 		this.plugin = plugin;
 		this.app = plugin.app;
 		this.registerMarkdownCodeBlockProcessor()
 	}
-	
+
 	arrayBufferToBase64(buffer: ArrayBuffer) {
 		let binary = '';
 		let bytes = new Uint8Array(buffer);
@@ -29,38 +29,38 @@ export class NCTextarea{
 		}
 		return window.btoa(binary);
 	}
-	async registerMarkdownCodeBlockProcessor(field='textarea'){
+	async registerMarkdownCodeBlockProcessor(field = 'textarea') {
 		let nc = this.plugin
 		nc.registerMarkdownCodeBlockProcessor(field, async (
-			source: string, 
-			el: HTMLElement, 
+			source: string,
+			el: HTMLElement,
 			ctx: MarkdownPostProcessorContext
 		) => {
 			source = source.trim()
 			let config;
-			if(source==''){
+			if (source == '') {
 				config = {}
-			}else{
+			} else {
 				config = nc.textarea.yamljs.load(source);
 			}
-		
+
 			let container = el.createEl("div", { cls: 'textarea-container' });
 
-			let area:any=null;
-			if(config['textarea']!=false){
+			let area: any = null;
+			if (config['textarea'] != false) {
 				let cls = 'code_block_textarea'
-				if(config.textarea?.cls){
+				if (config.textarea?.cls) {
 					cls = config['textarea']['cls']
 				}
-				area = container.createEl("textarea",{cls:cls});
+				area = container.createEl("textarea", { cls: cls });
 				area.style.width = '100%'
 				area.style.height = '200px'
 				let style = config.textarea?.style
-				if(style && typeof(style)=='object'){
-					for(let name in style){
-						if(name=='backgroundImage'){
+				if (style && typeof (style) == 'object') {
+					for (let name in style) {
+						if (name == 'backgroundImage') {
 							let img = nc.chain.get_tfile(style[name])
-							if(img){
+							if (img) {
 								let data = await nc.app.vault.readBinary(img)
 								let text = this.arrayBufferToBase64(data);
 								let bs64 = `data:image/png;base64,${text}`;
@@ -72,42 +72,42 @@ export class NCTextarea{
 					}
 				}
 			}
-			for(let k in config){
-				if(k.startsWith('buttons')){
+			for (let k in config) {
+				if (k.startsWith('buttons')) {
 					let btns = config[k];
-					if(btns && Array.isArray(btns)){
+					if (btns && Array.isArray(btns)) {
 						// 创建一个按钮容器
 						let buttonContainer = container.createEl("div", { cls: 'code_block_textarea_btn_container' });
 						buttonContainer.style.display = 'flex'; // 设置按钮容器为flex布局，使按钮在同一行显示
 						buttonContainer.style.justifyContent = 'flex-start'; // 设置按钮之间的间距均匀分布
 						buttonContainer.style.marginTop = '10px'
-						for(let btn of btns){
+						for (let btn of btns) {
 							let name = btn[0]
 							let fname = btn[1]
-							if(!name || !fname){continue}
+							if (!name || !fname) { continue }
 
 							let cls = 'code_block_textarea_btn'
-							if(btn[2]){
+							if (btn[2]) {
 								cls = btn[2]
 							}
 							// 库自带函数
 							let ufunc = (nc.textarea as any)[fname];
-							if(!ufunc){
+							if (!ufunc) {
 								// customJS/templater函数
-								ufunc = await nc.utils.get_str_func(nc.app,fname);
+								ufunc = await nc.utils.get_str_func(nc.app, fname);
 							}
-							if(ufunc){
-								let xbtn = buttonContainer.createEl('button', { text: name,cls:cls});
+							if (ufunc) {
+								let xbtn = buttonContainer.createEl('button', { text: name, cls: cls });
 								xbtn.addEventListener('click', () => {
-									ufunc(area,source,el,ctx)
+									ufunc(area, source, el, ctx)
 								});
 								continue
 							}
 
 							// 命令
 							let c = (nc.app as any).commands?.findCommand(fname);
-							if(c){
-								let xbtn = buttonContainer.createEl('button', { text: name,cls:cls});
+							if (c) {
+								let xbtn = buttonContainer.createEl('button', { text: name, cls: cls });
 								xbtn.addEventListener('click', () => {
 									(nc.app as any).commands.executeCommandById(fname)
 								});
@@ -115,16 +115,16 @@ export class NCTextarea{
 							}
 
 							let tfile = nc.chain.get_tfile(fname)
-							if(tfile){
-								let xbtn = buttonContainer.createEl('button', { text: name,cls:cls});
+							if (tfile) {
+								let xbtn = buttonContainer.createEl('button', { text: name, cls: cls });
 								xbtn.addEventListener('click', () => {
 									nc.utils.parse_templater(
-										nc.app,fname,true,{
-											area:area,
-											source:source,
-											el:el,
-											ctx:ctx
-										}
+										nc.app, fname, true, {
+										area: area,
+										source: source,
+										el: el,
+										ctx: ctx
+									}
 									)
 								});
 								continue
@@ -135,7 +135,7 @@ export class NCTextarea{
 				}
 			}
 
-			if(area && config['focus']!=false){
+			if (area && config['focus'] != false) {
 				area.focus()
 			}
 		});
@@ -155,3 +155,5 @@ export class NCTextarea{
 		console.log(area)
 	}
 }
+
+

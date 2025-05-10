@@ -123,6 +123,31 @@ export class NoteChain{
 		}
 		return files;
 	}
+
+	get_all_tfiles_tags(tags:string|Array<string>,sort_mode=''){
+		if(!Array.isArray(tags)){
+			tags = [tags]
+		}
+
+		tags = tags.map(x=>{
+			if(x.startsWith('#')){
+				return x;
+			}else{
+				return '#'+x;
+			}
+		})
+
+		let tfiles = this.get_all_tfiles(sort_mode).filter(x=>{
+			let ttags = this.get_tags(x);
+			for(let tag of tags){
+				if(ttags.contains(tag)){
+					return true;
+				}
+			}
+		})
+		return tfiles;
+	}
+	
 	
 	sort_folders_by_mtime(folders:Array<TFolder>,reverse=true){
 		function ufunc(f:TFolder){
@@ -432,6 +457,45 @@ export class NoteChain{
 			}
 		}
 		return res;
+	}
+
+	get_tfolders(name:string){
+		let folder = this.app.vault.getFolderByPath(name);
+		if(folder){
+			return [folder];
+		}
+		return this.get_all_folders().filter((x:TFolder)=>x.name==name);
+	}
+
+	get_group(group:string){
+		let tfiles:Array<TFile> = [];
+		let tags = this.get_all_tfiles_tags(group);
+		for(let f of tags){
+			if(!tfiles.contains(f)){
+				tfiles.push(f);
+			}
+		}
+
+		let folders = this.get_tfolders(group);
+		for(let folder of folders){
+			let xfiles = this.get_tfiles_of_folder(folder,true);
+			for(let f of xfiles){
+				if(!tfiles.contains(f)){
+					tfiles.push(f);
+				}
+			}
+		}
+
+		let tfile = this.get_tfile(group);
+		if(tfile){
+			let xfiles = this.get_links(tfile,true);
+			for(let f of xfiles){
+				if(!tfiles.contains(f)){
+					tfiles.push(f);
+				}
+			}
+		}
+		return tfiles;
 	}
 
 	get_outlinks(tfile=this.current_note,only_md=true):Array<TFile>{

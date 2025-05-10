@@ -482,21 +482,36 @@ const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
 		let tpl = (plugin.app as any).plugins.plugins['templater-obsidian']
 		if(!tpl){return}
 
+		
+		let tfiles:Array<TFile>=[];
 		let folder = plugin.app.vault.getFolderByPath(tpl.settings.templates_folder);
-		let tfiles;
 		if(folder){
-			tfiles = plugin.chain.get_tfiles_of_folder(folder,true)
+			let xfiles = plugin.chain.get_tfiles_of_folder(folder,true)
 			let tfile = plugin.chain.get_tfile(folder.path+'/'+folder.name+'.md');
 			let infiles = plugin.chain.get_links(tfile);
 			for(let f of infiles){
-				if(!tfiles.contains(f)){
-					tfiles.push(f)
+				if(!xfiles.contains(f)){
+					xfiles.push(f)
 				}
 			}
-			tfiles = plugin.chain.sort_tfiles_by_chain(tfiles)
-		}else{
-			tfiles = plugin.chain.get_all_tfiles()
+			xfiles = plugin.chain.sort_tfiles_by_chain(xfiles);
+			for(let f of xfiles){
+				tfiles.push(f);
+			}
 		}
+		let items = plugin.settings.tpl_tags_folder.trim().split('\n');
+		if(items.length>0){
+			for(let item of items){
+				let xfiles = plugin.chain.get_group(item);
+				for(let f of xfiles){
+					if(!tfiles.contains(f)){
+						tfiles.push(f)
+					}
+				}
+			}
+		}
+		
+
 		let tfile = await plugin.chain.sugguster_note(tfiles as any,0,true)
 		if(tfile){
 			let res = await plugin.utils.parse_templater(plugin.app,tfile.basename);
