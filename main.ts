@@ -10,7 +10,6 @@ import {
 import {NCEditor} from './src/NCEditor';
 import {NoteChain} from './src/NoteChain';
 import {NCTextarea} from './src/NCTextarea';
-import {DailyItem} from './src/NCDaily';
 import {NCFileExplorer} from './src/NCFileExplorer';
 import { Strings } from 'src/strings';
 import { WordCount } from 'src/WordCount';

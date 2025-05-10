@@ -7,35 +7,6 @@ import {NoteChain} from "./NoteChain";
 import { around } from 'monkey-around';
 
 
-function show_toc(title=''){
-	let cfile = app.workspace.getActiveFile()
-	if(!cfile){return}
-	let mcache = app.metadataCache.getFileCache(cfile)
-	if(!mcache?.headings){
-		if(title){
-			let toc=`[[${cfile.basename}|${title}]]`
-		}
-		return toc;
-	}
-	let minLevel = Math.min(...mcache.headings.map(x=>x.level))
-	let toc = mcache.headings.map(
-		x=>{
-			let head = `[[${cfile.basename}#${x.heading}|${x.heading}]]`
-			if(x.level>=minLevel){
-				head = '- '+head
-			}
-			let i = minLevel
-			while(i<x.level){
-				head = '  '+head
-				i = i+1
-			}
-			return head
-		}
-	)
-	toc = toc.join('\n')
-	return toc;
-}
-
 export class NCFileExplorer{
 	plugin:NoteChainPlugin;
 	app:App;
