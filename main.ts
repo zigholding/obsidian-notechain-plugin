@@ -182,11 +182,12 @@ export default class NoteChainPlugin extends Plugin {
 						.onClick(async () => {
 							let notes = file.parent?.children;
 							if(notes){
+								notes = notes.filter((x:TAbstractFile)=>x instanceof TFile)
 								let anchor = await this.dialog_suggest(
-									(f:TAbstractFile)=>f.name,
-									notes.filter((x:TAbstractFile)=>x instanceof TFile)
+									notes.map((x:TFile)=>x.basename),
+									notes
 								)
-
+								if(!anchor){return}
 								let note = this.chain.get_tfile(file.path+'/'+file.name+'.md');
 								if(!note){
 									note = await this.app.vault.create(
