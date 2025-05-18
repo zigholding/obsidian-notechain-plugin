@@ -182,9 +182,13 @@ export default class NoteChainPlugin extends Plugin {
 						.onClick(async () => {
 							let notes = file.parent?.children;
 							if(notes){
-								notes = notes.filter((x:TAbstractFile)=>x instanceof TFile)
+								notes = this.chain.sort_tfiles_by_chain(notes);
+								notes = notes.filter((x:TAbstractFile)=>{
+									if(x==file){return false}
+									return true;
+								})
 								let anchor = await this.dialog_suggest(
-									notes.map((x:TFile)=>x.basename),
+									notes.map((x:TAbstractFile)=>x instanceof TFile?'📃'+x.basename:'📁'+x.name),
 									notes
 								)
 								if(!anchor){return}
@@ -194,14 +198,43 @@ export default class NoteChainPlugin extends Plugin {
 										file.path+'/'+file.name+'.md',''
 									);
 								}
-								await this.editor.set_multi_frontmatter(
-									note,
-									{
-										"FolderPrevNote":`[[${anchor.basename}]]`,
-										"FolderPrevNoteOffset":0.5,
+								if(anchor instanceof TFile){
+									await this.editor.set_multi_frontmatter(
+										note,
+										{
+											"FolderPrevNote":`[[${anchor.basename}]]`,
+											"FolderPrevNoteOffset":0.5,
+										}
+									)
+								}else{
+									let anote = this.chain.get_tfile(anchor.path+'/'+anchor.name+'.md');
+									let prev = this.editor.get_frontmatter(anote,'FolderPrevNote');
+									let offset = this.editor.get_frontmatter(anote,'FolderPrevNoteOffset');
+									if(prev){
+										await this.editor.set_multi_frontmatter(
+											note,
+											{
+												"FolderPrevNote":prev,
+												"FolderPrevNoteOffset":offset*1.1,
+											}
+										)
+										
+									}else{
+										await this.editor.set_multi_frontmatter(
+											note,
+											{
+												"FolderPrevNoteOffset":offset*1.1,
+											}
+										)
 									}
-								)
+								}
+								
+								
 								this.chain.refresh_tfile(file);
+								if(file.parent){
+									await this.chain.reset_offset_of_folder(file.parent)
+								}
+
 								await this.explorer.sort(0,false);
 							}
 						});

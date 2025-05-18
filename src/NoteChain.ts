@@ -88,6 +88,27 @@ export class NoteChain{
 			);
 		}
 	}
+	
+
+	async reset_offset_of_folder(tfolder:TFolder){
+		let tfiles = this.children[tfolder.path]
+		let folders = tfiles.filter((x:TAbstractFile)=>x instanceof TFolder)
+		if(folders.length==0){return}
+		let base = Math.pow(0.1,Math.ceil(Math.log10(folders.length+1)));
+		let offset = base;
+		for(let folder of folders){
+			let anote = this.get_tfile(folder.path+'/'+folder.name+'.md');
+			if(!anote){
+				anote = await this.app.vault.create(
+					folder.path+'/'+folder.name+'.md',''
+				);
+			}
+			if(anote){
+				await this.editor.set_frontmatter(anote,'FolderPrevNoteOffset',offset);
+				offset = offset+base;
+			}
+		}
+	}
 
 	refresh_tfile(tfile:TAbstractFile){
 		if(tfile.parent?.children){
@@ -642,13 +663,20 @@ export class NoteChain{
 	indexOfFolder(tfile:TFolder,tfiles:Array<TFile>){
 		let fnote = this.get_tfile(tfile.name+'.md');
 		if(!fnote){return -1;}
+
+		let idx = -1;
+
 		let msg = this.plugin.editor.get_frontmatter(
 			fnote,"FolderPrevNote"
 		);
-		if(!msg||typeof(msg)!='string'){return -1;}
-		let anchor = this.get_tfile(msg)
-		if(!anchor){return -1;}
-		let idx = tfiles.indexOf(anchor);
+
+		if(msg && typeof(msg)=='string'){
+			let anchor = this.get_tfile(msg)
+			if(anchor){
+				idx = tfiles.indexOf(anchor)
+			}
+		}
+
 		let offset = this.plugin.editor.get_frontmatter(
 			fnote,"FolderPrevNoteOffset"
 		);
@@ -656,7 +684,7 @@ export class NoteChain{
 		if(typeof(offset)=='string'){
 			idx = idx + parseFloat(offset);
 		}else{
-			idx = idx + 0.5;
+			idx = idx + offset;
 		}
 		return idx;
 	}
