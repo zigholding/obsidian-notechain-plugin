@@ -90,25 +90,7 @@ export class NoteChain{
 	}
 	
 
-	async reset_offset_of_folder(tfolder:TFolder){
-		let tfiles = this.children[tfolder.path]
-		let folders = tfiles.filter((x:TAbstractFile)=>x instanceof TFolder)
-		if(folders.length==0){return}
-		let base = Math.pow(0.1,Math.ceil(Math.log10(folders.length+1)));
-		let offset = base;
-		for(let folder of folders){
-			let anote = this.get_tfile(folder.path+'/'+folder.name+'.md');
-			if(!anote){
-				anote = await this.app.vault.create(
-					folder.path+'/'+folder.name+'.md',''
-				);
-			}
-			if(anote){
-				await this.editor.set_frontmatter(anote,'FolderPrevNoteOffset',offset);
-				offset = offset+base;
-			}
-		}
-	}
+	
 
 	refresh_tfile(tfile:TAbstractFile){
 		if(tfile.parent?.children){
@@ -1365,4 +1347,108 @@ export class NoteChain{
 		return items;
 	}
 
+	get_folder_pre_info(tfolder:TFolder){
+		let note = this.get_tfile(tfolder.path+'/'+tfolder.name+'.md');
+		if(!note){
+			return {
+				'prev':null,
+				'offset':null,
+			};
+		}
+		return {
+			'prev':this.editor.get_frontmatter(note,'FolderPrevNote'),
+			'offset':this.editor.get_frontmatter(note,'FolderPrevNoteOffset'),
+		}
+	}
+
+	async set_folder_pre_info(tfolder:TFolder,prev:string|TFile,offset:number){
+		let tfile = await this.get_folder_note(tfolder);
+		let anchor  = prev instanceof TFile?prev:this.get_tfile(prev);
+		if(anchor){
+			await this.plugin.editor.set_multi_frontmatter(
+				tfile,
+				{
+					"FolderPrevNote":`[[${anchor.basename}]]`,
+					"FolderPrevNoteOffset":offset,
+				}
+			)
+		}else{
+			await this.plugin.editor.set_multi_frontmatter(
+				tfile,
+				{
+					"FolderPrevNoteOffset":offset,
+				}
+			)
+		}
+		if(offset>=1. || offset<=0.){
+			await this.reset_offset_of_folder(tfolder);
+		}
+	}
+
+	async reset_offset_of_folder(tfolder:TFolder){
+		let prev = this.get_folder_pre_info(tfolder);
+		if(prev['offset']==null){
+			return;
+		}
+
+		let tfolders = tfolder.parent?.children.filter((x:TAbstractFile)=>x instanceof TFolder);
+		let folders:any[] = [];
+		if(tfolders){
+			for(let x of tfolders){
+				let info = this.get_folder_pre_info(x as TFolder);
+				if(info['prev']==prev['prev']){
+					folders.push(x);
+				}
+			}
+		}
+		folders = folders.sort((a,b)=>{
+			let ainfo = this.get_folder_pre_info(a as TFolder);
+			let binfo = this.get_folder_pre_info(b as TFolder);
+			return ainfo['offset']-binfo['offset'];
+		});
+		
+		if(folders.length==0){return}
+
+		let base = Math.pow(0.1,Math.ceil(Math.log10(folders.length+1))+1);
+		let offset = 0.5-base;
+		for(let folder of folders){
+			offset = offset+base;
+			await this.set_folder_pre_info(folder,prev['prev'],offset);
+		}
+	}
+	
+	async get_folder_note(tfolder:TFolder){
+		let note = this.get_tfile(tfolder.path+'/'+tfolder.name+'.md');
+		if(!note){
+			note = await this.app.vault.create(tfolder.path+'/'+tfolder.name+'.md','');
+		}
+		return note;
+	}
+
+	async move_folder_as_next_note(tfolder:TFolder,anchor:TFolder|TFile){
+		let tfile = await this.get_folder_note(tfolder);
+		if(anchor instanceof TFolder){
+			let prev = this.get_folder_pre_info(anchor);
+			if(prev['prev']){
+				await this.set_folder_pre_info(anchor,prev['prev'],prev['offset']+0.0001);
+			}else{
+				await this.set_folder_pre_info(anchor,'',prev['offset']+0.0001);
+			}
+		}else if(anchor instanceof TFile){
+			let prevs:any[] = [];
+			let tfolders = tfolder.parent?.children.filter((x:TAbstractFile)=>x instanceof TFolder && x!=tfolder);
+			if(tfolders){
+				for(let x of tfolders){
+					let info = await this.get_folder_pre_info(x as TFolder);
+					prevs.push(info);
+				}
+			}
+			prevs = prevs.filter(x=>x['prev'] && this.get_tfile(x['prev'])==anchor).map(x=>x['offset']);
+			if(prevs.length==0){
+				this.set_folder_pre_info(tfolder,anchor,0.5);
+			}else{
+				this.set_folder_pre_info(tfolder,anchor,Math.min(...prevs)-0.0001)
+			}
+		}
+	}
 }

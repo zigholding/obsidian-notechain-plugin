@@ -192,49 +192,9 @@ export default class NoteChainPlugin extends Plugin {
 									notes
 								)
 								if(!anchor){return}
-								let note = this.chain.get_tfile(file.path+'/'+file.name+'.md');
-								if(!note){
-									note = await this.app.vault.create(
-										file.path+'/'+file.name+'.md',''
-									);
-								}
-								if(anchor instanceof TFile){
-									await this.editor.set_multi_frontmatter(
-										note,
-										{
-											"FolderPrevNote":`[[${anchor.basename}]]`,
-											"FolderPrevNoteOffset":0.5,
-										}
-									)
-								}else{
-									let anote = this.chain.get_tfile(anchor.path+'/'+anchor.name+'.md');
-									let prev = this.editor.get_frontmatter(anote,'FolderPrevNote');
-									let offset = this.editor.get_frontmatter(anote,'FolderPrevNoteOffset');
-									if(prev){
-										await this.editor.set_multi_frontmatter(
-											note,
-											{
-												"FolderPrevNote":prev,
-												"FolderPrevNoteOffset":offset*1.1,
-											}
-										)
-										
-									}else{
-										await this.editor.set_multi_frontmatter(
-											note,
-											{
-												"FolderPrevNoteOffset":offset*1.1,
-											}
-										)
-									}
-								}
-								
+								await this.chain.move_folder_as_next_note(file,anchor);
 								
 								this.chain.refresh_tfile(file);
-								if(file.parent){
-									await this.chain.reset_offset_of_folder(file.parent)
-								}
-
 								await this.explorer.sort(0,false);
 							}
 						});
