@@ -18,6 +18,7 @@ import { NCSettingTab,NCSettings,DEFAULT_SETTINGS } from 'src/setting';
 import { addCommands } from 'src/commands';
 import {dialog_suggest} from 'src/gui/inputSuggester'
 import {dialog_prompt} from 'src/gui/inputPrompt'
+import {EasyAPI} from 'src/easyapi/easyapi'
 
 
 export default class NoteChainPlugin extends Plugin {
@@ -35,8 +36,9 @@ export default class NoteChainPlugin extends Plugin {
 	utils:any;
 	timerId:any;
 	ob:any;
-	dialog_suggest: Function
-	dialog_prompt: Function
+	dialog_suggest: Function;
+	dialog_prompt: Function;
+	easyapi: EasyAPI;
 
 
 	async onload() {
@@ -81,6 +83,7 @@ export default class NoteChainPlugin extends Plugin {
 		this.mermaid = new MermaidGraph(this);
 		this.canvas = new CanvasGraph(this);
 		this.strings = new Strings();
+		this.easyapi = new EasyAPI(this.app);
 
 		addCommands(this);
 

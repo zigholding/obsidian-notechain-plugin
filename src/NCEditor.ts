@@ -55,7 +55,7 @@ export class NCEditor{
 		}
 		return flag;
 	}
-
+	
 	_set_(data:any,key:string,value:any){
 		let items = key.trim().split('.')
 		if(!items){return}
