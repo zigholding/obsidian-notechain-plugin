@@ -1380,12 +1380,10 @@ export class NoteChain{
 			await this.plugin.editor.set_multi_frontmatter(
 				tfile,
 				{
+					"FolderPrevNote":null,
 					"FolderPrevNoteOffset":offset,
 				}
 			)
-		}
-		if(offset>=0.99 || offset<=0.01){
-			await this.reset_offset_of_folder(tfolder);
 		}
 	}
 
@@ -1432,11 +1430,7 @@ export class NoteChain{
 	async move_folder_as_next_note(tfolder:TFolder,anchor:TFolder|TFile){
 		if(anchor instanceof TFolder){
 			let prev = this.get_folder_pre_info(anchor);
-			if(prev['prev']){
-				await this.set_folder_pre_info(tfolder,prev['prev'],prev['offset']+0.0001);
-			}else{
-				await this.set_folder_pre_info(tfolder,'',prev['offset']+0.0001);
-			}
+			await this.set_folder_pre_info(tfolder,prev['prev'],prev['offset']*1.001);
 		}else if(anchor instanceof TFile){
 			let prevs:any[] = [];
 			let tfolders = tfolder.parent?.children.filter((x:TAbstractFile)=>x instanceof TFolder && x!=tfolder);
@@ -1450,9 +1444,10 @@ export class NoteChain{
 			if(prevs.length==0){
 				this.set_folder_pre_info(tfolder,anchor,0.5);
 			}else{
-				this.set_folder_pre_info(tfolder,anchor,Math.min(...prevs)-0.0001)
+				this.set_folder_pre_info(tfolder,anchor,Math.min(...prevs)*1.001)
 			}
 		}
+		await this.reset_offset_of_folder(tfolder);
 	}
 
 	get_confluence_level(note:TFile){

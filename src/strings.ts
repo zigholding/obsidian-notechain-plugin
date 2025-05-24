@@ -111,7 +111,7 @@ export class Strings{
 
     get chain_move_up_node(){
         if(this.language=='zh'){
-            return '打开前置笔记'
+            return '向前移动笔记节点'
         }else{
             return "Move node up";
         }
@@ -119,7 +119,7 @@ export class Strings{
 
     get chain_move_down_node(){
         if(this.language=='zh'){
-            return '打开前置笔记'
+            return '向后移动笔记节点'
         }else{
             return "Move node down";
         }

@@ -193,7 +193,7 @@ export default class NoteChainPlugin extends Plugin {
 								)
 								if(!anchor){return}
 								await this.chain.move_folder_as_next_note(file,anchor);
-								
+								new Notice(`${anchor instanceof TFile?anchor.basename:anchor.name}-->${file.name}`)
 								this.chain.refresh_tfile(file);
 								await this.explorer.sort(0,false);
 							}
