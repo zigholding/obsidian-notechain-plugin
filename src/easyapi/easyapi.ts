@@ -34,6 +34,10 @@ export class EasyAPI {
         return this.app.workspace.getActiveFile();
     }
 
+    get cfolder(){
+        return this.cfile?.parent;
+    }
+
     get cview(){
         let view = (this.app.workspace as any).getActiveFileView()
 		return view;

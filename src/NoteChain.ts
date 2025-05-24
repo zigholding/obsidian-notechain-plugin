@@ -1421,9 +1421,9 @@ export class NoteChain{
 		}
 	}
 	
-	async get_folder_note(tfolder:TFolder){
+	async get_folder_note(tfolder:TFolder,create=true){
 		let note = this.get_tfile(tfolder.path+'/'+tfolder.name+'.md');
-		if(!note){
+		if(!note && create){
 			note = await this.app.vault.create(tfolder.path+'/'+tfolder.name+'.md','');
 		}
 		return note;
@@ -1453,5 +1453,13 @@ export class NoteChain{
 				this.set_folder_pre_info(tfolder,anchor,Math.min(...prevs)-0.0001)
 			}
 		}
+	}
+
+	get_confluence_level(note:TFile){
+		let fm = this.editor.get_frontmatter(note, this.plugin.settings.field_of_confluence_tab_format);
+		if(fm){
+			return (fm.match(/\t/g) || []).length;
+		}
+		return 0;
 	}
 }

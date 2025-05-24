@@ -6,6 +6,7 @@ import { App, View, WorkspaceLeaf,TFile } from 'obsidian';
 import {EasyAPI} from 'src/easyapi/easyapi'
 
 export class EasyEditor {
+    yamljs = require('js-yaml');
     app: App;
     api: EasyAPI;
 
@@ -105,6 +106,74 @@ export class EasyEditor {
             )
 		}else{
 			return null;
+		}
+	}
+
+    dict_set_value(data:any,key:string,value:any){
+		let items = key.trim().split('.')
+		if(!items){return}
+		let curr = data
+		for(let item of items.slice(0,items.length-1)){
+			let kv = item.match(/^(.*?)(\[-?\d+\])?$/) // 匹配数组索引, 如 key[0] 或 key
+			if(!kv){return}
+			let k = kv[1] // 键名
+			if(kv[2]){ // 有索引
+				let i = parseInt(kv[2].slice(1,kv[2].length-1)) // 索引
+				if(!(k in curr)){ // 键不存在
+					curr[k] = [{}] // 创建空数组
+					curr = curr[k][0]
+				}else{
+					if(Array.isArray(curr[k])){
+						let tmp = {}
+						if(i<0){
+							curr[k].splice(-i-1,0,tmp)
+						}else if(i<curr[k].length){
+							curr[k][i]=tmp
+						}else{
+							curr[k].push(tmp)
+						}
+						curr = tmp
+					}else{
+						curr[k] = [{}]
+						curr = curr[k][0]
+					}
+				}
+			}else{
+				if(!(k in curr)){
+					curr[k] = {}
+					curr = curr[k]
+				}else{
+					if(typeof(curr[k])!='object'){
+						curr[k] = {}
+						curr = curr[k]
+					}else{
+						curr = curr[k]
+					}
+				}
+			}
+		}
+		let kv = items[items.length-1].match(/^(.*?)(\[-?\d+\])?$/)
+		if(!kv){return}
+		let k = kv[1]
+		if(kv[2]){
+			let i = parseInt(kv[2].slice(1,kv[2].length-1))
+			if(k in curr){
+				if(Array.isArray(curr[k])){
+					if(i<0){
+						curr[k].splice(-i-1,0,value)
+					}else if(i<curr[k].length){
+						curr[k][i] = value
+					}else{
+						curr[k].push(value)
+					}
+				}else{
+					curr[k] = value
+				}
+			}else{
+				curr[k] = [value]
+			}
+		}else{
+			curr[k] = value
 		}
 	}
 }
