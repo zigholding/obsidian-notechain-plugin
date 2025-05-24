@@ -41,6 +41,8 @@ const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 					}
 				}
 				
+				if(!curr){return;}
+
 				if(fm['longform']==null){return;}
 				let scenes = plugin.utils.concat_array(fm.longform.scenes);
 				await set_confluence_level(fm.longform.scenes);
@@ -49,6 +51,10 @@ const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 
 				ignoredFiles = ignoredFiles.filter((f:string)=>!scenes.contains(f));
 				let notes = plugin.utils.concat_array([scenes,ignoredFiles]);
+				if(!notes || notes.length==0){
+					return;
+				}
+				
 				if(!notes.contains(curr.basename)){
 					notes.unshift(curr.basename);
 				}
