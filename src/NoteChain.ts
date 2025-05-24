@@ -1352,13 +1352,17 @@ export class NoteChain{
 		if(!note){
 			return {
 				'prev':null,
-				'offset':null,
+				'offset':0.0,
 			};
 		}
-		return {
+		let info = {
 			'prev':this.editor.get_frontmatter(note,'FolderPrevNote'),
 			'offset':this.editor.get_frontmatter(note,'FolderPrevNoteOffset'),
 		}
+		if(info['offset'] ==null){
+			info['offset'] = 0.0;
+		}
+		return info;
 	}
 
 	async set_folder_pre_info(tfolder:TFolder,prev:string|TFile,offset:number){
@@ -1380,7 +1384,7 @@ export class NoteChain{
 				}
 			)
 		}
-		if(offset>=1. || offset<=0.){
+		if(offset>=0.99 || offset<=0.01){
 			await this.reset_offset_of_folder(tfolder);
 		}
 	}
@@ -1426,13 +1430,12 @@ export class NoteChain{
 	}
 
 	async move_folder_as_next_note(tfolder:TFolder,anchor:TFolder|TFile){
-		let tfile = await this.get_folder_note(tfolder);
 		if(anchor instanceof TFolder){
 			let prev = this.get_folder_pre_info(anchor);
 			if(prev['prev']){
-				await this.set_folder_pre_info(anchor,prev['prev'],prev['offset']+0.0001);
+				await this.set_folder_pre_info(tfolder,prev['prev'],prev['offset']+0.0001);
 			}else{
-				await this.set_folder_pre_info(anchor,'',prev['offset']+0.0001);
+				await this.set_folder_pre_info(tfolder,'',prev['offset']+0.0001);
 			}
 		}else if(anchor instanceof TFile){
 			let prevs:any[] = [];

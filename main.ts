@@ -183,10 +183,7 @@ export default class NoteChainPlugin extends Plugin {
 							let notes = file.parent?.children;
 							if(notes){
 								notes = this.chain.sort_tfiles_by_chain(notes);
-								notes = notes.filter((x:TAbstractFile)=>{
-									if(x==file){return false}
-									return true;
-								})
+								notes = notes.filter((x:TAbstractFile)=>x!=file)
 								let anchor = await this.dialog_suggest(
 									notes.map((x:TAbstractFile)=>x instanceof TFile?'📃'+x.basename:'📁'+x.name),
 									notes
