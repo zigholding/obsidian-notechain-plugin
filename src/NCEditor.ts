@@ -495,8 +495,10 @@ export class NCEditor{
 
 	async set_frontmatter_align_file(src:TFile,dst:TFile,field:string){
 		if(field){
-			let value = this.get_frontmatter(src,field)
-			await this.set_frontmatter(dst,field,value,1)
+			let value = this.get_frontmatter(src,field);
+			if(value){
+				await this.set_frontmatter(dst,field,value,1)
+			}
 		}
 	}
 }

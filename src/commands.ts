@@ -244,7 +244,6 @@ const create_new_note = (plugin:NoteChainPlugin) => ({
 					if(!(target==='null')){
 						await (plugin.chain as any)[target](dst,curr);
 						if(target=='chain_insert_node_after'||target=='chain_insert_node_before'){
-
 							await plugin.editor.set_frontmatter_align_file(
 								curr,dst,plugin.settings.field_of_confluence_tab_format
 							)

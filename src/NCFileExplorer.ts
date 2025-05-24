@@ -74,6 +74,7 @@ export class NCFileExplorer{
 								path = element.getAttribute("data-path");
 
 								let target = dragManager.app.vault.getAbstractFileByPath(path);
+								
 								if(target instanceof TFolder||target.extension!='md'){
 									return;
 								}
