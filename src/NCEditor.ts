@@ -142,7 +142,9 @@ export class NCEditor{
 		}else{
 			let file = this.plugin.chain.get_tfile(tfile.path+'/'+tfile.name+'.md')
 			if(file){
-				let config = this.get_frontmatter(file,key)
+				let config = this.get_frontmatter(file,key+'_folder')
+				if(config){return config}
+				config = this.get_frontmatter(file,key)				
 				if(config){return config}
 			}
 		}
