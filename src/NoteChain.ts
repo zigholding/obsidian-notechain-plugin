@@ -643,26 +643,15 @@ export class NoteChain{
 	}
 
 	indexOfFolder(tfile:TFolder,tfiles:Array<TFile>){
-		let fnote = this.get_tfile(tfile.name+'.md');
-		if(!fnote){return -1;}
+		let info = this.get_folder_pre_info(tfile);
 
 		let idx = -1;
-
-		let msg = this.plugin.editor.get_frontmatter(
-			fnote,"FolderPrevNote"
-		);
-
-		if(msg && typeof(msg)=='string'){
-			let anchor = this.get_tfile(msg)
-			if(anchor){
-				idx = tfiles.indexOf(anchor)
-			}
+		let anchor = this.get_tfile(info['prev']);
+		if(anchor){
+			idx = tfiles.indexOf(anchor)
 		}
 
-		let offset = this.plugin.editor.get_frontmatter(
-			fnote,"FolderPrevNoteOffset"
-		);
-
+		let offset = info['offset']
 		if(typeof(offset)=='string'){
 			idx = idx + parseFloat(offset);
 		}else{
