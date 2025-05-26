@@ -78,6 +78,7 @@ const cmd_longform4notechain = (plugin:NoteChainPlugin) => ({
 		let nc = plugin;
 		let curr = plugin.chain.current_note;
 		if(curr==null || curr.parent==null){return;}
+		
 
 		let path = curr.parent.path+'/'+curr.parent.name+'.md';
 		let dst = await nc.chain.get_tfile(path);
@@ -87,7 +88,6 @@ const cmd_longform4notechain = (plugin:NoteChainPlugin) => ({
 				''
 			)
 		}
-
 		await plugin.app.fileManager.processFrontMatter(
 			dst,
 			fm =>{
@@ -139,6 +139,8 @@ const cmd_sort_file_explorer = (plugin:NoteChainPlugin) => ({
 	icon:'arrow-down-wide-narrow',
 	callback: async () => {
 		await plugin.explorer.sort(0,true);
+		await plugin.explorer.set_fileitem_style();
+		await plugin.explorer.set_display_text();
 	}
 });
 
