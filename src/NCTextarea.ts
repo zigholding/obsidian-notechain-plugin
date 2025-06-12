@@ -43,7 +43,16 @@ export class NCTextarea {
 			} else {
 				config = nc.textarea.yamljs.load(source);
 			}
-
+			let tfile = nc.chain.get_tfile(ctx.sourcePath);
+			if(tfile){
+				let frontmatter = (nc.app as any).metadataCache.getFileCache(tfile)['frontmatter'];
+				if(frontmatter){
+					for(let key in frontmatter){
+						config[key] = frontmatter[key];
+					}
+				}
+			}
+			
 			let container = el.createEl("div", { cls: 'textarea-container' });
 
 			let area: any = null;
@@ -118,14 +127,21 @@ export class NCTextarea {
 							if (tfile) {
 								let xbtn = buttonContainer.createEl('button', { text: name, cls: cls });
 								xbtn.addEventListener('click', () => {
-									nc.utils.parse_templater(
-										nc.app, fname, true, {
-										area: area,
-										source: source,
-										el: el,
-										ctx: ctx
+									let tags = nc.chain.get_tags(tfile).map(x=>x.slice(1)).filter(
+										x=>nc.settings.tpl_tags_folder.contains(x)
+									);
+									if(tags.length>0){
+										nc.utils.parse_templater(
+											nc.app, fname, true, {
+												area: area,
+												source: source,
+												el: el,
+												ctx: ctx
+											}
+										);
+									}else{
+										nc.chain.open_note_in_modal(tfile.path)
 									}
-									)
 								});
 								continue
 							}

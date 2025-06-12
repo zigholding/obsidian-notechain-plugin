@@ -9,11 +9,13 @@ import NoteChainPlugin from "../main";
 export class NoteContentModal extends Modal {
     content: string;
     plugin: NoteChainPlugin;
+    sourcePath: string;
 
-    constructor(app: App, content: string, plugin: NoteChainPlugin) {
+    constructor(app: App, content: string, plugin: NoteChainPlugin, sourcePath: string) {
         super(app);
         this.content = content;
         this.plugin = plugin;
+        this.sourcePath = sourcePath;
     }
 
     onOpen() {
@@ -30,8 +32,7 @@ export class NoteContentModal extends Modal {
 
         // 创建一个临时的 Component 实例
         const component = new Component();
-        
-        MarkdownRenderer.render(this.app, this.content, container, '', component);
+        MarkdownRenderer.render(this.app, this.content, container, this.sourcePath, component);
 
         this.addClickListener(container);
         

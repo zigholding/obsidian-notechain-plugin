@@ -47,11 +47,11 @@ export class NoteChain{
             let file = this.get_tfile(notePath);
             if (file instanceof TFile) {
                 let content = await this.app.vault.read(file);
-                let modal = new NoteContentModal(this.app, content, this.plugin);
+                let modal = new NoteContentModal(this.app, content, this.plugin,file.path);
 				modal.open();
 				return modal;
             } else {
-				let modal = new NoteContentModal(this.app, notePath, this.plugin);
+				let modal = new NoteContentModal(this.app, notePath, this.plugin,'');
 				modal.open();
 				return modal;
             }
@@ -259,10 +259,10 @@ export class NoteChain{
 		}
 	}
 
-
+	
 	get_tfile(path:string,only_first=true){
 		try{
-			path = path.split('|')[0].replace('[[','').replace(']]','');
+			path = path.split('|')[0].replace('![[','').replace('[[','').replace(']]','');
 			let tfile = this.app.vault.getFileByPath(path)
 			if(tfile){
 				return tfile;
