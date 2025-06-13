@@ -10,6 +10,7 @@ import NoteChainPlugin from "../main";
 import {NCEditor} from './NCEditor';
 import {get_tp_func} from './utils';
 import {NoteContentModal,NoteEditorModal} from './NCModal'
+import {NoteContentView} from './NCView'
 import { strings } from './strings';
 import { off } from 'process';
 
@@ -40,8 +41,6 @@ export class NoteChain{
 		this.init_children();
 	}
 
-
-
     async open_note_in_modal(notePath: string) {
         try {
             let file = this.get_tfile(notePath);
@@ -59,6 +58,32 @@ export class NoteChain{
             new Notice(`Error opening note in modal: ${error.message}`);
         }
     }
+
+	async open_note_in_view(notePath: string) {
+		try {
+
+			let content  = '';
+			let sourcePath = '';
+            let file = this.get_tfile(notePath);
+            if (file instanceof TFile) {
+                content = await this.app.vault.read(file);
+				sourcePath = notePath;
+            } else {
+				content = notePath;
+            }
+			let leaf = this.app.workspace.getRightLeaf(false); // 右侧打开
+			if(!leaf){return}
+			await leaf.setViewState({
+				type: 'note-content-view',
+				active: true,
+			});
+			const view = leaf.view as NoteContentView;
+			
+			view.setContent(content, sourcePath);
+        } catch (error) {
+            new Notice(`Error opening note in modal: ${error.message}`);
+        }
+	}
 
 	init_children(){
 		this.children = {};
@@ -260,8 +285,11 @@ export class NoteChain{
 	}
 
 	
-	get_tfile(path:string,only_first=true){
+	get_tfile(path:string|TFile,only_first=true){
 		try{
+			if(path instanceof TFile){
+				return path;
+			}
 			path = path.split('|')[0].replace('![[','').replace('[[','').replace(']]','');
 			let tfile = this.app.vault.getFileByPath(path)
 			if(tfile){

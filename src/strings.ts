@@ -213,6 +213,22 @@ export class Strings{
         }
     }
 
+    get cmd_open_note_in_modal(){
+        if(this.language=='zh'){
+            return '弹窗中打开笔记'
+        }else{
+            return "Open note in modal";
+        }
+    }
+
+    get cmd_open_note_in_view(){
+        if(this.language=='zh'){
+            return '页面中打开笔记'
+        }else{
+            return "Open note in view";
+        }
+    }
+
     get cmd_insert_command_id(){
         if(this.language=='zh'){
             return '插入命令ID'

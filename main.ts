@@ -19,7 +19,7 @@ import { addCommands } from 'src/commands';
 import {dialog_suggest} from 'src/gui/inputSuggester'
 import {dialog_prompt} from 'src/gui/inputPrompt'
 import {EasyAPI} from 'src/easyapi/easyapi'
-
+import { NoteContentView } from 'src/NCView';
 
 export default class NoteChainPlugin extends Plugin {
 	settings: NCSettings;
@@ -326,6 +326,13 @@ export default class NoteChainPlugin extends Plugin {
 					
 			})
 		);
+
+		this.registerView(
+			'note-content-view',
+			(leaf) => new NoteContentView(leaf, this)
+		);
+
+		
 		this.wordcout = new WordCount(this,this.app);
 		this.textarea = new NCTextarea(this);
 		this.status = 'loaded'

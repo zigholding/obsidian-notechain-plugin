@@ -136,7 +136,7 @@ const cmd_longform4notechain = (plugin:NoteChainPlugin) => ({
 const cmd_sort_file_explorer = (plugin:NoteChainPlugin) => ({
 	id: "sort_file_explorer",
     name: plugin.strings.cmd_sort_file_explorer,
-	icon:'arrow-down-wide-narrow',
+	icon:'lucide-refresh-cw',
 	callback: async () => {
 		await plugin.explorer.sort(0,true);
 		await plugin.explorer.set_fileitem_style();
@@ -708,6 +708,30 @@ const cmd_insert_command_id = (plugin: NoteChainPlugin) => ({
     }
 });
 
+const cmd_open_note_in_modal = (plugin: NoteChainPlugin) => ({
+    id: 'cmd_open_note_in_modal',
+    name: plugin.strings.cmd_open_note_in_modal,
+	icon:'Laptop',
+    callback: async () => {
+		
+		let note = await plugin.chain.sugguster_note();
+		if(note){
+			plugin.chain.open_note_in_modal(note.path);
+		}
+    }
+});
+
+const cmd_open_note_in_view = (plugin: NoteChainPlugin) => ({
+    id: 'cmd_open_note_in_view',
+    name: plugin.strings.cmd_open_note_in_view,
+	icon:'Panels Top Left',
+    callback: async () => {
+		let note = await plugin.chain.sugguster_note();
+		if(note){
+			plugin.chain.open_note_in_view(note.path);
+		}
+    }
+});
 
 
 
@@ -742,6 +766,8 @@ const commandBuilders = [
 	cmd_move_none_level,
 	cmd_move_prev_level,
 	cmd_insert_command_id,
+	cmd_open_note_in_modal,
+	cmd_open_note_in_view
 ];
 
 const commandBuildersDesktop = [

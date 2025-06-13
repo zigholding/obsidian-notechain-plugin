@@ -38,8 +38,6 @@ export class NCFileExplorer{
 		}
 	}
 
-	
-
 	async patchFileExplorer() {
 
 		// 目录拖动排序

@@ -8,6 +8,8 @@ import {
     TAbstractFile
 } from 'obsidian';
 
+import {NoteContentView} from './NCView'
+
 export function get_plugins(app:App,name:string){
 
 }
@@ -260,4 +262,15 @@ export async function toogle_note_css(app:App,document:any,name:string,refresh=f
             }
         }
     }
+}
+
+export async function open_note_as_leave(app:App,src:string){
+    const leaf = this.app.workspace.getRightLeaf(false); // 右侧打开
+    if(!leaf){return}
+    await leaf.setViewState({
+        type: 'note-content-view',
+        active: true,
+    });
+    const view = leaf.view as NoteContentView;
+    view.setContent(content, sourcePath);
 }
