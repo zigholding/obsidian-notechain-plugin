@@ -92,16 +92,16 @@ export class NoteContentView extends ItemView {
                 el.setAttr('aria-label', href);
                 el.addClass('hover-link'); // ✅ 核心
         
-                requestAnimationFrame(() => {
-                    this.app.workspace.trigger("hover-link", {
-                        event: null,
-                        source: 'markdown',
-                        hoverParent: el,
-                        targetEl: el,
-                        linktext: href,
-                        sourcePath: this.sourcePath,
-                    });
-                });
+				el.addEventListener('mouseenter', (e) => {
+					this.app.workspace.trigger("hover-link", {
+						event: e,
+						source: 'markdown',
+						hoverParent: el,
+						targetEl: el,
+						linktext: href,
+						sourcePath: this.sourcePath,
+					});
+				});
             }
         });
         
