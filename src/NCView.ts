@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, MarkdownRenderer, TFile } from 'obsidian';
+import { ItemView, WorkspaceLeaf, MarkdownRenderer, TFile,ViewStateResult } from 'obsidian';
 import NoteChainPlugin from "../main";
 
 export class NoteContentView extends ItemView {
@@ -18,6 +18,20 @@ export class NoteContentView extends ItemView {
 
 	getDisplayText() {
 		return 'Note Preview'; 
+	}
+
+	getState(): any {
+		return {
+			content: this.content,
+			sourcePath: this.sourcePath
+		};
+	}
+	
+	async setState(state: any, result: ViewStateResult): Promise<void> {
+		this.content = state.content;
+		this.sourcePath = state.sourcePath;
+	
+		await this.setContent(this.content, this.sourcePath);
 	}
 
 	getIcon() {
@@ -42,7 +56,7 @@ export class NoteContentView extends ItemView {
 			}
 		});
 
-		MarkdownRenderer.render(this.app, "这里是内容", div, '', this);
+		MarkdownRenderer.render(this.app, "", div, '', this);
 	}
 
 	async setContent(content: string, sourcePath: string) {
@@ -53,6 +67,8 @@ export class NoteContentView extends ItemView {
 		container.empty();
 		const div = container.createDiv();
 		div.addClass('markdown-rendered');
+
+        await MarkdownRenderer.render(this.app, content, div, sourcePath, this);
 
 		// 链接点击处理
 		div.addEventListener('click', async (e) => {
@@ -66,9 +82,31 @@ export class NoteContentView extends ItemView {
 			}
 		});
 
-		await MarkdownRenderer.render(this.app, content, div, sourcePath, this);
+		
 
-		// 注册文件变化监听
+        // ✅ 修复 Page Preview 不生效
+        div.querySelectorAll('a.internal-link').forEach((el) => {
+            const href = el.getAttribute('href');
+            if (href) {
+                el.setAttribute('data-href', href);
+                el.setAttr('aria-label', href);
+                el.addClass('hover-link'); // ✅ 核心
+        
+                requestAnimationFrame(() => {
+                    this.app.workspace.trigger("hover-link", {
+                        event: null,
+                        source: 'markdown',
+                        hoverParent: el,
+                        targetEl: el,
+                        linktext: href,
+                        sourcePath: this.sourcePath,
+                    });
+                });
+            }
+        });
+        
+
+		// ✅ 文件变化监听
 		const file = this.app.vault.getAbstractFileByPath(sourcePath);
 		if (file instanceof TFile) {
 			this.registerEvent(
