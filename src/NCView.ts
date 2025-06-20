@@ -110,7 +110,8 @@ export class NoteContentView extends ItemView {
 
 		// ✅ 文件变化监听
 		if (this.fileModifyHandler) {
-			this.fileModifyHandler = this.app.vault.offref(this.fileModifyHandler);
+			this.app.vault.offref(this.fileModifyHandler);
+			this.fileModifyHandler = null;
 		}
 		
 		const file = this.app.vault.getAbstractFileByPath(sourcePath);
