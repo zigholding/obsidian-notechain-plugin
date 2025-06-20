@@ -6,6 +6,7 @@ export class NoteContentView extends ItemView {
 	plugin: NoteChainPlugin;
 	sourcePath: string;
 	private fileModifyHandler: EventRef | null = null;
+	private debounceTimer: number | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: NoteChainPlugin) {
 		super(leaf);
@@ -117,11 +118,17 @@ export class NoteContentView extends ItemView {
 		const file = this.app.vault.getAbstractFileByPath(sourcePath);
 		if (file instanceof TFile) {
 			this.registerEvent(
-				this.app.vault.on('modify', (modifiedFile:TFile) => {
+				this.app.vault.on('modify', (modifiedFile: TFile) => {
 					if (modifiedFile.path === sourcePath) {
-						this.app.vault.read(modifiedFile).then((newContent) => {
-							this.setContent(newContent, sourcePath);
-						});
+						if (this.debounceTimer) {
+							window.clearTimeout(this.debounceTimer);
+						}
+						this.debounceTimer = window.setTimeout(() => {
+							this.app.vault.read(modifiedFile).then((newContent) => {
+								this.setContent(newContent, sourcePath);
+							});
+							this.debounceTimer = null;
+						}, 5000); // 5秒防抖
 					}
 				})
 			);
