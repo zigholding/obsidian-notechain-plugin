@@ -32,9 +32,9 @@ export class NoteContentModal extends Modal {
 
         // 创建一个临时的 Component 实例
         const component = new Component();
-        MarkdownRenderer.render(this.app, this.content, container, this.sourcePath, component);
-
-        this.addClickListener(container);
+        MarkdownRenderer.render(this.app, this.content, container, this.sourcePath, component).then(x=>{
+            this.addClickListener(container);
+        });
         
     }
 
@@ -52,6 +52,26 @@ export class NoteContentModal extends Modal {
                 if (href) {
                     this.openNoteInMainView(href);
                 }
+            }
+        });
+
+        container.querySelectorAll('a.internal-link').forEach((el) => {
+            const href = el.getAttribute('href');
+            if (href) {
+                el.setAttribute('data-href', href);
+                el.setAttr('aria-label', href);
+                el.addClass('hover-link'); // ✅ 核心
+        
+                el.addEventListener('mouseenter', (e) => {
+                    this.app.workspace.trigger("hover-link", {
+                        event: e,
+                        source: 'markdown',
+                        hoverParent: el,
+                        targetEl: el,
+                        linktext: href,
+                        sourcePath: this.sourcePath,
+                    });
+                });
             }
         });
     }
