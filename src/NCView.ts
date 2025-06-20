@@ -5,6 +5,7 @@ export class NoteContentView extends ItemView {
 	content: string;
 	plugin: NoteChainPlugin;
 	sourcePath: string;
+	private fileModifyHandler: EventRef | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: NoteChainPlugin) {
 		super(leaf);
@@ -70,6 +71,7 @@ export class NoteContentView extends ItemView {
 
         await MarkdownRenderer.render(this.app, content, div, sourcePath, this);
 
+		
 		// 链接点击处理
 		div.addEventListener('click', async (e) => {
 			const target = e.target as HTMLElement;
@@ -107,6 +109,10 @@ export class NoteContentView extends ItemView {
         
 
 		// ✅ 文件变化监听
+		if (this.fileModifyHandler) {
+			this.fileModifyHandler = this.app.vault.offref(this.fileModifyHandler);
+		}
+		
 		const file = this.app.vault.getAbstractFileByPath(sourcePath);
 		if (file instanceof TFile) {
 			this.registerEvent(
@@ -118,6 +124,14 @@ export class NoteContentView extends ItemView {
 					}
 				})
 			);
+		}
+	}
+
+	async onClose(): Promise<void> {
+		// 注销事件监听
+		if (this.fileModifyHandler) {
+			this.app.vault.offref(this.fileModifyHandler);
+			this.fileModifyHandler = null;
 		}
 	}
 }
