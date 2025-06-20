@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, MarkdownRenderer, TFile,ViewStateResult } from 'obsidian';
+import { ItemView, WorkspaceLeaf, MarkdownRenderer, TFile,ViewStateResult,EventRef} from 'obsidian';
 import NoteChainPlugin from "../main";
 
 export class NoteContentView extends ItemView {
