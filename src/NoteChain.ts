@@ -1498,7 +1498,8 @@ export class NoteChain {
 		return result;
 	}
 
-	async lexorank_set_id(tfile:TAbstractFile,key:string){
+	async lexorank_set_id(tfile:TAbstractFile,key:string|undefined){
+		if(!key){return}
 		if(tfile instanceof TFolder){
 			let xfile = await this.get_folder_note(tfile,true);
 			console.log(`set ${xfile.basename} ${this.fid} as ${key}`)
@@ -1560,7 +1561,6 @@ export class NoteChain {
 			let k = await this.lexorank_get_id(tfiles[i]);
 			keys.push(k);
 		}
-		console.log('keys:',keys)
 		// 2️⃣ 遍历 children
 		let i = 0;
 		while (i < tfiles.length) {
