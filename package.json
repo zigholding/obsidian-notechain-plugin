@@ -24,6 +24,7 @@
 	},
 	"dependencies": {
 		"js-yaml": "^4.1.0",
+		"lexorank": "^1.0.5",
 		"monkey-around": "^3.0.0",
 		"sortablejs": "^1.15.6"
 	}
