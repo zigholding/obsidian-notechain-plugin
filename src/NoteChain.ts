@@ -50,6 +50,20 @@ export class NoteChain {
 
 	}
 
+	children_as_list(root='/'):TAbstractFile[]{
+		let items = []
+		for(let k of this.children[root]){
+			items.push(k)
+			if(k instanceof TFolder){
+				let sitems = this.children_as_list(k.path);
+				for(let i of sitems){
+					items.push(i)
+				}
+			}
+		}
+		return items;
+	}
+
 	async open_note_in_modal(notePath: string) {
 		try {
 			let file = this.get_tfile(notePath);
@@ -771,7 +785,7 @@ export class NoteChain {
 
 
 	// Chain
-	get_prev_note(tfile = this.current_note) {
+	get_prev_note(tfile = this.current_note,across=false) {
 		if (!tfile) { return; }
 		if ((tfile as any).deleted) {
 			let tfiles = this.app.vault.getMarkdownFiles();
@@ -794,8 +808,28 @@ export class NoteChain {
 			}
 		} else {
 			let name = this.editor.get_frontmatter(tfile, this.prev);
-			if (!name || typeof (name) != 'string') { return null; }
 			let note = this.get_tfile(name);
+			if(!note && across){// 不存在时，获取文件列表中的下一个文件
+				let chain = this;
+				function _prev_(tfile:TAbstractFile){
+					if(tfile.parent){
+						let tfiles = chain.children[tfile.parent.path];
+						let idx = tfiles.indexOf(tfile);
+						// 在当前目录下搜索
+						while(idx>0){
+							let cnote = chain.get_1st_note(tfiles[idx-1],true);
+							if(cnote){
+								return cnote;
+							}else{
+								idx = idx-1
+							}
+						}
+						return _prev_(tfile.parent);
+					}
+					return null;
+				}
+				note = _prev_(tfile);
+			}
 			return note ? note : null;
 		}
 	}
@@ -804,8 +838,8 @@ export class NoteChain {
 		let note = this.get_prev_note(tfile);
 		this.open_note(note);
 	}
-
-	get_next_note(tfile = this.current_note) {
+	
+	get_next_note(tfile = this.current_note,across=false) {
 		if (!tfile) { return null; }
 		if ((tfile as any).deleted) {
 			let tfiles = this.app.vault.getMarkdownFiles();
@@ -827,9 +861,44 @@ export class NoteChain {
 			}
 		} else {
 			let name = this.editor.get_frontmatter(tfile, this.next);
-			if (!name || typeof (name) != 'string') { return null; }
+			// 根据元数据获取后置笔记
 			let note = this.get_tfile(name);
+			if(!note && across){// 不存在时，获取文件列表中的下一个文件
+				let chain = this;
+				function _next_(tfile:TAbstractFile){
+					if(tfile.parent){
+						let tfiles = chain.children[tfile.parent.path];
+						let idx = tfiles.indexOf(tfile);
+						// 在当前目录下搜索
+						while(idx<tfiles.length-1){
+							let cnote = chain.get_1st_note(tfiles[idx+1],false);
+							if(cnote){
+								return cnote;
+							}else{
+								idx = idx+1
+							}
+						}
+						return _next_(tfile.parent);
+					}
+					return null;
+				}
+				note = _next_(tfile);
+			}
 			return note ? note : null;
+		}
+	}
+
+	get_1st_note(tfile:TAbstractFile,last=false):TFile|undefined{
+		if(tfile instanceof TFile){
+			return tfile;
+		}else if(tfile instanceof TFolder){
+			let tfiles = this.children[tfile.path];
+			if(tfiles.length==0){return undefined}
+			if(last){
+				return this.get_1st_note(tfiles[tfiles.length-1],last)
+			}else{
+				return this.get_1st_note(tfiles[0])
+			}
 		}
 	}
 
