@@ -426,6 +426,22 @@ export class Strings{
     }
 
 
+    get setting_field_of_prevnote(){
+        if(this.language=='zh'){
+            return '前置笔记属性名'
+        }else{
+            return "Frontmatter of prev note";
+        }
+    }
+
+    get setting_field_of_nextnote(){
+        if(this.language=='zh'){
+            return '后置笔记属性名'
+        }else{
+            return "Frontmatter of next note";
+        }
+    }
+
     get setting_field_of_display_text(){
         if(this.language=='zh'){
             return '文件列表显示文件名'

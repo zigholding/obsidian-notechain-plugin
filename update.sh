@@ -14,12 +14,12 @@ git push origin master
 # 如果第二个参数为 true，则推送 tag
 if [ "$upload_tag" = "true" ]; then
     # 删除远程和本地 tag（如果存在）
-    git tag -d 1.2.1 2>/dev/null
-    git push origin -d tag 1.2.1 2>/dev/null
+    git tag -d 1.2.2 2>/dev/null
+    git push origin -d tag 1.2.2 2>/dev/null
 
     # 重新创建本地 tag
-    git tag -a 1.2.1 -m "1.2.1"
-    git push origin 1.2.1
+    git tag -a 1.2.2 -m "1.2.2"
+    git push origin 1.2.2
 else
     echo "跳过标签上传"
 fi

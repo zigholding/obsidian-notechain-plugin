@@ -29,7 +29,7 @@ export class NoteChain {
 	NoteEditorModal: any
 	LexoRank: any;
 
-	constructor(plugin: NoteChainPlugin, editor: NCEditor, prev = "PrevNote", next = "NextNote",nid="nid",fid='fid') {
+	constructor(plugin: NoteChainPlugin, editor: NCEditor, prev = "PrevNote", next = "NextNote",nid="lexorank.note",fid='lexorank.folder') {
 		this.plugin = plugin;
 		this.app = plugin.app;
 		if (editor) {
@@ -50,12 +50,12 @@ export class NoteChain {
 
 	}
 
-	children_as_list(root='/'):TAbstractFile[]{
+	children_as_chain(root='/'):TAbstractFile[]{
 		let items = []
 		for(let k of this.children[root]){
 			items.push(k)
 			if(k instanceof TFolder){
-				let sitems = this.children_as_list(k.path);
+				let sitems = this.children_as_chain(k.path);
 				for(let i of sitems){
 					items.push(i)
 				}
@@ -276,16 +276,9 @@ export class NoteChain {
 		}
 	}
 
-	open_note(tfile: TFile, new_tab = false, revealFolder = false, collapse = true) {
+	open_note(tfile: TFile, revealFolder = false, collapse = true) {
 		if (tfile) {
-			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-			if (new_tab || !view || !view.leaf) {
-				this.app.workspace.getLeaf(true).openFile(tfile);
-			} else if ((view.leaf as any).pinned) {
-				this.app.workspace.getLeaf(true).openFile(tfile);
-			} else {
-				view.leaf.openFile(tfile);
-			}
+			this.app.workspace.getLeaf().openFile(tfile);
 
 			if (revealFolder) {
 				if (collapse) {
@@ -304,7 +297,6 @@ export class NoteChain {
 		}
 	}
 
-
 	get_tfile(path: string | TFile, only_first = true) {
 		try {
 			if (path instanceof TFile) {
@@ -312,9 +304,10 @@ export class NoteChain {
 			}
 			path = path.split('|')[0].replace('![[', '').replace('[[', '').replace(']]', '');
 			let tfile = this.app.vault.getFileByPath(path)
-			if (tfile) {
-				return tfile;
-			}
+			if (tfile) {return tfile;}
+
+			tfile = this.app.vault.getFileByPath(path+'.md')
+			if (tfile) {return tfile;}
 
 			let tfiles = (this.app.metadataCache as any).uniqueFileLookup.get(path.toLowerCase());
 			if (!tfiles) {
@@ -835,7 +828,7 @@ export class NoteChain {
 	}
 
 	open_prev_notes(tfile = this.current_note) {
-		let note = this.get_prev_note(tfile);
+		let note = this.get_prev_note(tfile,true);
 		this.open_note(note);
 	}
 	
@@ -903,7 +896,7 @@ export class NoteChain {
 	}
 
 	open_next_notes(tfile = this.current_note) {
-		let note = this.get_next_note(tfile);
+		let note = this.get_next_note(tfile,true);
 		this.open_note(note);
 	}
 
@@ -987,7 +980,7 @@ export class NoteChain {
 			);
 		} else {
 			await this.editor.set_frontmatter(
-				tfile, this.prev, `[[${prev.basename}]]`
+				tfile, this.prev, this.get_link_of_file(prev)
 			);
 		}
 		if (this.plugin.settings.notice_while_modify_chain) {
@@ -1014,7 +1007,7 @@ export class NoteChain {
 			);
 		} else {
 			await this.editor.set_frontmatter(
-				tfile, this.next, `[[${next.basename}]]`
+				tfile, this.next, this.get_link_of_file(next)
 			);
 		}
 		if (this.plugin.settings.notice_while_modify_chain) {
@@ -1064,6 +1057,23 @@ export class NoteChain {
 		}
 	}
 
+	get_link_of_file(tfile:TFile){
+		if(!tfile){return null}
+		let tfiles = this.get_tfile(tfile.name,false);
+		if(tfiles.length>1){
+			if(tfile.extension=='md'){
+				return `[[${tfile.path.slice(0,tfile.path.length-tfile.extension.length-1)}]]`;
+			}else{
+				return `[[${tfile.path}]]`;
+			}
+		}else{
+			if(tfile.extension=='md'){
+				return `[[${tfile.basename}]]`;
+			}else{
+				return `[[${tfile.name}]]`;
+			}
+		}
+	}
 
 	async chain_set_prev_next(tfile: TFile, prev: TFile, next: TFile) {
 		if (tfile == null || prev == next || tfile == prev || tfile == next) { return; }
@@ -1080,8 +1090,8 @@ export class NoteChain {
 
 		let msg = `Note Chain: ${prev?.basename} --> 🏠${tfile?.basename} <-- ${next?.basename}`;
 		let fm: { [key: string]: any } = {};
-		fm[this.prev] = prev ? `[[${prev.basename}]]` : null;
-		fm[this.next] = next ? `[[${next.basename}]]` : null;
+		fm[this.prev] = this.get_link_of_file(prev);
+		fm[this.next] = this.get_link_of_file(next);
 		await this.plugin.editor.set_multi_frontmatter(tfile, fm);
 		if (this.plugin.settings.notice_while_modify_chain) {
 			new Notice(msg, 5000);
@@ -1171,7 +1181,7 @@ export class NoteChain {
 		await this.plugin.editor.set_multi_frontmatter(
 			note,
 			{
-				"FolderPrevNote": `[[${anchor.basename}]]`,
+				"FolderPrevNote": this.get_link_of_file(anchor),
 				"FolderPrevNoteOffset": 0.5,
 			}
 		)
@@ -1464,7 +1474,7 @@ export class NoteChain {
 			await this.plugin.editor.set_multi_frontmatter(
 				tfile,
 				{
-					"FolderPrevNote": `[[${anchor.basename}]]`,
+					"FolderPrevNote": this.get_link_of_file(anchor),
 					"FolderPrevNoteOffset": offset,
 				}
 			)

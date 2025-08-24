@@ -34,19 +34,22 @@ export default class InputSuggester extends FuzzySuggestModal<string> {
 	private rejectPromise: (reason?: unknown) => void;
 	public promise: Promise<string>;
 	private resolved: boolean;
+	public new_value: boolean;
 	inputEl: any;
 
 	public static Suggest(
 		app: App,
 		displayItems: string[],
 		items: string[],
-		options: Partial<Options> = {}
+		options: Partial<Options> = {},
+		new_value:boolean=false
 	) {
 		const newSuggester = new InputSuggester(
 			app,
 			displayItems,
 			items,
-			options
+			options,
+			new_value
 		);
 		return newSuggester.promise;
 	}
@@ -55,9 +58,11 @@ export default class InputSuggester extends FuzzySuggestModal<string> {
 		app: App,
 		private displayItems: string[],
 		private items: string[],
-		options: Partial<Options> = {}
+		options: Partial<Options> = {},
+		new_value: boolean = false
 	) {
 		super(app);
+		this.new_value = new_value
 
 		this.promise = new Promise<string>((resolve, reject) => {
 			this.resolvePromise = resolve;
@@ -92,8 +97,8 @@ export default class InputSuggester extends FuzzySuggestModal<string> {
 	}
 
 	getItems(): string[] {
-		if (this.inputEl.value === "") return this.items;
-		return [this.inputEl.value, ...this.items];
+		if (this.inputEl.value === ""||!this.new_value) return this.items;
+		return [...this.items,this.inputEl.value];
 	}
 
 	selectSuggestion(
@@ -111,12 +116,11 @@ export default class InputSuggester extends FuzzySuggestModal<string> {
 
 	onClose() {
 		super.onClose();
-
 		if (!this.resolved) this.rejectPromise("no input given.");
 	}
 }
 
-export async function dialog_suggest(displayItems:Array<string>,items:Array<any>,placeholder='') {
+export async function dialog_suggest(displayItems:Array<string>,items:Array<any>,placeholder='',new_value=false) {
 	try{
 		return await InputSuggester.Suggest(
 			this.app,
@@ -124,7 +128,8 @@ export async function dialog_suggest(displayItems:Array<string>,items:Array<any>
 			items,
 			{
 				placeholder: placeholder,
-			}
+			},
+			new_value
 		)
 	}catch(error){
 		

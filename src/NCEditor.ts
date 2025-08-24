@@ -76,7 +76,7 @@ export class NCEditor{
 		while(!flag && nretry>0){
 			await this.app.fileManager.processFrontMatter(tfile, (fm) =>{
 				for(let k in kv){
-					this.plugin.easyapi.editor.dict_set_value(fm,k,kv[k]);
+					this.plugin.easyapi.editor.set_obj_value(fm,k,kv[k]);
 				}
 			});
 			await sleep(100);
@@ -215,20 +215,24 @@ export class NCEditor{
 	}
 
 	async extract_code_block(tfile:TFile|string,btype:string){
-
 		if(tfile instanceof TFile){
 			tfile = await this.plugin.app.vault.cachedRead(tfile);
 		}
 		if(typeof(tfile)!='string'){
 			return ''
 		}
-		let cssCodeBlocks = [];
+		let blocks = [];
 		let reg = new RegExp(`\`\`\`${btype}\\n([\\s\\S]*?)\n\`\`\``,'g');;
 		let matches;
 		while ((matches = reg.exec(tfile)) !== null) {
-			cssCodeBlocks.push(matches[1].trim()); // Extract the CSS code without backticks
+			blocks.push(matches[1].trim());
 		}
-		return cssCodeBlocks;
+
+		reg = new RegExp(`~~~${btype}\\n([\\s\\S]*?)\n~~~`,'g');;
+		while ((matches = reg.exec(tfile)) !== null) {
+			blocks.push(matches[1].trim());
+		}
+		return blocks;
 	}
 
 	async extract_templater_block(tfile:TFile|string,reg=/<%\*\s*([\s\S]*?)\s*-?%>/g){
