@@ -28,6 +28,8 @@ export class WordCount{
         if(!tfile){return false;}
         if((tfile as any).deleted){return false;}
         if(tfile.extension!='md'){return false;}
+        if(tfile.basename==tfile.parent?.name){return true}
+        
         let xfolders = this.plugin.settings.wordcountxfolder.split('\n').filter(x=>x!='');
         for(let item of xfolders){
             if(tfile.path.startsWith(item)){

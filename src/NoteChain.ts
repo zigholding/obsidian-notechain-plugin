@@ -29,7 +29,10 @@ export class NoteChain {
 	NoteEditorModal: any
 	LexoRank: any;
 
-	constructor(plugin: NoteChainPlugin, editor: NCEditor, prev = "PrevNote", next = "NextNote",nid="lexorank.note",fid='lexorank.folder') {
+	constructor(plugin: NoteChainPlugin, editor: NCEditor,
+		prev = "PrevNote", next = "NextNote",
+		nid = "lexorank.note", fid = 'lexorank.folder'
+	) {
 		this.plugin = plugin;
 		this.app = plugin.app;
 		if (editor) {
@@ -50,13 +53,13 @@ export class NoteChain {
 
 	}
 
-	children_as_chain(root='/'):TAbstractFile[]{
+	children_as_chain(root = '/'): TAbstractFile[] {
 		let items = []
-		for(let k of this.children[root]){
+		for (let k of this.children[root]) {
 			items.push(k)
-			if(k instanceof TFolder){
+			if (k instanceof TFolder) {
 				let sitems = this.children_as_chain(k.path);
-				for(let i of sitems){
+				for (let i of sitems) {
 					items.push(i)
 				}
 			}
@@ -304,10 +307,10 @@ export class NoteChain {
 			}
 			path = path.split('|')[0].replace('![[', '').replace('[[', '').replace(']]', '');
 			let tfile = this.app.vault.getFileByPath(path)
-			if (tfile) {return tfile;}
+			if (tfile) { return tfile; }
 
-			tfile = this.app.vault.getFileByPath(path+'.md')
-			if (tfile) {return tfile;}
+			tfile = this.app.vault.getFileByPath(path + '.md')
+			if (tfile) { return tfile; }
 
 			let tfiles = (this.app.metadataCache as any).uniqueFileLookup.get(path.toLowerCase());
 			if (!tfiles) {
@@ -778,7 +781,7 @@ export class NoteChain {
 
 
 	// Chain
-	get_prev_note(tfile = this.current_note,across=false) {
+	get_prev_note(tfile = this.current_note, across = false) {
 		if (!tfile) { return; }
 		if ((tfile as any).deleted) {
 			let tfiles = this.app.vault.getMarkdownFiles();
@@ -802,19 +805,19 @@ export class NoteChain {
 		} else {
 			let name = this.editor.get_frontmatter(tfile, this.prev);
 			let note = this.get_tfile(name);
-			if(!note && across){// 不存在时，获取文件列表中的下一个文件
+			if (!note && across) {// 不存在时，获取文件列表中的下一个文件
 				let chain = this;
-				function _prev_(tfile:TAbstractFile){
-					if(tfile.parent){
+				function _prev_(tfile: TAbstractFile) {
+					if (tfile.parent) {
 						let tfiles = chain.children[tfile.parent.path];
 						let idx = tfiles.indexOf(tfile);
 						// 在当前目录下搜索
-						while(idx>0){
-							let cnote = chain.get_1st_note(tfiles[idx-1],true);
-							if(cnote){
+						while (idx > 0) {
+							let cnote = chain.get_1st_note(tfiles[idx - 1], true);
+							if (cnote) {
 								return cnote;
-							}else{
-								idx = idx-1
+							} else {
+								idx = idx - 1
 							}
 						}
 						return _prev_(tfile.parent);
@@ -828,11 +831,11 @@ export class NoteChain {
 	}
 
 	open_prev_notes(tfile = this.current_note) {
-		let note = this.get_prev_note(tfile,true);
+		let note = this.get_prev_note(tfile, true);
 		this.open_note(note);
 	}
-	
-	get_next_note(tfile = this.current_note,across=false) {
+
+	get_next_note(tfile = this.current_note, across = false) {
 		if (!tfile) { return null; }
 		if ((tfile as any).deleted) {
 			let tfiles = this.app.vault.getMarkdownFiles();
@@ -856,19 +859,19 @@ export class NoteChain {
 			let name = this.editor.get_frontmatter(tfile, this.next);
 			// 根据元数据获取后置笔记
 			let note = this.get_tfile(name);
-			if(!note && across){// 不存在时，获取文件列表中的下一个文件
+			if (!note && across) {// 不存在时，获取文件列表中的下一个文件
 				let chain = this;
-				function _next_(tfile:TAbstractFile){
-					if(tfile.parent){
+				function _next_(tfile: TAbstractFile) {
+					if (tfile.parent) {
 						let tfiles = chain.children[tfile.parent.path];
 						let idx = tfiles.indexOf(tfile);
 						// 在当前目录下搜索
-						while(idx<tfiles.length-1){
-							let cnote = chain.get_1st_note(tfiles[idx+1],false);
-							if(cnote){
+						while (idx < tfiles.length - 1) {
+							let cnote = chain.get_1st_note(tfiles[idx + 1], false);
+							if (cnote) {
 								return cnote;
-							}else{
-								idx = idx+1
+							} else {
+								idx = idx + 1
 							}
 						}
 						return _next_(tfile.parent);
@@ -881,22 +884,22 @@ export class NoteChain {
 		}
 	}
 
-	get_1st_note(tfile:TAbstractFile,last=false):TFile|undefined{
-		if(tfile instanceof TFile){
+	get_1st_note(tfile: TAbstractFile, last = false): TFile | undefined {
+		if (tfile instanceof TFile) {
 			return tfile;
-		}else if(tfile instanceof TFolder){
+		} else if (tfile instanceof TFolder) {
 			let tfiles = this.children[tfile.path];
-			if(tfiles.length==0){return undefined}
-			if(last){
-				return this.get_1st_note(tfiles[tfiles.length-1],last)
-			}else{
+			if (tfiles.length == 0) { return undefined }
+			if (last) {
+				return this.get_1st_note(tfiles[tfiles.length - 1], last)
+			} else {
 				return this.get_1st_note(tfiles[0])
 			}
 		}
 	}
 
 	open_next_notes(tfile = this.current_note) {
-		let note = this.get_next_note(tfile,true);
+		let note = this.get_next_note(tfile, true);
 		this.open_note(note);
 	}
 
@@ -1057,19 +1060,19 @@ export class NoteChain {
 		}
 	}
 
-	get_link_of_file(tfile:TFile){
-		if(!tfile){return null}
-		let tfiles = this.get_tfile(tfile.name,false);
-		if(tfiles.length>1){
-			if(tfile.extension=='md'){
-				return `[[${tfile.path.slice(0,tfile.path.length-tfile.extension.length-1)}]]`;
-			}else{
+	get_link_of_file(tfile: TFile) {
+		if (!tfile) { return null }
+		let tfiles = this.get_tfile(tfile.name, false);
+		if (tfiles.length > 1) {
+			if (tfile.extension == 'md') {
+				return `[[${tfile.path.slice(0, tfile.path.length - tfile.extension.length - 1)}]]`;
+			} else {
 				return `[[${tfile.path}]]`;
 			}
-		}else{
-			if(tfile.extension=='md'){
+		} else {
+			if (tfile.extension == 'md') {
 				return `[[${tfile.basename}]]`;
-			}else{
+			} else {
 				return `[[${tfile.name}]]`;
 			}
 		}
@@ -1577,74 +1580,95 @@ export class NoteChain {
 		return result;
 	}
 
-	async lexorank_set_id(tfile:TAbstractFile,key:string|undefined){
-		if(!key){return}
-		if(tfile instanceof TFolder){
-			let xfile = await this.get_folder_note(tfile,true);
-			console.log(`set ${xfile.basename} ${this.fid} as ${key}`)
-			await this.plugin.editor.set_frontmatter(xfile,this.fid,key)
-		}else if (tfile instanceof TFile){
-			console.log(`set ${tfile.basename} ${this.nid} as ${key}`)
-			await this.plugin.editor.set_frontmatter(tfile,this.nid,key);
+	lexorank_gen_mid(prev: string, next: string) {
+		if (!prev && !next) { return undefined }
+
+		if (!prev) {
+			return this.LexoRank.parse(next).genPrev().toString()
 		}
+
+		if (!next) {
+			return this.LexoRank.parse(prev).genNext().toString()
+		}
+
+		let p = this.LexoRank.parse(prev);
+		let n = this.LexoRank.parse(next);
+		return p.between(n).toString();
+
 	}
 
-	async lexorank_get_id(tfile:TAbstractFile){
-		if(tfile instanceof TFolder){
-			let xfile = await this.get_folder_note(tfile,false);
-			if(xfile){
-				return this.plugin.editor.get_frontmatter(xfile,this.fid)
-			}else{
+	async lexorank_set_id(tfile: TAbstractFile, key: string | undefined) {
+		if (!key) { return false }
+		let ckey = await this.lexorank_get_id(tfile);
+		if (ckey == key) { return false }
+		if (tfile instanceof TFolder) {
+			let xfile = await this.get_folder_note(tfile, true);
+			console.log(`set ${xfile.basename} ${this.fid} as ${key}`)
+			await this.plugin.editor.set_frontmatter(xfile, this.fid, key)
+		} else if (tfile instanceof TFile) {
+			if (!this.plugin.wordcout.filter(tfile)) { return }
+			console.log(`set ${tfile.basename} ${this.nid} as ${key}`)
+			await this.plugin.editor.set_frontmatter(tfile, this.nid, key);
+		}
+		return true;
+	}
+
+	async lexorank_get_id(tfile: TAbstractFile) {
+		if (tfile instanceof TFolder) {
+			let xfile = await this.get_folder_note(tfile, false);
+			if (xfile) {
+				return this.plugin.editor.get_frontmatter(xfile, this.fid)
+			} else {
 				return undefined;
 			}
-		}else if (tfile instanceof TFile){
-			if(this.plugin.wordcout.filter(tfile)){
-				return this.plugin.editor.get_frontmatter(tfile,this.nid);
+		} else if (tfile instanceof TFile) {
+			if (this.plugin.wordcout.filter(tfile)) {
+				return this.plugin.editor.get_frontmatter(tfile, this.nid);
 			}
 		}
 	}
 
-	async lexorank_init_folder(tfolder:TFolder,recursive=false){
+	async lexorank_init_folder(tfolder: TFolder, recursive = false) {
 		let tfiles = this.children[tfolder.path];
-		if(tfiles){
-			tfiles = tfiles.filter((tfile:TAbstractFile)=>{
+		if (tfiles) {
+			tfiles = tfiles.filter((tfile: TAbstractFile) => {
 				return tfile instanceof TFolder || (
 					tfile instanceof TFile && tfile.extension == 'md'
 				)
 			})
 			let keys = this.lexorank_init_keys(tfiles.length);
 			let i = 0;
-			while(i<tfiles.length){
-				await this.lexorank_set_id(tfiles[i],keys[i]);
-				i = i+1;
+			while (i < tfiles.length) {
+				await this.lexorank_set_id(tfiles[i], keys[i]);
+				i = i + 1;
 			}
 		}
-		if(!recursive){return}
-		for(let tfile of tfiles){
-			if(tfile instanceof TFolder){
-				await this.lexorank_init_folder(tfile,recursive);
+		if (!recursive) { return }
+		for (let tfile of tfiles) {
+			if (tfile instanceof TFolder) {
+				await this.lexorank_init_folder(tfile, recursive);
 			}
 		}
 	}
 
-	async lexorank_init_folder_minimal(tfolder: TFolder, recursive = false) {
-		let tfiles = this.children[tfolder.path];
-		if (!tfiles) return;
-	
-		// 过滤 md 文件和文件夹
-		tfiles = tfiles.filter((f: TAbstractFile) => f instanceof TFolder || (f instanceof TFile && f.extension === "md"));
-	
+	async lexorank_reset_tfiles(tfiles: TAbstractFile[]) {
+		// 仅保留文件夹和 md 文件
+		tfiles = tfiles.filter(
+			(f: TAbstractFile) => f instanceof TFolder || (f instanceof TFile && f.extension === "md")
+		);
+
 		// 1️⃣ 获取已有 sortKey
 		let keys: (string | undefined)[] = [];
 		for (let i = 0; i < tfiles.length; i++) {
 			let k = await this.lexorank_get_id(tfiles[i]);
 			keys.push(k);
 		}
-		// 2️⃣ 遍历 children
+
+		// 2️⃣ 遍历
 		let i = 0;
 		while (i < tfiles.length) {
 			if (!keys[i]) {
-				// 缺失 key -> 找前后边界
+				// 🔹缺失 key -> 找前后边界
 				let prevKey: string | null = null;
 				for (let j = i - 1; j >= 0; j--) {
 					if (keys[j]) {
@@ -1652,7 +1676,7 @@ export class NoteChain {
 						break;
 					}
 				}
-	
+
 				let nextKey: string | null = null;
 				for (let j = i + 1; j < tfiles.length; j++) {
 					if (keys[j]) {
@@ -1660,63 +1684,126 @@ export class NoteChain {
 						break;
 					}
 				}
-	
+
 				let prevRank: LexoRank | null = prevKey ? this.LexoRank.parse(prevKey) : null;
 				let nextRank: LexoRank | null = nextKey ? this.LexoRank.parse(nextKey) : null;
-	
+
 				let newRank: LexoRank;
-				if (prevRank && nextRank) newRank = prevRank.between(nextRank);
-				else if (prevRank) newRank = prevRank.genNext();
-				else if (nextRank) newRank = nextRank.genPrev();
-				else newRank = this.LexoRank.middle();
-	
+				if (prevRank && nextRank) {
+					if (prevRank.toString() === nextRank.toString()) {
+						// 🔹相等：没空间，顺延
+						newRank = prevRank.genNext();
+					} else {
+						newRank = prevRank.between(nextRank);
+					}
+				} else if (prevRank) {
+					newRank = prevRank.genNext();
+				} else if (nextRank) {
+					newRank = nextRank.genPrev();
+				} else {
+					newRank = this.LexoRank.middle();
+				}
+
 				keys[i] = newRank.toString();
-				await this.lexorank_set_id(tfiles[i], keys[i]);
 				i++;
 				continue;
 			}
-	
-			// 检测冲突区间
-			if (i > 0 && keys[i - 1]! > keys[i]!) {
+
+			// 🔹检测冲突（非递增）
+			if (i > 0 && keys[i - 1]! >= keys[i]!) {
 				let start = i - 1;
 				let end = i;
-				while (end + 1 < tfiles.length && keys[end]! > keys[end + 1]!) end++;
-	
+				while (end + 1 < tfiles.length && keys[end]! >= keys[end + 1]!) end++;
+
 				// 前后边界
 				let leftKey: string | null = start > 0 ? keys[start - 1] || null : null;
 				let rightKey: string | null = end + 1 < tfiles.length ? keys[end + 1] || null : null;
-	
+
 				let lastRank: LexoRank | null = leftKey ? this.LexoRank.parse(leftKey) : null;
-	
-				// 批量生成冲突区间 key
+
+				// 🔹批量生成冲突区间 key
 				for (let k = start; k <= end; k++) {
 					let nextRank: LexoRank | null = rightKey ? this.LexoRank.parse(rightKey) : null;
-	
 					let newRank: LexoRank;
-					if (lastRank && nextRank) newRank = lastRank.between(nextRank);
-					else if (lastRank) newRank = lastRank.genNext();
-					else if (nextRank) newRank = nextRank.genPrev();
-					else newRank = this.LexoRank.middle();
-	
+
+					if (lastRank && nextRank) {
+						if (lastRank.toString() === nextRank.toString()) {
+							// 🔹相等：没空间，顺延
+							newRank = lastRank.genNext();
+						} else {
+							newRank = lastRank.between(nextRank);
+						}
+					} else if (lastRank) {
+						newRank = lastRank.genNext();
+					} else if (nextRank) {
+						newRank = nextRank.genPrev();
+					} else {
+						newRank = this.LexoRank.middle();
+					}
+
 					keys[k] = newRank.toString();
-					await this.lexorank_set_id(tfiles[k], keys[k]);
 					lastRank = this.LexoRank.parse(keys[k]);
 				}
-	
+
 				i = end + 1;
 				continue;
 			}
-	
+
 			i++;
 		}
-	
+
+		// 3️⃣ 回写
+		let p: Promise<any>[] = [];
+		i = 0;
+		while (i < tfiles.length) {
+			if (
+				tfiles[i] instanceof TFolder ||
+				(tfiles[i] instanceof TFile && (tfiles[i] as TFile).basename == tfiles[i].parent?.name)
+			) {
+				let v = await this.lexorank_set_id(tfiles[i], keys[i]);
+				p.push(v);
+			} else {
+				p.push(this.lexorank_set_id(tfiles[i], keys[i]));
+			}
+			i++;
+		}
+
+		p = await Promise.all(p);
+		return p;
+	}
+
+
+	async lexorank_reset_folder(tfolder: TFolder, recursive = false) {
+		let tfiles = this.children[tfolder.path];
+		if (!tfiles) return;
+
+		await this.lexorank_reset_tfiles(tfiles);
+
 		// 3️⃣ 递归处理子文件夹
 		if (recursive) {
 			for (let f of tfiles) {
 				if (f instanceof TFolder) {
-					await this.lexorank_init_folder_minimal(f, recursive);
+					await this.lexorank_reset_folder(f, recursive);
 				}
 			}
 		}
-	}	
+		console.log(`Lexorank reset folder: ${tfolder.path} ✔️`)
+	}
+
+	async lexorank_reset_vault(root = '/') {
+		let i = 10;
+		let res;
+		while(i!=0){
+			let tfiles = this.children_as_chain(root);
+			res = await this.lexorank_reset_tfiles(tfiles);
+			if(res.filter(x=>x).length==0){
+				break
+			}else{
+				await sleep(500);
+			}
+			i = i -1
+		}
+		console.log(`Lexorank reset vault: ${root} ✔️`)
+		return res;
+	}
 }
