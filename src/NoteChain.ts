@@ -807,7 +807,7 @@ export class NoteChain {
 			let note = this.get_tfile(name);
 			if (!note && across) {// 不存在时，获取文件列表中的下一个文件
 				let chain = this;
-				function _prev_(tfile: TAbstractFile) {
+				function _prev_(tfile: TAbstractFile):(TAbstractFile|any) {
 					if (tfile.parent) {
 						let tfiles = chain.children[tfile.parent.path];
 						let idx = tfiles.indexOf(tfile);
@@ -861,7 +861,7 @@ export class NoteChain {
 			let note = this.get_tfile(name);
 			if (!note && across) {// 不存在时，获取文件列表中的下一个文件
 				let chain = this;
-				function _next_(tfile: TAbstractFile) {
+				function _next_(tfile: TAbstractFile):(TAbstractFile|any) {
 					if (tfile.parent) {
 						let tfiles = chain.children[tfile.parent.path];
 						let idx = tfiles.indexOf(tfile);
