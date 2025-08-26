@@ -31,7 +31,7 @@ export class NoteChain {
 
 	constructor(plugin: NoteChainPlugin, editor: NCEditor,
 		prev = "PrevNote", next = "NextNote",
-		nid = "lexorank.note", fid = 'lexorank.folder'
+		nid = "lexorank", fid = 'lexorank_folder'
 	) {
 		this.plugin = plugin;
 		this.app = plugin.app;
@@ -903,7 +903,7 @@ export class NoteChain {
 		this.open_note(note);
 	}
 
-	get_chain(tfile = this.current_note, prev = 10, next = 10, with_self = true) {
+	get_chain(tfile = this.current_note, prev = 10, next = 10, with_self = true,across=false) {
 		if (tfile == null) { return []; }
 
 		let res = new Array();
@@ -913,7 +913,7 @@ export class NoteChain {
 
 		let tmp = tfile;
 		for (let i = prev; i != 0; i--) {
-			let note = this.get_prev_note(tmp);
+			let note = this.get_prev_note(tmp,across);
 			if (!note) {
 				break;
 			} else if (res.includes(note)) {
@@ -926,7 +926,7 @@ export class NoteChain {
 
 		tmp = tfile;
 		for (let i = next; i != 0; i--) {
-			let note = this.get_next_note(tmp);
+			let note = this.get_next_note(tmp,across);
 			if (!note) {
 				break;
 			} else if (res.includes(note)) {
@@ -1260,8 +1260,8 @@ export class NoteChain {
 		}
 
 		res.push(...ctfiles);
-		let canvas = res.filter(f => (f instanceof TFile) && (f.extension == 'canvas'))
-		res = res.filter(f => (f instanceof TFile) && (f.extension != 'canvas'));
+		let canvas = res.filter(f => (f instanceof TFile) && (['canvas','base'].contains(f.extension)))
+		res = res.filter(f => (f instanceof TFile) && (!['canvas','base'].contains(f.extension)))
 		let folders = tfiles.filter(f => f instanceof TFolder);
 		if (folders.length > 0) {
 			let idxs = folders.map(
@@ -1563,21 +1563,31 @@ export class NoteChain {
 		return 0;
 	}
 
-	lexorank_init_keys(N: number) {
+	lexorank_init_keys(N: number): string[] {
 		if (N <= 0) return [];
-
-		let min = this.LexoRank.min();
-		let max = this.LexoRank.max();
-
-		let last = min;
-		let result = [];
-
-		for (let i = 0; i < N; i++) {
-			let nextRank = last.between(max);
-			result.push(nextRank.toString());
-			last = nextRank;
+	
+		let min = LexoRank.min();
+		let max = LexoRank.max();
+	
+		let result: string[] = [];
+	
+		function divide(left: LexoRank, right: LexoRank, n: number) {
+			if (n <= 0) return;
+	
+			// 取中点
+			let mid = left.between(right);
+			result.push(mid.toString());
+	
+			// 平均分配左右区间
+			let leftCount = Math.floor((n - 1) / 2);
+			let rightCount = (n - 1) - leftCount;
+	
+			divide(left, mid, leftCount);
+			divide(mid, right, rightCount);
 		}
-		return result;
+	
+		divide(min, max, N);
+		return result.sort(); // 保证顺序
 	}
 
 	lexorank_gen_mid(prev: string, next: string) {
@@ -1651,22 +1661,10 @@ export class NoteChain {
 		}
 	}
 
-	async lexorank_reset_tfiles(tfiles: TAbstractFile[]) {
-		// 仅保留文件夹和 md 文件
-		tfiles = tfiles.filter(
-			(f: TAbstractFile) => f instanceof TFolder || (f instanceof TFile && f.extension === "md")
-		);
-
-		// 1️⃣ 获取已有 sortKey
-		let keys: (string | undefined)[] = [];
-		for (let i = 0; i < tfiles.length; i++) {
-			let k = await this.lexorank_get_id(tfiles[i]);
-			keys.push(k);
-		}
-
+	lexorank_gen_keys(keys:(string|undefined)[]):(string|undefined)[]{
 		// 2️⃣ 遍历
 		let i = 0;
-		while (i < tfiles.length) {
+		while (i < keys.length) {
 			if (!keys[i]) {
 				// 🔹缺失 key -> 找前后边界
 				let prevKey: string | null = null;
@@ -1678,7 +1676,7 @@ export class NoteChain {
 				}
 
 				let nextKey: string | null = null;
-				for (let j = i + 1; j < tfiles.length; j++) {
+				for (let j = i + 1; j < keys.length; j++) {
 					if (keys[j]) {
 						nextKey = keys[j]!;
 						break;
@@ -1713,11 +1711,11 @@ export class NoteChain {
 			if (i > 0 && keys[i - 1]! >= keys[i]!) {
 				let start = i - 1;
 				let end = i;
-				while (end + 1 < tfiles.length && keys[end]! >= keys[end + 1]!) end++;
+				while (end + 1 < keys.length && keys[end]! >= keys[end + 1]!) end++;
 
 				// 前后边界
 				let leftKey: string | null = start > 0 ? keys[start - 1] || null : null;
-				let rightKey: string | null = end + 1 < tfiles.length ? keys[end + 1] || null : null;
+				let rightKey: string | null = end + 1 < keys.length ? keys[end + 1] || null : null;
 
 				let lastRank: LexoRank | null = leftKey ? this.LexoRank.parse(leftKey) : null;
 
@@ -1751,24 +1749,75 @@ export class NoteChain {
 
 			i++;
 		}
+		return keys;
+	}
 
-		// 3️⃣ 回写
+	
+	lexorank_check_keys(keys:(string|undefined)[]){
+		let i = 0;
+		while(i<keys.length-1){
+			let curr = keys[i];
+			let next = keys[i+1];
+			if(!curr || !next){
+				return false;
+			}
+			if(next <= curr){
+				return false;
+			}
+			i = i +1;
+		}
+		return true;
+	}
+
+	async lexorank_get_ids(tfiles:TAbstractFile[]){
+		let keys: (string | undefined)[] = [];
+		for (let i = 0; i < tfiles.length; i++) {
+			let k = await this.lexorank_get_id(tfiles[i]);
+			keys.push(k);
+		}
+		return keys;
+	}
+
+	async lexorank_set_ids(tfiles:TAbstractFile[],keys:(string|undefined)[]){
 		let p: Promise<any>[] = [];
-		i = 0;
+		let i = 0;
 		while (i < tfiles.length) {
 			if (
 				tfiles[i] instanceof TFolder ||
 				(tfiles[i] instanceof TFile && (tfiles[i] as TFile).basename == tfiles[i].parent?.name)
 			) {
-				let v = await this.lexorank_set_id(tfiles[i], keys[i]);
-				p.push(v);
+				p.push(this.lexorank_set_id(tfiles[i], keys[i]));
 			} else {
 				p.push(this.lexorank_set_id(tfiles[i], keys[i]));
 			}
 			i++;
 		}
 
-		p = await Promise.all(p);
+		const results = await Promise.all(p);
+		return results;
+	}
+
+	async lexorank_reset_tfiles(tfiles: TAbstractFile[],rebuild=false) {
+		// 仅保留文件夹和 md 文件
+		tfiles = tfiles.filter(
+			(f: TAbstractFile) => f instanceof TFolder || (f instanceof TFile && f.extension === "md")
+		);
+		let keys;
+		if(rebuild){
+			keys = this.lexorank_init_keys(tfiles.length);
+		}else{
+			keys = await this.lexorank_get_ids(tfiles);
+			let  i = 0;
+			while(!this.lexorank_check_keys(keys)){
+				console.log('i','lexorank_gen_keys--',i)
+				keys = this.lexorank_gen_keys(keys);
+				i = i+1;
+				if(i>5){
+					break;
+				}
+			}
+		}
+		let p = await this.lexorank_set_ids(tfiles,keys);
 		return p;
 	}
 
@@ -1790,20 +1839,18 @@ export class NoteChain {
 		console.log(`Lexorank reset folder: ${tfolder.path} ✔️`)
 	}
 
-	async lexorank_reset_vault(root = '/') {
+	async lexorank_reset_vault(root = '/',rebuild=false) {
 		let i = 10;
 		let res;
 		while(i!=0){
 			let tfiles = this.children_as_chain(root);
-			res = await this.lexorank_reset_tfiles(tfiles);
+			res = await this.lexorank_reset_tfiles(tfiles,rebuild);
 			if(res.filter(x=>x).length==0){
 				break
-			}else{
-				await sleep(500);
 			}
 			i = i -1
 		}
 		console.log(`Lexorank reset vault: ${root} ✔️`)
-		return res;
+		return res?.filter(x=>x).length;
 	}
 }

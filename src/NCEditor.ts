@@ -1,39 +1,39 @@
 import { time } from 'console';
-import { 
-	App, Editor, MarkdownView, Modal, Notice, 
+import {
+	App, Editor, MarkdownView, Modal, Notice,
 	Plugin, PluginSettingTab, Setting,
 	TAbstractFile,
-	TFile,TFolder
+	TFile, TFolder
 } from 'obsidian';
 import * as internal from 'stream';
 import NoteChainPlugin from "../main";
 
 
-export class NCEditor{
-	app:App;
-	nretry:number;
-	plugin:NoteChainPlugin;
+export class NCEditor {
+	app: App;
+	nretry: number;
+	plugin: NoteChainPlugin;
 
-	constructor(plugin:NoteChainPlugin){
+	constructor(plugin: NoteChainPlugin) {
 		this.plugin = plugin;
 		this.app = this.plugin.app;
-		this.nretry=10;
+		this.nretry = 10;
 	}
 
-	async set_frontmatter(tfile:TFile|string|Array<TFile|string>,key:string,value:any,nretry=this.nretry){
-		let kv:{[key:string]:string} = {};
+	async set_frontmatter(tfile: TFile | string | Array<TFile | string>, key: string, value: any, nretry = this.nretry) {
+		let kv: { [key: string]: string } = {};
 		kv[key] = value;
-		let flag = await this.set_multi_frontmatter(tfile,kv,nretry);
+		let flag = await this.set_multi_frontmatter(tfile, kv, nretry);
 		return flag;
 	}
 
-	check_frontmatter(tfile:TFile,kv:{[key:string]:any}):boolean{
+	check_frontmatter(tfile: TFile, kv: { [key: string]: any }): boolean {
 		try {
-			if(!tfile){return false;}
+			if (!tfile) { return false; }
 			let meta = this.app.metadataCache.getFileCache(tfile);
-			if(meta?.frontmatter){
-				for(let k in kv){
-					if(!(meta.frontmatter[k]==kv[k])){
+			if (meta?.frontmatter) {
+				for (let k in kv) {
+					if (!(meta.frontmatter[k] == kv[k])) {
 						return false;
 					}
 				}
@@ -45,68 +45,87 @@ export class NCEditor{
 		}
 	}
 
-	async wait_frontmatter(tfile:TFile,kv:{[key:string]:any},nretry=this.nretry):Promise<boolean>{
-		let flag = this.check_frontmatter(tfile,kv);
-		
-		while(!flag && nretry>0){
-			await sleep(50);
-			nretry = nretry-1;
-			flag = this.check_frontmatter(tfile,kv);
-		}
-		return flag;
-	}
+	async wait_frontmatter(tfile: TFile, kv: { [key: string]: any }, timeout = 3000): Promise<boolean> {
+		if (this.check_frontmatter(tfile, kv)) return true;
 
-	async set_multi_frontmatter(tfile:TFile|string|Array<TFile|string>,kv:{[key:string]:any},nretry=this.nretry):Promise<boolean>{
-		if(Array.isArray(tfile)){
-			for(let item of tfile){
-				this.set_multi_frontmatter(item,kv,nretry)
-			}
-			return true
-		}
-		if(typeof(tfile)=='string'){
-			tfile = this.plugin.chain.get_tfile(tfile)
-		}
-		if(!tfile || !(tfile instanceof TFile)){
-			return false
-		}
-		let flag= false
-		if(nretry>1){
-			flag = this.check_frontmatter(tfile,kv);
-		}
-		while(!flag && nretry>0){
-			await this.app.fileManager.processFrontMatter(tfile, (fm) =>{
-				for(let k in kv){
-					this.plugin.easyapi.editor.set_obj_value(fm,k,kv[k]);
+		return new Promise((resolve) => {
+			let timer = setTimeout(() => {
+				this.app.metadataCache.offref(off);
+				resolve(false);
+			}, timeout);
+
+			const off = this.app.metadataCache.on("changed", (file) => {
+				if (file.path === tfile.path && this.check_frontmatter(tfile, kv)) {
+					clearTimeout(timer);
+					this.app.metadataCache.offref(off);
+					resolve(true);
 				}
 			});
-			await sleep(100);
-			nretry = nretry-1;
-			flag = this.check_frontmatter(tfile,kv);
-		}
-		return flag;
+		});
 	}
 
-	get_frontmatter(tfile:TFile,key:string){
+	async set_multi_frontmatter(
+		tfile: TFile | string | Array<TFile | string>,
+		kv: { [key: string]: any },
+		nretry = this.nretry
+	): Promise<boolean> {
+		// 处理数组
+		if (Array.isArray(tfile)) {
+			for (let item of tfile) {
+				let ok = await this.set_multi_frontmatter(item, kv, nretry);
+				if (!ok) return false;
+			}
+			return true;
+		}
+
+		// 字符串转 TFile
+		if (typeof tfile === "string") {
+			tfile = this.plugin.chain.get_tfile(tfile);
+		}
+
+		if (!tfile || !(tfile instanceof TFile)) {
+			return false;
+		}
+
+		// 先检查是否已经满足
+		if (this.check_frontmatter(tfile, kv)) return true;
+
+		// 写入并等待
+		for (let attempt = 0; attempt < nretry; attempt++) {
+			await this.app.fileManager.processFrontMatter(tfile, (fm) => {
+				for (let k in kv) {
+					this.plugin.easyapi.editor.set_obj_value(fm, k, kv[k]);
+				}
+			});
+
+			let ok = await this.wait_frontmatter(tfile, kv, 1000);
+			if (ok) return true;
+		}
+
+		return false;
+	}
+
+	get_frontmatter(tfile: TFile, key: string) {
 		try {
-			if(!tfile){return null;}
+			if (!tfile) { return null; }
 			let meta = this.app.metadataCache.getFileCache(tfile);
-			if(meta?.frontmatter){
-				if(meta.frontmatter[key]){
+			if (meta?.frontmatter) {
+				if (meta.frontmatter[key]) {
 					return meta.frontmatter[key]
 				}
 				let keys = key.split('.')
 				let cfm = meta.frontmatter
-				for(let k of keys){
-					let items =k.match(/^(.*?)(\[-?\d+\])?$/)
-					if(!items){return null}
-					if(items[1]){
+				for (let k of keys) {
+					let items = k.match(/^(.*?)(\[-?\d+\])?$/)
+					if (!items) { return null }
+					if (items[1]) {
 						cfm = cfm[items[1]]
 					}
-					if(!cfm){return null}
-					if(Array.isArray(cfm) && items[2]){
-						let i = parseInt(items[2].slice(1,items[2].length-1))
-						if(i<0){
-							i = i+cfm.length
+					if (!cfm) { return null }
+					if (Array.isArray(cfm) && items[2]) {
+						let i = parseInt(items[2].slice(1, items[2].length - 1))
+						if (i < 0) {
+							i = i + cfm.length
 						}
 						cfm = cfm[i]
 					}
@@ -118,79 +137,79 @@ export class NCEditor{
 		}
 	}
 
-	get_vault_name(){
+	get_vault_name() {
 		let items = (this.plugin.app.vault.adapter as any).basePath.split('\\')
-		items = items[items.length-1].split('/')
-		return items[items.length-1]
+		items = items[items.length - 1].split('/')
+		return items[items.length - 1]
 	}
 
-	get_frontmatter_config(tfile:TAbstractFile,key:string){
-		if(tfile instanceof TFile){
-			if(tfile.extension=='md'){
-				let config = this.get_frontmatter(tfile,key)
-				if(config){return config}
-			}else{
+	get_frontmatter_config(tfile: TAbstractFile, key: string) {
+		if (tfile instanceof TFile) {
+			if (tfile.extension == 'md') {
+				let config = this.get_frontmatter(tfile, key)
+				if (config) { return config }
+			} else {
 				let file = this.plugin.chain.get_tfile(
-					tfile.path.slice(0,tfile.path.length-tfile.extension.length)+'md'
+					tfile.path.slice(0, tfile.path.length - tfile.extension.length) + 'md'
 				)
-				if(file){
-					let config = this.get_frontmatter(file,key)
-					if(config){return config}
+				if (file) {
+					let config = this.get_frontmatter(file, key)
+					if (config) { return config }
 				}
 			}
-			
-		}else{
-			let file = this.plugin.chain.get_tfile(tfile.path+'/'+tfile.name+'.md')
-			if(file){
-				let config = this.get_frontmatter(file,key+'_folder')
-				if(config){return config}
-				config = this.get_frontmatter(file,key)				
-				if(config){return config}
+
+		} else {
+			let file = this.plugin.chain.get_tfile(tfile.path + '/' + tfile.name + '.md')
+			if (file) {
+				let config = this.get_frontmatter(file, key + '_folder')
+				if (config) { return config }
+				config = this.get_frontmatter(file, key)
+				if (config) { return config }
 			}
 		}
-		
+
 		let dir = tfile.parent
-		while(dir){
+		while (dir) {
 			let cfile;
-			if(dir.parent){
+			if (dir.parent) {
 				cfile = this.plugin.chain.get_tfile(
-					dir.path+'/'+dir.name+'.md'
+					dir.path + '/' + dir.name + '.md'
 				)
-			}else{
+			} else {
 				cfile = this.plugin.chain.get_tfile(
 					this.get_vault_name()
 				)
 			}
-			let config = this.get_frontmatter(cfile,key)
-			if(config){return config}
+			let config = this.get_frontmatter(cfile, key)
+			if (config) { return config }
 			dir = dir.parent
 		}
 		return null
 
 	}
-	regexp_link(tfile:TFile,mode:string){
+	regexp_link(tfile: TFile, mode: string) {
 		//[[note||alias]]
-		if(mode==='link'){
-			return new RegExp(`\\[\\[${tfile.basename}\\|?.*\\]\\]`,'g');
+		if (mode === 'link') {
+			return new RegExp(`\\[\\[${tfile.basename}\\|?.*\\]\\]`, 'g');
 		}
-		
+
 		//paragraph
-		if(mode==='para'){
-			return new RegExp(`.*\\[\\[${tfile.basename}\\|?.*\\]\\].*`,'g');
+		if (mode === 'para') {
+			return new RegExp(`.*\\[\\[${tfile.basename}\\|?.*\\]\\].*`, 'g');
 		}
 	}
 
-	async replace(tfile:TFile,regex:any,target:string){
-		if(typeof regex === 'string'){
-			await this.app.vault.process(tfile,(data)=>{
-				if(data.indexOf(regex)>-1){
+	async replace(tfile: TFile, regex: any, target: string) {
+		if (typeof regex === 'string') {
+			await this.app.vault.process(tfile, (data) => {
+				if (data.indexOf(regex) > -1) {
 					return data.replace(regex, target);
 				}
 				return data;
 			})
-		}else if(regex instanceof RegExp){
-			await this.app.vault.process(tfile,(data)=>{
-				if(data.match(regex)){
+		} else if (regex instanceof RegExp) {
+			await this.app.vault.process(tfile, (data) => {
+				if (data.match(regex)) {
 					return data.replace(regex, target);
 				}
 				return data;
@@ -198,48 +217,48 @@ export class NCEditor{
 		}
 	}
 
-	async remove_metadata(tfile:TFile|string){
-		if(tfile instanceof TFile){
+	async remove_metadata(tfile: TFile | string) {
+		if (tfile instanceof TFile) {
 			tfile = await this.plugin.app.vault.cachedRead(tfile);
 		}
-		if(typeof(tfile)!='string'){
+		if (typeof (tfile) != 'string') {
 			return ''
 		}
 
 		let headerRegex = /^---\s*([\s\S]*?)\s*---/
 		let match = headerRegex.exec(tfile);
-		if(match){
+		if (match) {
 			tfile = tfile.slice(match[0].length).trim();
 		}
 		return tfile;
 	}
 
-	async extract_code_block(tfile:TFile|string,btype:string){
-		if(tfile instanceof TFile){
+	async extract_code_block(tfile: TFile | string, btype: string) {
+		if (tfile instanceof TFile) {
 			tfile = await this.plugin.app.vault.cachedRead(tfile);
 		}
-		if(typeof(tfile)!='string'){
+		if (typeof (tfile) != 'string') {
 			return ''
 		}
 		let blocks = [];
-		let reg = new RegExp(`\`\`\`${btype}\\n([\\s\\S]*?)\n\`\`\``,'g');;
+		let reg = new RegExp(`\`\`\`${btype}\\n([\\s\\S]*?)\n\`\`\``, 'g');;
 		let matches;
 		while ((matches = reg.exec(tfile)) !== null) {
 			blocks.push(matches[1].trim());
 		}
 
-		reg = new RegExp(`~~~${btype}\\n([\\s\\S]*?)\n~~~`,'g');;
+		reg = new RegExp(`~~~${btype}\\n([\\s\\S]*?)\n~~~`, 'g');;
 		while ((matches = reg.exec(tfile)) !== null) {
 			blocks.push(matches[1].trim());
 		}
 		return blocks;
 	}
 
-	async extract_templater_block(tfile:TFile|string,reg=/<%\*\s*([\s\S]*?)\s*-?%>/g){
-		if(tfile instanceof TFile){
+	async extract_templater_block(tfile: TFile | string, reg = /<%\*\s*([\s\S]*?)\s*-?%>/g) {
+		if (tfile instanceof TFile) {
 			tfile = await this.plugin.app.vault.cachedRead(tfile);
 		}
-		if(typeof(tfile)!='string'){
+		if (typeof (tfile) != 'string') {
 			return ''
 		}
 
@@ -248,60 +267,60 @@ export class NCEditor{
 		while ((matches = reg.exec(tfile)) !== null) {
 			cssCodeBlocks.push(matches[0].trim());
 		}
-		
-		let tpls = await this.extract_code_block(tfile,'js //templater');
-		for(let tpl of tpls){
+
+		let tpls = await this.extract_code_block(tfile, 'js //templater');
+		for (let tpl of tpls) {
 			cssCodeBlocks.push(`<%*\n${tpl}\n-%>`)
 		}
 
 		return cssCodeBlocks;
 	}
 
-	async extract_yaml_block(tfile:TFile|string){
-		
-		if(tfile instanceof TFile){
+	async extract_yaml_block(tfile: TFile | string) {
+
+		if (tfile instanceof TFile) {
 			tfile = await this.plugin.app.vault.cachedRead(tfile);
 		}
-		if(typeof(tfile)!='string'){
+		if (typeof (tfile) != 'string') {
 			return ''
 		}
 
 		let headerRegex = /^---\s*([\s\S]*?)\s*---/
 		let match = headerRegex.exec(tfile);
-        if(match){
+		if (match) {
 			return match[0]
-        }
+		}
 		return ''
 	}
 
-	_extract_block_id_(para:string){
+	_extract_block_id_(para: string) {
 		let reg = /\s+\^[a-zA-Z0-9]+\r?\n?$/
 		let match = reg.exec(para)
-		if(match){
+		if (match) {
 			return match[0].trim()
-		}else{
+		} else {
 			return ''
 		}
 	}
 
-	_generate_random_string_(length:number) {
+	_generate_random_string_(length: number) {
 		let characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 		let result = '';
-	
+
 		for (let i = 0; i < length; i++) {
 			let randomIndex = Math.floor(Math.random() * characters.length);
 			result += characters[randomIndex];
 		}
-	
+
 		return result;
 	}
 
-	async extract_all_blocks(tfile:TFile|string){
-		
-		if(tfile instanceof TFile){
+	async extract_all_blocks(tfile: TFile | string) {
+
+		if (tfile instanceof TFile) {
 			tfile = await this.plugin.app.vault.cachedRead(tfile);
 		}
-		if(typeof(tfile)!='string'){
+		if (typeof (tfile) != 'string') {
 			return ''
 		}
 
@@ -309,15 +328,15 @@ export class NCEditor{
 		let blocks = [];
 
 		let head = await this.plugin.editor.extract_yaml_block(ctx);
-		if(head!=''){
-			blocks.push(['YAML',head])
-			ctx=ctx.slice(head.length)
+		if (head != '') {
+			blocks.push(['YAML', head])
+			ctx = ctx.slice(head.length)
 		}
 
-		let kvgets:{[key:string]:any} = {
-			'空白段落':/^(\s*\n)*/,
+		let kvgets: { [key: string]: any } = {
+			'空白段落': /^(\s*\n)*/,
 			'代码块': /^[ \t]*```[\s\S]*?\n[ \t]*```[ \t]*\n(\s*\^[a-zA-Z0-9]+\r?[\n$])?/,
-			'tpl代码块':/^<%\*[\s\S]*?\n-?\*?%>[ \t]*\n(\s+\^[a-zA-Z0-9]+\r?[\n$])?/,
+			'tpl代码块': /^<%\*[\s\S]*?\n-?\*?%>[ \t]*\n(\s+\^[a-zA-Z0-9]+\r?[\n$])?/,
 			'任务': /^[ \t]*- \[.\].*\n?(\s+\^[a-zA-Z0-9]+\r?[\n$])?/,
 			'无序列表': /^[ \t]*- .*\n?(\s+\^[a-zA-Z0-9]+\r?[\n$])?/,
 			'有序列表': /^[ \t]*\d\. .*\n?(\s+[ \t]*\^[a-zA-Z0-9]+\r?[\n$])?/,
@@ -325,117 +344,117 @@ export class NCEditor{
 			'标题': /^#+ .*\n(\s*\^[a-zA-Z0-9]+\r?[\n$])?/,
 			'段落': /^(.*\n?)(\s*\^[a-zA-Z0-9]+\r?[\n$])?/
 		}
-		while(ctx.length>0){
+		while (ctx.length > 0) {
 			let flag = true
-			for(let key of Object.keys(kvgets)){
+			for (let key of Object.keys(kvgets)) {
 				let reg = kvgets[key];
 				let match = reg.exec(ctx);
-				if(match){
+				if (match) {
 					let curr = match[0];
-					if(curr.length>0){
+					if (curr.length > 0) {
 						let bid = this._extract_block_id_(curr)
-						if(key=='段落' && blocks.length>0 && blocks[blocks.length-1][0]=='段落'){
-							blocks[blocks.length-1][1] = blocks[blocks.length-1][1]+curr
-							blocks[blocks.length-1][2] = bid
-						}else{
-							blocks.push([key,curr,bid])
+						if (key == '段落' && blocks.length > 0 && blocks[blocks.length - 1][0] == '段落') {
+							blocks[blocks.length - 1][1] = blocks[blocks.length - 1][1] + curr
+							blocks[blocks.length - 1][2] = bid
+						} else {
+							blocks.push([key, curr, bid])
 						}
 						flag = false
-						ctx=ctx.slice(curr.length)
+						ctx = ctx.slice(curr.length)
 						break
 					}
 				}
 			}
-			if(flag){
+			if (flag) {
 				break
 			}
 		}
 
-		if(ctx.length>0){
+		if (ctx.length > 0) {
 			let bid = this._extract_block_id_(ctx)
-			blocks.push(['段落',ctx,bid])
+			blocks.push(['段落', ctx, bid])
 		}
 		return blocks
 	}
 
-	async append_block_ids(tfile:TFile){
+	async append_block_ids(tfile: TFile) {
 		let blocks = await this.extract_all_blocks(tfile);
 		let items = []
-		for(let block of blocks){
-			if(['空白段落','YAML'].contains(block[0])){
+		for (let block of blocks) {
+			if (['空白段落', 'YAML'].contains(block[0])) {
 				items.push(block[1])
-			}else if(!block[2]){
+			} else if (!block[2]) {
 				let bid = this._generate_random_string_(6)
-				
-				if(['任务','无序列表','有序列表'].contains(block[0])){
-					items.push(block[1].slice(0,-1)+' ^'+bid+'\n')
-				}else{
-					if(block[1].endsWith('\n')){
-						items.push(block[1]+'^'+bid+'\n')
-					}else{
-						items.push(block[1]+'\n^'+bid+'\n')
+
+				if (['任务', '无序列表', '有序列表'].contains(block[0])) {
+					items.push(block[1].slice(0, -1) + ' ^' + bid + '\n')
+				} else {
+					if (block[1].endsWith('\n')) {
+						items.push(block[1] + '^' + bid + '\n')
+					} else {
+						items.push(block[1] + '\n^' + bid + '\n')
 					}
 				}
-			}else{
+			} else {
 				items.push(block[1])
 			}
 		}
 		let res = items.join('')
-		await this.app.vault.modify(tfile,res)
+		await this.app.vault.modify(tfile, res)
 		return res;
 	}
 
-	async remove_block_ids(tfile:TFile){
+	async remove_block_ids(tfile: TFile) {
 		let blocks = await this.extract_all_blocks(tfile);
 		let items = []
-		for(let block of blocks){
-			if(['空白段落','YAML'].contains(block[0])){
+		for (let block of blocks) {
+			if (['空白段落', 'YAML'].contains(block[0])) {
 				items.push(block[1])
-			}else{
+			} else {
 				let reg = /\s+\^[a-zA-Z0-9]+\r?\n?$/
 				let match = reg.exec(block[1])
-				if(match){
-					items.push(block[1].replace(reg,'\n'))
-				}else{
+				if (match) {
+					items.push(block[1].replace(reg, '\n'))
+				} else {
 					items.push(block[1])
 				}
 			}
 		}
 		let res = items.join('')
-		await this.app.vault.modify(tfile,res)
+		await this.app.vault.modify(tfile, res)
 		return res;
 	}
 
-	async get_current_section(){
+	async get_current_section() {
 		let view = (this.app.workspace as any).getActiveFileView()
 		let editor = view.editor;
 		let tfile = view.file;
-		if(!view || !editor || !tfile){return null}
+		if (!view || !editor || !tfile) { return null }
 		let cursor = editor.getCursor();
 		let cache = this.app.metadataCache.getFileCache(tfile)
-		if(!cache){return}
-		if(!cursor){
+		if (!cache) { return }
+		if (!cursor) {
 			let ctx = await this.app.vault.cachedRead(tfile);
 			let items = cache?.sections?.map(
-				section=>ctx.slice(section.position.start.offset,section.position.end.offset)
+				section => ctx.slice(section.position.start.offset, section.position.end.offset)
 			)
-			if(!items){return null}
-			let section = await this.plugin.dialog_suggest(items,cache.sections)
+			if (!items) { return null }
+			let section = await this.plugin.dialog_suggest(items, cache.sections)
 			return section
 
-		}else{
+		} else {
 			let sections = cache?.sections?.filter(
-				x=>{return x.position.start.line<=cursor.line && x.position.end.line>=cursor.line}
+				x => { return x.position.start.line <= cursor.line && x.position.end.line >= cursor.line }
 			)[0]
 			return sections
 		}
 	}
 
-	async set_frontmatter_align_file(src:TFile,dst:TFile,field:string){
-		if(field){
-			let value = this.get_frontmatter(src,field);
-			if(value){
-				await this.set_frontmatter(dst,field,value,1)
+	async set_frontmatter_align_file(src: TFile, dst: TFile, field: string) {
+		if (field) {
+			let value = this.get_frontmatter(src, field);
+			if (value) {
+				await this.set_frontmatter(dst, field, value, 1)
 			}
 		}
 	}

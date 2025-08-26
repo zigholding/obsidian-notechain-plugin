@@ -225,6 +225,8 @@ export class NCFileExplorer{
 				return tfile.basename
 			}else if(tfile.extension=='canvas'){
 				return tfile.basename
+			}else if(tfile.extension=='base'){
+				return tfile.basename
 			}else{
 				return tfile.name
 			}
