@@ -733,6 +733,47 @@ const cmd_open_note_in_view = (plugin: NoteChainPlugin) => ({
     }
 });
 
+const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
+    id: 'cmd_execut_current_note',
+    name: plugin.strings.cmd_execut_current_note,
+	icon:'Panels Top Left',
+	hotkeys: [{ modifiers: ['Alt'], key: 'R' }],
+    callback: async () => {
+		let cfile = plugin.chain.current_note;
+		if(!cfile){return}
+
+		let ctx = await plugin.app.vault.cachedRead(cfile);
+		let flag = false;
+		if(ctx.search('\n```js //templater\n')>0){
+			new Notice(`执行当前脚本：${cfile.basename}`)
+			flag = true;
+			plugin.utils.parse_templater(plugin.app,cfile.basename)
+		}
+		if(ctx.search('\n```css\n')>0){
+			let all_css = await plugin.easyapi.editor.extract_code_block(cfile,'css');
+			let css = all_css.join('\n\n\n').trim();
+			if(css!=''){
+				flag = true;
+				// 将 css 写入 snippets
+				new Notice(`切换当前样式：${cfile.basename}`)
+				let cpath = plugin.app.vault.configDir+'/'+'snippets'+'/'+cfile.basename+'.css';
+				await plugin.app.vault.adapter.write(cpath,css);
+				
+				// 在配置文件中添加 css
+				let config = await (plugin.app.vault as any).readJson(plugin.app.vault.configDir+'/'+'appearance.json');
+				if(!config['enabledCssSnippets'].contains(cfile.basename)){
+					config['enabledCssSnippets'].push(cfile.basename);
+					await (plugin.app.vault as any).writeJson(plugin.app.vault.configDir+'/'+'appearance.json',config);
+				}
+				plugin.utils.toogle_note_css(plugin.app,document,cfile.basename,false)
+			}
+		}
+		if(!flag){
+			plugin.chain.open_note_in_modal(cfile.path);
+		}
+    }
+});
+
 
 
 const commandBuilders = [
@@ -767,7 +808,8 @@ const commandBuilders = [
 	cmd_move_prev_level,
 	cmd_insert_command_id,
 	cmd_open_note_in_modal,
-	cmd_open_note_in_view
+	cmd_open_note_in_view,
+	cmd_execut_current_note
 ];
 
 const commandBuildersDesktop = [

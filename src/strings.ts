@@ -237,6 +237,15 @@ export class Strings{
         }
     }
 
+    get cmd_execut_current_note(){
+        if(this.language=='zh'){
+            return '执行当前笔记'
+        }else{
+            return "Execute current note";
+        }
+    }
+
+    
 
     get filemenu_create_next_note(){
         if(this.language=='zh'){
