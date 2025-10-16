@@ -62,6 +62,26 @@ export class NoteContentView extends ItemView {
 	}
 
 	async setContent(content: string, sourcePath: string) {
+		if(sourcePath && (sourcePath.endsWith('.canvas') || sourcePath.endsWith('.base'))){
+            if('datacore' in (this.plugin.app as any).plugins.plugins){
+                content = `
+\`\`\`datacorejsx
+return (
+    <dc.Markdown
+        content=\`![[${sourcePath}]]\`
+    />
+);
+dv.span();
+\`\`\`
+                `.trim()
+            }else if('dataview' in (this.plugin.app as any).plugins.plugins){
+                content = `
+\`\`\`dataviewjs
+dv.span(\`![[${sourcePath}]]\`);
+\`\`\`
+                `.trim()
+            }
+        }
 		this.content = content;
 		this.sourcePath = sourcePath;
 
