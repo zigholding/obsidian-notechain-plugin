@@ -345,6 +345,7 @@ export class NoteChain {
 	}
 
 	get_tags(tfile = this.current_note) {
+		tfile = this.plugin.easyapi.file.get_tfile(tfile);
 		if (!tfile) { return [] }
 		let mcache = this.app.metadataCache.getFileCache(tfile);
 		let tags: Array<string> = []

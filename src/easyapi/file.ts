@@ -14,8 +14,11 @@ export class File {
         this.api = api;
     }
 
-    get_tfile(path:string|TFile,only_first=true){
+    get_tfile(path:string|TFile|null,only_first=true){
 		try{
+			if(!path){
+				return null;
+			}
 			if(path instanceof TFile){
 				return path;
 			}

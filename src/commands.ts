@@ -412,7 +412,12 @@ const cmd_file_open_with_system_app = (plugin:NoteChainPlugin) => ({
 			if(key){
 				let item = items[key];
 				let electron = require('electron')
-				electron.remote.shell.openPath(item);
+				if(item.startsWith('https://') || item.startsWith('http://')){
+					electron.remote.shell.openExternal(item);
+				}else{
+					electron.remote.shell.openPath(item);
+				}
+				
 			}
 		}
 	}

@@ -156,10 +156,30 @@ export class EasyEditor {
                 let cursor = editor.getCursor(); 
                 await editor.setSelection(cursor, cursor);
             }
-            return sel;
-        }else{
-            return '';
+            if(sel){
+                return sel;
+            }
         }
+        
+        let selection = window.getSelection();
+        if (selection && !selection.isCollapsed) {
+            const selectedText = selection.toString();
+            if(selectedText){
+                return selectedText;
+            }   
+        }
+        let areas = document.querySelectorAll('textarea');
+        for(let area of Array.from(areas)){
+            let sel = area.value.slice(area.selectionStart,area.selectionEnd);
+            
+            if(sel){
+                area.selectionStart = area.selectionEnd;
+                area.blur();
+                return sel
+                }
+        }
+        return ''
+        
     }
 
     async get_code_section(tfile:TFile,ctype='',idx=0,as_simple=true){
@@ -392,5 +412,7 @@ export class EasyEditor {
         await this.ea.app.vault.modify(tfile,ctx)
         return true;
     }
+
+
 }
 
