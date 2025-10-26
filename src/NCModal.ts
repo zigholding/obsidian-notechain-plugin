@@ -26,6 +26,11 @@ return (
 dv.span();
 \`\`\`
                 `.trim()
+                content = `
+\`\`\`dataviewjs
+dv.span(\`![[${sourcePath}]]\`);
+\`\`\`
+                `.trim()
             }else if('dataview' in (this.plugin.app as any).plugins.plugins){
                 content = `
 \`\`\`dataviewjs

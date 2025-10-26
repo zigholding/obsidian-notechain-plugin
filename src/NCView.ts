@@ -7,6 +7,7 @@ export class NoteContentView extends ItemView {
 	sourcePath: string;
 	private fileModifyHandler: EventRef | null = null;
 	private debounceTimer: number | null = null;
+	private noteIcon: string = '';
 
 	constructor(leaf: WorkspaceLeaf, plugin: NoteChainPlugin) {
 		super(leaf);
@@ -25,19 +26,21 @@ export class NoteContentView extends ItemView {
 	getState(): any {
 		return {
 			content: this.content,
-			sourcePath: this.sourcePath
+			sourcePath: this.sourcePath,
+			noteIcon: this.noteIcon
 		};
 	}
 	
 	async setState(state: any, result: ViewStateResult): Promise<void> {
 		this.content = state.content;
 		this.sourcePath = state.sourcePath;
+		this.noteIcon = state.noteIcon || '';
 	
 		await this.setContent(this.content, this.sourcePath);
 	}
 
 	getIcon() {
-		return '';
+		return this.noteIcon || '';
 	}
 
 	async onOpen() {
@@ -62,6 +65,18 @@ export class NoteContentView extends ItemView {
 	}
 
 	async setContent(content: string, sourcePath: string) {
+		// 从frontmatter中读取icon字段
+		this.noteIcon = '';
+		if (sourcePath) {
+			const file = this.app.vault.getAbstractFileByPath(sourcePath);
+			if (file instanceof TFile) {
+				const iconFromFrontmatter = this.plugin.editor.get_frontmatter(file, 'icon');
+				if (iconFromFrontmatter && typeof iconFromFrontmatter === 'string') {
+					this.noteIcon = iconFromFrontmatter;
+				}
+			}
+		}
+
 		if(sourcePath && (sourcePath.endsWith('.canvas') || sourcePath.endsWith('.base'))){
             if('datacore' in (this.plugin.app as any).plugins.plugins){
                 content = `
@@ -146,6 +161,8 @@ dv.span(\`![[${sourcePath}]]\`);
 						this.debounceTimer = window.setTimeout(() => {
 							this.app.vault.read(modifiedFile).then((newContent) => {
 								this.setContent(newContent, sourcePath);
+								// 更新图标
+								this.updateIcon();
 							});
 							this.debounceTimer = null;
 						}, 5000); // 5秒防抖
@@ -153,6 +170,20 @@ dv.span(\`![[${sourcePath}]]\`);
 				})
 			);
 		}
+		
+		// 更新图标显示
+		this.updateIcon();
+	}
+
+	private updateIcon() {
+		// 更新视图的图标显示
+		if (this.noteIcon) {
+			this.icon = this.noteIcon;
+		} else {
+			this.icon = '';
+		}
+		// 触发视图更新
+		this.app.workspace.requestSaveLayout();
 	}
 
 	async onClose(): Promise<void> {

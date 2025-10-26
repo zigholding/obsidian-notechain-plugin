@@ -442,7 +442,11 @@ const cmd_file_show_in_system_explorer = (plugin:NoteChainPlugin) => ({
 			if(key){
 				let item = items[key]
 				let electron = require('electron')
-				electron.remote.shell.showItemInFolder(item);
+				if(item.startsWith('https://') || item.startsWith('http://')){
+					await electron.remote.shell.openExternal(item);
+				}else{
+					await electron.remote.shell.showItemInFolder(item);
+				}
 			}
 		}
 	}

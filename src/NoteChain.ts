@@ -90,10 +90,16 @@ export class NoteChain {
 
 			let content = '';
 			let sourcePath = '';
+			let noteIcon = '';
 			let file = this.get_tfile(notePath);
 			if (file instanceof TFile) {
 				content = await this.app.vault.read(file);
 				sourcePath = notePath;
+				// 预先读取frontmatter中的icon
+				const iconFromFrontmatter = this.editor.get_frontmatter(file, 'icon');
+				if (iconFromFrontmatter && typeof iconFromFrontmatter === 'string') {
+					noteIcon = iconFromFrontmatter;
+				}
 			} else {
 				content = notePath;
 			}
@@ -102,6 +108,11 @@ export class NoteChain {
 			await leaf.setViewState({
 				type: 'note-content-view',
 				active: true,
+				state: {
+					content: content,
+					sourcePath: sourcePath,
+					noteIcon: noteIcon
+				}
 			});
 			const view = leaf.view as NoteContentView;
 
