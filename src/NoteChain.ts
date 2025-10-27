@@ -463,6 +463,17 @@ export class NoteChain {
 		}
 	}
 
+	get_last_activate_file(only_md = true, skip_conote = true) {
+		let tfiles = this.get_recent_tfiles(only_md);
+		for (let tfile of tfiles) {
+			if (skip_conote && this.get_tags(tfile).contains('#conote')) {
+				continue;
+			}
+			return tfile;
+		}
+		return null;
+	}
+
 	get_last_activate_leaf(skip_conote = true) {
 		let leaves: Array<any> = this.app.workspace.getLeavesOfType('markdown');
 		leaves = leaves.filter(x => x.getViewState().state.file);
