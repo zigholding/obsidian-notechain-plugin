@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, MarkdownRenderer, TFile,ViewStateResult,EventRef} from 'obsidian';
+import { ItemView, WorkspaceLeaf, MarkdownRenderer, TFile,ViewStateResult,EventRef, Menu} from 'obsidian';
 import NoteChainPlugin from "../main";
 
 export class NoteContentView extends ItemView {
@@ -65,8 +65,6 @@ export class NoteContentView extends ItemView {
 	}
 
 	async setContent(content: string, sourcePath: string) {
-		// 从frontmatter中读取icon字段
-		console.log('????setContent sourcePath:',sourcePath);
 		this.noteIcon = '';
 		if (sourcePath) {
 			const file = this.app.vault.getAbstractFileByPath(sourcePath);
@@ -123,11 +121,7 @@ dv.span(\`![[${sourcePath}]]\`);
 				}
 			}
 		});
-
-		
-		console.log('????sourcePath:',this.sourcePath);
         
-		// ✅ 处理内部链接的 hover 效果
 		this.setupInternalLinks(div, isDatacoreContent);
         
 
@@ -163,28 +157,19 @@ dv.span(\`![[${sourcePath}]]\`);
 	}
 
 	private setupInternalLinks(div: HTMLElement, isDatacoreContent: boolean) {
-		console.log('????setupInternalLinks isDatacoreContent:', isDatacoreContent);
-		
-		// 延迟处理已存在的链接，给渲染一些时间
 		setTimeout(() => {
 			this.processInternalLinks(div);
 		}, 100);
-		
-		// 使用 MutationObserver 监听所有渲染情况（不仅仅是 datacore）
 		const observer = new MutationObserver((mutations) => {
-			console.log('????MutationObserver triggered, mutations count:', mutations.length);
 			let shouldProcess = false;
 			for (const mutation of mutations) {
 				if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-					console.log('????Added nodes:', mutation.addedNodes.length);
-					// 检查是否有新的内部链接被添加
 					for (let i = 0; i < mutation.addedNodes.length; i++) {
 						const node = mutation.addedNodes[i];
 						if (node.nodeType === Node.ELEMENT_NODE) {
 							const element = node as HTMLElement;
 							if (element.querySelectorAll('a.internal-link').length > 0 || 
 								element.tagName === 'A' && element.hasClass('internal-link')) {
-								console.log('????Found internal link in added node');
 								shouldProcess = true;
 								break;
 							}
@@ -194,62 +179,47 @@ dv.span(\`![[${sourcePath}]]\`);
 			}
 			
 			if (shouldProcess) {
-				console.log('????Processing internal links...');
-				// 延迟处理，确保渲染完成
 				setTimeout(() => {
 					this.processInternalLinks(div);
 				}, 100);
 			}
 		});
 		
-		// 开始观察
 		observer.observe(div, {
 			childList: true,
 			subtree: true
 		});
 		
-		// 设置超时停止观察（避免无限观察）
 		setTimeout(() => {
 			observer.disconnect();
-			console.log('????Observer disconnected');
-		}, 10000); // 10秒后停止观察
+		}, 10000);
 		
-		// 定期轮询检查链接（作为备用方案）
 		let attempts = 0;
-		const maxAttempts = 10; // 最多尝试10次
+		const maxAttempts = 10;
 		const pollInterval = setInterval(() => {
 			attempts++;
-			console.log('????Polling attempt:', attempts);
 			this.processInternalLinks(div);
 			
 			if (attempts >= maxAttempts) {
 				clearInterval(pollInterval);
-				console.log('????Polling stopped');
 			}
-		}, 1000); // 每秒检查一次
+		}, 1000);
 	}
 
 	private processInternalLinks(div: HTMLElement) {
-		// ✅ 修复 Page Preview 不生效
 		const links = div.querySelectorAll('a.internal-link');
-		console.log('????processInternalLinks found', links.length, 'internal links');
 		
 		links.forEach((el) => {
-			// 避免重复处理已经处理过的链接
 			if (el.hasClass('nc-processed')) {
-				console.log('????Link already processed');
 				return;
 			}
 			
 			const href = el.getAttribute('href');
-			console.log('????Processing el:', el, 'href:', href);
 			if (href) {
-				console.log('href:', href);
-				console.log('sourcePath:', this.sourcePath);
 				el.setAttribute('data-href', href);
 				el.setAttr('aria-label', href);
-				el.addClass('hover-link'); // ✅ 核心
-				el.addClass('nc-processed'); // 标记为已处理
+				el.addClass('hover-link');
+				el.addClass('nc-processed');
 
 				el.addEventListener('mouseenter', (e) => {
 					this.app.workspace.trigger("hover-link", {
@@ -260,6 +230,18 @@ dv.span(\`![[${sourcePath}]]\`);
 						linktext: href,
 						sourcePath: this.sourcePath,
 					});
+				});
+
+				el.addEventListener('contextmenu', (e: MouseEvent) => {
+					e.preventDefault();
+					e.stopPropagation();
+					
+					const targetFile = this.app.metadataCache.getFirstLinkpathDest(href, this.sourcePath);
+					if (targetFile) {
+						const menu = new Menu();
+						this.app.workspace.trigger('file-menu', menu, targetFile, 'note-content-view', this.leaf);
+						menu.showAtPosition({ x: e.clientX, y: e.clientY });
+					}
 				});
 			}
 		});
