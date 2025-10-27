@@ -90,15 +90,21 @@ export class NoteChain {
 
 			let content = '';
 			let sourcePath = '';
-			let noteIcon = '';
+			let noteIcon = 'puzzle';
 			let file = this.get_tfile(notePath);
 			if (file instanceof TFile) {
-				content = await this.app.vault.read(file);
-				sourcePath = notePath;
-				// 预先读取frontmatter中的icon
-				const iconFromFrontmatter = this.editor.get_frontmatter(file, 'icon');
-				if (iconFromFrontmatter && typeof iconFromFrontmatter === 'string') {
-					noteIcon = iconFromFrontmatter;
+				if(file.extension==='base'){
+					noteIcon = 'database';
+				}else if(file.extension==='canvas'){
+					noteIcon = 'paintbrush';
+				}else{
+					content = await this.app.vault.read(file);
+					sourcePath = notePath;
+					// 预先读取frontmatter中的icon
+					const iconFromFrontmatter = this.editor.get_frontmatter(file, 'icon');
+					if (iconFromFrontmatter && typeof iconFromFrontmatter === 'string') {
+						noteIcon = iconFromFrontmatter;
+					}
 				}
 			} else {
 				content = notePath;
@@ -114,7 +120,7 @@ export class NoteChain {
 					noteIcon: noteIcon
 				}
 			});
-			const view = leaf.view as NoteContentView;
+			let view = leaf.view as NoteContentView;
 
 			view.setContent(content, sourcePath);
 		} catch (error) {

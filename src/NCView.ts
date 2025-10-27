@@ -12,7 +12,7 @@ export class NoteContentView extends ItemView {
 	constructor(leaf: WorkspaceLeaf, plugin: NoteChainPlugin) {
 		super(leaf);
 		this.plugin = plugin;
-		this.icon = 'getIcon';
+		this.icon = 'puzzle';
 	}
 
 	getViewType() {
@@ -66,6 +66,7 @@ export class NoteContentView extends ItemView {
 
 	async setContent(content: string, sourcePath: string) {
 		// 从frontmatter中读取icon字段
+		console.log('????setContent sourcePath:',sourcePath);
 		this.noteIcon = '';
 		if (sourcePath) {
 			const file = this.app.vault.getAbstractFileByPath(sourcePath);
@@ -77,16 +78,18 @@ export class NoteContentView extends ItemView {
 			}
 		}
 
+		const isDatacoreContent = Boolean(sourcePath && (sourcePath.endsWith('.canvas') || sourcePath.endsWith('.base')) && 
+			('datacore' in (this.plugin.app as any).plugins.plugins));
+
 		if(sourcePath && (sourcePath.endsWith('.canvas') || sourcePath.endsWith('.base'))){
             if('datacore' in (this.plugin.app as any).plugins.plugins){
                 content = `
 \`\`\`datacorejsx
 return (
     <dc.Markdown
-        content=\`![[${sourcePath}]]\`
+        content="![[${sourcePath}]]"
     />
 );
-dv.span();
 \`\`\`
                 `.trim()
             }else if('dataview' in (this.plugin.app as any).plugins.plugins){
@@ -97,6 +100,7 @@ dv.span(\`![[${sourcePath}]]\`);
                 `.trim()
             }
         }
+		
 		this.content = content;
 		this.sourcePath = sourcePath;
 
@@ -121,27 +125,10 @@ dv.span(\`![[${sourcePath}]]\`);
 		});
 
 		
-
-        // ✅ 修复 Page Preview 不生效
-        div.querySelectorAll('a.internal-link').forEach((el) => {
-            const href = el.getAttribute('href');
-            if (href) {
-                el.setAttribute('data-href', href);
-                el.setAttr('aria-label', href);
-                el.addClass('hover-link'); // ✅ 核心
+		console.log('????sourcePath:',this.sourcePath);
         
-				el.addEventListener('mouseenter', (e) => {
-					this.app.workspace.trigger("hover-link", {
-						event: e,
-						source: 'markdown',
-						hoverParent: el,
-						targetEl: el,
-						linktext: href,
-						sourcePath: this.sourcePath,
-					});
-				});
-            }
-        });
+		// ✅ 处理内部链接的 hover 效果
+		this.setupInternalLinks(div, isDatacoreContent);
         
 
 		// ✅ 文件变化监听
@@ -173,6 +160,109 @@ dv.span(\`![[${sourcePath}]]\`);
 		
 		// 更新图标显示
 		this.updateIcon();
+	}
+
+	private setupInternalLinks(div: HTMLElement, isDatacoreContent: boolean) {
+		console.log('????setupInternalLinks isDatacoreContent:', isDatacoreContent);
+		
+		// 延迟处理已存在的链接，给渲染一些时间
+		setTimeout(() => {
+			this.processInternalLinks(div);
+		}, 100);
+		
+		// 使用 MutationObserver 监听所有渲染情况（不仅仅是 datacore）
+		const observer = new MutationObserver((mutations) => {
+			console.log('????MutationObserver triggered, mutations count:', mutations.length);
+			let shouldProcess = false;
+			for (const mutation of mutations) {
+				if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+					console.log('????Added nodes:', mutation.addedNodes.length);
+					// 检查是否有新的内部链接被添加
+					for (let i = 0; i < mutation.addedNodes.length; i++) {
+						const node = mutation.addedNodes[i];
+						if (node.nodeType === Node.ELEMENT_NODE) {
+							const element = node as HTMLElement;
+							if (element.querySelectorAll('a.internal-link').length > 0 || 
+								element.tagName === 'A' && element.hasClass('internal-link')) {
+								console.log('????Found internal link in added node');
+								shouldProcess = true;
+								break;
+							}
+						}
+					}
+				}
+			}
+			
+			if (shouldProcess) {
+				console.log('????Processing internal links...');
+				// 延迟处理，确保渲染完成
+				setTimeout(() => {
+					this.processInternalLinks(div);
+				}, 100);
+			}
+		});
+		
+		// 开始观察
+		observer.observe(div, {
+			childList: true,
+			subtree: true
+		});
+		
+		// 设置超时停止观察（避免无限观察）
+		setTimeout(() => {
+			observer.disconnect();
+			console.log('????Observer disconnected');
+		}, 10000); // 10秒后停止观察
+		
+		// 定期轮询检查链接（作为备用方案）
+		let attempts = 0;
+		const maxAttempts = 10; // 最多尝试10次
+		const pollInterval = setInterval(() => {
+			attempts++;
+			console.log('????Polling attempt:', attempts);
+			this.processInternalLinks(div);
+			
+			if (attempts >= maxAttempts) {
+				clearInterval(pollInterval);
+				console.log('????Polling stopped');
+			}
+		}, 1000); // 每秒检查一次
+	}
+
+	private processInternalLinks(div: HTMLElement) {
+		// ✅ 修复 Page Preview 不生效
+		const links = div.querySelectorAll('a.internal-link');
+		console.log('????processInternalLinks found', links.length, 'internal links');
+		
+		links.forEach((el) => {
+			// 避免重复处理已经处理过的链接
+			if (el.hasClass('nc-processed')) {
+				console.log('????Link already processed');
+				return;
+			}
+			
+			const href = el.getAttribute('href');
+			console.log('????Processing el:', el, 'href:', href);
+			if (href) {
+				console.log('href:', href);
+				console.log('sourcePath:', this.sourcePath);
+				el.setAttribute('data-href', href);
+				el.setAttr('aria-label', href);
+				el.addClass('hover-link'); // ✅ 核心
+				el.addClass('nc-processed'); // 标记为已处理
+
+				el.addEventListener('mouseenter', (e) => {
+					this.app.workspace.trigger("hover-link", {
+						event: e,
+						source: 'markdown',
+						hoverParent: el,
+						targetEl: el,
+						linktext: href,
+						sourcePath: this.sourcePath,
+					});
+				});
+			}
+		});
 	}
 
 	private updateIcon() {
