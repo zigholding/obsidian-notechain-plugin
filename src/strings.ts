@@ -416,6 +416,22 @@ export class Strings{
             return "Tags or folder of script note";
         }
     }
+
+    get setting_httpServer_enabled(){
+        if(this.language=='zh'){
+            return '启用 HTTP 服务器'
+        }else{
+            return "Enable HTTP Server";
+        }
+    }
+
+    get setting_httpServer_port(){
+        if(this.language=='zh'){
+            return 'HTTP 服务器端口'
+        }else{
+            return "HTTP Server Port";
+        }
+    }
     
 
     get setting_wordcout_xfolder(){

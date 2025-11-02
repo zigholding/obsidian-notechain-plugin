@@ -10,6 +10,7 @@ import {Random } from './random';
 import { Waiter } from './waiter';
 import { Templater } from './templater';
 import {Time} from './time'
+import { Web } from './web';
 
 export class EasyAPI {
     app: App;
@@ -21,6 +22,7 @@ export class EasyAPI {
     waiter: Waiter
     tpl: Templater
     time: Time
+    web: Web
 
     constructor(app: App) {
         this.app = app;
@@ -31,7 +33,8 @@ export class EasyAPI {
         this.waiter = new Waiter(app,this);
         this.random = new Random(app,this);
         this.tpl = new Templater(app,this);
-        this.time = new Time(app,this)
+        this.time = new Time(app,this);
+        this.web = new Web(app);
     }
 
     get_plugin(name:string){

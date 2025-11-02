@@ -20,6 +20,7 @@ import { dialog_suggest } from 'src/gui/inputSuggester'
 import { dialog_prompt } from 'src/gui/inputPrompt'
 import { EasyAPI } from 'src/easyapi/easyapi'
 import { NoteContentView } from 'src/NCView';
+import { HTTPServer } from 'src/httpServer';
 
 export default class NoteChainPlugin extends Plugin {
 	settings: NCSettings;
@@ -39,6 +40,7 @@ export default class NoteChainPlugin extends Plugin {
 	dialog_suggest: Function;
 	dialog_prompt: Function;
 	easyapi: EasyAPI;
+	httpServer: HTTPServer | null = null;
 
 
 	async onload() {
@@ -87,6 +89,27 @@ export default class NoteChainPlugin extends Plugin {
 		this.canvas = new CanvasGraph(this);
 		this.strings = new Strings();
 		this.easyapi = new EasyAPI(this.app);
+
+		// 初始化 HTTP 服务器
+		this.httpServer = new HTTPServer(
+			this.app,
+			this.easyapi.tpl,
+			this.settings.httpServerPort
+		);
+		// 如果启用，自动启动 HTTP 服务器
+		if (this.settings.httpServerEnabled) {
+			this.httpServer.start()
+				.then(() => {
+					console.log(`HTTP Server auto-started on port ${this.settings.httpServerPort}`);
+				})
+				.catch((error) => {
+					console.error('Failed to start HTTP Server:', error);
+					// 如果启动失败，可以考虑通知用户
+					if (this.debug) {
+						new Notice(`Failed to start HTTP Server: ${error.message}`, 5000);
+					}
+				});
+		}
 
 		addCommands(this);
 
@@ -351,6 +374,9 @@ export default class NoteChainPlugin extends Plugin {
 	async onunload() {
 		await this.explorer.unregister();
 		await this.explorer.sort();
+		if (this.httpServer) {
+			await this.httpServer.stop();
+		}
 	}
 
 	async ufunc_on_file_open(file: TFile) {

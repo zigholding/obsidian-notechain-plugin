@@ -27,6 +27,8 @@ export interface NCSettings {
 	modal_default_height: number,
 	avata: string,
 	tpl_tags_folder: string,
+	httpServerPort: number,
+	httpServerEnabled: boolean,
 }
 
 export const DEFAULT_SETTINGS: NCSettings = {
@@ -51,6 +53,8 @@ export const DEFAULT_SETTINGS: NCSettings = {
 	modal_default_height: 600,
 	avata: 'avata',
 	tpl_tags_folder: '脚本笔记\nScriptNote',
+	httpServerPort: 3000,
+	httpServerEnabled: true,  // 默认启用 HTTP 服务器
 }
 
 
@@ -268,5 +272,35 @@ export class NCSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				})
 			);
+
+		new Setting(containerEl)
+			.setName(this.plugin.strings.setting_httpServer_enabled)
+			.addToggle(text => text
+				.setValue(this.plugin.settings.httpServerEnabled)
+				.onChange(async (value) => {
+					this.plugin.settings.httpServerEnabled = value;
+					await this.plugin.saveSettings();
+					if (value) {
+						await this.plugin.httpServer?.start();
+					} else {
+						await this.plugin.httpServer?.stop();
+					}
+				})
+			);
+
+		new Setting(containerEl)
+			.setName(this.plugin.strings.setting_httpServer_port)
+			.addText(text => text
+				.setValue(this.plugin.settings.httpServerPort.toString())
+				.onChange(async (value) => {
+					const port = parseInt(value) || 3000;
+					this.plugin.settings.httpServerPort = port;
+					await this.plugin.saveSettings();
+					if (this.plugin.settings.httpServerEnabled && this.plugin.httpServer) {
+						await this.plugin.httpServer.stop();
+						this.plugin.httpServer.setPort(port);
+						await this.plugin.httpServer.start();
+					}
+				}));
 	}
 }
