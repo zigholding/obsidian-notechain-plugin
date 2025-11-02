@@ -9,8 +9,7 @@ export class HTTPServer {
     private templater: Templater;
     private server: any = null;
     private port: number;
-    private sseConnections: Map<string, any> = new Map(); // 存储 SSE 连接（key: connectionId, value: res）
-    private sseConnectionId: string | null = null; // 当前活跃的 SSE 连接 ID（fastmcp 通常只有一个连接）
+    private sseConnections: Map<string, any> = new Map();
 
     constructor(app: App, templater: Templater, port: number = 3000) {
         this.app = app;
@@ -26,18 +25,15 @@ export class HTTPServer {
                 return;
             }
 
-            // 确保之前没有残留的服务器实例
             if (this.server && this.server.listening) {
                 this.server.close();
             }
 
             this.server = http.createServer(async (req:any, res:any) => {
-                // 设置 CORS 头
                 res.setHeader('Access-Control-Allow-Origin', '*');
                 res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-                res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+                res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-                // 处理 OPTIONS 预检请求
                 if (req.method === 'OPTIONS') {
                     res.writeHead(200);
                     res.end();
@@ -47,8 +43,7 @@ export class HTTPServer {
                 try {
                     const parsedUrl = url.parse(req.url || '', true);
                     
-                    // 记录所有请求（用于调试）
-                    console.log(`[${req.method}] ${parsedUrl.pathname}`, parsedUrl.query ? `query: ${JSON.stringify(parsedUrl.query)}` : '');
+                    console.log(`[${req.method}] ${parsedUrl.pathname}`);
                     
                     if (parsedUrl.pathname === '/templater' && (req.method === 'GET' || req.method === 'POST')) {
                         await this.handleTemplaterRequest(req, res, parsedUrl);
@@ -58,9 +53,7 @@ export class HTTPServer {
                         await this.handleMCPCallTool(req, res);
                     } else if (parsedUrl.pathname === '/sse' && req.method === 'GET') {
                         await this.handleSSEConnection(req, res);
-                    } else if ((parsedUrl.pathname === '/messages' || parsedUrl.pathname.startsWith('/messages')) && req.method === 'POST') {
-                        // MCP 消息端点（用于接收客户端 JSON-RPC 请求）
-                        console.log('POST request to:', parsedUrl.pathname);
+                    } else if (parsedUrl.pathname === '/messages' && req.method === 'POST') {
                         await this.handleMCPMessage(req, res);
                     } else {
                         console.warn(`Unknown route: ${req.method} ${parsedUrl.pathname}`);
@@ -68,10 +61,15 @@ export class HTTPServer {
                         res.end(JSON.stringify({ error: 'Not Found', path: parsedUrl.pathname }));
                     }
                 } catch (error: any) {
+                    console.error('Server error:', error);
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: error.message || 'Internal Server Error' }));
                 }
             });
+
+            // 设置服务器的 keep-alive 超时
+            this.server.keepAliveTimeout = 120000; // 120秒
+            this.server.headersTimeout = 120000;   // 120秒
 
             this.server.listen(this.port, '0.0.0.0', () => {
                 console.log(`HTTP Server started on http://0.0.0.0:${this.port}`);
@@ -90,28 +88,21 @@ export class HTTPServer {
         });
     }
 
-    private async handleTemplaterRequest(
-        req: any,
-        res: any,
-        parsedUrl: any
-    ) {
+    private async handleTemplaterRequest(req: any, res: any, parsedUrl: any) {
         try {
-            // 解析查询参数
             const query = parsedUrl.query;
             const filename = query.filename as string | undefined;
             const paramsStr = query.params as string | undefined;
-            const extract = query.extract !== 'false'; // 默认为 true
+            const extract = query.extract !== 'false';
             const idxStr = query.idx as string | undefined;
             const target = query.target as string | undefined;
 
-            // 解析额外参数（从 params 查询参数或 POST body）
             let extra: any = null;
             if (req.method === 'POST') {
                 const body = await this.readBody(req);
                 try {
                     extra = JSON.parse(body);
                 } catch {
-                    // 如果解析失败，尝试从查询参数获取
                     if (paramsStr) {
                         try {
                             extra = JSON.parse(decodeURIComponent(paramsStr));
@@ -121,7 +112,6 @@ export class HTTPServer {
                     }
                 }
             } else {
-                // GET 请求
                 if (paramsStr) {
                     try {
                         extra = JSON.parse(decodeURIComponent(paramsStr));
@@ -131,7 +121,6 @@ export class HTTPServer {
                 }
             }
 
-            // 解析 idx 参数（索引数组）
             let idx: number[] | null = null;
             if (idxStr) {
                 try {
@@ -140,7 +129,6 @@ export class HTTPServer {
                         idx = null;
                     }
                 } catch {
-                    // 如果不是 JSON，尝试作为逗号分隔的数字
                     const parts = idxStr.split(',').map(p => parseInt(p.trim())).filter(n => !isNaN(n));
                     if (parts.length > 0) {
                         idx = parts;
@@ -148,7 +136,6 @@ export class HTTPServer {
                 }
             }
 
-            // 调用 parse_templater
             const template = filename || '';
             const result = await this.templater.parse_templater(
                 template,
@@ -158,7 +145,6 @@ export class HTTPServer {
                 target || ''
             );
 
-            // 返回结果
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify({ success: true, result: result }, null, 2));
         } catch (error: any) {
@@ -171,46 +157,35 @@ export class HTTPServer {
         }
     }
 
-    /**
-     * 处理 MCP list_tools 请求
-     * 执行 obsidian_mcp_list_tools.md 脚本笔记，返回所有工具列表
-     */
     private async handleMCPListTools(req: any, res: any) {
         try {
-            // 执行 obsidian_mcp_list_tools.md 脚本笔记
             const listToolsFile = 'obsidian_mcp_list_tools.md';
             const result = await this.templater.parse_templater(
                 listToolsFile,
-                true,  // extract
-                null,  // extra
-                null,  // idx
-                ''     // target
+                true,
+                null,
+                null,
+                ''
             );
 
-            // 解析脚本返回的结果（应该是 JSON 字符串或对象）
             let tools: any[] = [];
             
             if (result && result.length > 0) {
                 const resultStr = result.join('\n').trim();
                 try {
-                    // 尝试解析为 JSON
                     const parsed = JSON.parse(resultStr);
                     if (Array.isArray(parsed)) {
                         tools = parsed;
                     } else if (parsed && Array.isArray(parsed.tools)) {
                         tools = parsed.tools;
                     } else if (typeof parsed === 'object') {
-                        // 如果是单个对象，包装成数组
                         tools = [parsed];
                     }
                 } catch {
-                    // 如果不是 JSON，尝试从文本中提取工具信息
-                    // 假设脚本返回的是工具列表的描述
-                    console.warn('list_tools 脚本返回的不是有效的 JSON，尝试解析文本');
+                    console.warn('list_tools script returned invalid JSON');
                 }
             }
 
-            // 返回 MCP 标准格式
             const response = {
                 tools: tools
             };
@@ -227,10 +202,6 @@ export class HTTPServer {
         }
     }
 
-    /**
-     * 处理 MCP call_tool 请求
-     * 执行对应的脚本笔记作为工具函数
-     */
     private async handleMCPCallTool(req: any, res: any) {
         try {
             const body = await this.readBody(req);
@@ -253,25 +224,20 @@ export class HTTPServer {
                 return;
             }
 
-            // 工具名称对应脚本笔记文件名（通常是 toolName.md）
-            // 也可以支持其他命名规则
             let scriptFile = toolName;
             if (!scriptFile.endsWith('.md')) {
                 scriptFile = scriptFile + '.md';
             }
 
-            // 执行对应的脚本笔记
             const result = await this.templater.parse_templater(
                 scriptFile,
-                true,  // extract
-                toolArguments,  // extra - 将 arguments 作为 extra 参数传递
-                null,  // idx
-                ''     // target
+                true,
+                toolArguments,
+                null,
+                ''
             );
 
-            // MCP 标准响应格式
             const content = result.map((item: any) => {
-                // 如果结果已经是对象，直接使用；否则包装成文本内容
                 if (typeof item === 'object' && item !== null) {
                     return item;
                 }
@@ -298,74 +264,146 @@ export class HTTPServer {
     }
 
     /**
-     * 处理 SSE (Server-Sent Events) 连接
-     * 用于支持 MCP 协议的 SSE 通信
-     * 
-     * MCP over SSE 协议流程：
-     * 1. 客户端连接到 SSE 端点
-     * 2. 服务器立即通过 SSE 流发送消息端点 URL（格式：{ "messages": "http://..." }）
-     * 3. 客户端使用该端点发送 JSON-RPC 请求
-     * 4. 服务器通过 SSE 流返回响应
+     * 处理 SSE 连接
+     * 🔥 关键修复：fastmcp Python 客户端需要在 SSE 连接建立后立即发送 endpoint 事件
      */
     private async handleSSEConnection(req: any, res: any) {
-        console.log('SSE connection established from:', req.headers['user-agent'] || 'unknown');
+        console.log('\n=== SSE Connection ===');
+        console.log('User-Agent:', req.headers['user-agent'] || 'unknown');
         
-        // 设置 SSE 响应头
+        // 1. 立即设置响应头
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive',
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Cache-Control',
-            'X-Accel-Buffering': 'no' // 禁用 nginx 缓冲
+            'X-Accel-Buffering': 'no'
         });
+        
+        // 2. 🔥 关键：立即发送 endpoint 事件（fastmcp 客户端需要这个）
+        // fastmcp 会解析这个事件来获取 /messages 端点的 URL
+        const sessionId = Date.now().toString() + Math.random().toString(36).substring(7);
+        const endpointUrl = `/messages?session_id=${sessionId}`;
+        
+        // 发送 endpoint 事件（这是 fastmcp 客户端期望的格式）
+        res.write(`event: endpoint\n`);
+        res.write(`data: ${endpointUrl}\n\n`);
+        
+        // 立即刷新
+        if (typeof res.flush === 'function') {
+            res.flush();
+        }
+        
+        console.log('✓ SSE connected, endpoint sent:', endpointUrl);
 
         // 生成连接 ID
-        const connectionId = Date.now().toString() + Math.random().toString(36);
-        this.sseConnections.set(connectionId, res);
-        this.sseConnectionId = connectionId; // 保存当前连接 ID
+        const connectionId = sessionId;
         
-        console.log('SSE Connection established:');
-        console.log('  Connection ID:', connectionId);
-        console.log('  Total connections:', this.sseConnections.size);
-        console.log('  User-Agent:', req.headers['user-agent'] || 'unknown');
-        console.log('  Remote IP:', req.socket.remoteAddress);
+        // 保存连接
+        this.sseConnections.set(connectionId, {
+            res: res,
+            sessionId: sessionId,
+            connectedAt: new Date()
+        });
+        
+        console.log('✓ Connection ID:', connectionId);
+        console.log('✓ Active connections:', this.sseConnections.size);
 
-        // 发送符合 JSON-RPC 2.0 格式的消息
-        const sendJSONRPC = (message: any) => {
+        // 清理函数
+        const cleanup = () => {
+            console.log('✗ SSE closed:', connectionId);
+            this.sseConnections.delete(connectionId);
+            clearInterval(heartbeatInterval);
+        };
+
+        // 监听连接事件
+        req.on('close', cleanup);
+        req.on('error', (error: any) => {
+            console.error('✗ Request error:', error.message);
+            cleanup();
+        });
+        res.on('error', (error: any) => {
+            console.error('✗ Response error:', error.message);
+            cleanup();
+        });
+
+        // 发送心跳 ping（SSE 注释格式）
+        const heartbeatInterval = setInterval(() => {
             try {
-                const jsonData = JSON.stringify(message);
-                const sseMessage = `data: ${jsonData}\n\n`;
-                res.write(sseMessage);
-                console.log('SSE sent:', JSON.stringify(message, null, 2));
-                // 立即刷新，确保数据发送
-                if (typeof res.flush === 'function') {
-                    res.flush();
+                if (this.sseConnections.has(connectionId)) {
+                    const now = new Date().toISOString();
+                    res.write(`: ping - ${now}\n\n`);
+                    if (typeof res.flush === 'function') {
+                        res.flush();
+                    }
+                } else {
+                    clearInterval(heartbeatInterval);
                 }
             } catch (error) {
-                console.error('Failed to send SSE message:', error);
-                throw error;
+                clearInterval(heartbeatInterval);
+                cleanup();
             }
-        };
-        
-        // 保存 sendJSONRPC 函数到 res，供 handleMCPMessage 使用
-        (res as any).sendJSONRPC = sendJSONRPC;
+        }, 30000); // 30秒心跳
 
-        // 创建处理请求的函数（可以从 POST /messages 接收）
-        const handleRequest = async (request: any) => {
+        console.log('✓ SSE ready, waiting for messages at:', endpointUrl);
+    }
+
+    /**
+     * 处理 MCP 消息
+     * 通过 SSE 连接发送响应
+     */
+    private async handleMCPMessage(req: any, res: any) {
+        console.log('\n=== MCP Message ===');
+        
+        try {
+            // 从查询参数获取 session_id
+            const parsedUrl = url.parse(req.url || '', true);
+            const sessionId = parsedUrl.query.session_id as string;
+            
+            console.log('Session ID:', sessionId);
+
+            const body = await this.readBody(req);
+            let request: any = {};
+            
+            try {
+                request = JSON.parse(body);
+                console.log('→ Request:', JSON.stringify(request, null, 2));
+            } catch (error: any) {
+                console.error('✗ Parse error');
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                    jsonrpc: '2.0',
+                    id: null,
+                    error: { code: -32700, message: 'Parse error' }
+                }));
+                return;
+            }
+
+            if (!request.jsonrpc || request.jsonrpc !== '2.0') {
+                console.warn('✗ Invalid JSON-RPC');
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: request.id || null,
+                    error: { code: -32600, message: 'Invalid Request' }
+                }));
+                return;
+            }
+
             const method = request.method;
             const params = request.params || {};
             const id = request.id;
             
-            console.log(`Processing MCP method: ${method}, id: ${id}`);
+            console.log(`→ Method: ${method}, ID: ${id}`);
 
+            // 构建响应
             let response: any = {
                 jsonrpc: '2.0',
                 id: id
             };
 
+            // 处理不同的方法
             if (method === 'initialize') {
-                console.log('Received initialize request');
                 response.result = {
                     protocolVersion: params.protocolVersion || '2024-11-05',
                     capabilities: {
@@ -378,15 +416,7 @@ export class HTTPServer {
                         version: '1.0.0'
                     }
                 };
-                // 通过 SSE 发送响应
-                sendJSONRPC(response);
                 
-                // 发送初始化完成通知
-                sendJSONRPC({
-                    jsonrpc: '2.0',
-                    method: 'notifications/initialized',
-                    params: {}
-                });
             } else if (method === 'tools/list') {
                 try {
                     const result = await this.templater.parse_templater(
@@ -408,20 +438,22 @@ export class HTTPServer {
                                 tools = parsed.tools;
                             }
                         } catch {
-                            console.warn('list_tools 脚本返回的不是有效的 JSON');
+                            console.warn('✗ Invalid JSON from list_tools');
                         }
                     }
 
                     response.result = { tools: tools };
-                    sendJSONRPC(response);
+                    console.log(`✓ Found ${tools.length} tools`);
+                    
                 } catch (error: any) {
+                    console.error('✗ Error listing tools:', error);
                     response.error = {
                         code: -32603,
                         message: 'Internal error',
                         data: error.message
                     };
-                    sendJSONRPC(response);
                 }
+                
             } else if (method === 'tools/call') {
                 const toolName = params.name;
                 const toolArguments = params.arguments || {};
@@ -457,248 +489,10 @@ export class HTTPServer {
                         });
 
                         response.result = { content: content };
-                        sendJSONRPC(response);
+                        console.log('✓ Tool executed');
+                        
                     } catch (error: any) {
-                        response.error = {
-                            code: -32603,
-                            message: 'Internal error',
-                            data: error.message
-                        };
-                        sendJSONRPC(response);
-                    }
-                }
-            } else {
-                response.error = {
-                    code: -32601,
-                    message: `Method not found: ${method}`
-                };
-                sendJSONRPC(response);
-            }
-        };
-
-        // 将 handleRequest 函数保存到连接对象，供 handleMCPMessage 使用
-        (res as any).handleRequest = handleRequest;
-        (res as any).connectionId = connectionId;
-
-        // 🔥 关键修复：立即发送消息端点 URL
-        // MCP over SSE 协议要求服务器在连接建立后立即发送消息端点
-        const messagesUrl = `http://127.0.0.1:${this.port}/messages`;
-        const endpointMessage = {
-            messages: messagesUrl
-        };
-        sendJSONRPC(endpointMessage);
-        console.log('Sent messages endpoint URL:', messagesUrl);
-
-        // 监听连接关闭
-        req.on('close', () => {
-            console.log('SSE connection closed:', connectionId);
-            this.sseConnections.delete(connectionId);
-            if (this.sseConnectionId === connectionId) {
-                this.sseConnectionId = null;
-            }
-            try {
-                res.end();
-            } catch (e) {
-                // 忽略已经关闭的连接
-            }
-        });
-        
-        // 监听连接错误
-        req.on('error', (error: any) => {
-            console.error('SSE connection error:', error);
-            this.sseConnections.delete(connectionId);
-            if (this.sseConnectionId === connectionId) {
-                this.sseConnectionId = null;
-            }
-        });
-        
-        // 监听响应错误
-        res.on('error', (error: any) => {
-            console.error('SSE response error:', error);
-            this.sseConnections.delete(connectionId);
-            if (this.sseConnectionId === connectionId) {
-                this.sseConnectionId = null;
-            }
-        });
-
-        // 定期发送心跳保持连接
-        const heartbeat = setInterval(() => {
-            try {
-                res.write(': heartbeat\n\n');
-            } catch (error) {
-                clearInterval(heartbeat);
-                this.sseConnections.delete(connectionId);
-            }
-        }, 30000); // 30秒心跳
-
-        // 清理定时器
-        req.on('close', () => {
-            clearInterval(heartbeat);
-        });
-    }
-
-    /**
-     * 处理 MCP 消息（JSON-RPC 请求）
-     * fastmcp 客户端通过 POST /messages 发送请求
-     * 响应通过 SSE 流返回
-     */
-    private async handleMCPMessage(req: any, res: any) {
-        try {
-            const body = await this.readBody(req);
-            let request: any = {};
-            
-            try {
-                request = JSON.parse(body);
-                console.log('MCP request received:', JSON.stringify(request, null, 2));
-            } catch (error: any) {
-                console.error('Failed to parse request body:', error);
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                    jsonrpc: '2.0',
-                    id: null,
-                    error: { code: -32700, message: 'Parse error' }
-                }));
-                return;
-            }
-
-            // 验证 JSON-RPC 格式
-            if (!request.jsonrpc || request.jsonrpc !== '2.0') {
-                console.warn('Invalid JSON-RPC version:', request.jsonrpc);
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({
-                    jsonrpc: '2.0',
-                    id: request.id || null,
-                    error: { code: -32600, message: 'Invalid Request' }
-                }));
-                return;
-            }
-
-            const method = request.method;
-            const params = request.params || {};
-            const id = request.id;
-            
-            console.log(`Processing MCP method: ${method}, id: ${id}`);
-
-            let response: any = {
-                jsonrpc: '2.0',
-                id: id
-            };
-
-            // 处理不同的 MCP 方法
-            if (method === 'initialize') {
-                console.log('Received initialize request with params:', JSON.stringify(params, null, 2));
-                
-                // MCP 标准初始化响应
-                response.result = {
-                    protocolVersion: params.protocolVersion || '2024-11-05',
-                    capabilities: {
-                        tools: {
-                            listChanged: false
-                        }
-                    },
-                    serverInfo: {
-                        name: 'NoteChain MCP Server',
-                        version: '1.0.0'
-                    }
-                };
-                
-                console.log('Sending initialize response:', JSON.stringify(response, null, 2));
-                
-                // 发送初始化完成通知（通过 SSE，如果有连接）
-                if (this.sseConnectionId && this.sseConnections.has(this.sseConnectionId)) {
-                    const initNotification = {
-                        jsonrpc: '2.0',
-                        method: 'notifications/initialized',
-                        params: {}
-                    };
-                    const sseRes = this.sseConnections.get(this.sseConnectionId);
-                    try {
-                        const jsonData = JSON.stringify(initNotification);
-                        sseRes.write(`data: ${jsonData}\n\n`);
-                        if (typeof sseRes.flush === 'function') {
-                            sseRes.flush();
-                        }
-                        console.log('Sent notifications/initialized via SSE');
-                    } catch (error) {
-                        console.error('Failed to send initialized notification:', error);
-                    }
-                }
-            } else if (method === 'tools/list') {
-                console.log('Executing obsidian_mcp_list_tools.md');
-                try {
-                    const result = await this.templater.parse_templater(
-                        'obsidian_mcp_list_tools.md',
-                        true,
-                        null,
-                        null,
-                        ''
-                    );
-
-                    let tools: any[] = [];
-                    if (result && result.length > 0) {
-                        const resultStr = result.join('\n').trim();
-                        try {
-                            const parsed = JSON.parse(resultStr);
-                            if (Array.isArray(parsed)) {
-                                tools = parsed;
-                            } else if (parsed && Array.isArray(parsed.tools)) {
-                                tools = parsed.tools;
-                            }
-                        } catch (parseError) {
-                            console.warn('list_tools 脚本返回的不是有效的 JSON:', parseError);
-                        }
-                    }
-
-                    response.result = {
-                        tools: tools
-                    };
-                } catch (error: any) {
-                    console.error('Error listing tools:', error);
-                    response.error = {
-                        code: -32603,
-                        message: 'Internal error',
-                        data: error.message
-                    };
-                }
-            } else if (method === 'tools/call') {
-                const toolName = params.name;
-                const toolArguments = params.arguments || {};
-
-                if (!toolName) {
-                    response.error = {
-                        code: -32602,
-                        message: 'Invalid params: tool name is required'
-                    };
-                } else {
-                    try {
-                        let scriptFile = toolName;
-                        if (!scriptFile.endsWith('.md')) {
-                            scriptFile = scriptFile + '.md';
-                        }
-
-                        const result = await this.templater.parse_templater(
-                            scriptFile,
-                            true,
-                            toolArguments,
-                            null,
-                            ''
-                        );
-
-                        const content = result.map((item: any) => {
-                            if (typeof item === 'object' && item !== null) {
-                                return item;
-                            }
-                            return {
-                                type: 'text',
-                                text: String(item || '')
-                            };
-                        });
-
-                        response.result = {
-                            content: content
-                        };
-                    } catch (error: any) {
-                        console.error('Error calling tool:', error);
+                        console.error('✗ Error calling tool:', error);
                         response.error = {
                             code: -32603,
                             message: 'Internal error',
@@ -706,51 +500,117 @@ export class HTTPServer {
                         };
                     }
                 }
+            } else if (method === 'notifications/initialized') {
+                // 客户端发送的初始化确认通知，不需要响应
+                console.log('✓ Received initialized notification from client');
+                // 对于通知（没有 id 的消息），不发送响应
+                res.writeHead(202, { 
+                    'Content-Type': 'application/json; charset=utf-8',
+                    'Access-Control-Allow-Origin': '*'
+                });
+                res.end(JSON.stringify({ accepted: true, message: 'Notification received' }));
+                return;
             } else {
+                console.warn('✗ Unknown method:', method);
                 response.error = {
                     code: -32601,
                     message: `Method not found: ${method}`
                 };
             }
 
-            // 🔥 关键：通过 SSE 连接发送响应
+            // 🔥 通过 SSE 发送响应
             let sentViaSSE = false;
-            if (this.sseConnectionId && this.sseConnections.has(this.sseConnectionId)) {
-                const sseRes = this.sseConnections.get(this.sseConnectionId);
+            
+            // 如果有 session_id，查找对应的 SSE 连接
+            if (sessionId && this.sseConnections.has(sessionId)) {
+                const conn = this.sseConnections.get(sessionId);
+                const sseRes = conn.res;
+                
                 try {
+                    // 发送响应
                     const jsonData = JSON.stringify(response);
-                    const sseMessage = `data: ${jsonData}\n\n`;
-                    sseRes.write(sseMessage);
+                    sseRes.write(`data: ${jsonData}\n\n`);
                     if (typeof sseRes.flush === 'function') {
                         sseRes.flush();
                     }
                     sentViaSSE = true;
                     console.log('✓ Response sent via SSE');
+                    
+                    // 如果是 initialize，发送 initialized 通知
+                    if (method === 'initialize') {
+                        const notification = {
+                            jsonrpc: '2.0',
+                            method: 'notifications/initialized',
+                            params: {}
+                        };
+                        const notificationData = JSON.stringify(notification);
+                        sseRes.write(`data: ${notificationData}\n\n`);
+                        if (typeof sseRes.flush === 'function') {
+                            sseRes.flush();
+                        }
+                        console.log('✓ Sent notifications/initialized');
+                    }
                 } catch (error) {
                     console.error('✗ Failed to send via SSE:', error);
-                    this.sseConnections.delete(this.sseConnectionId);
-                    this.sseConnectionId = null;
+                    this.sseConnections.delete(sessionId);
+                }
+            } else {
+                // 如果没有 session_id，尝试发送到任意活跃连接
+                for (const [connId, conn] of this.sseConnections.entries()) {
+                    try {
+                        const sseRes = conn.res;
+                        const jsonData = JSON.stringify(response);
+                        sseRes.write(`data: ${jsonData}\n\n`);
+                        if (typeof sseRes.flush === 'function') {
+                            sseRes.flush();
+                        }
+                        sentViaSSE = true;
+                        console.log('✓ Response sent via SSE (fallback):', connId);
+                        
+                        if (method === 'initialize') {
+                            const notification = {
+                                jsonrpc: '2.0',
+                                method: 'notifications/initialized',
+                                params: {}
+                            };
+                            const notificationData = JSON.stringify(notification);
+                            sseRes.write(`data: ${notificationData}\n\n`);
+                            if (typeof sseRes.flush === 'function') {
+                                sseRes.flush();
+                            }
+                            console.log('✓ Sent notifications/initialized');
+                        }
+                        
+                        break;
+                    } catch (error) {
+                        console.error('✗ Failed to send via SSE:', error);
+                        this.sseConnections.delete(connId);
+                    }
                 }
             }
             
-            // 如果没有 SSE 连接，通过 HTTP POST 响应返回（作为备选）
+            // HTTP 响应
             if (!sentViaSSE) {
-                console.log('⚠ Sending response via HTTP POST (no SSE connection)');
+                console.warn('⚠ No SSE connection, sending via HTTP');
                 res.writeHead(200, { 
                     'Content-Type': 'application/json; charset=utf-8',
                     'Access-Control-Allow-Origin': '*'
                 });
                 res.end(JSON.stringify(response, null, 2));
             } else {
-                // 已通过 SSE 发送，返回 202 Accepted
+                // 返回 202 Accepted
                 res.writeHead(202, { 
                     'Content-Type': 'application/json; charset=utf-8',
                     'Access-Control-Allow-Origin': '*'
                 });
-                res.end(JSON.stringify({ accepted: true, message: 'Response sent via SSE' }));
+                res.end(JSON.stringify({ 
+                    accepted: true, 
+                    message: 'Response sent via SSE'
+                }));
             }
+            
         } catch (error: any) {
-            console.error('Error handling MCP message:', error);
+            console.error('✗ Error:', error);
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 jsonrpc: '2.0',
@@ -782,6 +642,16 @@ export class HTTPServer {
     stop(): Promise<void> {
         return new Promise((resolve) => {
             if (this.server) {
+                // 关闭所有 SSE 连接
+                for (const [connId, conn] of this.sseConnections.entries()) {
+                    try {
+                        conn.res.end();
+                    } catch (e) {
+                        // 忽略错误
+                    }
+                }
+                this.sseConnections.clear();
+                
                 this.server.close(() => {
                     console.log('HTTP Server stopped');
                     this.server = null;
