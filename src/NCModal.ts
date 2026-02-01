@@ -10,6 +10,7 @@ export class NoteContentModal extends Modal {
     content: string;
     plugin: NoteChainPlugin;
     sourcePath: string;
+    private renderComponent: Component | null = null;
 
     constructor(app: App, content: string, plugin: NoteChainPlugin, sourcePath: string) {
         super(app);
@@ -20,15 +21,9 @@ export class NoteContentModal extends Modal {
 \`\`\`datacorejsx
 return (
     <dc.Markdown
-        content=\`![[${sourcePath}]]\`
+        content="![[${sourcePath}]]"
     />
 );
-dv.span();
-\`\`\`
-                `.trim()
-                content = `
-\`\`\`dataviewjs
-dv.span(\`![[${sourcePath}]]\`);
 \`\`\`
                 `.trim()
             }else if('dataview' in (this.plugin.app as any).plugins.plugins){
@@ -55,9 +50,10 @@ dv.span(\`![[${sourcePath}]]\`);
         container.style.verticalAlign = 'middle';
         container.style.padding = '20px'; // 添加一些内边距
 
-        // 创建一个临时的 Component 实例
-        const component = new Component();
-        MarkdownRenderer.render(this.app, this.content, container, this.sourcePath, component).then(x=>{
+        // 创建 Component 实例并手动管理生命周期
+        this.renderComponent = new Component();
+        this.renderComponent.load();
+        MarkdownRenderer.render(this.app, this.content, container, this.sourcePath, this.renderComponent).then(x=>{
             this.addClickListener(container);
         });
         
@@ -66,6 +62,11 @@ dv.span(\`![[${sourcePath}]]\`);
     onClose() {
         let {contentEl} = this;
         contentEl.empty();
+        // 清理 Component
+        if (this.renderComponent) {
+            this.renderComponent.unload();
+            this.renderComponent = null;
+        }
     }
 
     addClickListener(container: HTMLElement) {

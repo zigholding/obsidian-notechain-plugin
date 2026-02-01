@@ -20,7 +20,6 @@ export class HTTPServer {
     start(): Promise<void> {
         return new Promise((resolve, reject) => {
             if (this.server) {
-                console.log('HTTP Server is already running');
                 resolve();
                 return;
             }
@@ -42,8 +41,6 @@ export class HTTPServer {
 
                 try {
                     const parsedUrl = url.parse(req.url || '', true);
-                    
-                    console.log(`[${req.method}] ${parsedUrl.pathname}`);
                     
                     if (parsedUrl.pathname === '/templater' && (req.method === 'GET' || req.method === 'POST')) {
                         await this.handleTemplaterRequest(req, res, parsedUrl);
@@ -72,7 +69,6 @@ export class HTTPServer {
             this.server.headersTimeout = 120000;   // 120秒
 
             this.server.listen(this.port, '0.0.0.0', () => {
-                console.log(`HTTP Server started on http://0.0.0.0:${this.port}`);
                 resolve();
             });
 
@@ -268,9 +264,6 @@ export class HTTPServer {
      * 🔥 关键修复：fastmcp Python 客户端需要在 SSE 连接建立后立即发送 endpoint 事件
      */
     private async handleSSEConnection(req: any, res: any) {
-        console.log('\n=== SSE Connection ===');
-        console.log('User-Agent:', req.headers['user-agent'] || 'unknown');
-        
         // 1. 立即设置响应头
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
@@ -293,8 +286,6 @@ export class HTTPServer {
         if (typeof res.flush === 'function') {
             res.flush();
         }
-        
-        console.log('✓ SSE connected, endpoint sent:', endpointUrl);
 
         // 生成连接 ID
         const connectionId = sessionId;
@@ -305,13 +296,9 @@ export class HTTPServer {
             sessionId: sessionId,
             connectedAt: new Date()
         });
-        
-        console.log('✓ Connection ID:', connectionId);
-        console.log('✓ Active connections:', this.sseConnections.size);
 
         // 清理函数
         const cleanup = () => {
-            console.log('✗ SSE closed:', connectionId);
             this.sseConnections.delete(connectionId);
             clearInterval(heartbeatInterval);
         };
@@ -344,8 +331,6 @@ export class HTTPServer {
                 cleanup();
             }
         }, 30000); // 30秒心跳
-
-        console.log('✓ SSE ready, waiting for messages at:', endpointUrl);
     }
 
     /**
@@ -353,21 +338,16 @@ export class HTTPServer {
      * 通过 SSE 连接发送响应
      */
     private async handleMCPMessage(req: any, res: any) {
-        console.log('\n=== MCP Message ===');
-        
         try {
             // 从查询参数获取 session_id
             const parsedUrl = url.parse(req.url || '', true);
             const sessionId = parsedUrl.query.session_id as string;
-            
-            console.log('Session ID:', sessionId);
 
             const body = await this.readBody(req);
             let request: any = {};
             
             try {
                 request = JSON.parse(body);
-                console.log('→ Request:', JSON.stringify(request, null, 2));
             } catch (error: any) {
                 console.error('✗ Parse error');
                 res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -393,8 +373,6 @@ export class HTTPServer {
             const method = request.method;
             const params = request.params || {};
             const id = request.id;
-            
-            console.log(`→ Method: ${method}, ID: ${id}`);
 
             // 构建响应
             let response: any = {
@@ -443,7 +421,6 @@ export class HTTPServer {
                     }
 
                     response.result = { tools: tools };
-                    console.log(`✓ Found ${tools.length} tools`);
                     
                 } catch (error: any) {
                     console.error('✗ Error listing tools:', error);
@@ -489,7 +466,6 @@ export class HTTPServer {
                         });
 
                         response.result = { content: content };
-                        console.log('✓ Tool executed');
                         
                     } catch (error: any) {
                         console.error('✗ Error calling tool:', error);
@@ -502,7 +478,6 @@ export class HTTPServer {
                 }
             } else if (method === 'notifications/initialized') {
                 // 客户端发送的初始化确认通知，不需要响应
-                console.log('✓ Received initialized notification from client');
                 // 对于通知（没有 id 的消息），不发送响应
                 res.writeHead(202, { 
                     'Content-Type': 'application/json; charset=utf-8',
@@ -534,7 +509,6 @@ export class HTTPServer {
                         sseRes.flush();
                     }
                     sentViaSSE = true;
-                    console.log('✓ Response sent via SSE');
                     
                     // 如果是 initialize，发送 initialized 通知
                     if (method === 'initialize') {
@@ -548,7 +522,6 @@ export class HTTPServer {
                         if (typeof sseRes.flush === 'function') {
                             sseRes.flush();
                         }
-                        console.log('✓ Sent notifications/initialized');
                     }
                 } catch (error) {
                     console.error('✗ Failed to send via SSE:', error);
@@ -565,7 +538,6 @@ export class HTTPServer {
                             sseRes.flush();
                         }
                         sentViaSSE = true;
-                        console.log('✓ Response sent via SSE (fallback):', connId);
                         
                         if (method === 'initialize') {
                             const notification = {
@@ -578,7 +550,6 @@ export class HTTPServer {
                             if (typeof sseRes.flush === 'function') {
                                 sseRes.flush();
                             }
-                            console.log('✓ Sent notifications/initialized');
                         }
                         
                         break;
@@ -653,7 +624,6 @@ export class HTTPServer {
                 this.sseConnections.clear();
                 
                 this.server.close(() => {
-                    console.log('HTTP Server stopped');
                     this.server = null;
                     resolve();
                 });

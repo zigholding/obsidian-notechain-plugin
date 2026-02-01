@@ -8,6 +8,7 @@ export class NoteContentView extends ItemView {
 	private fileModifyHandler: EventRef | null = null;
 	private debounceTimer: number | null = null;
 	private noteIcon: string = '';
+	private displayText: string = 'Note Preview';
 
 	constructor(leaf: WorkspaceLeaf, plugin: NoteChainPlugin) {
 		super(leaf);
@@ -20,14 +21,15 @@ export class NoteContentView extends ItemView {
 	}
 
 	getDisplayText() {
-		return 'Note Preview'; 
+		return this.displayText; 
 	}
 
 	getState(): any {
 		return {
 			content: this.content,
 			sourcePath: this.sourcePath,
-			noteIcon: this.noteIcon
+			noteIcon: this.noteIcon,
+			displayText: this.displayText
 		};
 	}
 	
@@ -35,6 +37,7 @@ export class NoteContentView extends ItemView {
 		this.content = state.content;
 		this.sourcePath = state.sourcePath;
 		this.noteIcon = state.noteIcon || '';
+		this.displayText = state.displayText || 'Note Preview';
 	
 		await this.setContent(this.content, this.sourcePath);
 	}
@@ -69,11 +72,24 @@ export class NoteContentView extends ItemView {
 		if (sourcePath) {
 			const file = this.app.vault.getAbstractFileByPath(sourcePath);
 			if (file instanceof TFile) {
+				// 设置显示文本为文件名（不含扩展名）
+				this.displayText = file.basename;
 				const iconFromFrontmatter = this.plugin.editor.get_frontmatter(file, 'icon');
 				if (iconFromFrontmatter && typeof iconFromFrontmatter === 'string') {
 					this.noteIcon = iconFromFrontmatter;
 				}
+
+				const displayTextFromFrontmatter = this.plugin.editor.get_frontmatter(file, 'display');
+				if (displayTextFromFrontmatter && typeof displayTextFromFrontmatter === 'string') {
+					this.displayText = displayTextFromFrontmatter;
+				}
+			} else {
+				// 如果不是文件，使用路径的最后一部分作为显示文本
+				this.displayText = sourcePath.split('/').pop() || 'Note Preview';
 			}
+		} else {
+			// 如果没有路径，使用默认文本
+			this.displayText = 'Note Preview';
 		}
 
 		const isDatacoreContent = Boolean(sourcePath && (sourcePath.endsWith('.canvas') || sourcePath.endsWith('.base')) && 

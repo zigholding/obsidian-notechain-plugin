@@ -164,5 +164,25 @@ export class File {
 		}
 		return tags
 	}
+
+	get_selected_files(current_if_no_selected = true) {
+		let selector = document.querySelectorAll(
+			".tree-item-self.is-selected"
+		);
+		let items = Object.values(selector).map((x: any) => {
+			var _a;
+			return (_a = x.dataset) == null ? void 0 : _a.path;
+		});
+		let tfiles = items.map(
+			(x) => this.get_tfile(x)).filter((x) => x.extension == "md"
+			)
+		if (tfiles.length > 0) {
+			return tfiles
+		} else if (current_if_no_selected && this.app.workspace.getActiveFile()) {
+			return [this.app.workspace.getActiveFile()]
+		} else {
+			return []
+		}
+	}
 }
 
