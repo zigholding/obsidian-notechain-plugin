@@ -44,6 +44,9 @@ dv.span(\`![[${sourcePath}]]\`);
         this.modalEl.style.display = 'flex';
         this.modalEl.style.overflow = 'auto'; // 添加滚动条
 
+        // 根据 frontmatter 配置设置 modal 大小
+        this.setModalSize();
+
         const container = contentEl.createDiv({ cls: 'note-content-container' });
         container.addClass('markdown-rendered');
         container.style.display = 'table-cell';
@@ -57,6 +60,46 @@ dv.span(\`![[${sourcePath}]]\`);
             this.addClickListener(container);
         });
         
+    }
+
+    private setModalSize() {
+        if (!this.sourcePath) {
+            return;
+        }
+
+        const file = this.app.vault.getAbstractFileByPath(this.sourcePath);
+        if (!file) {
+            return;
+        }
+
+        const modalSizeConfig = this.plugin.editor.get_frontmatter_config(file, 'notechain.modal_size');
+        if (!Array.isArray(modalSizeConfig) || (modalSizeConfig.length !== 2 && modalSizeConfig.length !== 4)) {
+            return;
+        }
+
+        // 判断设备类型
+        const isMobile = (this.app as any).isMobile === true;
+        
+        let width: number, height: number;
+        
+        if (modalSizeConfig.length === 2) {
+            // 长度为2时，mobile和pc使用相同的尺寸
+            // 格式: [width, height]
+            width = modalSizeConfig[0];
+            height = modalSizeConfig[1];
+        } else {
+            // 长度为4时，根据设备类型选择对应的尺寸配置
+            // 格式: [pc_width, pc_height, mobile_width, mobile_height]
+            width = isMobile ? modalSizeConfig[2] : modalSizeConfig[0];
+            height = isMobile ? modalSizeConfig[3] : modalSizeConfig[1];
+        }
+        
+        if (typeof width === 'number' && typeof height === 'number') {
+            this.modalEl.style.width = `${width}px`;
+            this.modalEl.style.height = `${height}px`;
+            this.modalEl.style.maxWidth = `${width}px`;
+            this.modalEl.style.maxHeight = `${height}px`;
+        }
     }
 
     onClose() {
