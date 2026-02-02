@@ -1,8 +1,23 @@
-/*
+/* Note Chain - Modal 内笔记内容与 modal 尺寸一致 */
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.notechain-modal {
+  /* 使用弹性布局让内容自然填充 */
+  display: flex;
+  flex-direction: column;
+}
 
-If your plugin does not need CSS, delete this file.
+.notechain-modal .modal-content {
+  /* 占满 modal 高度，去掉多余内边距，让 note 内容真正对齐尺寸 */
+  flex: 1 1 auto;
+  height: 100%;
+  padding: 0;
+  box-sizing: border-box;
+}
 
-*/
+.notechain-modal .note-content-container {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+}
+

@@ -15,6 +15,8 @@ export class NoteContentModal extends Modal {
     constructor(app: App, content: string, plugin: NoteChainPlugin, sourcePath: string) {
         super(app);
         this.plugin = plugin;
+        // 为当前 Modal 添加专用 class，方便精确控制样式而不影响其他插件 / 核心模态框
+        this.modalEl.addClass('notechain-modal');
         if(sourcePath && (sourcePath.endsWith('.canvas') || sourcePath.endsWith('.base'))){
             if('datacore' in (this.plugin.app as any).plugins.plugins){
                 content = `
@@ -49,9 +51,12 @@ dv.span(\`![[${sourcePath}]]\`);
 
         const container = contentEl.createDiv({ cls: 'note-content-container' });
         container.addClass('markdown-rendered');
-        container.style.display = 'table-cell';
-        container.style.verticalAlign = 'middle';
-        container.style.padding = '20px'; // 添加一些内边距
+        // 让内容区域占满 modal 指定大小
+        container.style.display = 'block';
+        container.style.width = '100%';
+        container.style.height = '100%';
+        container.style.boxSizing = 'border-box';
+        container.style.padding = '0px';
 
         // 创建 Component 实例并手动管理生命周期
         this.renderComponent = new Component();

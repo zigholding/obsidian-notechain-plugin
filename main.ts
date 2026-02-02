@@ -21,6 +21,7 @@ import { dialog_prompt } from 'src/gui/inputPrompt'
 import { EasyAPI } from 'src/easyapi/easyapi'
 import { NoteContentView } from 'src/NCView';
 import { HTTPServer } from 'src/httpServer';
+import { DailyJob} from 'src/daily_job'
 
 export default class NoteChainPlugin extends Plugin {
 	settings: NCSettings;
@@ -31,6 +32,7 @@ export default class NoteChainPlugin extends Plugin {
 	mermaid: MermaidGraph;
 	canvas: CanvasGraph;
 	wordcout: WordCount;
+	dailyjob: DailyJob;
 	strings: Strings;
 	status: string;
 	debug: boolean;
@@ -89,6 +91,7 @@ export default class NoteChainPlugin extends Plugin {
 		this.canvas = new CanvasGraph(this);
 		this.strings = new Strings();
 		this.easyapi = new EasyAPI(this.app);
+		this.dailyjob = new DailyJob(this)
 
 		// 初始化 HTTP 服务器
 		this.httpServer = new HTTPServer(
