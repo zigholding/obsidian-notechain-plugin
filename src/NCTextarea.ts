@@ -90,14 +90,45 @@ export class NCTextarea {
 						buttonContainer.style.display = 'flex'; // 设置按钮容器为flex布局，使按钮在同一行显示
 						buttonContainer.style.justifyContent = 'flex-start'; // 设置按钮之间的间距均匀分布
 						buttonContainer.style.marginTop = '10px'
+
+						const applyBtnStyle = async (xbtn: HTMLButtonElement, style: any) => {
+							if (!style || typeof (style) != 'object') { return }
+							for (let name in style) {
+								if (name == 'cls') { continue }
+								if (name == 'backgroundImage') {
+									let img = nc.chain.get_tfile(style[name])
+									if (img) {
+										let data = await nc.app.vault.readBinary(img)
+										let text = this.arrayBufferToBase64(data);
+										let bs64 = `data:image/png;base64,${text}`;
+										let url = "url('" + bs64 + "')";
+										(xbtn as any).style.backgroundImage = url;
+										(xbtn as any).style.backgroundSize = 'cover';
+										(xbtn as any).style.backgroundRepeat = 'no-repeat';
+										(xbtn as any).style.backgroundPosition = 'center';
+										continue
+									}
+								}
+								(xbtn as any).style[name] = style[name];
+							}
+						}
+
 						for (let btn of btns) {
 							let name = btn[0]
 							let fname = btn[1]
 							if (!name || !fname) { continue }
 
 							let cls = 'code_block_textarea_btn'
+							let btnStyle: any = null;
 							if (btn[2]) {
-								cls = btn[2]
+								if (typeof (btn[2]) == 'string') {
+									cls = btn[2]
+								} else if (typeof (btn[2]) == 'object') {
+									if (btn[2].cls) {
+										cls = btn[2].cls
+									}
+									btnStyle = btn[2]
+								}
 							}
 							// 库自带函数
 							let ufunc = (nc.textarea as any)[fname];
@@ -107,6 +138,9 @@ export class NCTextarea {
 							}
 							if (ufunc) {
 								let xbtn = buttonContainer.createEl('button', { text: name, cls: cls });
+								if (btnStyle) {
+									await applyBtnStyle(xbtn, btnStyle);
+								}
 								xbtn.addEventListener('click', () => {
 									ufunc(area, source, el, ctx)
 								});
@@ -117,6 +151,9 @@ export class NCTextarea {
 							let c = (nc.app as any).commands?.findCommand(fname);
 							if (c) {
 								let xbtn = buttonContainer.createEl('button', { text: name, cls: cls });
+								if (btnStyle) {
+									await applyBtnStyle(xbtn, btnStyle);
+								}
 								xbtn.addEventListener('click', () => {
 									(nc.app as any).commands.executeCommandById(fname)
 								});
@@ -126,6 +163,9 @@ export class NCTextarea {
 							let tfile = nc.chain.get_tfile(fname)
 							if (tfile) {
 								let xbtn = buttonContainer.createEl('button', { text: name, cls: cls });
+								if (btnStyle) {
+									await applyBtnStyle(xbtn, btnStyle);
+								}
 								xbtn.addEventListener('click', () => {
 									let tags = nc.chain.get_tags(tfile).map(x=>x.slice(1)).filter(
 										x=>nc.settings.tpl_tags_folder.contains(x)
