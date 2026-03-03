@@ -176,7 +176,8 @@ export class NCTextarea {
 												area: area,
 												source: source,
 												el: el,
-												ctx: ctx
+												ctx: ctx,
+												params: btn[3]
 											}
 										);
 									}else{
