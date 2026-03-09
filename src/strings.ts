@@ -425,6 +425,14 @@ export class Strings{
         }
     }
 
+    get setting_httpServer_host(){
+        if(this.language=='zh'){
+            return 'HTTP 服务器IP地址'
+        }else{
+            return "HTTP Server Host";
+        }
+    }
+
     get setting_httpServer_port(){
         if(this.language=='zh'){
             return 'HTTP 服务器端口'

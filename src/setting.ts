@@ -27,6 +27,7 @@ export interface NCSettings {
 	modal_default_height: number,
 	avata: string,
 	tpl_tags_folder: string,
+	httpServerHost: string,
 	httpServerPort: number,
 	httpServerEnabled: boolean,
 }
@@ -53,6 +54,7 @@ export const DEFAULT_SETTINGS: NCSettings = {
 	modal_default_height: 600,
 	avata: 'avata',
 	tpl_tags_folder: '脚本笔记\nScriptNote',
+	httpServerHost: "127.0.0.1",
 	httpServerPort: 3000,
 	httpServerEnabled: true,  // 默认启用 HTTP 服务器
 }
@@ -287,6 +289,20 @@ export class NCSettingTab extends PluginSettingTab {
 					}
 				})
 			);
+		
+		new Setting(containerEl)
+			.setName(this.plugin.strings.setting_httpServer_host)
+			.addText(text => text
+				.setValue(this.plugin.settings.httpServerHost.toString())
+				.onChange(async (value) => {
+					this.plugin.settings.httpServerHost = value;
+					await this.plugin.saveSettings();
+					if (this.plugin.settings.httpServerEnabled && this.plugin.httpServer) {
+						await this.plugin.httpServer.stop();
+						this.plugin.httpServer.setHost(value);
+						await this.plugin.httpServer.start();
+					}
+				}));
 
 		new Setting(containerEl)
 			.setName(this.plugin.strings.setting_httpServer_port)

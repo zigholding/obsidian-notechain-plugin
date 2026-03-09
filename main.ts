@@ -97,13 +97,14 @@ export default class NoteChainPlugin extends Plugin {
 		this.httpServer = new HTTPServer(
 			this.app,
 			this.easyapi.tpl,
+			this.settings.httpServerHost,
 			this.settings.httpServerPort
 		);
 		// 如果启用，自动启动 HTTP 服务器
 		if (this.settings.httpServerEnabled) {
 			this.httpServer.start()
 				.then(() => {
-					console.log(`HTTP Server auto-started on port ${this.settings.httpServerPort}`);
+					console.log(`HTTP Server auto-started on ${this.settings.httpServerHost}:${this.settings.httpServerPort}`);
 				})
 				.catch((error) => {
 					console.error('Failed to start HTTP Server:', error);

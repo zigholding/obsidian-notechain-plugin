@@ -9,11 +9,13 @@ export class HTTPServer {
     private templater: Templater;
     private server: any = null;
     private port: number;
+    private host: string;
     private sseConnections: Map<string, any> = new Map();
 
-    constructor(app: App, templater: Templater, port: number = 3000) {
+    constructor(app: App, templater: Templater, host: string = '0.0.0.0', port: number = 3000) {
         this.app = app;
         this.templater = templater;
+        this.host = host;
         this.port = port;
     }
 
@@ -68,7 +70,7 @@ export class HTTPServer {
             this.server.keepAliveTimeout = 120000; // 120秒
             this.server.headersTimeout = 120000;   // 120秒
 
-            this.server.listen(this.port, '0.0.0.0', () => {
+            this.server.listen(this.port, this.host, () => {
                 resolve();
             });
 
@@ -631,6 +633,10 @@ export class HTTPServer {
                 resolve();
             }
         });
+    }
+
+    setHost(host: string) {
+        this.host = host;
     }
 
     setPort(port: number) {
