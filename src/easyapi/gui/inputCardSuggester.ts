@@ -22,7 +22,7 @@ export interface CardItem {
 	name: StyledValue;
 	detail?: StyledValue;
 	image?: StyledValue;
-	func?: CardItem[] | ((item: CardItem) => void | Promise<void>);
+	action?: CardItem[] | ((item: CardItem) => void | Promise<void>);
 	// 允许用户自定义其它字段
 	[key: string]: any;
 }
@@ -226,10 +226,10 @@ export class CardNavigatorModal extends Modal {
 				let item = items[index];
 				if (!item) return;
 
-				if (Array.isArray(item.func)) {
+				if (Array.isArray(item.action)) {
 					// 文件夹：进入子级
 					this.navigationStack.push(items);
-					this.currentItems = item.func;
+					this.currentItems = item.action;
 					this.renderUI(this.currentItems, true);
 				} else {
 					// 叶子：执行函数（如果有），关闭 modal 并返回对象
@@ -303,9 +303,9 @@ export class CardNavigatorModal extends Modal {
 				let item = items[index];
 				if (!item) return;
 
-				if (Array.isArray(item.func)) {
+				if (Array.isArray(item.action)) {
 					this.navigationStack = [];
-					this.currentItems = item.func;
+					this.currentItems = item.action;
 					this.renderUI(this.currentItems, true);
 				} else {
 					void this.handleLeafClick(item);
@@ -330,8 +330,8 @@ export class CardNavigatorModal extends Modal {
 						path: [...path, nameText],
 					});
 				}
-				if (Array.isArray(item.func)) {
-					searchRecursive(item.func, [...path, nameText]);
+				if (Array.isArray(item.action)) {
+					searchRecursive(item.action, [...path, nameText]);
 				}
 			}
 		}

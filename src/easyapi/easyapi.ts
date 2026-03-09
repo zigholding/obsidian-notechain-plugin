@@ -4,7 +4,7 @@ import { App, View, WorkspaceLeaf } from 'obsidian';
 
 import {dialog_suggest} from './gui/inputSuggester'
 import {dialog_prompt} from './gui/inputPrompt'
-import {openCardNavigator} from './gui/inputCardSuggster'
+import {openCardNavigator} from './gui/inputCardSuggester'
 import {EasyEditor } from './editor';
 import {File } from './file';
 import {Random } from './random';
