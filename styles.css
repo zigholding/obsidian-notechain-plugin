@@ -21,3 +21,116 @@
   overflow: auto;
 }
 
+/* Note Chain - 卡片选择器（CardNavigatorModal） */
+
+.nc-card-back {
+  margin: 6px 0;
+  padding: 6px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  text-align: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+.nc-card-back:hover {
+  background: var(--background-modifier-hover);
+}
+
+.nc-card-search {
+  margin-bottom: 8px;
+}
+.nc-card-search-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  font-size: 14px;
+}
+.nc-card-search-input:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 4px var(--interactive-accent);
+}
+
+.nc-card-nav {
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.nc-card-container {
+  display: grid;
+  grid-template-columns: repeat(var(--per-row, 4), 1fr);
+  gap: 8px;
+  padding: 4px;
+}
+
+.nc-card-btn {
+  padding: 6px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  background: var(--background-primary);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.nc-card-btn:hover {
+  background: var(--background-modifier-hover);
+  transform: translateY(-4px) scale(1.03);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+.nc-card-cover img {
+  width: 200px;
+  height: 200px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.nc-card-name {
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nc-card-detail {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nc-card-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.nc-card-search {
+  flex: 1;
+}
+
+.nc-card-search-input {
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.nc-card-home {
+  margin-left: 8px;
+  padding: 6px 8px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.nc-card-home:hover {
+  background: var(--background-modifier-hover);
+}
+

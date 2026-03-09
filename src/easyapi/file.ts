@@ -184,5 +184,21 @@ export class File {
 			return []
 		}
 	}
+
+	async read_binary_to_base64(tfile:TFile){
+		tfile = this.get_tfile(tfile)
+		if(!tfile){return null}
+		let buffer = await this.app.vault.readBinary(tfile)
+
+		let binary = '';
+		let bytes = new Uint8Array(buffer);
+		let len = bytes.byteLength;
+		for (let i = 0; i < len; i++) {
+			binary += String.fromCharCode(bytes[i]);
+		}
+		let text = window.btoa(binary);
+		let bs64 = `data:image/png;base64,${text}`;
+		return bs64
+	}
 }
 

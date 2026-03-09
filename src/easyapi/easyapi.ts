@@ -4,6 +4,7 @@ import { App, View, WorkspaceLeaf } from 'obsidian';
 
 import {dialog_suggest} from './gui/inputSuggester'
 import {dialog_prompt} from './gui/inputPrompt'
+import {openCardNavigator} from './gui/inputCardSuggster'
 import {EasyEditor } from './editor';
 import {File } from './file';
 import {Random } from './random';
@@ -16,6 +17,7 @@ export class EasyAPI {
     app: App;
     dialog_suggest: Function
 	dialog_prompt: Function
+    dialog_cards: Function
     editor: EasyEditor
     file: File
     random: Random
@@ -28,6 +30,7 @@ export class EasyAPI {
         this.app = app;
         this.dialog_suggest = dialog_suggest;
 		this.dialog_prompt = dialog_prompt;
+		this.dialog_cards = openCardNavigator;
         this.editor = new EasyEditor(app,this);
         this.file = new File(app,this);
         this.waiter = new Waiter(app,this);
@@ -35,6 +38,7 @@ export class EasyAPI {
         this.tpl = new Templater(app,this);
         this.time = new Time(app,this);
         this.web = new Web(app);
+        (window as any).ea = this;
     }
 
     get_plugin(name:string){
