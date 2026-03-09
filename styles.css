@@ -80,11 +80,19 @@
   transform: translateY(-4px) scale(1.03);
   box-shadow: 0 6px 12px rgba(0,0,0,0.15);
 }
+.nc-card-cover {
+  width: 100%;
+  height: 80px; /* 固定封面高度，避免卡片被图片拉长 */
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .nc-card-cover img {
-  width: 200px;
-  height: 200px;
-  object-fit: cover;
-  border-radius: 4px;
+  width: 100%;
+  height: 100%;
+  object-fit: var(--nc-object-fit, cover);
+  border-radius: var(--nc-border-radius, 4px);
 }
 .nc-card-name {
   margin-top: 4px;

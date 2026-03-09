@@ -1,6 +1,13 @@
 import { App, Modal } from "obsidian";
 
 /**
+ * 文本 / 图片字段的可选样式配置：
+ * - 基本格式为 [值, styleObject]
+ * - 例如：name: ["标题", { color: "red", "font-weight": "bold" }]
+ */
+export type StyledValue = string | [string, Record<string, string>];
+
+/**
  * 单个卡片的数据结构
  *
  * - 如果 `func` 是数组：表示这是一个“文件夹”，点击后进入子级
@@ -8,11 +15,13 @@ import { App, Modal } from "obsidian";
  *   1) 关闭 Modal
  *   2) 返回当前对象
  *   3) 同时调用该函数（如果存在）
+ *
+ * - `name` / `detail` / `image` 支持样式数组：["文本或路径", {style配置}]
  */
 export interface CardItem {
-	name: string;
-	detail?: string;
-	image?: string;
+	name: StyledValue;
+	detail?: StyledValue;
+	image?: StyledValue;
 	func?: CardItem[] | ((item: CardItem) => void | Promise<void>);
 	// 允许用户自定义其它字段
 	[key: string]: any;
@@ -34,13 +43,58 @@ let DEFAULT_OPTIONS: Required<CardNavigatorOptions> = {
 	backText: "⬅ 返回上一级",
 };
 
-function formatImage(image: CardItem["image"]): string {
+function styleObjectToString(style?: Record<string, string>): string {
+	if (!style) return "";
+	return Object.entries(style)
+		.map(([k, v]) => `${k}:${v};`)
+		.join("");
+}
+
+function getTextAndStyle(
+	value?: StyledValue,
+): { text: string; style: string } {
+	if (!value) return { text: "", style: "" };
+	if (Array.isArray(value)) {
+		const [text, style] = value;
+		return { text, style: styleObjectToString(style) };
+	}
+	return { text: value, style: "" };
+}
+
+function getImageAndStyle(
+	value?: StyledValue,
+): { src: string | null; wrapperStyle: string; imgStyle: string } {
+	if (!value) return { src: null, wrapperStyle: "", imgStyle: "" };
+
+	if (Array.isArray(value)) {
+		const [src, style] = value;
+		const entries = Object.entries(style);
+		const wrapperEntries = entries.filter(
+			([k]) => k !== "object-fit" && k !== "border-radius",
+		);
+		const imgEntries = entries.filter(
+			([k]) => k === "object-fit" || k === "border-radius",
+		);
+
+		return {
+			src,
+			wrapperStyle: styleObjectToString(
+				Object.fromEntries(wrapperEntries),
+			),
+			imgStyle: styleObjectToString(Object.fromEntries(imgEntries)),
+		};
+	}
+
+	return { src: value, wrapperStyle: "", imgStyle: "" };
+}
+
+function formatImage(image?: string | null, style = ""): string {
 	if (!image) return "⚡";
 	if (typeof image === "string") {
 		if (image.startsWith("http")) {
-			return `<img src="${image}" />`;
+			return `<img src="${image}" style="${style}" />`;
 		}else if(image.startsWith("data:image/png;base64,")){
-			return `<img src="${image}" />`;
+			return `<img src="${image}" style="${style}" />`;
 		}else{
 			return image;
 		}
@@ -90,12 +144,35 @@ export class CardNavigatorModal extends Modal {
 		this.contentEl.empty();
 	}
 
+	private focusSearchInput(): void {
+		const input = this.contentEl.querySelector(
+			".nc-card-search-input",
+		) as HTMLInputElement | null;
+		if (input) {
+			input.focus();
+			input.select();
+		}
+	}
+
 	private makeButton(item: CardItem, index: number): string {
+		const {
+			src: imgSrc,
+			wrapperStyle: imgWrapperStyle,
+			imgStyle,
+		} = getImageAndStyle(item.image);
+		const { text: nameText, style: nameStyle } = getTextAndStyle(item.name);
+		const { text: detailText, style: detailStyle } = getTextAndStyle(
+			item.detail,
+		);
+
 		return `
 			<div class="nc-card-btn" data-index="${index}">
-				<div class="nc-card-cover">${formatImage(item.image)}</div>
-				<div class="nc-card-name">${item.name}</div>
-				${item.detail ? `<div class="nc-card-detail">${item.detail}</div>` : ""}
+				<div class="nc-card-cover" style="${imgWrapperStyle}">${formatImage(
+					imgSrc,
+					imgStyle,
+				)}</div>
+				<div class="nc-card-name" style="${nameStyle}">${nameText}</div>
+				${detailText ? `<div class="nc-card-detail" style="${detailStyle}">${detailText}</div>` : ""}
 			</div>
 		`;
 	}
@@ -131,6 +208,7 @@ export class CardNavigatorModal extends Modal {
 		`;
 
 		this.bindEvents(items, canGoBack);
+		this.focusSearchInput();
 	}
 
 	private bindEvents(items: CardItem[], canGoBack: boolean): void {
@@ -241,17 +319,19 @@ export class CardNavigatorModal extends Modal {
 
 		function searchRecursive(list: CardItem[], path: string[] = []) {
 			for (let item of list) {
-				let nameMatch = item.name.toLowerCase().includes(keyword);
-				let detailMatch =
-					item.detail && item.detail.toLowerCase().includes(keyword);
+				const nameText = getTextAndStyle(item.name).text.toLowerCase();
+				const detailText = getTextAndStyle(item.detail).text.toLowerCase();
+
+				let nameMatch = nameText.includes(keyword);
+				let detailMatch = detailText.includes(keyword);
 				if (nameMatch || detailMatch) {
 					results.push({
 						...item,
-						path: [...path, item.name],
+						path: [...path, nameText],
 					});
 				}
 				if (Array.isArray(item.func)) {
-					searchRecursive(item.func, [...path, item.name]);
+					searchRecursive(item.func, [...path, nameText]);
 				}
 			}
 		}
@@ -261,17 +341,11 @@ export class CardNavigatorModal extends Modal {
 	}
 
 	private async handleLeafClick(item: CardItem): Promise<void> {
-		try {
-			if (typeof item.func === "function") {
-				await item.func(item);
-			}
-		} finally {
-			this.resolved = true;
-			if (this.resolveResult) {
-				this.resolveResult(item);
-			}
-			this.close();
+		this.resolved = true;
+		if (this.resolveResult) {
+			this.resolveResult(item);
 		}
+		this.close();
 	}
 }
 
