@@ -191,6 +191,7 @@ export class CardNavigatorModal extends Modal {
     }
 
     private renderIconOrImage(el: HTMLElement, imageVal: StyledValue | undefined, isFolder: boolean) {
+		
         let rawImage: unknown = "";
         let style: Record<string, string> = {};
 
@@ -210,14 +211,30 @@ export class CardNavigatorModal extends Modal {
             return;
         }
 
-        // URL / 路径：当作图片加载
+        // 1. 已经是可用 URL / data-url / app 路径：直接作为 <img> src
         if (/^(https?:\/\/|data:|app:\/\/|\/|\\)/.test(imageStr)) {
             const img = el.createEl("img", { attr: { src: imageStr } });
             if (style) Object.assign(img.style, style);
             return;
         }
 
-        // 其它：优先当作图标 ID，失败时退化为纯文本
+        // 2. 仅是文件名或相对路径：尝试从当前库读取为 base64 并转成 data-url
+        if (/\.(png|jpe?g|gif|webp|svg)/i.test(imageStr)) {
+            (async () => {
+                try {
+					let nc = (this.app as any).plugins.plugins['note-chain'];
+					let src = await nc.easyapi.file.read_binary_to_base64(imageStr);
+                    const img = el.createEl("img", { attr: { src } });
+                    if (style) Object.assign(img.style, style);
+                } catch (e) {
+                    // 读取失败时退回到默认图标，而不是抛错
+                    setIcon(el, isFolder ? "folder" : "file-text");
+                }
+            })();
+            return;
+        }
+
+        // 3. 其它：优先当作图标 ID，失败时退化为纯文本
         try {
             setIcon(el, imageStr);
             if (el.innerHTML === "") el.setText(imageStr);
@@ -225,6 +242,26 @@ export class CardNavigatorModal extends Modal {
             el.empty();
             el.setText(imageStr);
         }
+    }
+
+    private arrayBufferToBase64(buffer: ArrayBuffer): string {
+        let binary = "";
+        const bytes = new Uint8Array(buffer);
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary);
+    }
+
+    private guessImageMimeType(path: string): string {
+        const lower = path.toLowerCase();
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+        if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".webp")) return "image/webp";
+        if (lower.endsWith(".svg")) return "image/svg+xml";
+        return "image/png";
     }
 
     private renderStyledElement(el: HTMLElement, value: StyledValue | undefined, cls: string) {
