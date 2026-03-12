@@ -115,13 +115,30 @@ export class CardNavigatorModal extends Modal {
 			};
 		}
 	
-		// 右侧搜索框 + 统计
+		// 右侧搜索框 + 统计 + 🎯 定位按钮
 		const searchContainer = navBar.createDiv({ cls: "nc-search-wrapper" });
 		const searchInput = searchContainer.createEl("input", {
 			cls: "nc-card-search-input",
 			attr: { placeholder: this.options.searchPlaceholder }
 		});
 		const countEl = searchContainer.createDiv({ cls: "nc-card-count" });
+
+        // 🎯 按钮：重新定位到 reveal 目标卡片（如果存在）
+        const revealBtn = searchContainer.createDiv({ cls: "nc-icon-btn", attr: { title: "跳转到目标卡片" } });
+        revealBtn.setText("🎯");
+        if (!this.options.reveal) {
+            revealBtn.addClass("is-disabled");
+        } else {
+            revealBtn.onclick = () => {
+                if (!this.options.reveal) return;
+                const path = this.findRevealPath(this.rootData, this.options.reveal);
+                if (path && path.length > 0) {
+                    this.navigationStack = path.slice(0, -1);
+                    const targetList = path[path.length - 1];
+                    this.renderUI(targetList, this.navigationStack.length > 0, this.options.reveal);
+                }
+            };
+        }
 	
 		// 2. 卡片容器区域（支持增量加载）
 		const scrollArea = this.contentEl.createDiv({ cls: "nc-scroll-area" });

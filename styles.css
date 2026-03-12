@@ -93,6 +93,12 @@
   transition: all 0.2s ease;
 }
 
+.nc-icon-btn.is-disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
 .nc-icon-btn:hover {
   background: color-mix(in srgb, var(--interactive-accent) 16%, var(--background-primary));
   color: var(--text-normal);
