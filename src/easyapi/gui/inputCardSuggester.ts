@@ -56,7 +56,18 @@ export class CardNavigatorModal extends Modal {
         const resizer = this.modalEl.createDiv({ cls: "nc-modal-resizer" });
         this.initResizer(resizer);
 
-        this.renderUI(this.rootData, false, this.options.reveal);
+        // 如果设置了 reveal，尝试定位其所在的层级列表并预先展开
+        let initialItems = this.rootData;
+        if (this.options.reveal) {
+            const path = this.findRevealPath(this.rootData, this.options.reveal);
+            if (path && path.length > 0) {
+                // path: [rootList, ..., targetList]
+                this.navigationStack = path.slice(0, -1);
+                initialItems = path[path.length - 1];
+            }
+        }
+
+        this.renderUI(initialItems, this.navigationStack.length > 0, this.options.reveal);
     }
 
     private initResizer(resizer: HTMLElement) {
@@ -83,7 +94,7 @@ export class CardNavigatorModal extends Modal {
         // 1. 顶部导航栏
 		const navBar = this.contentEl.createDiv({ cls: "nc-card-navbar" });
 	
-		// 左侧按钮组 (首页 + 返回)
+		// 左侧按钮组 (首页 + 返回上级)
 		const btnGroup = navBar.createDiv({ cls: "nc-nav-group" });
 		
 		// 首页按钮：任何时候点击都回到最初状态
@@ -94,10 +105,10 @@ export class CardNavigatorModal extends Modal {
             this.renderUI(this.rootData, false, this.options.reveal);
 		};
 	
-		// 返回按钮：仅在有层级时显示
+		// 返回上级按钮（⤴️）：仅在有层级时显示
 		if (canGoBack || this.navigationStack.length > 0) {
 			const backBtn = btnGroup.createDiv({ cls: "nc-icon-btn", attr: { title: "返回上一级" } });
-			setIcon(backBtn, "arrow-left");
+			backBtn.setText("⤴️");
 			backBtn.onclick = () => {
 				const prev = this.navigationStack.pop();
                 this.renderUI(prev || this.rootData, this.navigationStack.length > 0);
@@ -128,7 +139,10 @@ export class CardNavigatorModal extends Modal {
 			const slice = currentList.slice(renderedCount, renderedCount + pageSize);
 			slice.forEach((item) => {
 				const isFolder = Array.isArray(item.action);
-				const card = container.createDiv({ cls: `nc-card-btn ${isFolder ? 'nc-is-folder' : ''}` });
+				const classes = [`nc-card-btn`];
+				if (isFolder) classes.push("nc-is-folder");
+				if (revealTarget && item === revealTarget) classes.push("nc-card-reveal");
+				const card = container.createDiv({ cls: classes.join(" ") });
 				const cover = card.createDiv({ cls: "nc-card-cover" });
 				this.renderIconOrImage(cover, item.image, isFolder);
 				const info = card.createDiv({ cls: "nc-card-info" });
@@ -334,6 +348,21 @@ export class CardNavigatorModal extends Modal {
             el.setText(value != null ? String(value) : "");
             el.setAttr("title", value != null ? String(value) : "");
         }
+    }
+
+    // 从整棵树中找到 target 所在的列表路径（按引用匹配）
+    private findRevealPath(list: CardItem[], target: CardItem, stack: CardItem[][] = []): CardItem[][] | null {
+        const nextStack = [...stack, list];
+        for (const item of list) {
+            if (item === target) {
+                return nextStack;
+            }
+            if (Array.isArray(item.action)) {
+                const found = this.findRevealPath(item.action, target, nextStack);
+                if (found) return found;
+            }
+        }
+        return null;
     }
 
     private getRawText(val: StyledValue | undefined): string {
