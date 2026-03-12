@@ -16,9 +16,15 @@ export interface CardNavigatorOptions {
     cardWidth?: number;
     cardHeight?: number;
     searchPlaceholder?: string;
+    /** 初始时希望自动滚动到的卡片 */
+    reveal?: CardItem;
 }
 
-const DEFAULT_OPTIONS: Required<CardNavigatorOptions> = {
+type ResolvedCardNavigatorOptions = Omit<Required<CardNavigatorOptions>, "reveal"> & {
+    reveal?: CardItem;
+};
+
+const DEFAULT_OPTIONS: ResolvedCardNavigatorOptions = {
     width: 800,
     height: 600,
     cardWidth: 200,
@@ -27,7 +33,7 @@ const DEFAULT_OPTIONS: Required<CardNavigatorOptions> = {
 };
 
 export class CardNavigatorModal extends Modal {
-    private options: Required<CardNavigatorOptions>;
+    private options: ResolvedCardNavigatorOptions;
     private navigationStack: CardItem[][] = [];
     private resolveResult: ((item: CardItem | null) => void) | null = null;
     private resolved = false;
@@ -50,7 +56,7 @@ export class CardNavigatorModal extends Modal {
         const resizer = this.modalEl.createDiv({ cls: "nc-modal-resizer" });
         this.initResizer(resizer);
 
-        this.renderUI(this.rootData, false);
+        this.renderUI(this.rootData, false, this.options.reveal);
     }
 
     private initResizer(resizer: HTMLElement) {
@@ -71,10 +77,10 @@ export class CardNavigatorModal extends Modal {
         });
     }
 
-    private renderUI(items: CardItem[], canGoBack: boolean) {
+    private renderUI(items: CardItem[], canGoBack: boolean, revealTarget?: CardItem) {
 		this.contentEl.empty();
 		
-		// 1. 顶部导航栏
+        // 1. 顶部导航栏
 		const navBar = this.contentEl.createDiv({ cls: "nc-card-navbar" });
 	
 		// 左侧按钮组 (首页 + 返回)
@@ -85,7 +91,7 @@ export class CardNavigatorModal extends Modal {
 		setIcon(homeBtn, "home");
 		homeBtn.onclick = () => {
 			this.navigationStack = [];
-			this.renderUI(this.rootData, false);
+            this.renderUI(this.rootData, false, this.options.reveal);
 		};
 	
 		// 返回按钮：仅在有层级时显示
@@ -94,7 +100,7 @@ export class CardNavigatorModal extends Modal {
 			setIcon(backBtn, "arrow-left");
 			backBtn.onclick = () => {
 				const prev = this.navigationStack.pop();
-				this.renderUI(prev || this.rootData, this.navigationStack.length > 0);
+                this.renderUI(prev || this.rootData, this.navigationStack.length > 0);
 			};
 		}
 	
@@ -115,6 +121,7 @@ export class CardNavigatorModal extends Modal {
 		const pageSize = 20;
 		let currentList: CardItem[] = items;
 		let renderedCount = 0;
+		let pendingRevealIndex: number | null = revealTarget ? items.indexOf(revealTarget) : null;
 
 		const appendPage = () => {
 			if (!currentList || renderedCount >= currentList.length) return;
@@ -127,7 +134,7 @@ export class CardNavigatorModal extends Modal {
 				const info = card.createDiv({ cls: "nc-card-info" });
 				this.renderStyledElement(info.createDiv(), item.name, "nc-card-name");
 				if (item.detail) this.renderStyledElement(info.createDiv(), item.detail, "nc-card-detail");
-				card.onclick = () => this.handleItemClick(item, items);
+				card.onclick = () => this.handleItemClick(item, currentList);
 			});
 			renderedCount += slice.length;
 		};
@@ -139,6 +146,23 @@ export class CardNavigatorModal extends Modal {
 			renderedCount = 0;
 			countEl.setText(`共 ${displayItems.length} 个卡片`);
 			appendPage();
+
+			// 如有指定的 reveal 目标，确保其所在页被渲染并自动滚动到视图内
+			if (pendingRevealIndex != null && pendingRevealIndex >= 0 && pendingRevealIndex < currentList.length) {
+				while (renderedCount <= pendingRevealIndex && renderedCount < currentList.length) {
+					appendPage();
+				}
+				const targetIndex = pendingRevealIndex;
+				pendingRevealIndex = null;
+				requestAnimationFrame(() => {
+					const cards = container.getElementsByClassName("nc-card-btn");
+					const targetEl = cards.item(targetIndex) as HTMLElement | null;
+					if (targetEl) {
+						const offsetTop = targetEl.offsetTop;
+						scrollArea.scrollTop = Math.max(offsetTop - 40, 0);
+					}
+				});
+			}
 		};
 
 		// 滚动到底部附近时，按页追加更多卡片
