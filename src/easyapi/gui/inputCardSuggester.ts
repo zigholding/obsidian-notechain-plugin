@@ -1,365 +1,267 @@
-import { App, Modal } from "obsidian";
+import { App, Modal, setIcon } from "obsidian";
 
-/**
- * 文本 / 图片字段的可选样式配置：
- * - 基本格式为 [值, styleObject]
- * - 例如：name: ["标题", { color: "red", "font-weight": "bold" }]
- */
 export type StyledValue = string | [string, Record<string, string>];
 
-/**
- * 单个卡片的数据结构
- *
- * - 如果 `func` 是数组：表示这是一个“文件夹”，点击后进入子级
- * - 如果 `func` 是函数：表示这是一个“可执行项”，点击后会：
- *   1) 关闭 Modal
- *   2) 返回当前对象
- *   3) 同时调用该函数（如果存在）
- *
- * - `name` / `detail` / `image` 支持样式数组：["文本或路径", {style配置}]
- */
 export interface CardItem {
-	name: StyledValue;
-	detail?: StyledValue;
-	image?: StyledValue;
-	action?: CardItem[] | ((item: CardItem) => void | Promise<void>);
-	// 允许用户自定义其它字段
-	[key: string]: any;
+    name: StyledValue;
+    detail?: StyledValue;
+    image?: StyledValue;
+    action?: CardItem[] | ((item: CardItem) => void | Promise<void>);
+    [key: string]: any;
 }
 
 export interface CardNavigatorOptions {
-	perRow?: number;
-	maxHeight?: number;
-	searchPlaceholder?: string;
-	homeText?: string;
-	backText?: string;
+    width?: number;
+    height?: number;
+    cardWidth?: number;
+    cardHeight?: number;
+    searchPlaceholder?: string;
 }
 
-let DEFAULT_OPTIONS: Required<CardNavigatorOptions> = {
-	perRow: 4,
-	maxHeight: 600,
-	searchPlaceholder: "🔍 搜索...",
-	homeText: "🏠 返回根目录",
-	backText: "⬅ 返回上一级",
+const DEFAULT_OPTIONS: Required<CardNavigatorOptions> = {
+    width: 800,
+    height: 600,
+    cardWidth: 200,
+    cardHeight: 240,
+    searchPlaceholder: "🔍 输入关键词搜索...",
 };
 
-function styleObjectToString(style?: Record<string, string>): string {
-	if (!style) return "";
-	return Object.entries(style)
-		.map(([k, v]) => `${k}:${v};`)
-		.join("");
-}
-
-function getTextAndStyle(
-	value?: StyledValue,
-): { text: string; style: string } {
-	if (!value) return { text: "", style: "" };
-	if (Array.isArray(value)) {
-		const [text, style] = value;
-		return { text, style: styleObjectToString(style) };
-	}
-	return { text: value, style: "" };
-}
-
-function getImageAndStyle(
-	value?: StyledValue,
-): { src: string | null; wrapperStyle: string; imgStyle: string } {
-	if (!value) return { src: null, wrapperStyle: "", imgStyle: "" };
-
-	if (Array.isArray(value)) {
-		const [src, style] = value;
-		const entries = Object.entries(style);
-		const wrapperEntries = entries.filter(
-			([k]) => k !== "object-fit" && k !== "border-radius",
-		);
-		const imgEntries = entries.filter(
-			([k]) => k === "object-fit" || k === "border-radius",
-		);
-
-		return {
-			src,
-			wrapperStyle: styleObjectToString(
-				Object.fromEntries(wrapperEntries),
-			),
-			imgStyle: styleObjectToString(Object.fromEntries(imgEntries)),
-		};
-	}
-
-	return { src: value, wrapperStyle: "", imgStyle: "" };
-}
-
-function formatImage(image?: string | null, style = ""): string {
-	if (!image) return "⚡";
-	if (typeof image === "string") {
-		if (image.startsWith("http")) {
-			return `<img src="${image}" style="${style}" />`;
-		}else if(image.startsWith("data:image/png;base64,")){
-			return `<img src="${image}" style="${style}" />`;
-		}else{
-			return image;
-		}
-	}
-	return "⚡";
-}
-
-/**
- * 基于 Obsidian Modal 的层次卡片选择器
- */
 export class CardNavigatorModal extends Modal {
-	private rootData: CardItem[];
-	private options: Required<CardNavigatorOptions>;
+    private options: Required<CardNavigatorOptions>;
+    private navigationStack: CardItem[][] = [];
+    private resolveResult: ((item: CardItem | null) => void) | null = null;
+    private resolved = false;
 
-	private currentItems: CardItem[];
-	private navigationStack: CardItem[][] = [];
+    constructor(app: App, private rootData: CardItem[], options: CardNavigatorOptions = {}) {
+        super(app);
+        this.options = { ...DEFAULT_OPTIONS, ...options };
+    }
 
-	private resolveResult: ((item: CardItem | null) => void) | null = null;
-	private resolved = false;
+    openAndWait(): Promise<CardItem | null> {
+        this.open();
+        return new Promise((resolve) => { this.resolveResult = resolve; });
+    }
 
-	constructor(app: App, data: CardItem[], options: CardNavigatorOptions = {}) {
-		super(app);
-		this.rootData = data;
-		this.currentItems = data;
-		this.options = { ...DEFAULT_OPTIONS, ...options };
-	}
+    onOpen(): void {
+        this.modalEl.addClass("nc-card-navigator-modal");
+        this.modalEl.style.width = `${this.options.width}px`;
+        this.modalEl.style.height = `${this.options.height}px`;
 
-	/**
-	 * 打开 Modal，并在用户选择后返回选中的 CardItem
-	 */
-	openAndWait(): Promise<CardItem | null> {
-		this.open();
-		return new Promise<CardItem | null>((resolve) => {
-			this.resolveResult = resolve;
-		});
-	}
+        const resizer = this.modalEl.createDiv({ cls: "nc-modal-resizer" });
+        this.initResizer(resizer);
 
-	onOpen(): void {
-		this.modalEl.addClass("note-chain-card-suggester-modal");
-		this.renderUI(this.currentItems, false);
-	}
+        this.renderUI(this.rootData, false);
+    }
 
-	onClose(): void {
-		if (!this.resolved && this.resolveResult) {
-			this.resolveResult(null);
-		}
+    private initResizer(resizer: HTMLElement) {
+        resizer.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            const startX = e.clientX, startY = e.clientY;
+            const startW = this.modalEl.offsetWidth, startH = this.modalEl.offsetHeight;
+            const onMove = (me: MouseEvent) => {
+                this.modalEl.style.width = `${startW + (me.clientX - startX)}px`;
+                this.modalEl.style.height = `${startH + (me.clientY - startY)}px`;
+            };
+            const onUp = () => {
+                document.removeEventListener("mousemove", onMove);
+                document.removeEventListener("mouseup", onUp);
+            };
+            document.addEventListener("mousemove", onMove);
+            document.addEventListener("mouseup", onUp);
+        });
+    }
+
+    private renderUI(items: CardItem[], canGoBack: boolean) {
 		this.contentEl.empty();
-	}
-
-	private focusSearchInput(): void {
-		const input = this.contentEl.querySelector(
-			".nc-card-search-input",
-		) as HTMLInputElement | null;
-		if (input) {
-			input.focus();
-			input.select();
-		}
-	}
-
-	private makeButton(item: CardItem, index: number): string {
-		const {
-			src: imgSrc,
-			wrapperStyle: imgWrapperStyle,
-			imgStyle,
-		} = getImageAndStyle(item.image);
-		const { text: nameText, style: nameStyle } = getTextAndStyle(item.name);
-		const { text: detailText, style: detailStyle } = getTextAndStyle(
-			item.detail,
-		);
-
-		return `
-			<div class="nc-card-btn" data-index="${index}">
-				<div class="nc-card-cover" style="${imgWrapperStyle}">${formatImage(
-					imgSrc,
-					imgStyle,
-				)}</div>
-				<div class="nc-card-name" style="${nameStyle}">${nameText}</div>
-				${detailText ? `<div class="nc-card-detail" style="${detailStyle}">${detailText}</div>` : ""}
-			</div>
-		`;
-	}
-
-	private renderFolder(items: CardItem[]): string {
-		return items.map((item, index) => this.makeButton(item, index)).join("");
-	}
-
-	private renderUI(items: CardItem[], canGoBack: boolean): void {
-		let { perRow, maxHeight, searchPlaceholder, homeText, backText } =
-			this.options;
-
-		let backBtn = "";
-		if (canGoBack) {
-			backBtn = `<div class="nc-card-back">${backText}</div>`;
-		}
-
-		this.contentEl.empty();
-
-		this.contentEl.innerHTML = `
-			<div class="nc-card-topbar">
-				<div class="nc-card-search">
-					<input type="text" placeholder="${searchPlaceholder}" class="nc-card-search-input"/>
-				</div>
-				<div class="nc-card-home">${homeText}</div>
-			</div>
-			${backBtn}
-			<div class="nc-card-nav" style="max-height: ${maxHeight}px;">
-				<div class="nc-card-container" style="--per-row:${perRow}">
-					${this.renderFolder(items)}
-				</div>
-			</div>
-		`;
-
-		this.bindEvents(items, canGoBack);
-		this.focusSearchInput();
-	}
-
-	private bindEvents(items: CardItem[], canGoBack: boolean): void {
-		let nav = this.contentEl.querySelector(
-			".nc-card-nav",
-		) as HTMLDivElement | null;
-		if (!nav) return;
-
-		// 点击卡片
-		nav.querySelectorAll<HTMLDivElement>(".nc-card-btn").forEach((btn) => {
-			btn.onclick = () => {
-				let indexAttr = btn.getAttribute("data-index");
-				if (indexAttr == null) return;
-				let index = parseInt(indexAttr, 10);
-				let item = items[index];
-				if (!item) return;
-
-				if (Array.isArray(item.action)) {
-					// 文件夹：进入子级
-					this.navigationStack.push(items);
-					this.currentItems = item.action;
-					this.renderUI(this.currentItems, true);
-				} else {
-					// 叶子：执行函数（如果有），关闭 modal 并返回对象
-					void this.handleLeafClick(item);
-				}
-			};
-		});
-
-		// 返回上一级
-		let backBtn = this.contentEl.querySelector(
-			".nc-card-back",
-		) as HTMLDivElement | null;
-		if (backBtn && canGoBack) {
+		
+		// 1. 顶部导航栏
+		const navBar = this.contentEl.createDiv({ cls: "nc-card-navbar" });
+	
+		// 左侧按钮组 (首页 + 返回)
+		const btnGroup = navBar.createDiv({ cls: "nc-nav-group" });
+		
+		// 首页按钮：任何时候点击都回到最初状态
+		const homeBtn = btnGroup.createDiv({ cls: "nc-icon-btn", attr: { title: "回到首页" } });
+		setIcon(homeBtn, "home");
+		homeBtn.onclick = () => {
+			this.navigationStack = [];
+			this.renderUI(this.rootData, false);
+		};
+	
+		// 返回按钮：仅在有层级时显示
+		if (canGoBack || this.navigationStack.length > 0) {
+			const backBtn = btnGroup.createDiv({ cls: "nc-icon-btn", attr: { title: "返回上一级" } });
+			setIcon(backBtn, "arrow-left");
 			backBtn.onclick = () => {
-				let parentItems = this.navigationStack.pop();
-				if (parentItems) {
-					this.currentItems = parentItems;
-					this.renderUI(this.currentItems, this.navigationStack.length > 0);
-				} else {
-					this.currentItems = this.rootData;
-					this.renderUI(this.currentItems, false);
-				}
+				const prev = this.navigationStack.pop();
+				this.renderUI(prev || this.rootData, this.navigationStack.length > 0);
 			};
 		}
-
-		// 返回根目录
-		let homeBtn = this.contentEl.querySelector(
-			".nc-card-home",
-		) as HTMLDivElement | null;
-		if (homeBtn) {
-			homeBtn.onclick = () => {
-				this.navigationStack = [];
-				this.currentItems = this.rootData;
-				this.renderUI(this.currentItems, false);
-			};
-		}
-
-		// 搜索
-		let searchInput = this.contentEl.querySelector(
-			".nc-card-search-input",
-		) as HTMLInputElement | null;
-		if (searchInput) {
-			searchInput.addEventListener("input", (e) => {
-				let target = e.target as HTMLInputElement;
-				let keyword = target.value.trim().toLowerCase();
-				if (keyword === "") {
-					this.renderUI(this.currentItems, canGoBack);
-				} else {
-					let filteredItems = this.searchItems(this.rootData, keyword);
-					if (!nav) return;
-					nav.innerHTML = `<div class="nc-card-container" style="--per-row:${this.options.perRow}">${this.renderFolder(
-						filteredItems,
-					)}</div>`;
-					this.bindSearchEvents(filteredItems);
-				}
-			});
-		}
-	}
-
-	private bindSearchEvents(items: CardItem[]): void {
-		let nav = this.contentEl.querySelector(
-			".nc-card-nav",
-		) as HTMLDivElement | null;
-		if (!nav) return;
-
-		nav.querySelectorAll<HTMLDivElement>(".nc-card-btn").forEach((btn) => {
-			btn.onclick = () => {
-				let indexAttr = btn.getAttribute("data-index");
-				if (indexAttr == null) return;
-				let index = parseInt(indexAttr, 10);
-				let item = items[index];
-				if (!item) return;
-
-				if (Array.isArray(item.action)) {
-					this.navigationStack = [];
-					this.currentItems = item.action;
-					this.renderUI(this.currentItems, true);
-				} else {
-					void this.handleLeafClick(item);
-				}
-			};
+	
+		// 右侧搜索框 + 统计
+		const searchContainer = navBar.createDiv({ cls: "nc-search-wrapper" });
+		const searchInput = searchContainer.createEl("input", {
+			cls: "nc-card-search-input",
+			attr: { placeholder: this.options.searchPlaceholder }
 		});
-	}
-
-	private searchItems(items: CardItem[], keyword: string): CardItem[] {
-		let results: CardItem[] = [];
-
-		function searchRecursive(list: CardItem[], path: string[] = []) {
-			for (let item of list) {
-				const nameText = getTextAndStyle(item.name).text.toLowerCase();
-				const detailText = getTextAndStyle(item.detail).text.toLowerCase();
-
-				let nameMatch = nameText.includes(keyword);
-				let detailMatch = detailText.includes(keyword);
-				if (nameMatch || detailMatch) {
-					results.push({
-						...item,
-						path: [...path, nameText],
-					});
-				}
-				if (Array.isArray(item.action)) {
-					searchRecursive(item.action, [...path, nameText]);
-				}
+		const countEl = searchContainer.createDiv({ cls: "nc-card-count" });
+	
+		// 2. 卡片容器区域
+		const scrollArea = this.contentEl.createDiv({ cls: "nc-scroll-area" });
+		const container = scrollArea.createDiv({ cls: "nc-card-container" });
+		container.style.setProperty("--nc-card-min-width", `${this.options.cardWidth}px`);
+		container.style.setProperty("--nc-card-height", `${this.options.cardHeight}px`);
+	
+		// 渲染函数
+		const drawCards = (displayItems: CardItem[]) => {
+			container.empty();
+			countEl.setText(`共 ${displayItems.length} 个卡片`);
+			displayItems.forEach((item) => {
+				const isFolder = Array.isArray(item.action);
+				const card = container.createDiv({ cls: `nc-card-btn ${isFolder ? 'nc-is-folder' : ''}` });
+				const cover = card.createDiv({ cls: "nc-card-cover" });
+				this.renderIconOrImage(cover, item.image, isFolder);
+				const info = card.createDiv({ cls: "nc-card-info" });
+				this.renderStyledElement(info.createDiv(), item.name, "nc-card-name");
+				if (item.detail) this.renderStyledElement(info.createDiv(), item.detail, "nc-card-detail");
+				card.onclick = () => this.handleItemClick(item, items);
+			});
+		};
+	
+		// 初始渲染
+		drawCards(items);
+	
+		// 搜索逻辑
+		searchInput.oninput = (e) => {
+			const val = ((e.target as HTMLInputElement)?.value ?? "").toLowerCase();
+			if (!val) {
+				drawCards(items);
+				return;
 			}
-		}
-
-		searchRecursive(items);
-		return results;
+			const filtered = this.searchRecursive(this.rootData, val);
+			drawCards(filtered);
+		};
+	
+		searchInput.focus();
 	}
 
-	private async handleLeafClick(item: CardItem): Promise<void> {
-		this.resolved = true;
-		if (this.resolveResult) {
-			this.resolveResult(item);
-		}
-		this.close();
-	}
+    // 内部快速刷新的方法，避免重绘整个顶部栏
+    private renderUI_Plain(filteredItems: CardItem[], container: HTMLElement, originalItems: CardItem[]) {
+        container.empty();
+        filteredItems.forEach((item) => {
+            const isFolder = Array.isArray(item.action);
+            const card = container.createDiv({ cls: `nc-card-btn ${isFolder ? 'nc-is-folder' : ''}` });
+            const cover = card.createDiv({ cls: "nc-card-cover" });
+            this.renderIconOrImage(cover, item.image, isFolder);
+            const info = card.createDiv({ cls: "nc-card-info" });
+            this.renderStyledElement(info.createDiv(), item.name, "nc-card-name");
+            if (item.detail) this.renderStyledElement(info.createDiv(), item.detail, "nc-card-detail");
+            card.onclick = () => this.handleItemClick(item, originalItems);
+        });
+    }
+
+    private searchRecursive(list: CardItem[], query: string): CardItem[] {
+        const tokens = query
+            .split(/\s+/)
+            .map((t) => t.trim())
+            .filter((t) => t.length > 0);
+
+        if (tokens.length === 0) return list;
+
+        let results: CardItem[] = [];
+
+        for (const item of list) {
+            const name = this.getRawText(item?.name).toLowerCase();
+            const detail = this.getRawText(item?.detail).toLowerCase();
+
+            const text = `${name} ${detail}`;
+
+            const matched = tokens.every((token) => text.includes(token));
+
+            if (matched) {
+                results.push(item);
+            }
+
+            if (Array.isArray(item.action)) {
+                results.push(...this.searchRecursive(item.action, query));
+            }
+        }
+
+        return [...new Set(results)]; // 去重
+    }
+
+    private renderIconOrImage(el: HTMLElement, imageVal: StyledValue | undefined, isFolder: boolean) {
+        let imageStr = "";
+        let style: Record<string, string> = {};
+        if (Array.isArray(imageVal)) { [imageStr, style] = imageVal; } else { imageStr = imageVal || ""; }
+
+        if (style) Object.assign(el.style, style);
+
+        if (!imageStr) {
+            setIcon(el, isFolder ? "folder" : "file-text");
+            return;
+        }
+
+        if (/^(https?:\/\/|data:|app:\/\/|\/|\\)/.test(imageStr)) {
+            const img = el.createEl("img", { attr: { src: imageStr } });
+            if (style) Object.assign(img.style, style);
+        } else {
+            setIcon(el, imageStr);
+            if (el.innerHTML === "") el.setText(imageStr);
+        }
+    }
+
+    private renderStyledElement(el: HTMLElement, value: StyledValue | undefined, cls: string) {
+        if (!value) return;
+        el.addClass(cls);
+        if (cls === "nc-card-detail") {
+            const raw = this.getRawText(value);
+            const normalized = typeof raw === "string" ? raw.replace(/\\n/g, "\n") : String(raw);
+            const lines = normalized.split("\n");
+            el.empty();
+            lines.forEach((line, i) => {
+                el.appendText(line);
+                if (i < lines.length - 1) el.appendChild(document.createElement("br"));
+            });
+            el.setAttr("title", normalized.replace(/\n/g, " "));
+            if (Array.isArray(value) && value[1]) Object.assign(el.style, value[1]);
+            return;
+        }
+        if (Array.isArray(value)) {
+            const text = this.getRawText(value);
+            el.setText(text);
+            if (value[1]) Object.assign(el.style, value[1]);
+            el.setAttr("title", text);
+        } else {
+            el.setText(value != null ? String(value) : "");
+            el.setAttr("title", value != null ? String(value) : "");
+        }
+    }
+
+    private getRawText(val: StyledValue | undefined): string {
+        if (val == null) return "";
+        if (Array.isArray(val)) return val[0] != null ? String(val[0]) : "";
+        return String(val);
+    }
+
+    private async handleItemClick(item: CardItem, currentList: CardItem[]) {
+        if (Array.isArray(item.action)) {
+            this.navigationStack.push(currentList);
+            this.renderUI(item.action, true);
+        } else {
+            this.resolved = true;
+            if (item.action) await item.action(item);
+            if (this.resolveResult) this.resolveResult(item);
+            this.close();
+        }
+    }
+
+    onClose() {
+        if (!this.resolved && this.resolveResult) this.resolveResult(null);
+        this.contentEl.empty();
+    }
 }
 
-/**
- * 便捷函数：
- * 打开卡片选择器，返回用户点击的对象
- */
-export async function openCardNavigator(
-	app: App,
-	data: CardItem[],
-	options: CardNavigatorOptions = {},
-): Promise<CardItem | null> {
-	let modal = new CardNavigatorModal(app, data, options);
-	return await modal.openAndWait();
+export async function openCardNavigator(app: App, data: CardItem[], options?: CardNavigatorOptions) {
+    return new CardNavigatorModal(app, data, options).openAndWait();
 }
-
-

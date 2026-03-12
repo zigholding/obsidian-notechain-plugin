@@ -1,13 +1,14 @@
-/* Note Chain - Modal 内笔记内容与 modal 尺寸一致 */
+/* ==========================================================================
+   1. 基础 Modal 容器 (Note Chain 核心)
+   ========================================================================== */
 
+/* 通用 Modal 增强：确保内容对齐尺寸 */
 .notechain-modal {
-  /* 使用弹性布局让内容自然填充 */
   display: flex;
   flex-direction: column;
 }
 
 .notechain-modal .modal-content {
-  /* 占满 modal 高度，去掉多余内边距，让 note 内容真正对齐尺寸 */
   flex: 1 1 auto;
   height: 100%;
   padding: 0;
@@ -17,128 +18,313 @@
 .notechain-modal .note-content-container {
   width: 100%;
   height: 100%;
-  box-sizing: border-box;
   overflow: auto;
 }
 
-/* Note Chain - 卡片选择器（CardNavigatorModal） */
-
-.nc-card-back {
-  margin: 6px 0;
-  padding: 6px;
-  background: var(--background-secondary);
-  border-radius: 6px;
-  text-align: center;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background 0.2s;
-}
-.nc-card-back:hover {
-  background: var(--background-modifier-hover);
+/* 卡片选择器专用：让内容区填满并为内部滚动腾出空间 */
+.nc-card-navigator-modal .modal-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  height: 100%;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-.nc-card-search {
-  margin-bottom: 8px;
+/* 卡片导航器专用 Modal：锁定高度，禁止全局滚动 + 现代居中卡片面板 */
+.nc-card-navigator-modal {
+  background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.03),
+      rgba(255, 255, 255, 0.02)
+    );
+  border: 1px solid var(--background-modifier-border-focus);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(0, 0, 0, 0.35);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 禁止全局滚动，强制内部滚动 */
+  position: relative;
+  max-width: min(960px, 90vw);
+  max-height: min(680px, 85vh);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
-.nc-card-search-input {
-  width: 100%;
-  padding: 6px 10px;
+
+/* ==========================================================================
+ 2. 顶部导航栏 (首页、返回、搜索紧贴)
+ ========================================================================== */
+
+.nc-card-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 10px 18px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--background-secondary) 92%, transparent),
+    color-mix(in srgb, var(--background-secondary-alt) 92%, transparent)
+  );
+  border-bottom: 1px solid var(--background-modifier-border);
+  gap: 8px; /* 按钮组与搜索框的间距 */
+  flex-shrink: 0; /* 防止顶栏被卡片挤压 */
+}
+
+/* 按钮组逻辑 */
+.nc-nav-group {
+  display: flex;
+  gap: 4px; 
+  flex-shrink: 0;
+}
+
+.nc-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: color-mix(in srgb, var(--background-primary) 92%, transparent);
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
-  font-size: 14px;
-}
-.nc-card-search-input:focus {
-  outline: none;
-  border-color: var(--interactive-accent);
-  box-shadow: 0 0 4px var(--interactive-accent);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.nc-card-nav {
-  overflow-y: auto;
-  padding-right: 4px;
+.nc-icon-btn:hover {
+  background: color-mix(in srgb, var(--interactive-accent) 16%, var(--background-primary));
+  color: var(--text-normal);
+  border-color: var(--interactive-accent);
+  transform: translateY(-1px);
+}
+
+.nc-icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* 搜索框紧贴设计 */
+.nc-search-wrapper {
+  flex-grow: 1;
+  max-width: 520px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nc-card-search-input {
+  width: 100%;
+  flex: 1 1 auto;
+  height: 32px; /* 高度与按钮组对齐 */
+  background: var(--background-primary) !important;
+  border: 1px solid var(--background-modifier-border) !important;
+  border-radius: 6px !important;
+  padding: 0 12px !important;
+  font-size: 13px;
+  color: var(--text-normal);
+}
+
+.nc-card-search-input:focus {
+  border-color: var(--interactive-accent) !important;
+  box-shadow: 0 0 0 2px var(--background-modifier-border-focus) !important;
+}
+
+.nc-card-search-input::placeholder {
+  color: var(--text-faint);
+}
+
+/* 顶部卡片数量徽标（与搜索框同一行） */
+.nc-card-count {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--background-modifier-border) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 65%, transparent);
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+ 3. 局部滚动区域与网格系统
+ ========================================================================== */
+
+.nc-scroll-area {
+  flex: 1; /* 占据剩余所有高度 */
+  overflow-y: auto; /* 核心：让卡片区域独立滚动 */
+  padding: 16px 18px 20px;
+  scrollbar-gutter: stable; /* 防止滚动条出现时布局抖动 */
+  position: relative;
+}
+
+/* 自定义滚动条（仅作用于卡片区域） */
+.nc-scroll-area::-webkit-scrollbar {
+  width: 8px;
+}
+
+.nc-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nc-scroll-area::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--background-modifier-border) 75%, transparent);
+  border-radius: 999px;
+}
+
+.nc-scroll-area::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--interactive-accent) 60%, transparent);
+}
+
+.nc-scroll-area {
+  scrollbar-color: color-mix(in srgb, var(--background-modifier-border) 75%, transparent)
+    transparent;
+  scrollbar-width: thin;
 }
 
 .nc-card-container {
   display: grid;
-  grid-template-columns: repeat(var(--per-row, 4), 1fr);
-  gap: 8px;
-  padding: 4px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--nc-card-min-width), 1fr));
+  gap: 14px 16px;
+  align-content: flex-start;
 }
 
+@media (max-width: 720px) {
+  .nc-card-container {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}
+
+/* ==========================================================================
+ 4. 卡片 UI 与内容截断
+ ========================================================================== */
+
 .nc-card-btn {
-  padding: 6px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 8px;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  height: var(--nc-card-height);
+  background: radial-gradient(
+      circle at 0% 0%,
+      color-mix(in srgb, var(--interactive-accent) 9%, var(--background-secondary)),
+      var(--background-secondary)
+    );
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 86%, transparent);
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-  background: var(--background-primary);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: relative;
 }
+
 .nc-card-btn:hover {
-  background: var(--background-modifier-hover);
-  transform: translateY(-4px) scale(1.03);
-  box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+  transform: translateY(-4px) scale(1.01);
+  border-color: var(--interactive-accent);
+  box-shadow:
+    0 14px 26px rgba(0, 0, 0, 0.28),
+    0 0 0 1px color-mix(in srgb, var(--interactive-accent) 36%, transparent);
+  background: radial-gradient(
+      circle at 0% 0%,
+      color-mix(in srgb, var(--interactive-accent) 22%, var(--background-secondary-alt)),
+      var(--background-secondary-alt)
+    );
 }
+
+/* 封面图片/图标 */
 .nc-card-cover {
   width: 100%;
-  height: 80px; /* 固定封面高度，避免卡片被图片拉长 */
-  overflow: hidden;
+  height: 46%;
+  background: radial-gradient(
+      circle at 10% 0%,
+      color-mix(in srgb, var(--interactive-accent) 18%, var(--background-tertiary)),
+      var(--background-tertiary)
+    );
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  position: relative;
 }
+
 .nc-card-cover img {
   width: 100%;
   height: 100%;
-  object-fit: var(--nc-object-fit, cover);
-  border-radius: var(--nc-border-radius, 4px);
+  object-fit: cover;
 }
-.nc-card-name {
-  margin-top: 4px;
-  font-size: 14px;
-  font-weight: bold;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+
+.nc-card-cover svg {
+  width: 30px;
+  height: 30px;
+  opacity: 0.7;
 }
-.nc-card-detail {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.nc-card-topbar {
+
+/* 文字信息排版 */
+.nc-card-info {
+  padding: 10px 12px 12px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.nc-card-search {
+  flex-direction: column;
+  gap: 4px;
   flex: 1;
+  overflow: hidden;
 }
 
-.nc-card-search-input {
-  width: 100%;
-  padding: 4px 6px;
-  border-radius: 6px;
-  border: 1px solid var(--background-modifier-border);
-}
-
-.nc-card-home {
-  margin-left: 8px;
-  padding: 6px 8px;
-  background: var(--background-secondary);
-  border-radius: 6px;
-  cursor: pointer;
+.nc-card-name {
   font-size: 14px;
+  font-weight: 600;
+  color: var(--text-normal);
   white-space: nowrap;
-  transition: background 0.2s;
-}
-.nc-card-home:hover {
-  background: var(--background-modifier-hover);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+.nc-card-detail {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  white-space: pre-line;           /* 这一行 */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 文件夹区分 */
+.nc-is-folder .nc-card-cover {
+  background: radial-gradient(
+      circle at 10% 0%,
+      color-mix(in srgb, var(--interactive-accent) 26%, var(--background-modifier-border-focus)),
+      var(--background-modifier-border-focus)
+    );
+}
+
+.nc-is-folder .nc-card-name::after {
+  content: " · 文件夹";
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+ 5. 其他交互元素 (拖拽手柄)
+ ========================================================================== */
+
+.nc-modal-resizer {
+  width: 16px;
+  height: 16px;
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  cursor: nwse-resize;
+  z-index: 100;
+}
+
+.nc-modal-resizer::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid var(--text-faint);
+  border-bottom: 2px solid var(--text-faint);
+}
