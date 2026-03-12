@@ -191,23 +191,39 @@ export class CardNavigatorModal extends Modal {
     }
 
     private renderIconOrImage(el: HTMLElement, imageVal: StyledValue | undefined, isFolder: boolean) {
-        let imageStr = "";
+        let rawImage: unknown = "";
         let style: Record<string, string> = {};
-        if (Array.isArray(imageVal)) { [imageStr, style] = imageVal; } else { imageStr = imageVal || ""; }
+
+        if (Array.isArray(imageVal)) {
+            rawImage = imageVal[0];
+            if (imageVal[1]) style = imageVal[1];
+        } else {
+            rawImage = imageVal ?? "";
+        }
 
         if (style) Object.assign(el.style, style);
+
+        const imageStr = rawImage == null ? "" : String(rawImage);
 
         if (!imageStr) {
             setIcon(el, isFolder ? "folder" : "file-text");
             return;
         }
 
+        // URL / 路径：当作图片加载
         if (/^(https?:\/\/|data:|app:\/\/|\/|\\)/.test(imageStr)) {
             const img = el.createEl("img", { attr: { src: imageStr } });
             if (style) Object.assign(img.style, style);
-        } else {
+            return;
+        }
+
+        // 其它：优先当作图标 ID，失败时退化为纯文本
+        try {
             setIcon(el, imageStr);
             if (el.innerHTML === "") el.setText(imageStr);
+        } catch {
+            el.empty();
+            el.setText(imageStr);
         }
     }
 
