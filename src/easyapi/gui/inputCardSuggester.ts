@@ -106,17 +106,20 @@ export class CardNavigatorModal extends Modal {
 		});
 		const countEl = searchContainer.createDiv({ cls: "nc-card-count" });
 	
-		// 2. 卡片容器区域
+		// 2. 卡片容器区域（支持增量加载）
 		const scrollArea = this.contentEl.createDiv({ cls: "nc-scroll-area" });
 		const container = scrollArea.createDiv({ cls: "nc-card-container" });
 		container.style.setProperty("--nc-card-min-width", `${this.options.cardWidth}px`);
 		container.style.setProperty("--nc-card-height", `${this.options.cardHeight}px`);
-	
-		// 渲染函数
-		const drawCards = (displayItems: CardItem[]) => {
-			container.empty();
-			countEl.setText(`共 ${displayItems.length} 个卡片`);
-			displayItems.forEach((item) => {
+
+		const pageSize = 20;
+		let currentList: CardItem[] = items;
+		let renderedCount = 0;
+
+		const appendPage = () => {
+			if (!currentList || renderedCount >= currentList.length) return;
+			const slice = currentList.slice(renderedCount, renderedCount + pageSize);
+			slice.forEach((item) => {
 				const isFolder = Array.isArray(item.action);
 				const card = container.createDiv({ cls: `nc-card-btn ${isFolder ? 'nc-is-folder' : ''}` });
 				const cover = card.createDiv({ cls: "nc-card-cover" });
@@ -126,8 +129,26 @@ export class CardNavigatorModal extends Modal {
 				if (item.detail) this.renderStyledElement(info.createDiv(), item.detail, "nc-card-detail");
 				card.onclick = () => this.handleItemClick(item, items);
 			});
+			renderedCount += slice.length;
 		};
-	
+
+		// 渲染函数：重置并只加载首批
+		const drawCards = (displayItems: CardItem[]) => {
+			currentList = displayItems;
+			container.empty();
+			renderedCount = 0;
+			countEl.setText(`共 ${displayItems.length} 个卡片`);
+			appendPage();
+		};
+
+		// 滚动到底部附近时，按页追加更多卡片
+		scrollArea.addEventListener("scroll", () => {
+			const threshold = 120;
+			if (scrollArea.scrollTop + scrollArea.clientHeight + threshold >= scrollArea.scrollHeight) {
+				appendPage();
+			}
+		});
+
 		// 初始渲染
 		drawCards(items);
 	
