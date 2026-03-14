@@ -1,5 +1,5 @@
 import { 
-	Notice, TFile
+	Notice, TFile, TFolder
 } from 'obsidian';
 
 import NoteChainPlugin from '../main';
@@ -785,7 +785,43 @@ const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
 
 
 
+const cmd_generate_mcp_skill = (plugin: NoteChainPlugin) => ({
+	id: 'generate-mcp-skill',
+	name: 'Generate MCP Agent Skill (SKILL.md)',
+	icon: 'file-code',
+	callback: async () => {
+		if (!plugin.httpServer) {
+			new Notice('HTTP Server not initialized');
+			return;
+		}
+		if ((plugin.app as any).isMobile) {
+			new Notice('Save to computer is only available on desktop');
+			return;
+		}
+		const baseUrl = `http://${plugin.settings.httpServerHost}:${plugin.settings.httpServerPort}`;
+		const content = plugin.httpServer.getMCPSkillMarkdown(baseUrl);
+		try {
+			const { dialog } = require('electron').remote;
+			const result = await dialog.showSaveDialog({
+				title: 'Save MCP Agent Skill (SKILL.md)',
+				defaultPath: 'SKILL.md',
+				filters: [
+					{ name: 'Markdown', extensions: ['md'] },
+					{ name: 'All Files', extensions: ['*'] }
+				]
+			});
+			if (result.canceled || !result.filePath) return;
+			const fs = require('fs');
+			fs.writeFileSync(result.filePath, content, 'utf8');
+			new Notice(`SKILL.md saved to ${result.filePath}`);
+		} catch (e: any) {
+			new Notice('Failed to save SKILL.md: ' + (e?.message ?? e));
+		}
+	}
+});
+
 const commandBuilders = [
+	cmd_generate_mcp_skill,
 	cmd_open_note,
 	cmd_reveal_note,
 	cmd_open_and_reveal_note,

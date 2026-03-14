@@ -127,6 +127,8 @@ export class HTTPServer {
                         await this.handleMCPMessage(req, res);
                     } else if (parsedUrl.pathname === '/mcp/test' && req.method === 'GET') {
                         await this.handleMCPTestPage(req, res);
+                    } else if (parsedUrl.pathname === '/mcp/skill' && req.method === 'GET') {
+                        await this.handleMCPSkill(req, res);
                     } else {
                         console.warn(`Unknown route: ${req.method} ${parsedUrl.pathname}`);
                         res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -318,6 +320,86 @@ export class HTTPServer {
         const html = MCP_TEST_HTML.replace('__BASE_URL__', baseUrl);
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(html);
+    }
+
+    /**
+     * 生成供 Agent 使用的 MCP Skill 文档（SKILL.md 内容）。
+     * @param baseUrl 例如 http://127.0.0.1:3000
+     */
+    getMCPSkillMarkdown(baseUrl: string): string {
+        const base = baseUrl.replace(/\/$/, '');
+        return `---
+name: note-chain-mcp
+description: Call Obsidian MCP tools via Note-Chain HTTP server. Use when the user or task needs to list available MCP tools, call a tool (e.g. get current note, search vault), or integrate with Obsidian from an agent. Requires the Note-Chain HTTP server running at the given base URL.
+---
+
+# Note-Chain MCP Agent Skill
+
+Call MCP tools exposed by the Note-Chain plugin over HTTP. Base URL must point to a running Note-Chain server (e.g. \`http://127.0.0.1:3000\`).
+
+## Base URL
+
+\`\`\`
+${base}
+\`\`\`
+
+## List tools
+
+**GET or POST** \`${base}/mcp/list_tools\`
+
+Returns \`{ "tools": [ { "name", "description", "inputSchema" }, ... ] }\`.
+
+Example:
+
+\`\`\`javascript
+const res = await fetch(\`${base}/mcp/list_tools\`);
+const data = await res.json();
+console.log(data.tools);
+\`\`\`
+
+## Call a tool
+
+**POST** \`${base}/mcp/call_tool\`
+
+Body (JSON):
+
+\`\`\`json
+{
+  "name": "tool_name_without_md",
+  "arguments": { "key": "value" }
+}
+\`\`\`
+
+Returns \`{ "content": [ { "type": "text", "text": "..." } ] }\`.
+
+Example:
+
+\`\`\`javascript
+const response = await fetch(\`${base}/mcp/call_tool\`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    name: 'get_current_note',
+    arguments: { query: 'test' }
+  })
+});
+const data = await response.json();
+console.log(data.content);
+\`\`\`
+
+## Test page
+
+Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a form.
+`;
+    }
+
+    /** GET /mcp/skill 返回 SKILL.md 内容，便于 Agent 或用户复制 */
+    private async handleMCPSkill(req: any, res: any) {
+        const host = req.headers.host || `127.0.0.1:${this.port}`;
+        const baseUrl = `http://${host}`;
+        const markdown = this.getMCPSkillMarkdown(baseUrl);
+        res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8' });
+        res.end(markdown);
     }
 
     private async handleMCPCallTool(req: any, res: any) {
