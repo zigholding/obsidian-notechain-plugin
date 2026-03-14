@@ -799,7 +799,7 @@ const cmd_generate_mcp_skill = (plugin: NoteChainPlugin) => ({
 			return;
 		}
 		const baseUrl = `http://${plugin.settings.httpServerHost}:${plugin.settings.httpServerPort}`;
-		const content = plugin.httpServer.getMCPSkillMarkdown(baseUrl);
+		const content = await plugin.httpServer.getMCPSkillMarkdownAsync(baseUrl);
 		try {
 			const { dialog } = require('electron').remote;
 			const result = await dialog.showSaveDialog({
