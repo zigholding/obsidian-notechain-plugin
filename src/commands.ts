@@ -276,13 +276,13 @@ const create_new_note = (plugin:NoteChainPlugin) => ({
 		targets[plugin.strings.item_chain_insert_node_as_head] = 'chain_insert_node_as_head';
 		targets[plugin.strings.item_item_chain_insert_null] = 'null';
 
-		let target = await plugin.dialog_suggest(
+		let target = await plugin.easyapi.dialog_suggest(
 			plugin.utils.array_prefix_id(Object.keys(targets)), 
 			Object.values(targets), 
 			true
 		);
 		if(!target){return;}
-		let name = await plugin.dialog_prompt(plugin.strings.prompt_notename);
+		let name = await plugin.easyapi.dialog_prompt(plugin.strings.prompt_notename);
 		if(name){
 			let curr = plugin.chain.current_note;
 			if(curr && curr.parent){
@@ -404,7 +404,7 @@ const cmd_file_open_with_system_app = (plugin:NoteChainPlugin) => ({
 			let items = await nc.chain.get_file_links(tfile);
 
 			let keys = Object.keys(items);
-			let key = await nc.dialog_suggest(
+			let key = await nc.easyapi.dialog_suggest(
 				nc.utils.array_prefix_id(keys),
 				keys
 			)
@@ -434,7 +434,7 @@ const cmd_file_show_in_system_explorer = (plugin:NoteChainPlugin) => ({
 		if(tfile){
 			let items = await nc.chain.get_file_links(tfile);
 			let keys = Object.keys(items);
-			let key = await nc.dialog_suggest(
+			let key = await nc.easyapi.dialog_suggest(
 				nc.utils.array_prefix_id(keys),
 				keys
 			)
@@ -482,14 +482,14 @@ const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 
 			let keys = Object.keys(items);
 			
-			let key = await nc.dialog_suggest(
+			let key = await nc.easyapi.dialog_suggest(
 				nc.utils.array_prefix_id(keys),
 				keys,
 			)
 
 			if(key){
 				let note = items[key];
-				let res = await nc.dialog_prompt('New Name','',note.basename);
+				let res = await nc.easyapi.dialog_prompt('New Name','',note.basename);
 				if(res && !(res===note.basename) && !(res==='')){
 					let npath = note.parent.path+'/'+res+'.'+note.extension;
 					let dst = nc.chain.get_tfile(res+'.'+note.extension);
@@ -600,7 +600,7 @@ const cmd_set_frontmatter = (plugin: NoteChainPlugin) => ({
     callback: async () => {
 		let files = plugin.chain.get_selected_files(true)
 		if(files.length==0){return}
-		let field = await plugin.dialog_prompt('Frontmatter name')
+		let field = await plugin.easyapi.dialog_prompt('Frontmatter name')
 		if(!field){return}
 		let prev = plugin.editor.get_frontmatter(files[0],field)
 		if(prev){
@@ -612,7 +612,7 @@ const cmd_set_frontmatter = (plugin: NoteChainPlugin) => ({
 		}else{
 			prev = ''
 		}
-		let value = await plugin.dialog_prompt('Frontmatter value','',prev)
+		let value = await plugin.easyapi.dialog_prompt('Frontmatter value','',prev)
 		value = value.trim()
 		if(!value){return}
 		value = value.replace(/\\n/g,'\n').replace(/\\t/g,'\t')
@@ -710,7 +710,7 @@ const cmd_insert_command_id = (plugin: NoteChainPlugin) => ({
 		let names = Object.keys(ids)
 
 		let msg = plugin.utils.array_prefix_id(names);
-		let cmd = await plugin.dialog_suggest(msg,names);
+		let cmd = await plugin.easyapi.dialog_suggest(msg,names);
 		if(cmd){
 			editor.replaceSelection(ids[cmd]);
 		}

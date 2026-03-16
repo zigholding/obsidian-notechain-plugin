@@ -16,8 +16,6 @@ import { WordCount } from 'src/WordCount';
 import { MermaidGraph, CanvasGraph } from 'src/graph';
 import { NCSettingTab, NCSettings, DEFAULT_SETTINGS } from 'src/setting';
 import { addCommands } from 'src/commands';
-import { dialog_suggest } from 'src/gui/inputSuggester'
-import { dialog_prompt } from 'src/gui/inputPrompt'
 import { EasyAPI } from 'src/easyapi/easyapi'
 import { NoteContentView } from 'src/NCView';
 import { HTTPServer } from 'src/httpServer';
@@ -39,15 +37,11 @@ export default class NoteChainPlugin extends Plugin {
 	utils: any;
 	timerId: any;
 	ob: any;
-	dialog_suggest: Function;
-	dialog_prompt: Function;
 	easyapi: EasyAPI;
 	httpServer: HTTPServer | null = null;
 
 
 	async onload() {
-		this.dialog_suggest = dialog_suggest
-		this.dialog_prompt = dialog_prompt
 		this.status = 'waiting'
 		this.app.workspace.onLayoutReady(
 			async () => {
@@ -168,7 +162,7 @@ export default class NoteChainPlugin extends Plugin {
 							.setTitle(this.strings.filemenu_create_next_note)
 							.setIcon("file-plus")
 							.onClick(async () => {
-								let filename = await this.dialog_prompt('File name');
+								let filename = await this.easyapi.dialog_prompt('File name');
 								if (!filename) { return }
 								let dst = file.parent ? file.parent.path + '/' + filename + '.md' : filename + '.md';
 								if (this.chain.get_tfile(dst)) {
@@ -223,7 +217,7 @@ export default class NoteChainPlugin extends Plugin {
 								if (notes) {
 									notes = this.chain.sort_tfiles_by_chain(notes);
 									notes = notes.filter((x: TAbstractFile) => x != file)
-									let anchor = await this.dialog_suggest(
+									let anchor = await this.easyapi.dialog_suggest(
 										notes.map((x: TAbstractFile) => x instanceof TFile ? '📃' + x.basename : '📁' + x.name),
 										notes
 									)
@@ -430,7 +424,7 @@ export default class NoteChainPlugin extends Plugin {
 		let notes = this.chain.get_inlinks(tfile);
 		if (notes.length) {
 			if (mode === 'suggester') {
-				mode = await this.dialog_suggest(
+				mode = await this.easyapi.dialog_suggest(
 					["delete links", 'replace links', "delete paragraph with links",],
 					[['link', 'del'], ['link', 'rep'], ['para', 'del']]
 				);
@@ -454,13 +448,13 @@ export default class NoteChainPlugin extends Plugin {
 		let notes = await this.chain.suggester_notes();
 		if (notes?.length > 0) {
 			try {
-				let regs = await this.dialog_prompt('Enter the regular expression to replace.');
+				let regs = await this.easyapi.dialog_prompt('Enter the regular expression to replace.');
 				if (regs == null) {
 					return;
 				}
 				let reg = new RegExp(regs, 'g');
 
-				let target = await this.dialog_prompt('Enter the target string.');
+				let target = await this.easyapi.dialog_prompt('Enter the target string.');
 				if (target == null) {
 					return;
 				}
@@ -514,7 +508,7 @@ export default class NoteChainPlugin extends Plugin {
 		//notes = notes.filter(f=>f!=curr);
 		//为0时也显示，否则以为是bug
 		//if(notes.length==0){return;}
-		const note = await this.dialog_suggest(
+		const note = await this.easyapi.dialog_suggest(
 			this.utils.array_prefix_id(
 				notes.map((file: TFile) => this.tfile_to_string(file, [], ""))
 			),
@@ -530,7 +524,7 @@ export default class NoteChainPlugin extends Plugin {
 			this.strings.item_insert_node_as_tail,
 			this.strings.item_insert_folder_after,
 		];
-		let mode = await this.dialog_suggest(
+		let mode = await this.easyapi.dialog_suggest(
 			this.utils.array_prefix_id(sitems),
 			sitems, false, this.strings.item_insert_suggester
 		);
@@ -588,7 +582,7 @@ export default class NoteChainPlugin extends Plugin {
 		notes = this.chain.sort_tfiles(notes, ['mtime', 'x']);
 		notes = this.chain.sort_tfiles_by_chain(notes);
 		if (notes.length > 0) {
-			let note = await this.dialog_suggest(
+			let note = await this.easyapi.dialog_suggest(
 				this.utils.array_prefix_id(
 					notes.map((file: TFile) => this.chain.tfile_to_string(file))
 				),
