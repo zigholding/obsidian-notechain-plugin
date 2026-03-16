@@ -1282,7 +1282,33 @@ export class NoteChain {
 	}
 
 	sort_tfiles_by_chain(tfiles: Array<TAbstractFile>) {
+		// 1️⃣ 计算基准顺序：如果这些文件都在同一个文件夹下，
+		//    就使用该文件夹在 children 里已有的顺序作为“原始顺序”。
+		let baseOrder: TAbstractFile[] | null = null;
+		if (tfiles.length > 0) {
+			const parentPaths = new Set(
+				tfiles
+					.map(f => f.parent?.path)
+					.filter((p): p is string => !!p)
+			);
+			if (parentPaths.size === 1) {
+				const p = Array.from(parentPaths)[0];
+				if (this.children[p]) {
+					baseOrder = this.children[p];
+				}
+			}
+		}
+
 		let notes = tfiles.filter(f => f instanceof TFile);
+
+		if (baseOrder) {
+			const indexOfInBase = (f: TAbstractFile) => {
+				const idx = baseOrder!.indexOf(f);
+				return idx >= 0 ? idx : Number.MAX_SAFE_INTEGER;
+			};
+			notes = notes.sort((a, b) => indexOfInBase(a) - indexOfInBase(b));
+		}
+		
 		let res: TAbstractFile[] = [];
 		let ctfiles: TFile[] = [];
 		while (notes.length > 0) {
