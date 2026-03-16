@@ -252,7 +252,7 @@ export class NoteChain {
 			folders = folders.filter((f: TFile) => this.filter_user_ignore(f));
 		}
 		try {
-			let folder = await this.plugin.dialog_suggest(
+			let folder = await this.plugin.easyapi.dialog_suggest(
 				this.plugin.utils.array_prefix_id(
 					folders.map((f: TFile) => f.path)
 				), folders
@@ -299,7 +299,7 @@ export class NoteChain {
 				items = (notes as any).map((f: TFile) => f.path.slice(slice))
 			}
 			let msg = this.plugin.utils.array_prefix_id(items);
-			let note = await this.plugin.dialog_suggest(msg, notes);
+			let note = await this.plugin.easyapi.dialog_suggest(msg, notes);
 			return note;
 		} catch (error) {
 			return null;
@@ -783,7 +783,7 @@ export class NoteChain {
 		if (kv.contains(smode)) {
 			mode = smode;
 		} else {
-			mode = await this.plugin.dialog_suggest(this.plugin.utils.array_prefix_id(kv), kv);
+			mode = await this.plugin.easyapi.dialog_suggest(this.plugin.utils.array_prefix_id(kv), kv);
 		}
 		if (mode === this.plugin.strings.item_currentnote) {
 			return [tfile];
@@ -1375,7 +1375,7 @@ export class NoteChain {
 			'ctime (new to old)': ['ctime', 'x'],
 			'mtime (new to old)': ['mtime', 'x'],
 		}
-		let field = await this.plugin.dialog_suggest(
+		let field = await this.plugin.easyapi.dialog_suggest(
 			Object.keys(kv),
 			Object.values(kv)
 		);

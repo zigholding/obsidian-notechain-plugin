@@ -185,8 +185,8 @@ export class NCEditor {
 			dir = dir.parent
 		}
 		return null
-
 	}
+
 	regexp_link(tfile: TFile, mode: string) {
 		//[[note||alias]]
 		if (mode === 'link') {
@@ -439,7 +439,7 @@ export class NCEditor {
 				section => ctx.slice(section.position.start.offset, section.position.end.offset)
 			)
 			if (!items) { return null }
-			let section = await this.plugin.dialog_suggest(items, cache.sections)
+			let section = await this.plugin.easyapi.dialog_suggest(items, cache.sections)
 			return section
 
 		} else {
