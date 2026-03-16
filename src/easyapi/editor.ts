@@ -335,6 +335,7 @@ export class EasyEditor {
     }
 
     set_obj_value(data: any, key: string, value: any) {
+        const isDelete = (value === '$DELETE');
         let items = key.trim().split('.')
         if (!items) { return }
         let curr = data
@@ -344,35 +345,53 @@ export class EasyEditor {
             let k = kv[1] // 键名
             if (kv[2]) { // 有索引
                 let i = parseInt(kv[2].slice(1, kv[2].length - 1)) // 索引
-                if (!(k in curr)) { // 键不存在
-                    curr[k] = [{}] // 创建空数组
-                    curr = curr[k][0]
+                if (isDelete) {
+                    // 删除模式下不创建路径, 仅在存在时向下
+                    if (!(k in curr)) { return }
+                    if (!Array.isArray(curr[k])) { return }
+                    let arr = curr[k]
+                    if (arr.length == 0) { return }
+                    // 规范化索引
+                    let idx = ((i % arr.length) + arr.length) % arr.length;
+                    curr = arr[idx]
                 } else {
-                    if (Array.isArray(curr[k])) {
-                        let tmp = {}
-                        if (i < 0) {
-                            curr[k].splice(-i - 1, 0, tmp)
-                        } else if (i < curr[k].length) {
-                            curr[k][i] = tmp
-                        } else {
-                            curr[k].push(tmp)
-                        }
-                        curr = tmp
-                    } else {
-                        curr[k] = [{}]
+                    if (!(k in curr)) { // 键不存在
+                        curr[k] = [{}] // 创建空数组
                         curr = curr[k][0]
+                    } else {
+                        if (Array.isArray(curr[k])) {
+                            let tmp = {}
+                            if (i < 0) {
+                                curr[k].splice(-i - 1, 0, tmp)
+                            } else if (i < curr[k].length) {
+                                curr[k][i] = tmp
+                            } else {
+                                curr[k].push(tmp)
+                            }
+                            curr = tmp
+                        } else {
+                            curr[k] = [{}]
+                            curr = curr[k][0]
+                        }
                     }
                 }
             } else {
-                if (!(k in curr)) {
-                    curr[k] = {}
+                if (isDelete) {
+                    // 删除模式下不创建中间对象
+                    if (!(k in curr)) { return }
+                    if (typeof (curr[k]) != 'object' || curr[k] === null) { return }
                     curr = curr[k]
                 } else {
-                    if (typeof (curr[k]) != 'object') {
+                    if (!(k in curr)) {
                         curr[k] = {}
                         curr = curr[k]
                     } else {
-                        curr = curr[k]
+                        if (typeof (curr[k]) != 'object') {
+                            curr[k] = {}
+                            curr = curr[k]
+                        } else {
+                            curr = curr[k]
+                        }
                     }
                 }
             }
@@ -384,21 +403,39 @@ export class EasyEditor {
             let i = parseInt(kv[2].slice(1, kv[2].length - 1))
             if (k in curr) {
                 if (Array.isArray(curr[k])) {
-                    if (i < 0) {
-                        curr[k].splice(-i - 1, 0, value)
-                    } else if (i < curr[k].length) {
-                        curr[k][i] = value
+                    let arr = curr[k]
+                    if (isDelete) {
+                        if (arr.length == 0) { return }
+                        // 支持负索引删除
+                        let idx = ((i % arr.length) + arr.length) % arr.length;
+                        arr.splice(idx, 1)
                     } else {
-                        curr[k].push(value)
+                        if (i < 0) {
+                            arr.splice(-i - 1, 0, value)
+                        } else if (i < arr.length) {
+                            arr[i] = value
+                        } else {
+                            arr.push(value)
+                        }
                     }
                 } else {
-                    curr[k] = value
+                    if (isDelete) {
+                        delete curr[k]
+                    } else {
+                        curr[k] = value
+                    }
                 }
             } else {
-                curr[k] = [value]
+                if (!isDelete) {
+                    curr[k] = [value]
+                }
             }
         } else {
-            curr[k] = value
+            if (isDelete) {
+                delete curr[k]
+            } else {
+                curr[k] = value
+            }
         }
     }
 
