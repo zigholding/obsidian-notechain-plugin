@@ -37,6 +37,8 @@ export class CardNavigatorModal extends Modal {
     private navigationStack: CardItem[][] = [];
     private resolveResult: ((item: CardItem | null) => void) | null = null;
     private resolved = false;
+	/** 用于取消过期渲染/异步任务（如图片读取） */
+	private renderSession = 0;
 
     constructor(app: App, private rootData: CardItem[], options: CardNavigatorOptions = {}) {
         super(app);
@@ -89,6 +91,7 @@ export class CardNavigatorModal extends Modal {
     }
 
     private renderUI(items: CardItem[], canGoBack: boolean, revealTarget?: CardItem) {
+		const session = ++this.renderSession;
 		this.contentEl.empty();
 		
         // 1. 顶部导航栏
@@ -152,6 +155,7 @@ export class CardNavigatorModal extends Modal {
 		let pendingRevealIndex: number | null = revealTarget ? items.indexOf(revealTarget) : null;
 
 		const appendPage = () => {
+			if (session !== this.renderSession) return;
 			if (!currentList || renderedCount >= currentList.length) return;
 			const slice = currentList.slice(renderedCount, renderedCount + pageSize);
 			slice.forEach((item) => {
@@ -161,7 +165,7 @@ export class CardNavigatorModal extends Modal {
 				if (revealTarget && item === revealTarget) classes.push("nc-card-reveal");
 				const card = container.createDiv({ cls: classes.join(" ") });
 				const cover = card.createDiv({ cls: "nc-card-cover" });
-				this.renderIconOrImage(cover, item.image, isFolder);
+				this.renderIconOrImage(cover, item.image, isFolder, session);
 				const info = card.createDiv({ cls: "nc-card-info" });
 				this.renderStyledElement(info.createDiv(), item.name, "nc-card-name");
 				if (item.detail) this.renderStyledElement(info.createDiv(), item.detail, "nc-card-detail");
@@ -172,6 +176,7 @@ export class CardNavigatorModal extends Modal {
 
 		// 渲染函数：重置并只加载首批
 		const drawCards = (displayItems: CardItem[]) => {
+			if (session !== this.renderSession) return;
 			currentList = displayItems;
 			container.empty();
 			renderedCount = 0;
@@ -186,6 +191,7 @@ export class CardNavigatorModal extends Modal {
 				const targetIndex = pendingRevealIndex;
 				pendingRevealIndex = null;
 				requestAnimationFrame(() => {
+					if (session !== this.renderSession) return;
 					const cards = container.getElementsByClassName("nc-card-btn");
 					const targetEl = cards.item(targetIndex) as HTMLElement | null;
 					if (targetEl) {
@@ -198,6 +204,7 @@ export class CardNavigatorModal extends Modal {
 
 		// 滚动到底部附近时，按页追加更多卡片
 		scrollArea.addEventListener("scroll", () => {
+			if (session !== this.renderSession) return;
 			const threshold = 120;
 			if (scrollArea.scrollTop + scrollArea.clientHeight + threshold >= scrollArea.scrollHeight) {
 				appendPage();
@@ -209,6 +216,7 @@ export class CardNavigatorModal extends Modal {
 	
 		// 搜索逻辑
 		searchInput.oninput = (e) => {
+			if (session !== this.renderSession) return;
 			const val = ((e.target as HTMLInputElement)?.value ?? "").toLowerCase();
 			if (!val) {
 				drawCards(items);
@@ -223,12 +231,13 @@ export class CardNavigatorModal extends Modal {
 
     // 内部快速刷新的方法，避免重绘整个顶部栏
     private renderUI_Plain(filteredItems: CardItem[], container: HTMLElement, originalItems: CardItem[]) {
+		const session = this.renderSession;
         container.empty();
         filteredItems.forEach((item) => {
             const isFolder = Array.isArray(item.action);
             const card = container.createDiv({ cls: `nc-card-btn ${isFolder ? 'nc-is-folder' : ''}` });
             const cover = card.createDiv({ cls: "nc-card-cover" });
-            this.renderIconOrImage(cover, item.image, isFolder);
+            this.renderIconOrImage(cover, item.image, isFolder, session);
             const info = card.createDiv({ cls: "nc-card-info" });
             this.renderStyledElement(info.createDiv(), item.name, "nc-card-name");
             if (item.detail) this.renderStyledElement(info.createDiv(), item.detail, "nc-card-detail");
@@ -266,7 +275,7 @@ export class CardNavigatorModal extends Modal {
         return [...new Set(results)]; // 去重
     }
 
-    private renderIconOrImage(el: HTMLElement, imageVal: StyledValue | undefined, isFolder: boolean) {
+    private renderIconOrImage(el: HTMLElement, imageVal: StyledValue | undefined, isFolder: boolean, session: number) {
 		
         let rawImage: unknown = "";
         let style: Record<string, string> = {};
@@ -298,8 +307,10 @@ export class CardNavigatorModal extends Modal {
         if (/\.(png|jpe?g|gif|webp|svg)/i.test(imageStr)) {
             (async () => {
                 try {
+					if (session !== this.renderSession) return;
 					let nc = (this.app as any).plugins.plugins['note-chain'];
 					let src = await nc.easyapi.file.read_binary_to_base64(imageStr);
+					if (session !== this.renderSession) return;
                     const img = el.createEl("img", { attr: { src } });
                     if (style) Object.assign(img.style, style);
                 } catch (e) {
@@ -394,13 +405,22 @@ export class CardNavigatorModal extends Modal {
             this.renderUI(item.action, true);
         } else {
             this.resolved = true;
-            if (item.action) await item.action(item);
+            // 先关闭/返回结果，避免在大量 DOM 仍在页面上时执行重逻辑导致卡顿
             if (this.resolveResult) this.resolveResult(item);
             this.close();
+            // 将实际 action 延后到下一帧执行，让 Obsidian 先完成关闭 modal 的布局/绘制
+            const action = item.action;
+            if (action) {
+                requestAnimationFrame(() => {
+                    void Promise.resolve(action(item));
+                });
+            }
         }
     }
 
     onClose() {
+		// 取消所有过期的异步任务（如图片读取）
+		this.renderSession++;
         if (!this.resolved && this.resolveResult) this.resolveResult(null);
         this.contentEl.empty();
     }

@@ -1299,7 +1299,7 @@ export class NoteChain {
 			}
 		}
 
-		let notes = tfiles.filter(f => f instanceof TFile);
+		let notes = tfiles.filter(f => f instanceof TFile ) as TFile[];
 
 		if (baseOrder) {
 			const indexOfInBase = (f: TAbstractFile) => {
