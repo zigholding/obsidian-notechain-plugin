@@ -7,8 +7,8 @@ import {
 	TFile, TFolder
 } from 'obsidian';
 
-import { NCEditor } from './src/NCEditor';
 import { NoteChain } from './src/NoteChain';
+import { EasyEditor } from 'src/easyapi/editor';
 import { NCTextarea } from './src/NCTextarea';
 import { NCFileExplorer } from './src/NCFileExplorer';
 import { Strings } from 'src/strings';
@@ -26,7 +26,6 @@ export default class NoteChainPlugin extends Plugin {
 	settings: NCSettings;
 	chain: NoteChain;
 	textarea: NCTextarea;
-	editor: NCEditor;
 	explorer: NCFileExplorer;
 	mermaid: MermaidGraph;
 	canvas: CanvasGraph;
@@ -38,9 +37,13 @@ export default class NoteChainPlugin extends Plugin {
 	utils: any;
 	timerId: any;
 	ob: any;
-	easyapi: EasyAPI;
+	easyapi!: EasyAPI;
 	httpServer: HTTPServer | null = null;
 
+	/** 原 NCEditor API：与 `easyapi.editor` 相同 */
+	get editor(): EasyEditor {
+		return this.easyapi.editor;
+	}
 
 	async onload() {
 		this.status = 'waiting'
@@ -76,16 +79,15 @@ export default class NoteChainPlugin extends Plugin {
 		this.utils = require('./src/utils');
 		this.ob = require('obsidian');
 
-		this.editor = new NCEditor(this);
+		this.easyapi = new EasyAPI(this.app);
 		this.chain = new NoteChain(
-			this, this.editor,
+			this,
 			this.settings.field_of_prevnote, this.settings.field_of_nextnote
 		);
 		this.explorer = new NCFileExplorer(this);
 		this.mermaid = new MermaidGraph(this);
 		this.canvas = new CanvasGraph(this);
 		this.strings = new Strings();
-		this.easyapi = new EasyAPI(this.app);
 		this.dailyjob = new DailyJob(this)
 
 		// 初始化 HTTP 服务器
@@ -189,7 +191,7 @@ export default class NoteChainPlugin extends Plugin {
 					[['link', 'del'], ['link', 'rep'], ['para', 'del']]
 				);
 			}
-			let reg = this.editor.regexp_link(tfile, mode[0]);
+			let reg = this.easyapi.editor.regexp_link(tfile, mode[0]);
 			if (reg) {
 				for (let note of notes) {
 					let target;
@@ -198,7 +200,7 @@ export default class NoteChainPlugin extends Plugin {
 					} else {
 						target = ''
 					}
-					this.editor.replace(note, reg, target);
+					await this.easyapi.editor.replace(note, reg, target);
 				}
 			}
 		}
@@ -222,7 +224,7 @@ export default class NoteChainPlugin extends Plugin {
 					/\\n/g, '\n'
 				);
 				for (let note of notes) {
-					await this.editor.replace(note, reg, target);
+					await this.easyapi.editor.replace(note, reg, target);
 				}
 			} catch (error) {
 
@@ -237,7 +239,7 @@ export default class NoteChainPlugin extends Plugin {
 			'.tree-item-self.is-selected'
 		)
 		let items = Object.values(selector).map((x: any) => x.dataset?.path)
-		let tfiles = items.map(x => this.chain.get_tfile(x)).filter(x => x.extension == 'md')
+		let tfiles = items.map(x => this.easyapi.file.get_tfile(x)).filter(x => x.extension == 'md')
 		if (tfiles.length > 1) {
 			tfiles = this.chain.sort_tfiles_by_chain(tfiles)
 			let notes = this.chain.get_all_tfiles()

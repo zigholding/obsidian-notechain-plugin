@@ -184,14 +184,14 @@ export async function parse_templater(app:App,template:string|TFile,extract=true
     if(template instanceof TFile){
         template_file = template
         if(extract){
-            blocks = await nc.editor.extract_templater_block(template);
+            blocks = await nc.easyapi.editor.extract_templater_block(template);
         }else{
             let item = await app.vault.cachedRead(template)
             blocks = [item]
         }
     }else{
         if(extract){
-            blocks = await nc.editor.extract_templater_block(template);
+            blocks = await nc.easyapi.editor.extract_templater_block(template);
         }else{
             blocks = [template]
         }
@@ -249,7 +249,7 @@ export async function toogle_note_css(app:App,document:any,name:string,refresh=f
     if(link && !refresh){
         link.remove()
     }else{
-        let css = await nc.editor.extract_code_block(tfile,'css')
+        let css = await nc.easyapi.editor.extract_code_block(tfile,'css')
         let inner = css.join('\n')
         if(link){
             link.innerHTML = inner

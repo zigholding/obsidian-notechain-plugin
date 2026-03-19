@@ -72,25 +72,9 @@ export class Templater {
         };
     }
 
-    async extract_templater_block(tfile:TFile|string,reg=/<%\*\s*([\s\S]*?)\s*-?%>/g){
-        let xfile = this.ea.file.get_tfile(tfile);
-		if(xfile){
-			tfile = await this.app.vault.cachedRead(xfile);
-		}
-		if(typeof(tfile)!='string'){return []}
-        
-		let blocks = [];
-		let matches;
-		while ((matches = reg.exec(tfile)) !== null) {
-			blocks.push(matches[0].trim());
-		}
-		
-		let tpls = await this.ea.editor.extract_code_block(tfile,'js //templater');
-		for(let tpl of tpls){
-			blocks.push(`<%*\n${tpl}\n-%>`)
-		}
-		return blocks;
-	}
+    async extract_templater_block(tfile: TFile | string, reg = /<%\*\s*([\s\S]*?)\s*-?%>/g) {
+        return this.ea.editor.extract_templater_block(tfile, reg);
+    }
 
     // target_file：target>activate>template
     async parse_templater(template:string|TFile,extract=true,extra:any=null,idx:number[]|null=null,target='') {

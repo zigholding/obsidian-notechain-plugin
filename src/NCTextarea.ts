@@ -43,7 +43,7 @@ export class NCTextarea {
 			} else {
 				config = nc.textarea.yamljs.load(source);
 			}
-			let tfile = nc.chain.get_tfile(ctx.sourcePath);
+			let tfile = nc.easyapi.file.get_tfile(ctx.sourcePath);
 			if(tfile){
 				let frontmatter = (nc.app as any).metadataCache.getFileCache(tfile)['frontmatter'];
 				if(frontmatter){
@@ -68,7 +68,7 @@ export class NCTextarea {
 				if (style && typeof (style) == 'object') {
 					for (let name in style) {
 						if (name == 'backgroundImage') {
-							let img = nc.chain.get_tfile(style[name])
+							let img = nc.easyapi.file.get_tfile(style[name])
 							if (img) {
 								let data = await nc.app.vault.readBinary(img)
 								let text = this.arrayBufferToBase64(data);
@@ -96,7 +96,7 @@ export class NCTextarea {
 							for (let name in style) {
 								if (name == 'cls') { continue }
 								if (name == 'backgroundImage') {
-									let img = nc.chain.get_tfile(style[name])
+									let img = nc.easyapi.file.get_tfile(style[name])
 									if (img) {
 										let data = await nc.app.vault.readBinary(img)
 										let text = this.arrayBufferToBase64(data);
@@ -160,7 +160,7 @@ export class NCTextarea {
 								continue
 							}
 
-							let tfile = nc.chain.get_tfile(fname)
+							let tfile = nc.easyapi.file.get_tfile(fname)
 							if (tfile) {
 								let xbtn = buttonContainer.createEl('button', { text: name, cls: cls });
 								if (btnStyle) {

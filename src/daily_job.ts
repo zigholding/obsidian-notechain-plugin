@@ -68,7 +68,7 @@ export class DailyJob {
             return jobs;
         } else {
             if (typeof (tfile) == 'string') {
-                tfile = this.plugin.chain.get_tfile(tfile);
+                tfile = this.plugin.easyapi.file.get_tfile(tfile);
             }
             if (!tfile) { return null }
             let ctx = await this.app.vault.read(tfile as TFile);

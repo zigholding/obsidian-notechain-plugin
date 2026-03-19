@@ -7,7 +7,7 @@ import {
 } from 'obsidian';
 
 import NoteChainPlugin from "../main";
-import {NCEditor} from './NCEditor';
+import { EasyEditor } from './easyapi/editor';
 import {get_tp_func} from './utils'
 import { strings } from './strings';
 import { off } from 'process';
@@ -56,7 +56,7 @@ class NoteNode {
 		let newId = `ID${this.id.toString().padStart(4, '0')}`;
 		this.note2id[node] = newId;
 		this.id = this.id+1;
-		let tfile = this.plugin.chain.get_tfile(node);
+		let tfile = this.plugin.easyapi.file.get_tfile(node);
 		if(tfile){
 			if(avata ==''){
 				avata = this.plugin.settings.avata
@@ -96,7 +96,7 @@ class NoteNode {
 export class MermaidGraph{
 	plugin:NoteChainPlugin;
 	app:App;
-	editor:NCEditor;
+	editor: EasyEditor;
 
 	constructor(plugin:NoteChainPlugin) {
 		this.plugin = plugin;
@@ -418,13 +418,13 @@ export class MermaidGraph{
 				for (let [relation, linkedNote] of Object.entries(links)) {
 					if(linkedNote instanceof Array){
 						for(let item of linkedNote){
-							let linkedTFile = nc.chain.get_tfile(item as string);
+							let linkedTFile = nc.easyapi.file.get_tfile(item as string);
 							if (linkedTFile instanceof TFile) {
 								msg += `\t${node.get_node(currentFile)} -->|${relation}| ${node.get_node(linkedTFile)}\n`;
 							}
 						}
 					}else{
-						let linkedTFile = nc.chain.get_tfile(linkedNote as string);
+						let linkedTFile = nc.easyapi.file.get_tfile(linkedNote as string);
 						if (linkedTFile instanceof TFile) {
 							msg += `\t${node.get_node(currentFile)} -->|${relation}| ${node.get_node(linkedTFile)}\n`;
 						}
@@ -532,7 +532,7 @@ export class MermaidGraph{
 export class EchartGraph{
 	plugin:NoteChainPlugin;
 	app:App;
-	editor:NCEditor;
+	editor: EasyEditor;
 
 	constructor(plugin:NoteChainPlugin) {
 		this.plugin = plugin;
@@ -721,7 +721,7 @@ export class EchartGraph{
 export class CanvasGraph{
 	plugin:NoteChainPlugin;
 	app:App;
-	editor:NCEditor;
+	editor: EasyEditor;
 
 	constructor(plugin:NoteChainPlugin) {
 		this.plugin = plugin;

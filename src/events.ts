@@ -66,7 +66,7 @@ const onFileMenuCreateNextNote = (plugin: NoteChainPlugin) => {
 							const filename = await plugin.easyapi.dialog_prompt('File name');
 							if (!filename) { return; }
 							const dst = file.parent ? file.parent.path + '/' + filename + '.md' : filename + '.md';
-							if (plugin.chain.get_tfile(dst)) {
+							if (plugin.easyapi.file.get_tfile(dst)) {
 								new Notice('Exists:' + file.path, 3000);
 							} else {
 								const tfile = await plugin.app.vault.create(dst, '');
@@ -136,7 +136,7 @@ const onFileMenuMoveAsNextNote = (plugin: NoteChainPlugin) => {
 				'.tree-item-self.is-selected'
 			);
 			let items = Object.values(selector).map((x: any) => x.dataset?.path);
-			let tfiles = items.map(x => plugin.chain.get_tfile(x)).filter(x => x.extension == 'md');
+			let tfiles = items.map(x => plugin.easyapi.file.get_tfile(x)).filter(x => x.extension == 'md');
 			if (tfiles.length > 1) {
 				menu.addItem((item) => {
 					item

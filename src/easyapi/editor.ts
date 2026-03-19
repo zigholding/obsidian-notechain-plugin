@@ -1,7 +1,7 @@
 
 
 
-import { App, View, WorkspaceLeaf, TFile } from 'obsidian';
+import { App, TAbstractFile, TFile } from 'obsidian';
 
 import { EasyAPI } from 'src/easyapi/easyapi'
 
@@ -9,10 +9,208 @@ export class EasyEditor {
     yamljs = require('js-yaml');
     app: App;
     ea: EasyAPI;
+    /** set_frontmatter / set_multi_frontmatter 默认重试次数 */
+    nretry = 10;
 
     constructor(app: App, api: EasyAPI) {
         this.app = app;
         this.ea = api;
+    }
+
+    async set_frontmatter(
+        tfile: TFile | string | Array<TFile | string>,
+        key: string,
+        value: any,
+        nretry = this.nretry
+    ): Promise<boolean> {
+        const kv: { [key: string]: string } = {};
+        kv[key] = value;
+        return this.set_multi_frontmatter(tfile, kv, nretry);
+    }
+
+    check_frontmatter(tfile: TFile, kv: { [key: string]: any }): boolean {
+        try {
+            if (!tfile) { return false; }
+            const meta = this.app.metadataCache.getFileCache(tfile);
+            if (meta?.frontmatter) {
+                for (const k in kv) {
+                    if (!(meta.frontmatter[k] == kv[k])) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            return false;
+        } catch {
+            return false;
+        }
+    }
+
+    async wait_frontmatter(tfile: TFile, kv: { [key: string]: any }, timeout = 3000): Promise<boolean> {
+        if (this.check_frontmatter(tfile, kv)) return true;
+
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => {
+                this.app.metadataCache.offref(off);
+                resolve(false);
+            }, timeout);
+
+            const off = this.app.metadataCache.on('changed', (file) => {
+                if (file.path === tfile.path && this.check_frontmatter(tfile, kv)) {
+                    clearTimeout(timer);
+                    this.app.metadataCache.offref(off);
+                    resolve(true);
+                }
+            });
+        });
+    }
+
+    async set_multi_frontmatter(
+        tfile: TFile | string | Array<TFile | string>,
+        kv: { [key: string]: any },
+        nretry = this.nretry
+    ): Promise<boolean> {
+        if (Array.isArray(tfile)) {
+            for (const item of tfile) {
+                const ok = await this.set_multi_frontmatter(item, kv, nretry);
+                if (!ok) return false;
+            }
+            return true;
+        }
+
+        if (typeof tfile === 'string') {
+            tfile = this.ea.file.get_tfile(tfile) as TFile;
+        }
+
+        if (!tfile || !(tfile instanceof TFile)) {
+            return false;
+        }
+
+        if (this.check_frontmatter(tfile, kv)) return true;
+
+        for (let attempt = 0; attempt < nretry; attempt++) {
+            await this.app.fileManager.processFrontMatter(tfile, (fm) => {
+                for (const k in kv) {
+                    this.set_obj_value(fm, k, kv[k]);
+                }
+            });
+
+            const ok = await this.wait_frontmatter(tfile, kv, 1000);
+            if (ok) return true;
+        }
+
+        return false;
+    }
+
+    get_frontmatter(tfile: TFile, key: string): any {
+        try {
+            if (!tfile) { return null; }
+            const meta = this.app.metadataCache.getFileCache(tfile);
+            if (meta?.frontmatter) {
+                if (meta.frontmatter[key]) {
+                    return meta.frontmatter[key];
+                }
+                const keys = key.split('.');
+                let cfm: any = meta.frontmatter;
+                for (const k of keys) {
+                    const items = k.match(/^(.*?)(\[-?\d+\])?$/);
+                    if (!items) { return null; }
+                    if (items[1]) {
+                        cfm = cfm[items[1]];
+                    }
+                    if (!cfm) { return null; }
+                    if (Array.isArray(cfm) && items[2]) {
+                        let i = parseInt(items[2].slice(1, items[2].length - 1));
+                        if (i < 0) {
+                            i = i + cfm.length;
+                        }
+                        cfm = cfm[i];
+                    }
+                }
+                return cfm;
+            }
+        } catch {
+            return null;
+        }
+    }
+
+    get_vault_name(): string {
+        let items = (this.app.vault.adapter as any).basePath.split('\\');
+        items = items[items.length - 1].split('/');
+        return items[items.length - 1];
+    }
+
+    get_frontmatter_config(tfile: TAbstractFile, key: string): any {
+        if (tfile instanceof TFile) {
+            if (tfile.extension == 'md') {
+                const config = this.get_frontmatter(tfile, key);
+                if (config) { return config; }
+            } else {
+                const file = this.ea.file.get_tfile(
+                    tfile.path.slice(0, tfile.path.length - tfile.extension.length) + 'md'
+                );
+                if (file) {
+                    const config = this.get_frontmatter(file, key);
+                    if (config) { return config; }
+                }
+            }
+        } else {
+            const file = this.ea.file.get_tfile(tfile.path + '/' + tfile.name + '.md');
+            if (file) {
+                let config = this.get_frontmatter(file, key + '_folder');
+                if (config) { return config; }
+                config = this.get_frontmatter(file, key);
+                if (config) { return config; }
+            }
+        }
+
+        let dir: TAbstractFile | null = tfile.parent;
+        while (dir) {
+            let cfile: TFile | null;
+            if (dir.parent) {
+                cfile = this.ea.file.get_tfile(dir.path + '/' + dir.name + '.md');
+            } else {
+                cfile = this.ea.file.get_tfile(this.get_vault_name());
+            }
+            const config = cfile ? this.get_frontmatter(cfile, key) : null;
+            if (config) { return config; }
+            dir = dir.parent;
+        }
+        return null;
+    }
+
+    /** 基于活动 Markdown 视图：光标所在 section，或无光标时弹窗选择 section */
+    async pickSectionFromActiveMarkdownView(): Promise<any> {
+        const view = (this.app.workspace as any).getActiveFileView();
+        const editor = view?.editor;
+        const tfile = view?.file;
+        if (!view || !editor || !tfile) { return null; }
+        const cursor = editor.getCursor();
+        const cache = this.app.metadataCache.getFileCache(tfile);
+        if (!cache) { return; }
+        if (!cursor) {
+            const ctx = await this.app.vault.cachedRead(tfile);
+            const items = cache?.sections?.map(
+                (section: { position: { start: { offset: number }; end: { offset: number } } }) =>
+                    ctx.slice(section.position.start.offset, section.position.end.offset)
+            );
+            if (!items) { return null; }
+            const section = await this.ea.dialog_suggest(items, cache.sections);
+            return section;
+        }
+        return cache?.sections?.filter(
+            (x: { position: { start: { line: number }; end: { line: number } } }) =>
+                x.position.start.line <= cursor.line && x.position.end.line >= cursor.line
+        )[0];
+    }
+
+    async set_frontmatter_align_file(src: TFile, dst: TFile, field: string) {
+        if (field) {
+            const value = this.get_frontmatter(src, field);
+            if (value) {
+                await this.set_frontmatter(dst, field, value, 1);
+            }
+        }
     }
 
     cn2num(chinese: string) {
@@ -146,6 +344,208 @@ export class EasyEditor {
             blocks.push(matches[1].trim());
         }
         return blocks;
+    }
+
+    /** `[[note|alias]]` 或整段匹配的正则 */
+    regexp_link(tfile: TFile, mode: string): RegExp | undefined {
+        if (mode === 'link') {
+            return new RegExp(`\\[\\[${tfile.basename}\\|?.*\\]\\]`, 'g');
+        }
+        if (mode === 'para') {
+            return new RegExp(`.*\\[\\[${tfile.basename}\\|?.*\\]\\].*`, 'g');
+        }
+    }
+
+    async replace(tfile: TFile, regex: string | RegExp, target: string) {
+        if (typeof regex === 'string') {
+            await this.app.vault.process(tfile, (data) => {
+                if (data.indexOf(regex) > -1) {
+                    return data.replace(regex, target);
+                }
+                return data;
+            });
+        } else if (regex instanceof RegExp) {
+            await this.app.vault.process(tfile, (data) => {
+                if (data.match(regex)) {
+                    return data.replace(regex, target);
+                }
+                return data;
+            });
+        }
+    }
+
+    /** 去掉 YAML frontmatter，返回正文；`string` 视为已是全文内容（不按路径解析） */
+    async remove_metadata(tfile: TFile | string): Promise<string> {
+        if (tfile instanceof TFile) {
+            tfile = await this.app.vault.cachedRead(tfile);
+        }
+        if (typeof tfile != 'string') {
+            return '';
+        }
+        const headerRegex = /^---\s*([\s\S]*?)\s*---/;
+        const match = headerRegex.exec(tfile);
+        if (match) {
+            tfile = tfile.slice(match[0].length).trim();
+        }
+        return tfile;
+    }
+
+    async extract_templater_block(tfile: TFile | string, reg = /<%\*\s*([\s\S]*?)\s*-?%>/g): Promise<string[]> {
+        let xfile = this.ea.file.get_tfile(tfile);
+        if (xfile) {
+            tfile = await this.app.vault.cachedRead(xfile);
+        }
+        if (typeof tfile != 'string') {
+            return [];
+        }
+        const cssCodeBlocks: string[] = [];
+        let matches: RegExpExecArray | null;
+        while ((matches = reg.exec(tfile)) !== null) {
+            cssCodeBlocks.push(matches[0].trim());
+        }
+        const tpls = await this.extract_code_block(tfile, 'js //templater');
+        for (const tpl of tpls) {
+            cssCodeBlocks.push(`<%*\n${tpl}\n-%>`);
+        }
+        return cssCodeBlocks;
+    }
+
+    async extract_yaml_block(tfile: TFile | string): Promise<string> {
+        if (tfile instanceof TFile) {
+            tfile = await this.app.vault.cachedRead(tfile);
+        }
+        if (typeof tfile != 'string') {
+            return '';
+        }
+        const headerRegex = /^---\s*([\s\S]*?)\s*---/;
+        const match = headerRegex.exec(tfile);
+        if (match) {
+            return match[0];
+        }
+        return '';
+    }
+
+    private extractBlockId(para: string): string {
+        const reg = /\s+\^[a-zA-Z0-9]+\r?\n?$/;
+        const match = reg.exec(para);
+        if (match) {
+            return match[0].trim();
+        }
+        return '';
+    }
+
+    private generateRandomString(length: number): string {
+        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < length; i++) {
+            const randomIndex = Math.floor(Math.random() * characters.length);
+            result += characters[randomIndex];
+        }
+        return result;
+    }
+
+    async extract_all_blocks(tfile: TFile | string): Promise<any[]> {
+        if (tfile instanceof TFile) {
+            tfile = await this.app.vault.cachedRead(tfile);
+        }
+        if (typeof tfile != 'string') {
+            return [];
+        }
+        let ctx = tfile;
+        const blocks: any[] = [];
+        const head = await this.extract_yaml_block(ctx);
+        if (head != '') {
+            blocks.push(['YAML', head]);
+            ctx = ctx.slice(head.length);
+        }
+        const kvgets: { [key: string]: RegExp } = {
+            '空白段落': /^(\s*\n)*/,
+            '代码块': /^[ \t]*```[\s\S]*?\n[ \t]*```[ \t]*\n(\s*\^[a-zA-Z0-9]+\r?[\n$])?/,
+            'tpl代码块': /^<%\*[\s\S]*?\n-?\*?%>[ \t]*\n(\s+\^[a-zA-Z0-9]+\r?[\n$])?/,
+            '任务': /^[ \t]*- \[.\].*\n?(\s+\^[a-zA-Z0-9]+\r?[\n$])?/,
+            '无序列表': /^[ \t]*- .*\n?(\s+\^[a-zA-Z0-9]+\r?[\n$])?/,
+            '有序列表': /^[ \t]*\d\. .*\n?(\s+[ \t]*\^[a-zA-Z0-9]+\r?[\n$])?/,
+            '引用': /^(>.*\n)+(\s*\^[a-zA-Z0-9]+\r?[\n$])?/,
+            '标题': /^#+ .*\n(\s*\^[a-zA-Z0-9]+\r?[\n$])?/,
+            '段落': /^(.*\n?)(\s*\^[a-zA-Z0-9]+\r?[\n$])?/
+        };
+        while (ctx.length > 0) {
+            let flag = true;
+            for (const key of Object.keys(kvgets)) {
+                const reg = kvgets[key];
+                const match = reg.exec(ctx);
+                if (match) {
+                    const curr = match[0];
+                    if (curr.length > 0) {
+                        const bid = this.extractBlockId(curr);
+                        if (key == '段落' && blocks.length > 0 && blocks[blocks.length - 1][0] == '段落') {
+                            blocks[blocks.length - 1][1] = blocks[blocks.length - 1][1] + curr;
+                            blocks[blocks.length - 1][2] = bid;
+                        } else {
+                            blocks.push([key, curr, bid]);
+                        }
+                        flag = false;
+                        ctx = ctx.slice(curr.length);
+                        break;
+                    }
+                }
+            }
+            if (flag) {
+                break;
+            }
+        }
+        if (ctx.length > 0) {
+            const bid = this.extractBlockId(ctx);
+            blocks.push(['段落', ctx, bid]);
+        }
+        return blocks;
+    }
+
+    async append_block_ids(tfile: TFile): Promise<string> {
+        const blocks = await this.extract_all_blocks(tfile);
+        const items: string[] = [];
+        for (const block of blocks) {
+            if (['空白段落', 'YAML'].contains(block[0])) {
+                items.push(block[1]);
+            } else if (!block[2]) {
+                const bid = this.generateRandomString(6);
+                if (['任务', '无序列表', '有序列表'].contains(block[0])) {
+                    items.push(block[1].slice(0, -1) + ' ^' + bid + '\n');
+                } else {
+                    if (block[1].endsWith('\n')) {
+                        items.push(block[1] + '^' + bid + '\n');
+                    } else {
+                        items.push(block[1] + '\n^' + bid + '\n');
+                    }
+                }
+            } else {
+                items.push(block[1]);
+            }
+        }
+        const res = items.join('');
+        await this.app.vault.modify(tfile, res);
+        return res;
+    }
+
+    async remove_block_ids(tfile: TFile): Promise<string> {
+        const blocks = await this.extract_all_blocks(tfile);
+        const items: string[] = [];
+        for (const block of blocks) {
+            if (['空白段落', 'YAML'].contains(block[0])) {
+                items.push(block[1]);
+            } else {
+                const reg = /\s+\^[a-zA-Z0-9]+\r?\n?$/;
+                const match = reg.exec(block[1]);
+                if (match) {
+                    items.push(block[1].replace(reg, '\n'));
+                } else {
+                    items.push(block[1]);
+                }
+            }
+        }
+        const res = items.join('');
+        await this.app.vault.modify(tfile, res);
+        return res;
     }
 
     async get_selection(cancel_selection = false) {

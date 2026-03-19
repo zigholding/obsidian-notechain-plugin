@@ -7,7 +7,6 @@ import {
 } from 'obsidian';
 
 import NoteChainPlugin from "../main";
-import { NCEditor } from './NCEditor';
 import { get_tp_func } from './utils';
 import { NoteContentModal, NoteEditorModal } from './NCModal'
 import { NoteContentView } from './NCView'
@@ -24,22 +23,16 @@ export class NoteChain {
 	next: string;
 	fid: string;
 	nid: string;
-	editor: NCEditor;
 	children: { [key: string]: any };
 	NoteEditorModal: any
 	LexoRank: any;
 
-	constructor(plugin: NoteChainPlugin, editor: NCEditor,
+	constructor(plugin: NoteChainPlugin,
 		prev = "PrevNote", next = "NextNote",
 		nid = "lexorank", fid = 'lexorank_folder'
 	) {
 		this.plugin = plugin;
 		this.app = plugin.app;
-		if (editor) {
-			this.editor = editor;
-		} else {
-			this.editor = new NCEditor(plugin);
-		}
 		(window as any).nc = this.plugin;
 
 		this.NoteEditorModal = NoteEditorModal
@@ -69,7 +62,7 @@ export class NoteChain {
 
 	async open_note_in_modal(notePath: string) {
 		try {
-			let file = this.get_tfile(notePath);
+			let file = this.plugin.easyapi.file.get_tfile(notePath);
 			if (file instanceof TFile) {
 				let content = await this.app.vault.read(file);
 				let modal = new NoteContentModal(this.app, content, this.plugin, file.path);
@@ -92,7 +85,7 @@ export class NoteChain {
 			let sourcePath = '';
 			let noteIcon = 'puzzle';
 			let displayText = 'Note Preview';
-			let file = this.get_tfile(notePath);
+			let file = this.plugin.easyapi.file.get_tfile(notePath);
 			if (file instanceof TFile) {
 				displayText = file.basename; // 使用文件名（不含扩展名）作为显示文本
 				if(file.extension==='base'){
@@ -103,12 +96,12 @@ export class NoteChain {
 					content = await this.app.vault.read(file);
 					sourcePath = notePath;
 					// 预先读取frontmatter中的icon
-					const iconFromFrontmatter = this.editor.get_frontmatter(file, 'icon');
+					const iconFromFrontmatter = this.plugin.editor.get_frontmatter(file, 'icon');
 					if (iconFromFrontmatter && typeof iconFromFrontmatter === 'string') {
 						noteIcon = iconFromFrontmatter;
 					}
 
-					const displayTextFromFrontmatter = this.editor.get_frontmatter(file, 'display');
+					const displayTextFromFrontmatter = this.plugin.editor.get_frontmatter(file, 'display');
 					if (displayTextFromFrontmatter && typeof displayTextFromFrontmatter === 'string') {
 						displayText = displayTextFromFrontmatter;
 					}
@@ -327,50 +320,6 @@ export class NoteChain {
 		}
 	}
 
-	get_tfile(path: string | TFile, only_first = true) {
-		try {
-			if (path instanceof TFile) {
-				return path;
-			}
-			path = path.split('|')[0].replace('![[', '').replace('[[', '').replace(']]', '');
-			let tfile = this.app.vault.getFileByPath(path)
-			if (tfile) { return tfile; }
-
-			tfile = this.app.vault.getFileByPath(path + '.md')
-			if (tfile) { return tfile; }
-
-			let tfiles = (this.app.metadataCache as any).uniqueFileLookup.get(path.toLowerCase());
-			if (!tfiles) {
-				tfiles = (this.app.metadataCache as any).uniqueFileLookup.get(path.toLowerCase() + '.md');
-				if (!tfiles) {
-					return null;
-				} else {
-					path = path + '.md'
-				}
-			}
-
-			let ctfiles = tfiles.filter((x: TFile) => x.name == path)
-			if (ctfiles.length > 0) {
-				if (only_first) {
-					return ctfiles[0]
-				} else {
-					return ctfiles
-				}
-			}
-
-			if (tfiles.length > 0) {
-				if (only_first) {
-					return tfiles[0]
-				} else {
-					return tfiles
-				}
-			}
-			return null;
-		} catch {
-			return null
-		}
-	}
-
 	get_tags(tfile = this.current_note) {
 		tfile = this.plugin.easyapi.file.get_tfile(tfile);
 		if (!tfile) { return [] }
@@ -406,14 +355,14 @@ export class NoteChain {
 		let recent = (this.app as any).plugins.getPlugin('recent-files-obsidian');
 		if (recent) {
 			let files = recent.data.recentFiles.map(
-				(x: any) => this.get_tfile(x.path)
+				(x: any) => this.plugin.easyapi.file.get_tfile(x.path)
 			).filter((x: any) => x)
 			return files
 		} else {
 			let recent = []
 			let files = (this.app.workspace as any).recentFileTracker?.lastOpenFiles
 			if (files && files.length > 0) {
-				recent = files.map((x: string) => this.get_tfile(x)).filter((x: TFile) => x)
+				recent = files.map((x: string) => this.plugin.easyapi.file.get_tfile(x)).filter((x: TFile) => x)
 			}
 			let tfile = this.app.workspace.getActiveFile()
 			if (tfile) {
@@ -443,7 +392,7 @@ export class NoteChain {
 			let xt = t.clone().add(-i, 'days')
 			// 库中所有文件
 			let fname = xt.format('YYYY-MM-DD');
-			let tfile = this.get_tfile(fname);
+			let tfile = this.plugin.easyapi.file.get_tfile(fname);
 			if (tfile) {
 				return tfile;
 			}
@@ -520,7 +469,7 @@ export class NoteChain {
 			return (_a = x.dataset) == null ? void 0 : _a.path;
 		});
 		let tfiles = items.map(
-			(x) => this.get_tfile(x)).filter((x) => x.extension == "md"
+			(x) => this.plugin.easyapi.file.get_tfile(x)).filter((x) => x.extension == "md"
 			)
 		if (tfiles.length > 0) {
 			return tfiles
@@ -572,7 +521,7 @@ export class NoteChain {
 			}
 		}
 
-		let tfile = this.get_tfile(group);
+		let tfile = this.plugin.easyapi.file.get_tfile(group);
 		if (tfile) {
 			let xfiles = this.get_links(tfile, true);
 			for (let f of xfiles) {
@@ -593,7 +542,7 @@ export class NoteChain {
 		let res: Array<TFile> = [];
 		if (mcache.links) {
 			for (let link of mcache.links) {
-				let tfile = this.get_tfile(link.link);
+				let tfile = this.plugin.easyapi.file.get_tfile(link.link);
 				if (tfile && !res.contains(tfile) && !(only_md && tfile.extension != 'md')) {
 					res.push(tfile);
 				}
@@ -601,7 +550,7 @@ export class NoteChain {
 		}
 		if (mcache.frontmatterLinks) {
 			for (let link of mcache.frontmatterLinks) {
-				let tfile = this.get_tfile(link.link);
+				let tfile = this.plugin.easyapi.file.get_tfile(link.link);
 				if (tfile && !res.contains(tfile) && !(only_md && tfile.extension != 'md')) {
 					res.push(tfile);
 				}
@@ -609,7 +558,7 @@ export class NoteChain {
 		}
 		if (!only_md && mcache.embeds) {
 			for (let link of mcache.embeds) {
-				let tfile = this.get_tfile(link.link);
+				let tfile = this.plugin.easyapi.file.get_tfile(link.link);
 				if (tfile && !res.contains(tfile)) {
 					res.push(tfile);
 				}
@@ -729,7 +678,7 @@ export class NoteChain {
 		let info = this.get_folder_pre_info(tfile);
 
 		let idx = -1;
-		let anchor = this.get_tfile(info['prev']);
+		let anchor = this.plugin.easyapi.file.get_tfile(info['prev']);
 		if (anchor) {
 			idx = tfiles.indexOf(anchor)
 		}
@@ -829,7 +778,7 @@ export class NoteChain {
 				if (!f) {
 					return false
 				}
-				let next = this.editor.get_frontmatter(f, this.next)
+				let next = this.plugin.editor.get_frontmatter(f, this.next)
 				if (typeof (next) != 'string') {
 					return false
 				}
@@ -842,8 +791,8 @@ export class NoteChain {
 				return null;
 			}
 		} else {
-			let name = this.editor.get_frontmatter(tfile, this.prev);
-			let note = this.get_tfile(name);
+			let name = this.plugin.editor.get_frontmatter(tfile, this.prev);
+			let note = this.plugin.easyapi.file.get_tfile(name);
 			if (!note && across) {// 不存在时，获取文件列表中的下一个文件
 				let chain = this;
 				function _prev_(tfile: TAbstractFile):(TAbstractFile|any) {
@@ -883,7 +832,7 @@ export class NoteChain {
 					if (!f) {
 						return false
 					}
-					let prev = this.editor.get_frontmatter(f, this.prev)
+					let prev = this.plugin.editor.get_frontmatter(f, this.prev)
 					if (typeof (prev) != 'string') {
 						return false
 					}
@@ -895,9 +844,9 @@ export class NoteChain {
 				return null;
 			}
 		} else {
-			let name = this.editor.get_frontmatter(tfile, this.next);
+			let name = this.plugin.editor.get_frontmatter(tfile, this.next);
 			// 根据元数据获取后置笔记
-			let note = this.get_tfile(name);
+			let note = this.plugin.easyapi.file.get_tfile(name);
 			if (!note && across) {// 不存在时，获取文件列表中的下一个文件
 				let chain = this;
 				function _next_(tfile: TAbstractFile):(TAbstractFile|any) {
@@ -1007,8 +956,8 @@ export class NoteChain {
 		if (tfile == null || tfile == prev) { return; }
 		if (this.get_prev_note(tfile) == prev) {
 			if (prev == null) {
-				if (this.editor.get_frontmatter(tfile, this.prev) != null) {
-					await this.editor.set_frontmatter(
+				if (this.plugin.editor.get_frontmatter(tfile, this.prev) != null) {
+					await this.plugin.editor.set_frontmatter(
 						tfile, this.prev, null
 					)
 				}
@@ -1017,11 +966,11 @@ export class NoteChain {
 		}
 		let msg = `Note Chain: ${prev?.basename} --> 🏠${tfile.basename}`;
 		if (prev == null) {
-			await this.editor.set_frontmatter(
+			await this.plugin.editor.set_frontmatter(
 				tfile, this.prev, null
 			);
 		} else {
-			await this.editor.set_frontmatter(
+			await this.plugin.editor.set_frontmatter(
 				tfile, this.prev, this.get_link_of_file(prev)
 			);
 		}
@@ -1034,8 +983,8 @@ export class NoteChain {
 		if (tfile == null || tfile == next) { return; }
 		if (this.get_next_note(tfile) == next) {
 			if (next == null) {
-				if (this.editor.get_frontmatter(tfile, this.next) != null) {
-					await this.editor.set_frontmatter(
+				if (this.plugin.editor.get_frontmatter(tfile, this.next) != null) {
+					await this.plugin.editor.set_frontmatter(
 						tfile, this.next, null
 					)
 				}
@@ -1044,11 +993,11 @@ export class NoteChain {
 		}
 		let msg = `Note Chain: 🏠${tfile?.basename} <-- ${next?.basename}`;
 		if (next == null) {
-			await this.editor.set_frontmatter(
+			await this.plugin.editor.set_frontmatter(
 				tfile, this.next, null
 			);
 		} else {
-			await this.editor.set_frontmatter(
+			await this.plugin.editor.set_frontmatter(
 				tfile, this.next, this.get_link_of_file(next)
 			);
 		}
@@ -1093,7 +1042,7 @@ export class NoteChain {
 		if (anchor_next) { tfiles.push(anchor_next) }
 		await this.chain_concat_tfiles(tfiles);
 		for (let dst of tfiles.slice(1, tfiles.length - 1)) {
-			await this.editor.set_frontmatter_align_file(
+			await this.plugin.editor.set_frontmatter_align_file(
 				anchor, dst, this.plugin.settings.field_of_confluence_tab_format
 			)
 		}
@@ -1101,7 +1050,7 @@ export class NoteChain {
 
 	get_link_of_file(tfile: TFile) {
 		if (!tfile) { return null }
-		let tfiles = this.get_tfile(tfile.name, false);
+		let tfiles = this.plugin.easyapi.file.get_tfile(tfile.name, false);
 		if (tfiles.length > 1) {
 			if (tfile.extension == 'md') {
 				return `[[${tfile.path.slice(0, tfile.path.length - tfile.extension.length - 1)}]]`;
@@ -1216,7 +1165,7 @@ export class NoteChain {
 		if (!tfile.parent || tfile.parent.parent != anchor.parent) {
 			return;
 		}
-		let note = this.get_tfile(tfile.parent.name);
+		let note = this.plugin.easyapi.file.get_tfile(tfile.parent.name);
 		if (!note) {
 			return;
 		}
@@ -1371,8 +1320,8 @@ export class NoteChain {
 	sort_tfiles_by_field(tfiles: Array<TFile>, field: string) {
 		let res = tfiles.sort(
 			(a, b) => {
-				let av = this.editor.get_frontmatter(a, field);
-				let bv = this.editor.get_frontmatter(b, field);
+				let av = this.plugin.editor.get_frontmatter(a, field);
+				let bv = this.plugin.editor.get_frontmatter(b, field);
 				if (typeof (av) != typeof (bv)) {
 					return 0
 				}
@@ -1444,7 +1393,7 @@ export class NoteChain {
 		items['🏠 ' + tfile.basename] = (this.app.vault.adapter as any).getFullPath(tfile.path)
 		if (xlinks) {
 			let tmp;
-			tmp = this.editor.get_frontmatter(tfile, 'github');
+			tmp = this.plugin.editor.get_frontmatter(tfile, 'github');
 			if (tmp) {
 				if (tmp.contains('github.com')) {
 					items['🌐github'] = tmp;
@@ -1452,7 +1401,7 @@ export class NoteChain {
 					items['🌐github'] = `https://github.com/` + tmp;
 				}
 			}
-			tmp = this.editor.get_frontmatter(tfile, 'huggingface');
+			tmp = this.plugin.editor.get_frontmatter(tfile, 'huggingface');
 			if (tmp) {
 				if (tmp.contains('huggingface.co')) {
 					items['🌐huggingface🤗'] = tmp;
@@ -1460,7 +1409,7 @@ export class NoteChain {
 					items['🌐huggingface🤗'] = `https://huggingface.co/` + tmp;
 				}
 			}
-			tmp = this.editor.get_frontmatter(tfile, 'arxiv');
+			tmp = this.plugin.editor.get_frontmatter(tfile, 'arxiv');
 			if (tmp?.ID) {
 				items['🌐arxiv'] = `https://arxiv.org/abs/` + tmp?.ID;
 			}
@@ -1518,7 +1467,7 @@ export class NoteChain {
 	}
 
 	get_folder_pre_info(tfolder: TFolder) {
-		let note = this.get_tfile(tfolder.path + '/' + tfolder.name + '.md');
+		let note = this.plugin.easyapi.file.get_tfile(tfolder.path + '/' + tfolder.name + '.md');
 		if (!note) {
 			return {
 				'prev': null,
@@ -1526,8 +1475,8 @@ export class NoteChain {
 			};
 		}
 		let info = {
-			'prev': this.editor.get_frontmatter(note, 'FolderPrevNote'),
-			'offset': this.editor.get_frontmatter(note, 'FolderPrevNoteOffset'),
+			'prev': this.plugin.editor.get_frontmatter(note, 'FolderPrevNote'),
+			'offset': this.plugin.editor.get_frontmatter(note, 'FolderPrevNoteOffset'),
 		}
 		if (info['offset'] == null) {
 			info['offset'] = 0.0;
@@ -1537,7 +1486,7 @@ export class NoteChain {
 
 	async set_folder_pre_info(tfolder: TFolder, prev: string | TFile, offset: number) {
 		let tfile = await this.get_folder_note(tfolder);
-		let anchor = prev instanceof TFile ? prev : this.get_tfile(prev);
+		let anchor = prev instanceof TFile ? prev : this.plugin.easyapi.file.get_tfile(prev);
 		if (anchor) {
 			await this.plugin.editor.set_multi_frontmatter(
 				tfile,
@@ -1590,7 +1539,7 @@ export class NoteChain {
 	}
 
 	async get_folder_note(tfolder: TFolder, create = true) {
-		let note = this.get_tfile(tfolder.path + '/' + tfolder.name + '.md');
+		let note = this.plugin.easyapi.file.get_tfile(tfolder.path + '/' + tfolder.name + '.md');
 		if (!note && create) {
 			note = await this.app.vault.create(tfolder.path + '/' + tfolder.name + '.md', '');
 		}
@@ -1610,7 +1559,7 @@ export class NoteChain {
 					prevs.push(info);
 				}
 			}
-			prevs = prevs.filter(x => x['prev'] && this.get_tfile(x['prev']) == anchor).map(x => x['offset']);
+			prevs = prevs.filter(x => x['prev'] && this.plugin.easyapi.file.get_tfile(x['prev']) == anchor).map(x => x['offset']);
 			if (prevs.length == 0) {
 				this.set_folder_pre_info(tfolder, anchor, 0.5);
 			} else {
@@ -1621,7 +1570,7 @@ export class NoteChain {
 	}
 
 	get_confluence_level(note: TFile) {
-		let fm = this.editor.get_frontmatter(note, this.plugin.settings.field_of_confluence_tab_format);
+		let fm = this.plugin.editor.get_frontmatter(note, this.plugin.settings.field_of_confluence_tab_format);
 		if (fm) {
 			return (fm.match(/\t/g) || []).length;
 		}

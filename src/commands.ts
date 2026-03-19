@@ -28,7 +28,7 @@ const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 							}
 						}
 					}else if(typeof scenes === 'string'){
-						let note = plugin.chain.get_tfile(scenes);
+						let note = plugin.easyapi.file.get_tfile(scenes);
 						if(note){
 							let slevel = '\t'.repeat(level);
 							let prelevel = plugin.editor.get_frontmatter(note,plugin.settings.field_of_confluence_tab_format);
@@ -59,7 +59,7 @@ const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 					notes.unshift(curr.basename);
 				}
 
-				notes = notes.map((f:string)=>plugin.chain.get_tfile(f));
+				notes = notes.map((f:string)=>plugin.easyapi.file.get_tfile(f));
 				if(curr.parent==null){return};
 				let tfiles = plugin.chain.get_tfiles_of_folder(curr.parent).filter((f:any)=>!notes.contains(f));
 				notes = plugin.utils.concat_array([tfiles,notes]);
@@ -81,7 +81,7 @@ const cmd_longform4notechain = (plugin:NoteChainPlugin) => ({
 		
 
 		let path = curr.parent.path+'/'+curr.parent.name+'.md';
-		let dst = await nc.chain.get_tfile(path);
+		let dst = await nc.easyapi.file.get_tfile(path);
 		if(dst==null){
 			dst = await plugin.app.vault.create(
 				curr.parent.path+'/'+curr.parent.name+'.md', 
@@ -287,7 +287,7 @@ const create_new_note = (plugin:NoteChainPlugin) => ({
 			let curr = plugin.chain.current_note;
 			if(curr && curr.parent){
 				let path = curr.parent.path+'/'+name+'.md';
-				let dst = await plugin.chain.get_tfile(path);
+				let dst = await plugin.easyapi.file.get_tfile(path);
 				if(dst==null){
 					dst = await plugin.app.vault.create(
 						curr.parent.path+'/'+name+'.md',
@@ -492,7 +492,7 @@ const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 				let res = await nc.easyapi.dialog_prompt('New Name','',note.basename);
 				if(res && !(res===note.basename) && !(res==='')){
 					let npath = note.parent.path+'/'+res+'.'+note.extension;
-					let dst = nc.chain.get_tfile(res+'.'+note.extension);
+					let dst = plugin.easyapi.file.get_tfile(res+'.'+note.extension);
 					if(dst){
 						new Notice('Exist:'+res+note.extension,3000);
 					}else{
@@ -547,7 +547,7 @@ const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
 		let folder = plugin.app.vault.getFolderByPath(tpl.settings.templates_folder);
 		if(folder){
 			let xfiles = plugin.chain.get_tfiles_of_folder(folder,true)
-			let tfile = plugin.chain.get_tfile(folder.path+'/'+folder.name+'.md');
+			let tfile = plugin.easyapi.file.get_tfile(folder.path+'/'+folder.name+'.md');
 			let infiles = plugin.chain.get_links(tfile);
 			for(let f of infiles){
 				if(!xfiles.contains(f)){
