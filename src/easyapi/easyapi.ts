@@ -69,6 +69,10 @@ export class EasyAPI {
         return this.get_plugin('dataview')?.api;
     }
 
+    get dc(){
+        return this.get_plugin('datacore')?.api;
+    }
+
     get cfile(){
         return this.app.workspace.getActiveFile();
     }
@@ -108,3 +112,4 @@ export class EasyAPI {
         return editor;
     }
 }
+
