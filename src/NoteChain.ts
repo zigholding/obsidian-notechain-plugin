@@ -684,7 +684,7 @@ export class NoteChain {
 			);
 		} else {
 			await this.plugin.editor.set_frontmatter(
-				tfile, this.prev, this.get_link_of_file(prev)
+				tfile, this.prev, this.plugin.easyapi.file.get_link_of_file(prev)
 			);
 		}
 		if (this.plugin.settings.notice_while_modify_chain) {
@@ -711,7 +711,7 @@ export class NoteChain {
 			);
 		} else {
 			await this.plugin.editor.set_frontmatter(
-				tfile, this.next, this.get_link_of_file(next)
+				tfile, this.next, this.plugin.easyapi.file.get_link_of_file(next)
 			);
 		}
 		if (this.plugin.settings.notice_while_modify_chain) {
@@ -761,24 +761,6 @@ export class NoteChain {
 		}
 	}
 
-	get_link_of_file(tfile: TFile) {
-		if (!tfile) { return null }
-		let tfiles = this.plugin.easyapi.file.get_tfile(tfile.name, false);
-		if (tfiles.length > 1) {
-			if (tfile.extension == 'md') {
-				return `[[${tfile.path.slice(0, tfile.path.length - tfile.extension.length - 1)}]]`;
-			} else {
-				return `[[${tfile.path}]]`;
-			}
-		} else {
-			if (tfile.extension == 'md') {
-				return `[[${tfile.basename}]]`;
-			} else {
-				return `[[${tfile.name}]]`;
-			}
-		}
-	}
-
 	async chain_set_prev_next(tfile: TFile, prev: TFile, next: TFile) {
 		if (tfile == null || prev == next || tfile == prev || tfile == next) { return; }
 
@@ -794,8 +776,8 @@ export class NoteChain {
 
 		let msg = `Note Chain: ${prev?.basename} --> 🏠${tfile?.basename} <-- ${next?.basename}`;
 		let fm: { [key: string]: any } = {};
-		fm[this.prev] = this.get_link_of_file(prev);
-		fm[this.next] = this.get_link_of_file(next);
+		fm[this.prev] = this.plugin.easyapi.file.get_link_of_file(prev);
+		fm[this.next] = this.plugin.easyapi.file.get_link_of_file(next);
 		await this.plugin.editor.set_multi_frontmatter(tfile, fm);
 		if (this.plugin.settings.notice_while_modify_chain) {
 			new Notice(msg, 5000);
@@ -885,7 +867,7 @@ export class NoteChain {
 		await this.plugin.editor.set_multi_frontmatter(
 			note,
 			{
-				"FolderPrevNote": this.get_link_of_file(anchor),
+				"FolderPrevNote": this.plugin.easyapi.file.get_link_of_file(anchor),
 				"FolderPrevNoteOffset": 0.5,
 			}
 		)
@@ -1204,7 +1186,7 @@ export class NoteChain {
 			await this.plugin.editor.set_multi_frontmatter(
 				tfile,
 				{
-					"FolderPrevNote": this.get_link_of_file(anchor),
+					"FolderPrevNote": this.plugin.easyapi.file.get_link_of_file(anchor),
 					"FolderPrevNoteOffset": offset,
 				}
 			)

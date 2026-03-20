@@ -1,7 +1,7 @@
 
 
 
-import { App, View, WorkspaceLeaf,TFile,TFolder } from 'obsidian';
+import { App, View, WorkspaceLeaf,TFile,TFolder,TAbstractFile } from 'obsidian';
 
 import {EasyAPI} from 'src/easyapi/easyapi'
 
@@ -98,6 +98,24 @@ export class File {
 			)
 		}
 		return []
+	}
+
+	get_link_of_file(tfile: TFile) {
+		if (!tfile) { return null }
+		let tfiles = this.get_tfile(tfile.name, false);
+		if (tfiles.length > 1) {
+			if (tfile.extension == 'md') {
+				return `[[${tfile.path.slice(0, tfile.path.length - tfile.extension.length - 1)}]]`;
+			} else {
+				return `[[${tfile.path}]]`;
+			}
+		} else {
+			if (tfile.extension == 'md') {
+				return `[[${tfile.basename}]]`;
+			} else {
+				return `[[${tfile.name}]]`;
+			}
+		}
 	}
 
 	get_all_tfiles_of_tags(tags:string|Array<string>){
