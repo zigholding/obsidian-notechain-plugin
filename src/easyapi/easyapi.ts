@@ -38,7 +38,9 @@ export class EasyAPI {
         this.tpl = new Templater(app,this);
         this.time = new Time(app,this);
         this.web = new Web(app);
-        (window as any).ea = this;
+        if(!(window as any).ea){
+            (window as any).ea = this;
+        }
     }
 
     get_plugin(name:string){
