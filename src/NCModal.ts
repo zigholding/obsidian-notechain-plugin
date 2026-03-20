@@ -51,6 +51,22 @@ dv.span(\`![[${sourcePath}]]\`);
 
         const container = contentEl.createDiv({ cls: 'note-content-container' });
         container.addClass('markdown-rendered');
+        // Apply frontmatter `cssClasses` to the markdown root,
+        // so CSS selectors defined in the note can match this modal view.
+        let cssClasses: unknown = null;
+        if (this.sourcePath) {
+            const cfile = this.plugin.easyapi.file.get_tfile(this.sourcePath);
+            if (cfile) {
+                cssClasses = this.plugin.editor.get_frontmatter(cfile, 'cssClasses');
+            }
+        }
+        const normalizedCssClasses =
+            typeof cssClasses === 'string'
+                ? cssClasses.split(/[\s,]+/).filter(Boolean)
+                : Array.isArray(cssClasses)
+                    ? cssClasses.filter((x) => typeof x === 'string' && x.trim().length > 0)
+                    : [];
+        normalizedCssClasses.forEach((c) => container.addClass(c));
         // 让内容区域占满 modal 指定大小
         container.style.display = 'block';
         container.style.width = '100%';
