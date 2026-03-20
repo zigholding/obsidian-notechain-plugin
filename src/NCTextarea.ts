@@ -44,7 +44,7 @@ export class NCTextarea {
 				config = nc.textarea.yamljs.load(source);
 			}
 			let tfile = nc.easyapi.file.get_tfile(ctx.sourcePath);
-			if(tfile){
+			if(tfile && config['frontmatter'] != false){
 				let frontmatter = (nc.app as any).metadataCache.getFileCache(tfile)['frontmatter'];
 				if(frontmatter){
 					for(let key in frontmatter){
