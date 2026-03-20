@@ -144,7 +144,7 @@ const onFileMenuMoveAsNextNote = (plugin: NoteChainPlugin) => {
 						.setIcon('hand')
 						.onClick(async () => {
 							tfiles = plugin.chain.sort_tfiles_by_chain(tfiles);
-							let notes = plugin.chain.get_all_tfiles();
+							let notes = plugin.easyapi.file.get_all_tfiles();
 							notes = notes.filter((x: TFile) => !tfiles.contains(x));
 							const anchor = await plugin.chain.sugguster_note(notes);
 							if (!anchor) { return; }

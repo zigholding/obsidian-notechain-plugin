@@ -133,7 +133,7 @@ export class NoteChain {
 
 	init_children() {
 		this.children = {};
-		for (let f of this.get_all_folders()) {
+		for (let f of this.plugin.easyapi.file.get_all_folders()) {
 			let tfiles = f.children;
 			if (this.plugin.explorer?.file_explorer) {
 				tfiles = this.sort_tfiles(
@@ -178,48 +178,6 @@ export class NoteChain {
 		return get_tp_func(this.app, 'tp.system.prompt');
 	}
 
-	get_all_folders() {
-		let folders = (this.app.vault as any).getAllFolders();
-		let folder = this.app.vault.getFolderByPath('/');
-		if (folder && !folders.contains(folder)) {
-			folders.push(folder);
-		}
-		return folders;
-	}
-
-	get_all_tfiles(sort_mode = '') {
-		let files = this.app.vault.getMarkdownFiles();
-		if (!(sort_mode === '')) {
-			this.sort_tfiles(files, sort_mode = sort_mode);
-		}
-		return files;
-	}
-
-	get_all_tfiles_tags(tags: string | Array<string>, sort_mode = '') {
-		if (!Array.isArray(tags)) {
-			tags = [tags]
-		}
-
-		tags = tags.map(x => {
-			if (x.startsWith('#')) {
-				return x;
-			} else {
-				return '#' + x;
-			}
-		})
-
-		let tfiles = this.get_all_tfiles(sort_mode).filter(x => {
-			let ttags = this.get_tags(x);
-			for (let tag of tags) {
-				if (ttags.contains(tag)) {
-					return true;
-				}
-			}
-		})
-		return tfiles;
-	}
-
-
 	sort_folders_by_mtime(folders: Array<TFolder>, reverse = true) {
 		function ufunc(f: TFolder) {
 			return Math.max(
@@ -237,7 +195,7 @@ export class NoteChain {
 	async cmd_move_file_to_another_folder(tfile = this.current_note) {
 		if (tfile == null) { return; }
 
-		let folders = this.get_all_folders();
+		let folders = this.plugin.easyapi.file.get_all_folders();
 		folders = this.sort_folders_by_mtime(folders
 		).filter(f => f != tfile.parent);
 
@@ -320,37 +278,6 @@ export class NoteChain {
 		}
 	}
 
-	get_tags(tfile = this.current_note) {
-		tfile = this.plugin.easyapi.file.get_tfile(tfile);
-		if (!tfile) { return [] }
-		let mcache = this.app.metadataCache.getFileCache(tfile);
-		let tags: Array<string> = []
-		if (mcache?.tags) {
-			for (let curr of mcache.tags) {
-				if (!tags.contains(curr.tag)) {
-					tags.push(curr.tag)
-				}
-			}
-		}
-		if (mcache?.frontmatter?.tags) {
-			if (Array.isArray(mcache.frontmatter.tags)) {
-				for (let curr of mcache.frontmatter.tags) {
-					let tag = '#' + curr;
-					if (!tags.contains(tag)) {
-						tags.push(tag)
-					}
-				}
-			} else if (typeof mcache.frontmatter.tags === 'string') {
-				let tag = `#` + mcache.frontmatter.tags
-				if (!tags.contains(tag)) {
-					tags.push(tag)
-				}
-			}
-
-		}
-		return tags
-	}
-
 	get_recent_tfiles(only_md = true): Array<TFile> {
 		let recent = (this.app as any).plugins.getPlugin('recent-files-obsidian');
 		if (recent) {
@@ -425,7 +352,7 @@ export class NoteChain {
 	get_last_activate_file(only_md = true, skip_conote = true) {
 		let tfiles = this.get_recent_tfiles(only_md);
 		for (let tfile of tfiles) {
-			if (skip_conote && this.get_tags(tfile).contains('#conote')) {
+			if (skip_conote && this.plugin.easyapi.file.get_tags(tfile).contains('#conote')) {
 				continue;
 			}
 			return tfile;
@@ -440,7 +367,7 @@ export class NoteChain {
 
 		for (let leaf of leaves) {
 			let file = leaf.getViewState().state.file;
-			if (skip_conote && this.get_tags(file).contains('#conote')) {
+			if (skip_conote && this.plugin.easyapi.file.get_tags(file).contains('#conote')) {
 				continue;
 			}
 			return leaf;
@@ -458,200 +385,6 @@ export class NoteChain {
 
 	get current_note(): TFile | null {
 		return this.app.workspace.getActiveFile();
-	}
-
-	get_inlinks(tfile = this.current_note, only_md = true): Array<TFile> {
-		if (tfile == null) { return []; }
-		let res: Array<TFile> = []
-
-		let inlinks = (this.app.metadataCache as any).getBacklinksForFile(tfile);
-		for (let [k, v] of inlinks.data) {
-			let curr = this.app.vault.getFileByPath(k);
-			if (curr) {
-				res.push(curr)
-			}
-		}
-		return res;
-	}
-
-	get_tfolders(name: string) {
-		let folder = this.app.vault.getFolderByPath(name);
-		if (folder) {
-			return [folder];
-		}
-		return this.get_all_folders().filter((x: TFolder) => x.name == name);
-	}
-
-	get_group(group: string) {
-		let tfiles: Array<TFile> = [];
-		let tags = this.get_all_tfiles_tags(group);
-		for (let f of tags) {
-			if (!tfiles.contains(f)) {
-				tfiles.push(f);
-			}
-		}
-
-		let folders = this.get_tfolders(group);
-		for (let folder of folders) {
-			let xfiles = this.get_tfiles_of_folder(folder, true);
-			for (let f of xfiles) {
-				if (!tfiles.contains(f)) {
-					tfiles.push(f);
-				}
-			}
-		}
-
-		let tfile = this.plugin.easyapi.file.get_tfile(group);
-		if (tfile) {
-			let xfiles = this.get_links(tfile, true);
-			for (let f of xfiles) {
-				if (!tfiles.contains(f)) {
-					tfiles.push(f);
-				}
-			}
-		}
-		return tfiles;
-	}
-
-	get_outlinks(tfile = this.current_note, only_md = true): Array<TFile> {
-		if (tfile == null) { return []; }
-
-		let mcache = this.app.metadataCache.getFileCache(tfile);
-		if (!mcache) { return []; }
-
-		let res: Array<TFile> = [];
-		if (mcache.links) {
-			for (let link of mcache.links) {
-				let tfile = this.plugin.easyapi.file.get_tfile(link.link);
-				if (tfile && !res.contains(tfile) && !(only_md && tfile.extension != 'md')) {
-					res.push(tfile);
-				}
-			}
-		}
-		if (mcache.frontmatterLinks) {
-			for (let link of mcache.frontmatterLinks) {
-				let tfile = this.plugin.easyapi.file.get_tfile(link.link);
-				if (tfile && !res.contains(tfile) && !(only_md && tfile.extension != 'md')) {
-					res.push(tfile);
-				}
-			}
-		}
-		if (!only_md && mcache.embeds) {
-			for (let link of mcache.embeds) {
-				let tfile = this.plugin.easyapi.file.get_tfile(link.link);
-				if (tfile && !res.contains(tfile)) {
-					res.push(tfile);
-				}
-			}
-		}
-		return res;
-	}
-
-	get_links(tfile = this.current_note, only_md = true) {
-		let inlinks = this.get_inlinks(tfile, only_md);
-		let outlinks = this.get_outlinks(tfile, only_md);
-		for (let link of inlinks) {
-			if (!outlinks.contains(link)) {
-				outlinks.push(link)
-			}
-		}
-		return outlinks;
-	}
-
-	get_group_inlinks(tfiles: Array<TFile>, level = 1) {
-		let items = tfiles.map((x: TFile) => x);
-		while (level != 0) {
-			let curr = items.map((x: TFile) => x);
-			for (let c of curr) {
-				let links = this.get_inlinks(c, true);
-				for (let link of links) {
-					if (!items.contains(link)) {
-						items.push(link)
-					}
-				}
-			}
-			if (curr.length == items.length) {
-				break;
-			}
-			level = level - 1;
-		}
-		return items;
-	}
-
-	get_group_outlinks(tfiles: Array<TFile>, level = 1) {
-		let items = tfiles.map((x: TFile) => x);
-		while (level != 0) {
-			let curr = items.map((x: TFile) => x);
-			for (let c of curr) {
-				let links = this.get_outlinks(c, true);
-				for (let link of links) {
-					if (!items.contains(link)) {
-						items.push(link)
-					}
-				}
-			}
-			if (curr.length == items.length) {
-				break;
-			}
-			level = level - 1;
-		}
-		return items;
-	}
-
-	get_group_links(tfiles: Array<TFile>, level = 1) {
-		let items = tfiles.map((x: TFile) => x);
-		while (level != 0) {
-			let curr = items.map((x: TFile) => x);
-			for (let c of curr) {
-				let links = this.get_links(c, true);
-				for (let link of links) {
-					if (!items.contains(link)) {
-						items.push(link)
-					}
-				}
-			}
-			if (curr.length == items.length) {
-				break;
-			}
-			level = level - 1;
-		}
-		return items;
-	}
-
-	get_brothers(tfile = this.current_note) {
-		if (tfile && tfile.parent) {
-			return this.get_tfiles_of_folder(tfile.parent, false);
-		} else {
-			return [];
-		}
-
-	}
-
-	get_uncles(tfile: TFile) {
-		if (tfile && tfile.parent && tfile.parent.parent) {
-			let folder = tfile.parent.parent;
-			return folder.children.filter(
-				(x: TAbstractFile) => x instanceof TFile
-			)
-		}
-		return []
-	}
-
-	get_tfiles_of_folder(tfolder: TFolder | null, with_children = false): any {
-		if (tfolder == null) { return []; }
-		let notes = [];
-		for (let c of tfolder.children) {
-			if (c instanceof TFile && c.extension === 'md') {
-				notes.push(c);
-			} else if (c instanceof TFolder && with_children) {
-				let tmp = this.get_tfiles_of_folder(c);
-				for (let x of tmp) {
-					notes.push(x);
-				}
-			}
-		}
-		return notes;
-
 	}
 
 	indexOfFolder(tfile: TFolder, tfiles: Array<TFile>) {
@@ -717,24 +450,24 @@ export class NoteChain {
 		if (mode === this.plugin.strings.item_currentnote) {
 			return [tfile];
 		} else if (mode === this.plugin.strings.item_get_brothers) {
-			return this.get_brothers(tfile);
+			return this.plugin.easyapi.file.get_brothers(tfile);
 		} else if (mode === this.plugin.strings.item_same_folder) {
 			if (tfile?.parent) {
-				return this.get_tfiles_of_folder(tfile.parent, true);
+				return this.plugin.easyapi.file.get_tfiles_of_folder(tfile.parent, -1);
 			}
 		} else if (mode === this.plugin.strings.item_inlinks_outlinks) {
-			return this.get_links(tfile);
+			return this.plugin.easyapi.file.get_links(tfile);
 		} else if (mode === this.plugin.strings.item_inlins) {
-			return this.get_inlinks(tfile);
+			return this.plugin.easyapi.file.get_inlinks(tfile);
 		} else if (mode === this.plugin.strings.item_outlinks) {
-			return this.get_outlinks(tfile);
+			return this.plugin.easyapi.file.get_outlinks(tfile);
 		} else if (mode === this.plugin.strings.item_all_noes) {
-			return this.get_all_tfiles();
+			return this.plugin.easyapi.file.get_all_tfiles();
 		} else if (mode === this.plugin.strings.item_recent) {
 			return this.get_recent_tfiles()
 		} else if (mode === this.plugin.strings.item_uncle_notes) {
 			if (tfile) {
-				return this.get_uncles(tfile);
+				return this.plugin.easyapi.file.get_uncles(tfile);
 			}
 		} else if (mode === this.plugin.strings.item_notechain) {
 			return this.get_chain(
@@ -1159,7 +892,7 @@ export class NoteChain {
 	}
 
 	async chain_suggester_tfiles(tfile = this.current_note, mode = 'suggester') {
-		let notes = this.get_brothers(tfile);
+		let notes = this.plugin.easyapi.file.get_brothers(tfile);
 		if (notes.length == 0) { return; }
 
 		let files = await this.suggester_sort(notes);
@@ -1421,7 +1154,7 @@ export class NoteChain {
 			}
 		}
 		if (inlinks) {
-			let links = this.get_inlinks(tfile, false);
+			let links = this.plugin.easyapi.file.get_inlinks(tfile, false);
 			for (let i of links) {
 				if (onlymd && !(i.extension === 'md')) { continue; }
 				if (i.extension === 'md') {
@@ -1432,7 +1165,7 @@ export class NoteChain {
 			}
 		}
 		if (outlinks) {
-			let links = this.get_outlinks(tfile, false);
+			let links = this.plugin.easyapi.file.get_outlinks(tfile, false);
 			for (let i of links) {
 				if (onlymd && !(i.extension === 'md')) { continue; }
 				if (i.extension === 'md') {

@@ -167,7 +167,7 @@ export class NCTextarea {
 									await applyBtnStyle(xbtn, btnStyle);
 								}
 								xbtn.addEventListener('click', () => {
-									let tags = nc.chain.get_tags(tfile).map(x=>x.slice(1)).filter(
+									let tags = nc.easyapi.file.get_tags(tfile).map(x=>x.slice(1)).filter(
 										x=>nc.settings.tpl_tags_folder.contains(x)
 									);
 									if(tags.length>0){

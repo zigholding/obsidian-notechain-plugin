@@ -81,7 +81,26 @@ export class File {
 		return notes;
 	}
 
-	get_all_tfiles_of_tags(tags:string|Array<string>,sort_mode=''){
+	get_brothers(tfile = this.api.cfile) {
+		if (tfile && tfile.parent) {
+			return this.get_tfiles_of_folder(tfile.parent, 0);
+		} else {
+			return [];
+		}
+
+	}
+
+	get_uncles(tfile: TFile) {
+		if (tfile && tfile.parent && tfile.parent.parent) {
+			let folder = tfile.parent.parent;
+			return folder.children.filter(
+				(x: TAbstractFile) => x instanceof TFile
+			)
+		}
+		return []
+	}
+
+	get_all_tfiles_of_tags(tags:string|Array<string>){
 		if(!Array.isArray(tags)){
 			tags = [tags]
 		}
@@ -163,6 +182,198 @@ export class File {
 			
 		}
 		return tags
+	}
+
+	get_inlinks(tfile = this.api.cfile, only_md = true): Array<TFile> {
+		if (tfile == null) { return []; }
+		let res: Array<TFile> = []
+
+		let inlinks = (this.app.metadataCache as any).getBacklinksForFile(tfile);
+		for (let [k, v] of inlinks.data) {
+			let curr = this.app.vault.getFileByPath(k);
+			if (curr) {
+				res.push(curr)
+			}
+		}
+		return res;
+	}
+
+	get_outlinks(tfile = this.api.cfile, only_md = true): Array<TFile> {
+		if (tfile == null) { return []; }
+
+		let mcache = this.app.metadataCache.getFileCache(tfile);
+		if (!mcache) { return []; }
+
+		let res: Array<TFile> = [];
+		if (mcache.links) {
+			for (let link of mcache.links) {
+				let tfile = this.get_tfile(link.link);
+				if (tfile && !res.contains(tfile) && !(only_md && tfile.extension != 'md')) {
+					res.push(tfile);
+				}
+			}
+		}
+		if (mcache.frontmatterLinks) {
+			for (let link of mcache.frontmatterLinks) {
+				let tfile = this.get_tfile(link.link);
+				if (tfile && !res.contains(tfile) && !(only_md && tfile.extension != 'md')) {
+					res.push(tfile);
+				}
+			}
+		}
+		if (!only_md && mcache.embeds) {
+			for (let link of mcache.embeds) {
+				let tfile = this.get_tfile(link.link);
+				if (tfile && !res.contains(tfile)) {
+					res.push(tfile);
+				}
+			}
+		}
+		return res;
+	}
+
+	get_links(tfile = this.api.cfile, only_md = true) {
+		let inlinks = this.get_inlinks(tfile, only_md);
+		let outlinks = this.get_outlinks(tfile, only_md);
+		for (let link of inlinks) {
+			if (!outlinks.contains(link)) {
+				outlinks.push(link)
+			}
+		}
+		return outlinks;
+	}
+
+	get_group_inlinks(tfiles: Array<TFile>, level = 1) {
+		let items = tfiles.map((x: TFile) => x);
+		while (level != 0) {
+			let curr = items.map((x: TFile) => x);
+			for (let c of curr) {
+				let links = this.get_inlinks(c, true);
+				for (let link of links) {
+					if (!items.contains(link)) {
+						items.push(link)
+					}
+				}
+			}
+			if (curr.length == items.length) {
+				break;
+			}
+			level = level - 1;
+		}
+		return items;
+	}
+
+	get_group_outlinks(tfiles: Array<TFile>, level = 1) {
+		let items = tfiles.map((x: TFile) => x);
+		while (level != 0) {
+			let curr = items.map((x: TFile) => x);
+			for (let c of curr) {
+				let links = this.get_outlinks(c, true);
+				for (let link of links) {
+					if (!items.contains(link)) {
+						items.push(link)
+					}
+				}
+			}
+			if (curr.length == items.length) {
+				break;
+			}
+			level = level - 1;
+		}
+		return items;
+	}
+
+
+	get_group_links(tfiles: Array<TFile>, level = 1) {
+		let items = tfiles.map((x: TFile) => x);
+		while (level != 0) {
+			let curr = items.map((x: TFile) => x);
+			for (let c of curr) {
+				let links = this.get_links(c, true);
+				for (let link of links) {
+					if (!items.contains(link)) {
+						items.push(link)
+					}
+				}
+			}
+			if (curr.length == items.length) {
+				break;
+			}
+			level = level - 1;
+		}
+		return items;
+	}
+
+	get_all_folders() {
+		let folders = (this.app.vault as any).getAllFolders();
+		let folder = this.app.vault.getFolderByPath('/');
+		if (folder && !folders.contains(folder)) {
+			folders.push(folder);
+		}
+		return folders;
+	}
+
+	get_tfolders(name: string) {
+		let folder = this.app.vault.getFolderByPath(name);
+		if (folder) {
+			return [folder];
+		}
+		return this.get_all_folders().filter((x: TFolder) => x.name == name);
+	}
+
+	get_all_tfiles_tags(tags: string | Array<string>) {
+		if (!Array.isArray(tags)) {
+			tags = [tags]
+		}
+
+		tags = tags.map(x => {
+			if (x.startsWith('#')) {
+				return x;
+			} else {
+				return '#' + x;
+			}
+		})
+
+		let tfiles = this.get_all_tfiles().filter(x => {
+			let ttags = this.get_tags(x);
+			for (let tag of tags) {
+				if (ttags.contains(tag)) {
+					return true;
+				}
+			}
+		})
+		return tfiles;
+	}
+
+	get_group(group: string) {
+		let tfiles: Array<TFile> = [];
+		let tags = this.get_all_tfiles_tags(group);
+		for (let f of tags) {
+			if (!tfiles.contains(f)) {
+				tfiles.push(f);
+			}
+		}
+
+		let folders = this.get_tfolders(group);
+		for (let folder of folders) {
+			let xfiles = this.get_tfiles_of_folder(folder, -1);
+			for (let f of xfiles) {
+				if (!tfiles.contains(f)) {
+					tfiles.push(f);
+				}
+			}
+		}
+
+		let tfile = this.get_tfile(group);
+		if (tfile) {
+			let xfiles = this.get_links(tfile, true);
+			for (let f of xfiles) {
+				if (!tfiles.contains(f)) {
+					tfiles.push(f);
+				}
+			}
+		}
+		return tfiles;
 	}
 
 	get_selected_files(current_if_no_selected = true) {

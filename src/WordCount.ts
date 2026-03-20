@@ -262,7 +262,7 @@ export class WordCount{
 
     get_words_of_tfiles(files:Array<TFile>|null=null){
         if(!files){
-            files = this.plugin.chain.get_all_tfiles();
+            files = this.plugin.easyapi.file.get_all_tfiles();
         }
         return files.map(
             x=>this.plugin.editor.get_frontmatter(x,'words')

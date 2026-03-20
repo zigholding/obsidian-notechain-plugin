@@ -165,8 +165,8 @@ export class MermaidGraph{
 		let inlinks:{[key:string]:Array<TFile>} = {}
 		let outlinks:{[key:string]:Array<TFile>} = {}
 		for(let tfile of tfiles){
-			outlinks[tfiles.indexOf(tfile)] = this.plugin.chain.get_outlinks(tfile,true);
-			inlinks[tfiles.indexOf(tfile)] = this.plugin.chain.get_inlinks(tfile,true);
+			outlinks[tfiles.indexOf(tfile)] = this.plugin.easyapi.file.get_outlinks(tfile,true);
+			inlinks[tfiles.indexOf(tfile)] = this.plugin.easyapi.file.get_inlinks(tfile,true);
 		}
 		
 		let edges = [];
@@ -250,8 +250,8 @@ export class MermaidGraph{
 		let chain = nc.chain.get_chain(tfile,N,N)
 		msg = msg + this.subgraph_chain(node,chain,'笔记链');
 
-		let inlinks = nc.chain.get_inlinks(tfile,true).filter((x:TFile)=>!chain.contains(x));
-		let outlinks = nc.chain.get_outlinks(tfile,true).filter((x:TFile)=>!chain.contains(x));
+		let inlinks = nc.easyapi.file.get_inlinks(tfile,true).filter((x:TFile)=>!chain.contains(x));
+		let outlinks = nc.easyapi.file.get_outlinks(tfile,true).filter((x:TFile)=>!chain.contains(x));
 
 		msg = msg + this.subgraph_links(node,inlinks,'入链','-->',true);
 
@@ -288,7 +288,7 @@ export class MermaidGraph{
 			return 'No File.'
 		}
 
-		let tfiles = this.plugin.chain.get_brothers(tfile);
+		let tfiles = this.plugin.easyapi.file.get_brothers(tfile);
 		return this.flowchart_cross(tfile,tfiles,subgraph,color,c_anchor);
 	}
 
@@ -352,8 +352,8 @@ export class MermaidGraph{
 	flowchart_groups(anchor:TFile,name='group'){
 		let nc = this.plugin;
 
-		let tfiles = nc.chain.get_brothers(anchor);
-		tfiles = nc.chain.get_group_links(tfiles,1)
+		let tfiles = nc.easyapi.file.get_brothers(anchor);
+		tfiles = nc.easyapi.file.get_group_links(tfiles,1)
 
 		let node = nc.mermaid.get_note_node(anchor);
 
@@ -399,7 +399,7 @@ export class MermaidGraph{
 		let msg = "```mermaid\nflowchart TD\n";
 
 		// 获取 N 层链接的笔记
-		let tfiles = nc.chain.get_group_links([tfile], N);
+		let tfiles = nc.easyapi.file.get_group_links([tfile], N);
 		if(show_all_node){
 			for(let tfile of tfiles){
 				msg +=`${node.get_node(tfile)}\n`
@@ -464,9 +464,9 @@ export class MermaidGraph{
 		// 获取 N 层链接的笔记
 		let tfiles;
 		if(N==-1){
-			tfiles = nc.chain.get_brothers(tfile);
+			tfiles = nc.easyapi.file.get_brothers(tfile);
 		}else{
-			tfiles = nc.chain.get_group_links([tfile], N);
+			tfiles = nc.easyapi.file.get_group_links([tfile], N);
 		}
 		tfiles = nc.chain.sort_tfiles_by_chain(tfiles) as TFile[];
 
@@ -603,7 +603,7 @@ export class EchartGraph{
 		}
 		for(let tfile of tfiles){
 			let sid = node.get_node(tfile);
-			let olinks = this.plugin.chain.get_outlinks(tfile,true);
+			let olinks = this.plugin.easyapi.file.get_outlinks(tfile,true);
 			for(let olink of olinks){
 				if(olink==tfile){continue}
 				if(tfiles.contains(olink)){
@@ -640,8 +640,8 @@ export class EchartGraph{
 		let chain = nc.chain.get_chain(tfile,N,N)
 		msg = msg + this.subgraph_chain(node,chain,'笔记链');
 
-		let inlinks = nc.chain.get_inlinks(tfile,true).filter((x:TFile)=>!chain.contains(x));
-		let outlinks = nc.chain.get_outlinks(tfile,true).filter((x:TFile)=>!chain.contains(x));
+		let inlinks = nc.easyapi.file.get_inlinks(tfile,true).filter((x:TFile)=>!chain.contains(x));
+		let outlinks = nc.easyapi.file.get_outlinks(tfile,true).filter((x:TFile)=>!chain.contains(x));
 
 		msg = msg + this.subgraph_links(node,inlinks,'入链','-->',true);
 
@@ -678,7 +678,7 @@ export class EchartGraph{
 			return 'No File.'
 		}
 
-		let tfiles = this.plugin.chain.get_brothers(tfile);
+		let tfiles = this.plugin.easyapi.file.get_brothers(tfile);
 		return this.flowchart_cross(tfile,tfiles,subgraph,color,c_anchor);
 	}
 

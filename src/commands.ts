@@ -61,7 +61,7 @@ const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 
 				notes = notes.map((f:string)=>plugin.easyapi.file.get_tfile(f));
 				if(curr.parent==null){return};
-				let tfiles = plugin.chain.get_tfiles_of_folder(curr.parent).filter((f:any)=>!notes.contains(f));
+				let tfiles = plugin.easyapi.file.get_tfiles_of_folder(curr.parent).filter((f:any)=>!notes.contains(f));
 				notes = plugin.utils.concat_array([tfiles,notes]);
 				await plugin.chain.chain_concat_tfiles(notes);
 				plugin.explorer.sort();
@@ -104,7 +104,7 @@ const cmd_longform4notechain = (plugin:NoteChainPlugin) => ({
 				if(dst==null){return;}
 				if(dst.parent==null){return};
 				if(fm['longform']==null){return;}
-				let notes = plugin.chain.get_tfiles_of_folder(dst.parent);
+				let notes = plugin.easyapi.file.get_tfiles_of_folder(dst.parent);
 				notes = plugin.chain.sort_tfiles_by_chain(notes);
 				
 				let levels = notes.map((f:TFile)=>plugin.chain.get_confluence_level(f));
@@ -463,7 +463,7 @@ const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 
 		if(tfile){
 			let items:{[key:string]:any} = {}
-			let links = nc.chain.get_inlinks(tfile,false);
+			let links = nc.easyapi.file.get_inlinks(tfile,false);
 			for(let i of links){
 				if(i.extension==='md'){
 					items['ℹ️ '+i.basename] = i;
@@ -471,7 +471,7 @@ const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 					items['ℹ️ '+i.name] = i;
 				}
 			}
-			links = nc.chain.get_outlinks(tfile,false);
+			links = nc.easyapi.file.get_outlinks(tfile,false);
 			for(let i of links){
 				if(i.extension==='md'){
 					items['🅾️ '+i.basename] = i;
@@ -546,9 +546,9 @@ const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
 		let tfiles:Array<TFile>=[];
 		let folder = plugin.app.vault.getFolderByPath(tpl.settings.templates_folder);
 		if(folder){
-			let xfiles = plugin.chain.get_tfiles_of_folder(folder,true)
+			let xfiles = plugin.easyapi.file.get_tfiles_of_folder(folder,true)
 			let tfile = plugin.easyapi.file.get_tfile(folder.path+'/'+folder.name+'.md');
-			let infiles = plugin.chain.get_links(tfile);
+			let infiles = plugin.easyapi.file.get_links(tfile);
 			for(let f of infiles){
 				if(!xfiles.contains(f)){
 					xfiles.push(f)
@@ -562,7 +562,7 @@ const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
 		let items = plugin.settings.tpl_tags_folder.trim().split('\n');
 		if(items.length>0){
 			for(let item of items){
-				let xfiles = plugin.chain.get_group(item);
+				let xfiles = plugin.easyapi.file.get_group(item);
 				for(let f of xfiles){
 					if(!tfiles.contains(f)){
 						tfiles.push(f)

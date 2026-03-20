@@ -155,7 +155,7 @@ export default class NoteChainPlugin extends Plugin {
 	}
 
 	async auto_notechain(file: TFile) {
-		let notes = this.chain.get_brothers(file);
+		let notes = this.easyapi.file.get_brothers(file);
 		if (notes.length == 0) { return; }
 		if (!this.wordcout.filter(file)) { return; }
 		if (this.explorer?.file_explorer) {
@@ -183,7 +183,7 @@ export default class NoteChainPlugin extends Plugin {
 
 	async clear_inlinks(tfile = this.chain.current_note, mode = 'suggester') {
 		if (tfile == null) { return; }
-		let notes = this.chain.get_inlinks(tfile);
+		let notes = this.easyapi.file.get_inlinks(tfile);
 		if (notes.length) {
 			if (mode === 'suggester') {
 				mode = await this.easyapi.dialog_suggest(
@@ -242,7 +242,7 @@ export default class NoteChainPlugin extends Plugin {
 		let tfiles = items.map(x => this.easyapi.file.get_tfile(x)).filter(x => x.extension == 'md')
 		if (tfiles.length > 1) {
 			tfiles = this.chain.sort_tfiles_by_chain(tfiles)
-			let notes = this.chain.get_all_tfiles()
+			let notes = this.easyapi.file.get_all_tfiles()
 			notes = notes.filter((x: TFile) => !tfiles.contains(x))
 			let anchor = await this.chain.sugguster_note(notes)
 			if (!anchor) { return }
