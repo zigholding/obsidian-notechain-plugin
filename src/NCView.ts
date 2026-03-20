@@ -68,6 +68,14 @@ export class NoteContentView extends ItemView {
 	}
 
 	async setContent(content: string, sourcePath: string) {
+		console.log('setContent', content, sourcePath);
+		let cssClasses: unknown = null;
+		if (sourcePath) {
+			const cfile = this.plugin.easyapi.file.get_tfile(sourcePath);
+			if (cfile) {
+				cssClasses = this.plugin.editor.get_frontmatter(cfile, 'cssClasses');
+			}
+		}
 		this.noteIcon = '';
 		if (sourcePath) {
 			const file = this.app.vault.getAbstractFileByPath(sourcePath);
@@ -122,6 +130,15 @@ dv.span(\`![[${sourcePath}]]\`);
 		container.empty();
 		const div = container.createDiv();
 		div.addClass('markdown-rendered');
+		// Apply frontmatter `cssClasses` to the markdown root element,
+		// so CSS selectors defined in the note can match this view.
+		const normalizedCssClasses =
+			typeof cssClasses === 'string'
+				? cssClasses.split(/[\s,]+/).filter(Boolean)
+				: Array.isArray(cssClasses)
+					? cssClasses.filter((x) => typeof x === 'string' && x.trim().length > 0)
+					: [];
+		normalizedCssClasses.forEach((c) => div.addClass(c));
 
         await MarkdownRenderer.render(this.app, content, div, sourcePath, this);
 
