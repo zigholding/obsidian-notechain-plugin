@@ -598,7 +598,7 @@ const cmd_set_frontmatter = (plugin: NoteChainPlugin) => ({
     name: plugin.strings.cmd_set_frontmatter,
 	icon: 'database',
     callback: async () => {
-		let files = plugin.chain.get_selected_files(true)
+		let files = plugin.easyapi.file.get_selected_files(true)
 		if(files.length==0){return}
 		let field = await plugin.easyapi.dialog_prompt('Frontmatter name')
 		if(!field){return}
@@ -643,7 +643,7 @@ const cmd_move_next_level = (plugin: NoteChainPlugin) => ({
     callback: async () => {
 		let key = plugin.settings.field_of_confluence_tab_format
 		if(!key){return}
-		let tfiles = plugin.chain.get_selected_files()
+		let tfiles = plugin.easyapi.file.get_selected_files()
 		for(let tfile of tfiles){
 			let level = plugin.editor.get_frontmatter(tfile,key)
 			if(!level){
@@ -663,7 +663,7 @@ const cmd_move_none_level = (plugin: NoteChainPlugin) => ({
     callback: async () => {
 		let key = plugin.settings.field_of_confluence_tab_format
 		if(!key){return}
-		let tfiles = plugin.chain.get_selected_files()
+		let tfiles = plugin.easyapi.file.get_selected_files()
 		for(let tfile of tfiles){
 			let level = plugin.editor.get_frontmatter(tfile,key)
 			if(level){
@@ -681,7 +681,7 @@ const cmd_move_prev_level = (plugin: NoteChainPlugin) => ({
     callback: async () => {
 		let key = plugin.settings.field_of_confluence_tab_format
 		if(!key){return}
-		let tfiles = plugin.chain.get_selected_files()
+		let tfiles = plugin.easyapi.file.get_selected_files()
 		for(let tfile of tfiles){
 			let level = plugin.editor.get_frontmatter(tfile,key)
 			if(level){
