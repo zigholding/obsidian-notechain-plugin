@@ -166,18 +166,6 @@ export class NoteChain {
 		}
 	}
 
-	get tp_find_tfile() {
-		return get_tp_func(this.app, 'tp.file.find_tfile');
-	}
-
-	get tp_suggester() {
-		return get_tp_func(this.app, 'tp.system.suggester');
-	}
-
-	get tp_prompt() {
-		return get_tp_func(this.app, 'tp.system.prompt');
-	}
-
 	sort_folders_by_mtime(folders: Array<TFolder>, reverse = true) {
 		function ufunc(f: TFolder) {
 			return Math.max(
