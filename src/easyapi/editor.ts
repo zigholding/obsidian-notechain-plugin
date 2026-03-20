@@ -325,21 +325,31 @@ export class EasyEditor {
         return true;
     }
 
-    async extract_code_block(tfile: TFile | string, btype: string) {
+    async extract_code_block(tfile: TFile | string, btype: string | string[]) {
         let xfile = this.ea.file.get_tfile(tfile);
         if (xfile) {
             tfile = await this.app.vault.cachedRead(xfile);
         }
         if (typeof (tfile) != 'string') { return [] }
 
+        const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const types = (Array.isArray(btype) ? btype : [btype])
+            .map(x => (x ?? '').trim())
+            .filter(Boolean);
+        if (types.length === 0) { return [] }
+
+        const fenceInfo = types.length === 1
+            ? escapeRegExp(types[0])
+            : `(?:${types.map(escapeRegExp).join('|')})`;
+
         let blocks = [];
-        let reg = new RegExp(`\`\`\`${btype}\\n([\\s\\S]*?)\n\`\`\``, 'g');;
+        let reg = new RegExp(String.raw`\`\`\`${fenceInfo}\r?\n([\s\S]*?)\r?\n\`\`\``, 'g');
         let matches;
         while ((matches = reg.exec(tfile)) !== null) {
             blocks.push(matches[1].trim());
         }
 
-        reg = new RegExp(`~~~${btype}\\n([\\s\\S]*?)\n~~~`, 'g');;
+        reg = new RegExp(String.raw`~~~${fenceInfo}\r?\n([\s\S]*?)\r?\n~~~`, 'g');
         while ((matches = reg.exec(tfile)) !== null) {
             blocks.push(matches[1].trim());
         }
@@ -403,7 +413,12 @@ export class EasyEditor {
         while ((matches = reg.exec(tfile)) !== null) {
             cssCodeBlocks.push(matches[0].trim());
         }
-        const tpls = await this.extract_code_block(tfile, 'js //templater');
+        const tpls = await this.extract_code_block(tfile, [
+            'js //templater',
+            'js templater',
+            'js tpl',
+            'js //tpl'
+        ]);
         for (const tpl of tpls) {
             cssCodeBlocks.push(`<%*\n${tpl}\n-%>`);
         }

@@ -546,7 +546,7 @@ const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
 		let tfiles:Array<TFile>=[];
 		let folder = plugin.app.vault.getFolderByPath(tpl.settings.templates_folder);
 		if(folder){
-			let xfiles = plugin.easyapi.file.get_tfiles_of_folder(folder,true)
+			let xfiles = plugin.easyapi.file.get_tfiles_of_folder(folder,-1)
 			let tfile = plugin.easyapi.file.get_tfile(folder.path+'/'+folder.name+'.md');
 			let infiles = plugin.easyapi.file.get_links(tfile);
 			for(let f of infiles){
@@ -574,7 +574,7 @@ const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
 
 		let tfile = await plugin.chain.sugguster_note(tfiles as any,0,true)
 		if(tfile){
-			let res = await plugin.utils.parse_templater(plugin.app,tfile.basename);
+			let res = await plugin.easyapi.tpl.parse_templater(tfile.basename);
 			let txt = res.join('\n').trim()
 			let view = (plugin.app.workspace as any).getActiveFileView()
 			if(view){
@@ -756,7 +756,7 @@ const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
 		if(ctx.search('\n```js //templater\n')>0){
 			new Notice(`执行当前脚本：${cfile.basename}`)
 			flag = true;
-			plugin.utils.parse_templater(plugin.app,cfile.basename)
+			plugin.easyapi.tpl.parse_templater(cfile.basename)
 		}
 		if(ctx.search('\n```css\n')>0){
 			let all_css = await plugin.easyapi.editor.extract_code_block(cfile,'css');

@@ -171,8 +171,8 @@ export class NCTextarea {
 										x=>nc.settings.tpl_tags_folder.contains(x)
 									);
 									if(tags.length>0){
-										nc.utils.parse_templater(
-											nc.app, fname, true, {
+										nc.easyapi.tpl.parse_templater(
+											fname, true, {
 												area: area,
 												source: source,
 												el: el,
