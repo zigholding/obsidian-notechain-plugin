@@ -319,6 +319,22 @@ export class Strings{
         }
     }
 
+    get setting_tab_notechain(){
+        if(this.language=='zh'){
+            return '笔记链'
+        }else{
+            return "Note Chain";
+        }
+    }
+
+    get setting_tab_webviewer_llm(){
+        if(this.language=='zh'){
+            return '网页 AI'
+        }else{
+            return "Web viewer AI";
+        }
+    }
+
     get setting_isSortFileExplorer(){
         if(this.language=='zh'){
             return '根据笔记链条排序目录'

@@ -1,0 +1,638 @@
+import { Notice, TFile } from 'obsidian';
+
+import type NoteChainPlugin from '../../main';
+import { WebViewLLMSettings_DEFAULT } from './setting';
+import { strings } from './strings';
+import { BaseWebViewer } from './LLM/BaseWebViewer';
+import { DeepSeek } from './LLM/DeepSeek';
+import { Doubao } from './LLM/Doubao';
+import { Kimi } from './LLM/Kimi';
+import { Yuanbao } from './LLM/Yuanbao';
+import { ChatGPT } from './LLM/ChatGPT';
+import { ChatGLM } from './LLM/ChatGLM';
+import { Gemini } from './LLM/Gemini';
+import { Claude } from './LLM/Claude';
+
+export class WebViewerLLMModule {
+	readonly plugin: NoteChainPlugin;
+
+	llms: Array<BaseWebViewer>;
+	basellms: Array<BaseWebViewer>;
+
+	basewv: BaseWebViewer;
+	deepseek: DeepSeek;
+	doubao: Doubao;
+	kimi: Kimi;
+	yuanbao: Yuanbao;
+	chatgpt: ChatGPT;
+	chatglm: ChatGLM;
+	gemini: Gemini;
+	claude: Claude;
+
+	auto_chat = true;
+
+	constructor(plugin: NoteChainPlugin) {
+		this.plugin = plugin;
+		this.llms = [];
+		this.doubao = new Doubao(this.app);
+		this.kimi = new Kimi(this.app);
+		this.yuanbao = new Yuanbao(this.app);
+		this.chatgpt = new ChatGPT(this.app);
+		this.chatglm = new ChatGLM(this.app);
+		this.gemini = new Gemini(this.app);
+		this.claude = new Claude(this.app);
+		this.deepseek = new DeepSeek(this.app);
+		this.basellms = [
+			this.yuanbao,
+			this.chatgpt,
+			this.kimi,
+			this.doubao,
+			this.deepseek,
+			this.chatglm,
+			this.gemini,
+			this.claude,
+		];
+		this.basewv = new BaseWebViewer(this.app, '');
+	}
+
+	get app() {
+		return this.plugin.app;
+	}
+
+	get easyapi() {
+		return this.plugin.easyapi;
+	}
+
+	async init() {
+		this.auto_chat = true;
+	}
+
+	async cmd_refresh_llms() {
+		const views = this.basewv.views;
+		this.llms = this.llms.slice(0, 0);
+		for (const view of views) {
+			if ((view as any).url.startsWith(this.deepseek.homepage)) {
+				const llm = new DeepSeek(this.app);
+				llm.view = view;
+				this.deepseek.view = view;
+				this.llms.push(llm);
+			} else if ((view as any).url.startsWith(this.doubao.homepage)) {
+				const llm = new Doubao(this.app);
+				llm.view = view;
+				this.doubao.view = view;
+				this.llms.push(llm);
+			} else if ((view as any).url.startsWith(this.kimi.homepage)) {
+				const llm = new Kimi(this.app);
+				llm.view = view;
+				this.kimi.view = view;
+				this.llms.push(llm);
+			} else if ((view as any).url.startsWith(this.chatgpt.homepage)) {
+				const llm = new ChatGPT(this.app);
+				llm.view = view;
+				this.chatgpt.view = view;
+				this.llms.push(llm);
+			} else if ((view as any).url.startsWith(this.yuanbao.homepage)) {
+				const llm = new Yuanbao(this.app);
+				llm.view = view;
+				this.yuanbao.view = view;
+				this.llms.push(llm);
+			} else if ((view as any).url.startsWith(this.chatglm.homepage)) {
+				const llm = new ChatGLM(this.app);
+				llm.view = view;
+				this.chatglm.view = view;
+				this.llms.push(llm);
+			} else if ((view as any).url.startsWith(this.gemini.homepage)) {
+				const llm = new Gemini(this.app);
+				llm.view = view;
+				this.gemini.view = view;
+				this.llms.push(llm);
+			} else if ((view as any).url.startsWith(this.claude.homepage)) {
+				const llm = new Claude(this.app);
+				llm.view = view;
+				this.claude.view = view;
+				this.llms.push(llm);
+			}
+		}
+	}
+
+	async cmd_chat_sequence() {
+		await this.cmd_refresh_llms();
+		if (this.llms.length == 0) {
+			return;
+		}
+		this.auto_chat = true;
+		let idx = 0;
+		let llm = this.llms[idx];
+		let rsp = (await llm.get_last_content()) ?? '';
+		let prevs: string[] = [];
+		while (this.auto_chat && rsp && rsp != '') {
+			if (this.settings.auto_stop.split('\n').contains(rsp.trim())) {
+				this.auto_chat = false;
+				break;
+			}
+			const patterns = this.settings.auto_stop.split('\n');
+			outer: for (const pattern of patterns) {
+				const regex = new RegExp(pattern.trim());
+				if (regex.test(rsp.trim())) {
+					this.auto_chat = false;
+					break outer;
+				}
+			}
+			rsp = `${llm.name}_${idx}:\n${rsp}`;
+			prevs.push(rsp);
+			prevs = prevs.slice(-this.llms.length + 1);
+			idx = idx + 1;
+			if (idx == this.llms.length) {
+				idx = 0;
+			}
+			llm = this.llms[idx];
+			rsp = (await llm.request(prevs.join('\n\n---\n\n'))) ?? '';
+		}
+		this.auto_chat = false;
+	}
+
+	async get_prompt(tfile: TFile | null, idx = -1, selection = false) {
+		if (!tfile) {
+			return '';
+		}
+		let prompt: any = '';
+		const items = this.settings.prompt_name.trim().split('\n');
+		if (items.length == 0) {
+			return '';
+		}
+
+		const allItemsSet = new Set(items);
+		for (const item of items) {
+			const firstUpper = item.charAt(0).toUpperCase() + item.slice(1);
+			allItemsSet.add(firstUpper);
+			const allUpper = item.toUpperCase();
+			allItemsSet.add(allUpper);
+		}
+		const allItems = Array.from(allItemsSet);
+
+		for (const item of allItems) {
+			prompt = await this.easyapi.editor.get_code_section(tfile, item, -1);
+			if (prompt) {
+				return prompt;
+			}
+
+			prompt = await this.easyapi.editor.get_heading_section(tfile, item, -1, false);
+			if (prompt) {
+				return prompt;
+			}
+		}
+
+		if (selection && !prompt) {
+			prompt = await this.easyapi.editor.get_selection();
+		}
+
+		if (!prompt) {
+			prompt = await this.easyapi.nc.editor.remove_metadata(tfile);
+		}
+
+		if (prompt) {
+			return prompt;
+		}
+
+		return '';
+	}
+
+	async get_last_active_llm() {
+		await this.cmd_refresh_llms();
+		const llm = this.llms.sort(
+			(a: any, b: any) => b.view.leaf.activeTime - a.view.leaf.activeTime
+		)[0];
+		return llm;
+	}
+
+	async cmd_chat_every_llms(prompt = '') {
+		await this.cmd_refresh_llms();
+		if (prompt == '') {
+			prompt = await this.get_prompt(this.easyapi.cfile, 0, true);
+		}
+		if (prompt == '') {
+			return;
+		}
+
+		const promises = [];
+		for (const llm of this.llms) {
+			promises.push(llm.request(prompt));
+		}
+		const responses = await Promise.all(promises);
+		return responses;
+	}
+
+	async cmd_chat_first_llms() {
+		const llm = await this.get_last_active_llm();
+		if (!llm) {
+			return;
+		}
+
+		const prompt = await this.get_prompt(this.easyapi.cfile, 0, true);
+		if (prompt == '') {
+			return;
+		}
+
+		const rsp = await llm.request(prompt);
+		return rsp;
+	}
+
+	async cmd_chat_with_target_tfile(tfile: TFile | null = null, target: any = null) {
+		const llm = await this.get_last_active_llm();
+
+		const ea = this.easyapi;
+		const cfile = ea.cfile;
+
+		if (!tfile) {
+			const tfiles = ea.file.get_all_tfiles_of_tags(
+				this.settings.prompt_name.trim().split('\n')
+			);
+			if (ea.cfile && tfiles.contains(ea.cfile)) {
+				tfile = ea.cfile;
+			} else {
+				if (ea.cfile && !tfiles.contains(ea.cfile)) {
+					tfiles.unshift(ea.cfile);
+				}
+				tfile = await ea.nc.chain.sugguster_note(tfiles);
+			}
+		}
+		if (!tfile) {
+			return;
+		}
+
+		let prompt = await this.get_prompt(tfile);
+		prompt = prompt.replace(/^\s*%%[\s\S]*?%%/, '').trim();
+		const conditionalRegex = /\$\{([a-zA-Z0-9.]+)\?([a-zA-Z0-9.]+)\}/g;
+		let selectionValue = null;
+		let hasSelection = false;
+
+		if (prompt.includes('${selection}') || conditionalRegex.test(prompt)) {
+			selectionValue = await this.easyapi.editor.get_selection();
+			hasSelection = !!selectionValue;
+		}
+
+		prompt = prompt.replace(conditionalRegex, (match: string, primary: string, fallback: string) => {
+			if (primary === 'selection') {
+				return hasSelection ? '${selection}' : '${' + fallback + '}';
+			}
+			return match;
+		});
+
+		const replacements = new Map();
+
+		if (hasSelection) {
+			replacements.set('${selection}', selectionValue);
+		}
+
+		if (ea.cfile) {
+			replacements.set('${tfile.basename}', ea.cfile.basename);
+			replacements.set('${tfile.path}', ea.cfile.path);
+
+			if (prompt.includes('${tfile.content}')) {
+				const ctx = await ea.nc.editor.remove_metadata(ea.cfile);
+				replacements.set('${tfile.content}', ctx);
+			}
+
+			if (prompt.includes('${tfile.brothers}')) {
+				const ctx = '- ' + ea.nc.chain.get_brothers(ea.cfile).map((x: TFile) => x.basename).join('\n- ');
+				replacements.set('${tfile.brothers}', ctx);
+			}
+
+			if (prompt.includes('${tfile}')) {
+				let ctx = await ea.ccontent;
+				ctx = `Name: ${ea.cfile.basename}\n\nPath: ${ea.cfile.path}\n\n${ctx}`;
+				replacements.set('${tfile}', ctx);
+			}
+		}
+
+		if (!hasSelection && prompt.includes('${selection}')) {
+			new Notice('请选择文本/Select text first');
+			return;
+		}
+
+		const sparasRegex = /\$\{\[\[(.*?)\]\]\}/g;
+		const amatches = new Set<string>();
+		let amatch;
+		sparasRegex.lastIndex = 0;
+		while ((amatch = sparasRegex.exec(prompt)) !== null) {
+			amatches.add(amatch[1]);
+		}
+		for (const am of amatches) {
+			const xfile = ea.file.get_tfile(am);
+			if (xfile) {
+				const ctx = await ea.tpl.parse_templater(xfile, true, { cfile: ea.cfile });
+				replacements.set(`\$\{[[${am}]]\}`, ctx.join('\n'));
+			}
+		}
+
+		const placeholderRegex = new RegExp(
+			Array.from(replacements.keys()).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'),
+			'g'
+		);
+		prompt = prompt.replace(placeholderRegex, (m: string) => replacements.get(m) || m);
+
+		const promptRegex = /\$\{prompt\.([a-zA-Z0-9_]+)\}/g;
+		const promptMatches: Set<string> = new Set();
+		let pMatch;
+		promptRegex.lastIndex = 0;
+		while ((pMatch = promptRegex.exec(prompt)) !== null) {
+			promptMatches.add(pMatch[1]);
+		}
+
+		for (const placeholder of promptMatches) {
+			const title = placeholder.charAt(0).toUpperCase() + placeholder.slice(1);
+			const ctx = await ea.dialog_prompt(title, `Enter value for ${placeholder}...`);
+			if (ctx === void 0 || ctx === null) {
+				return null;
+			}
+			prompt = prompt.replace(new RegExp(`\\$\\{prompt\\.${placeholder}\\}`, 'g'), ctx);
+		}
+
+		if (typeof target === 'string' && target.trim() !== '') {
+			prompt = prompt.replace(/\$\{.*?\}/g, target.trim());
+		} else if (Array.isArray(target)) {
+			for (const i of target) {
+				prompt = prompt.replace(/\$\{.*?\}/, i);
+			}
+		} else if (typeof target === 'object' && target) {
+			for (const k in target) {
+				prompt = prompt.replace(`\${${k}}`, target[k]);
+			}
+		}
+
+		if (llm) {
+			const req = await llm.request(prompt);
+			const codes = await ea.editor.extract_code_block(tfile, 'js //templater');
+			if (codes.length === 0 && req) {
+				if (llm.view) {
+					this.app.workspace.setActiveLeaf(llm.view.leaf);
+				}
+			} else {
+				await ea.tpl.parse_templater(tfile, true, { cfile, llm: req });
+			}
+		} else {
+			await navigator.clipboard.writeText(prompt);
+		}
+	}
+
+	async cmd_paste_last_active_llm() {
+		const llm = await this.get_last_active_llm();
+		if (!llm) {
+			return;
+		}
+		const rsp = await llm.get_last_content();
+		if (!rsp) {
+			return;
+		}
+		this.easyapi.ceditor.replaceSelection(rsp);
+	}
+
+	async cmd_paste_to_markdown(anyblock = 'list2tab') {
+		const tfile = this.easyapi.cfile;
+		if (!tfile) {
+			return;
+		}
+
+		await this.cmd_refresh_llms();
+
+		const llms = this.llms;
+		if (llms.length == 0) {
+			return;
+		}
+
+		const rsps = await Promise.all(llms.map((x) => x.get_last_content()));
+		let xtx = '';
+		if (llms.length > 1) {
+			xtx = `[${anyblock}|addClass(ab-col${llms.length})]\n`;
+		}
+		for (const i in rsps) {
+			const name = llms[i].name;
+			xtx =
+				xtx +
+				'\n' +
+				`
+- ${name}
+\`\`\`dataviewjs
+dv.span(
+	${JSON.stringify(rsps[i])}
+)
+\`\`\`
+		`
+					.trim()
+					.replace(/\n/g, '\n\t');
+		}
+		xtx = '\n\n' + xtx.trim() + '\n\n';
+		this.easyapi.ceditor.replaceSelection(xtx);
+	}
+
+	async get_turndown() {
+		const TurndownService = (await import('turndown')).default;
+		const { gfm } = await import('turndown-plugin-gfm');
+		const turndown = new TurndownService({
+			headingStyle: 'atx',
+			bulletListMarker: '-',
+			codeBlockStyle: 'fenced',
+			emDelimiter: '*',
+			strongDelimiter: '**',
+		});
+
+		turndown.use(gfm);
+		return turndown;
+	}
+
+	get turndown_styles() {
+		const yamljs = this.easyapi.editor.yamljs;
+		const parseDefault = () =>
+			yamljs.load(WebViewLLMSettings_DEFAULT.turndown_styles) as Record<string, unknown>;
+
+		let config: Record<string, unknown>;
+		const yamlText = this.settings.turndown_styles;
+		try {
+			const loaded =
+				yamlText != null && String(yamlText).trim() !== ''
+					? yamljs.load(yamlText)
+					: null;
+			if (loaded != null && typeof loaded === 'object' && !Array.isArray(loaded)) {
+				config = loaded as Record<string, unknown>;
+			} else {
+				config = parseDefault();
+			}
+		} catch {
+			config = parseDefault();
+		}
+
+		if (!config['pre-process']) {
+			config['pre-process'] = [];
+		}
+		if (!config['script']) {
+			config['script'] = [];
+		}
+		if (!config['class']) {
+			config['class'] = [];
+		}
+		if (!config['name+class']) {
+			config['name+class'] = [];
+		}
+		if (!config['key+value']) {
+			config['key+value'] = [];
+		}
+		if (!config['post-process']) {
+			config['post-process'] = [];
+		}
+		return config;
+	}
+
+	async html_to_markdown(html: string): Promise<string> {
+		const turndown_styles = this.turndown_styles;
+
+		if (Array.isArray(turndown_styles['pre-process'])) {
+			const eatra = { html: html };
+			for (const i of turndown_styles['pre-process']) {
+				await this.easyapi.tpl.parse_templater(i, true, eatra);
+				html = eatra['html'];
+			}
+		}
+
+		const parser = new DOMParser();
+		const doc = parser.parseFromString(html, 'text/html');
+		doc.querySelectorAll('.hyc-common-markdown__ref-list').forEach((div) => {
+			const next = div.nextSibling;
+
+			if (next && next.nodeType === 3 && /^[\s。、“”，；！？（）【】：]+$/.test(next.nodeValue || '')) {
+				let prev = div.previousSibling;
+
+				if (prev && prev.nodeType === 1) {
+					const textNodes = prev.childNodes;
+					if (textNodes.length > 0) {
+						prev = textNodes[textNodes.length - 1];
+					}
+				}
+
+				if (prev && prev.nodeType === 3) {
+					prev.nodeValue = (prev.nodeValue || '').trimEnd() + next.nodeValue;
+					next.remove();
+				}
+			}
+
+			div.remove();
+		});
+
+		html = doc.body.innerHTML;
+
+		const turndown = await this.get_turndown();
+
+		turndown.addRule('fixedTable', {
+			filter: ['table'],
+			replacement: (content, node) => {
+				const rows = [];
+				const headers = Array.from(node.querySelectorAll('th')).map((th) =>
+					(th as any).textContent.replace(/\s+/g, ' ').trim()
+				);
+				if (headers.length > 0) {
+					rows.push(`| ${headers.join(' | ')} |`);
+					rows.push(`| ${headers.map(() => '---').join(' | ')} |`);
+				}
+
+				node.querySelectorAll('tr').forEach((tr) => {
+					const cols = Array.from(tr.querySelectorAll('td')).map((td) =>
+						(td as any).textContent.replace(/\s+/g, ' ').trim()
+					);
+					if (cols.length > 0) {
+						rows.push(`| ${cols.join(' | ')} |`);
+					}
+				});
+				return rows.join('\n') + '\n\n';
+			},
+		});
+
+		turndown.addRule('skip_class', {
+			filter: function (node) {
+				if (node.classList) {
+					try {
+						for (const i of turndown_styles.class) {
+							const reg = new RegExp(i);
+							for (const c of Array.from(node.classList)) {
+								if (c.match(reg)) {
+									return true;
+								}
+							}
+						}
+					} catch (e) {
+						// do nothing
+					}
+					try {
+						for (const i of turndown_styles['name+class']) {
+							const items = i.trim().split(' ');
+							if (items.length == 1) {
+								if (node.nodeName.toLowerCase() == items[0]) {
+									return true;
+								}
+							} else {
+								const reg = new RegExp(items[1]);
+								if (node.nodeName.toLowerCase() == items[0]) {
+									for (const c of Array.from(node.classList)) {
+										if (c.match(reg)) {
+											return true;
+										}
+									}
+								}
+							}
+						}
+					} catch (e) {
+						// do nothing
+					}
+				}
+				try {
+					for (const i of turndown_styles['key+value']) {
+						const items = i.split(' ');
+						const reg = new RegExp(items[1]);
+						if (node.nodeType == 1) {
+							return !!node.getAttribute(items[0])?.match(reg);
+						}
+					}
+				} catch (e) {
+					// do nothing
+				}
+				return false;
+			},
+			replacement: function () {
+				return '';
+			},
+		});
+
+		turndown.addRule('customBlockquote', {
+			filter: 'blockquote',
+			replacement: (content: any) => `> ${content.trim()}\n\n`,
+		});
+
+		if (Array.isArray(turndown_styles['script'])) {
+			for (const i of turndown_styles['script']) {
+				await this.easyapi.tpl.parse_templater(i, true, turndown);
+			}
+		}
+
+		turndown.addRule('hycCodeBlock', {
+			filter: (node) => node.nodeName === 'DIV' && node.classList.contains('hyc-code-scrollbar__view'),
+			replacement: (content, node) => {
+				const codeNode = node.querySelector('code');
+				let lang = '';
+				if (codeNode && codeNode.className.match(/language-(\w+)/)) {
+					lang = RegExp.$1;
+				}
+				const codeText = codeNode ? codeNode.textContent : node.textContent;
+
+				return `\`\`\`${lang}\n${codeText?.trim()}\n\`\`\``;
+			},
+		});
+
+		let md = turndown.turndown(html);
+		if (Array.isArray(turndown_styles['post-process'])) {
+			const eatra = { md: md };
+			for (const i of turndown_styles['post-process']) {
+				await this.easyapi.tpl.parse_templater(i, true, eatra);
+				md = eatra['md'];
+			}
+		}
+		return md;
+	}
+}

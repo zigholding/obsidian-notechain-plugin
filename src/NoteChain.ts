@@ -11,7 +11,7 @@ import { get_tp_func } from './utils';
 import { NoteContentModal, NoteEditorModal } from './NCModal'
 import { NoteContentView } from './NCView'
 import { LexoRank } from "lexorank";
-import { strings } from './strings';
+import { strings } from './NoteChain/strings';
 import { off } from 'process';
 
 

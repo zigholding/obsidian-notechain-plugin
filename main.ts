@@ -11,10 +11,12 @@ import { NoteChain } from './src/NoteChain';
 import { EasyEditor } from 'src/easyapi/editor';
 import { NCTextarea } from './src/NCTextarea';
 import { NCFileExplorer } from './src/NCFileExplorer';
-import { Strings } from 'src/strings';
+import { Strings } from 'src/NoteChain/strings';
 import { WordCount } from 'src/WordCount';
 import { MermaidGraph, CanvasGraph } from 'src/graph';
-import { NCSettingTab, NCSettings, DEFAULT_SETTINGS } from 'src/setting';
+import { NCSettingTab } from 'src/setting';
+import { NCSettings_DEFAULT } from 'src/NoteChain/setting';
+import { WebViewLLMSettings_DEFAULT } from 'src/WebViewerLLM/setting';
 import { addCommands } from 'src/commands';
 import { addEvents } from 'src/events';
 import { EasyAPI } from 'src/easyapi/easyapi'
@@ -22,8 +24,10 @@ import { NoteContentView } from 'src/NCView';
 import { HTTPServer } from 'src/httpServer';
 import { DailyJob} from 'src/daily_job'
 
+import {WebViewerLLMModule} from 'src/WebViewerLLM/WebViewerLLMModule';
+
 export default class NoteChainPlugin extends Plugin {
-	settings: NCSettings;
+	settings: any;
 	chain: NoteChain;
 	textarea: NCTextarea;
 	explorer: NCFileExplorer;
@@ -31,6 +35,7 @@ export default class NoteChainPlugin extends Plugin {
 	canvas: CanvasGraph;
 	wordcout: WordCount;
 	dailyjob: DailyJob;
+	webviewerllm: WebViewerLLMModule;
 	strings: Strings;
 	status: string;
 	debug: boolean;
@@ -82,26 +87,27 @@ export default class NoteChainPlugin extends Plugin {
 		this.easyapi = new EasyAPI(this.app);
 		this.chain = new NoteChain(
 			this,
-			this.settings.field_of_prevnote, this.settings.field_of_nextnote
+			this.settings.notechain.field_of_prevnote, this.settings.notechain.field_of_nextnote
 		);
 		this.explorer = new NCFileExplorer(this);
 		this.mermaid = new MermaidGraph(this);
 		this.canvas = new CanvasGraph(this);
 		this.strings = new Strings();
 		this.dailyjob = new DailyJob(this)
+		this.webviewerllm = new WebViewerLLMModule(this);
 
 		// 初始化 HTTP 服务器
 		this.httpServer = new HTTPServer(
 			this.app,
 			this.easyapi.tpl,
-			this.settings.httpServerHost,
-			this.settings.httpServerPort
+			this.settings.notechain.httpServerHost,
+			this.settings.notechain.httpServerPort
 		);
 		// 如果启用，自动启动 HTTP 服务器
-		if (this.settings.httpServerEnabled) {
+		if (this.settings.notechain.httpServerEnabled) {
 			this.httpServer.start()
 				.then(() => {
-					console.log(`HTTP Server auto-started on ${this.settings.httpServerHost}:${this.settings.httpServerPort}`);
+					console.log(`HTTP Server auto-started on ${this.settings.notechain.httpServerHost}:${this.settings.notechain.httpServerPort}`);
 				})
 				.catch((error) => {
 					console.error('Failed to start HTTP Server:', error);
@@ -114,7 +120,6 @@ export default class NoteChainPlugin extends Plugin {
 
 		addCommands(this);
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new NCSettingTab(this.app, this));
 
 		addEvents(this);
@@ -140,16 +145,16 @@ export default class NoteChainPlugin extends Plugin {
 	}
 
 	async ufunc_on_file_open(file: TFile) {
-		if (this.settings.refreshDataView) {
+		if (this.settings.notechain.refreshDataView) {
 			(this.app as any).commands.executeCommandById(
 				"dataview:dataview-force-refresh-views"
 			)
 		}
-		if (this.settings.refreshTasks) {
+		if (this.settings.notechain.refreshTasks) {
 			let target = await (this.app as any).plugins.getPlugin("obsidian-tasks-plugin");
 			target && target.cache.notifySubscribers();
 		}
-		if (this.settings.auto_notechain) {
+		if (this.settings.notechain.auto_notechain) {
 			await this.auto_notechain(file);
 		}
 	}
@@ -174,7 +179,12 @@ export default class NoteChainPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign(
+			{}, 
+			{'notechain': NCSettings_DEFAULT}, 
+			{'webviewllm': WebViewLLMSettings_DEFAULT},
+			await this.loadData()
+		);
 	}
 
 	async saveSettings() {
@@ -262,7 +272,7 @@ export default class NoteChainPlugin extends Plugin {
 
 		let curr = this.chain.current_note;
 		if (curr == null) { return; }
-		let smode = (this.strings as any)[this.settings.suggesterNotesMode];
+		let smode = (this.strings as any)[this.settings.notechain.suggesterNotesMode];
 		let notes = await this.chain.suggester_notes(curr, false, smode);
 		if (!notes) { return }
 		notes = this.chain.sort_tfiles(notes, ['mtime', 'x']);
