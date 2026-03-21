@@ -126,11 +126,11 @@ export class WebViewerLLMModule {
 		let rsp = (await llm.get_last_content()) ?? '';
 		let prevs: string[] = [];
 		while (this.auto_chat && rsp && rsp != '') {
-			if (this.settings.auto_stop.split('\n').contains(rsp.trim())) {
+			if (this.plugin.settings.webviewllm.auto_stop.split('\n').contains(rsp.trim())) {
 				this.auto_chat = false;
 				break;
 			}
-			const patterns = this.settings.auto_stop.split('\n');
+			const patterns = this.plugin.settings.webviewllm.auto_stop.split('\n');
 			outer: for (const pattern of patterns) {
 				const regex = new RegExp(pattern.trim());
 				if (regex.test(rsp.trim())) {
@@ -156,7 +156,7 @@ export class WebViewerLLMModule {
 			return '';
 		}
 		let prompt: any = '';
-		const items = this.settings.prompt_name.trim().split('\n');
+		const items = this.plugin.settings.webviewllm.prompt_name.trim().split('\n');
 		if (items.length == 0) {
 			return '';
 		}
@@ -245,7 +245,7 @@ export class WebViewerLLMModule {
 
 		if (!tfile) {
 			const tfiles = ea.file.get_all_tfiles_of_tags(
-				this.settings.prompt_name.trim().split('\n')
+				this.plugin.settings.webviewllm.prompt_name.trim().split('\n')
 			);
 			if (ea.cfile && tfiles.contains(ea.cfile)) {
 				tfile = ea.cfile;
