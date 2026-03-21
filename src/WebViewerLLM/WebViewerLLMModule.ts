@@ -13,6 +13,16 @@ import { ChatGLM } from './LLM/ChatGLM';
 import { Gemini } from './LLM/Gemini';
 import { Claude } from './LLM/Claude';
 
+/** YAML `turndown_styles` after defaults; list keys are string rule lines */
+export interface WebViewerTurndownStylesNormalized {
+	'pre-process': string[];
+	script: string[];
+	class: string[];
+	'name+class': string[];
+	'key+value': string[];
+	'post-process': string[];
+}
+
 export class WebViewerLLMModule {
 	readonly plugin: NoteChainPlugin;
 
@@ -171,12 +181,12 @@ export class WebViewerLLMModule {
 		const allItems = Array.from(allItemsSet);
 
 		for (const item of allItems) {
-			prompt = await this.easyapi.editor.get_code_section(tfile, item, -1);
+			prompt = await this.easyapi.editor.get_code_section(tfile, item as string, -1);
 			if (prompt) {
 				return prompt;
 			}
 
-			prompt = await this.easyapi.editor.get_heading_section(tfile, item, -1, false);
+			prompt = await this.easyapi.editor.get_heading_section(tfile, item as string, -1, false);
 			if (prompt) {
 				return prompt;
 			}
@@ -440,13 +450,13 @@ dv.span(
 		return turndown;
 	}
 
-	get turndown_styles() {
+	get turndown_styles(): WebViewerTurndownStylesNormalized {
 		const yamljs = this.easyapi.editor.yamljs;
 		const parseDefault = () =>
 			yamljs.load(WebViewLLMSettings_DEFAULT.turndown_styles) as Record<string, unknown>;
 
 		let config: Record<string, unknown>;
-		const yamlText = this.settings.turndown_styles;
+		const yamlText = this.plugin.settings.webviewllm.turndown_styles;
 		try {
 			const loaded =
 				yamlText != null && String(yamlText).trim() !== ''
@@ -479,7 +489,7 @@ dv.span(
 		if (!config['post-process']) {
 			config['post-process'] = [];
 		}
-		return config;
+		return config as unknown as WebViewerTurndownStylesNormalized;
 	}
 
 	async html_to_markdown(html: string): Promise<string> {
@@ -523,7 +533,7 @@ dv.span(
 
 		turndown.addRule('fixedTable', {
 			filter: ['table'],
-			replacement: (content, node) => {
+			replacement: (_content: string, node: Element) => {
 				const rows = [];
 				const headers = Array.from(node.querySelectorAll('th')).map((th) =>
 					(th as any).textContent.replace(/\s+/g, ' ').trim()
@@ -533,7 +543,7 @@ dv.span(
 					rows.push(`| ${headers.map(() => '---').join(' | ')} |`);
 				}
 
-				node.querySelectorAll('tr').forEach((tr) => {
+				node.querySelectorAll('tr').forEach((tr: Element) => {
 					const cols = Array.from(tr.querySelectorAll('td')).map((td) =>
 						(td as any).textContent.replace(/\s+/g, ' ').trim()
 					);
@@ -546,7 +556,7 @@ dv.span(
 		});
 
 		turndown.addRule('skip_class', {
-			filter: function (node) {
+			filter: function (node: Element): boolean {
 				if (node.classList) {
 					try {
 						for (const i of turndown_styles.class) {
@@ -612,8 +622,9 @@ dv.span(
 		}
 
 		turndown.addRule('hycCodeBlock', {
-			filter: (node) => node.nodeName === 'DIV' && node.classList.contains('hyc-code-scrollbar__view'),
-			replacement: (content, node) => {
+			filter: (node: Element) =>
+				node.nodeName === 'DIV' && node.classList.contains('hyc-code-scrollbar__view'),
+			replacement: (_content: string, node: Element) => {
 				const codeNode = node.querySelector('code');
 				let lang = '';
 				if (codeNode && codeNode.className.match(/language-(\w+)/)) {
