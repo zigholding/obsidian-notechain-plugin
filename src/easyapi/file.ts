@@ -1,80 +1,80 @@
 
 
 
-import { App, View, WorkspaceLeaf,TFile,TFolder,TAbstractFile } from 'obsidian';
+import { App, View, WorkspaceLeaf, TFile, TFolder, TAbstractFile } from 'obsidian';
 import { CardNavigatorOptions, type CardItem } from './gui/inputCardSuggester'
 
-import {EasyAPI} from 'src/easyapi/easyapi'
+import { EasyAPI } from 'src/easyapi/easyapi'
 
 export class File {
-    app: App;
-    api: EasyAPI;
+	app: App;
+	api: EasyAPI;
 
-    constructor(app: App, api:EasyAPI) {
-        this.app = app;
-        this.api = api;
-    }
+	constructor(app: App, api: EasyAPI) {
+		this.app = app;
+		this.api = api;
+	}
 
-    get_tfile(path:string|TFile|null,only_first=true){
-		try{
-			if(!path){
+	get_tfile(path: string | TFile | null, only_first = true) {
+		try {
+			if (!path) {
 				return null;
 			}
-			if(path instanceof TFile){
+			if (path instanceof TFile) {
 				return path;
 			}
-			path = path.split('|')[0].replace('![[','').replace('[[','').replace(']]','');
+			path = path.split('|')[0].replace('![[', '').replace('[[', '').replace(']]', '');
 			let tfile = this.app.vault.getFileByPath(path)
-			if(tfile){
+			if (tfile) {
 				return tfile;
 			}
 
 			let tfiles = (this.app.metadataCache as any).uniqueFileLookup.get(path.toLowerCase());
-			if(!tfiles){
-				tfiles = (this.app.metadataCache as any).uniqueFileLookup.get(path.toLowerCase()+'.md');
-				if(!tfiles){
+			if (!tfiles) {
+				tfiles = (this.app.metadataCache as any).uniqueFileLookup.get(path.toLowerCase() + '.md');
+				if (!tfiles) {
 					return null;
-				}else{
-					path = path+'.md'
+				} else {
+					path = path + '.md'
 				}
 			}
 
-			let ctfiles = tfiles.filter((x:TFile)=>x.name==path)
-			if(ctfiles.length>0){
-				if(only_first){
+			let ctfiles = tfiles.filter((x: TFile) => x.name == path)
+			if (ctfiles.length > 0) {
+				if (only_first) {
 					return ctfiles[0]
-				}else{
+				} else {
 					return ctfiles
 				}
 			}
 
-			if(tfiles.length>0){
-				if(only_first){
+			if (tfiles.length > 0) {
+				if (only_first) {
 					return tfiles[0]
-				}else{
+				} else {
 					return tfiles
 				}
 			}
 			return null;
-		}catch{
+		} catch {
 			return null
 		}
 	}
 
-	get_all_tfiles(){
+	get_all_tfiles() {
 		let files = this.app.vault.getMarkdownFiles();
 		return files;
 	}
 
-	get_tfiles_of_folder(tfolder:TFolder|null,n=0):any{
-		if(!tfolder){return [];}
+	get_tfiles_of_folder(tfolder: TFolder | null, n = 0): any {
+		if (!tfolder) { return []; }
 		let notes = [];
-		for(let c of tfolder.children){
-			if(c instanceof TFile && c.extension==='md'){
+		for (let c of tfolder.children) {
+			if (c instanceof TFile && c.extension === 'md') {
 				notes.push(c);
-			}else if(c instanceof TFolder && n!=0){
-				let tmp = this.get_tfiles_of_folder(c,n-1);
-				for(let x of tmp){
+			} else if (c instanceof TFolder && n != 0) {
+				let tmp = this.get_tfiles_of_folder(c, n - 1);
+				for (let x of tmp) {
 					notes.push(x);
 				}
 			}
@@ -119,23 +119,23 @@ export class File {
 		}
 	}
 
-	get_all_tfiles_of_tags(tags:string|Array<string>){
-		if(!Array.isArray(tags)){
+	get_all_tfiles_of_tags(tags: string | Array<string>) {
+		if (!Array.isArray(tags)) {
 			tags = [tags]
 		}
 
-		tags = tags.map(x=>{
-			if(x.startsWith('#')){
+		tags = tags.map(x => {
+			if (x.startsWith('#')) {
 				return x;
-			}else{
-				return '#'+x;
+			} else {
+				return '#' + x;
 			}
 		})
 
-		let tfiles = this.get_all_tfiles().filter(x=>{
+		let tfiles = this.get_all_tfiles().filter(x => {
 			let ttags = this.get_tags(x);
-			for(let tag of tags){
-				if(ttags.contains(tag)){
+			for (let tag of tags) {
+				if (ttags.contains(tag)) {
 					return true;
 				}
 			}
@@ -143,62 +143,62 @@ export class File {
 		return tfiles;
 	}
 
-    generate_structure(tfolder:TFolder, depth = 0, isRoot = true,only_folder=false,only_md=true) {
-        let structure = '';
-        const indentUnit = '    '; // 关键修改点：每层缩进 4 空格
-        const verticalLine = '│   '; // 垂直连接线密度增强
-        const indent = verticalLine.repeat(Math.max(depth - 1, 0)) + indentUnit.repeat(depth > 0 ? 1 : 0);
-        const children = tfolder.children || [];
-    
-        // 显示根目录名称
-        if (isRoot) {
-            structure += `${tfolder.name}/\n`;
-            isRoot = false;
-        }
-    
-        children.forEach((child, index) => {
-            const isLast = index === children.length - 1;
-            const prefix = isLast ? '└── ' : '├── '; // 统一符号风格
-    
-            if (child instanceof TFolder) {
-                // 目录节点：增加垂直连接线密度
-                structure += `${indent}${prefix}${child.name}/\n`;
-                structure += this.generate_structure(child, depth + 1, isRoot,only_folder,only_md);
-            } else if(!only_folder) {
-                // 文件节点：对齐符号与目录
-                if(only_md && (child as TFile).extension!='md'){return}
-                structure += `${indent}${prefix}${child.name}\n`;
-            }
-        });
-        return structure;
-    }
+	generate_structure(tfolder: TFolder, depth = 0, isRoot = true, only_folder = false, only_md = true) {
+		let structure = '';
+		const indentUnit = '    '; // 关键修改点：每层缩进 4 空格
+		const verticalLine = '│   '; // 垂直连接线密度增强
+		const indent = verticalLine.repeat(Math.max(depth - 1, 0)) + indentUnit.repeat(depth > 0 ? 1 : 0);
+		const children = tfolder.children || [];
 
-	get_tags(tfile:TFile){
-		if(!tfile){return []}
-		let mcache= this.app.metadataCache.getFileCache(tfile);
-		let tags:Array<string> = []
-		if(mcache?.tags){
-			for(let curr of mcache.tags){
-				if(!tags.contains(curr.tag)){
+		// 显示根目录名称
+		if (isRoot) {
+			structure += `${tfolder.name}/\n`;
+			isRoot = false;
+		}
+
+		children.forEach((child, index) => {
+			const isLast = index === children.length - 1;
+			const prefix = isLast ? '└── ' : '├── '; // 统一符号风格
+
+			if (child instanceof TFolder) {
+				// 目录节点：增加垂直连接线密度
+				structure += `${indent}${prefix}${child.name}/\n`;
+				structure += this.generate_structure(child, depth + 1, isRoot, only_folder, only_md);
+			} else if (!only_folder) {
+				// 文件节点：对齐符号与目录
+				if (only_md && (child as TFile).extension != 'md') { return }
+				structure += `${indent}${prefix}${child.name}\n`;
+			}
+		});
+		return structure;
+	}
+
+	get_tags(tfile: TFile) {
+		if (!tfile) { return [] }
+		let mcache = this.app.metadataCache.getFileCache(tfile);
+		let tags: Array<string> = []
+		if (mcache?.tags) {
+			for (let curr of mcache.tags) {
+				if (!tags.contains(curr.tag)) {
 					tags.push(curr.tag)
 				}
 			}
 		}
-		if(mcache?.frontmatter?.tags){
-			if(Array.isArray(mcache.frontmatter.tags)){
-				for(let curr of mcache.frontmatter.tags){
-					let tag = '#'+curr;
-					if(!tags.contains(tag)){
+		if (mcache?.frontmatter?.tags) {
+			if (Array.isArray(mcache.frontmatter.tags)) {
+				for (let curr of mcache.frontmatter.tags) {
+					let tag = '#' + curr;
+					if (!tags.contains(tag)) {
 						tags.push(tag)
 					}
 				}
-			}else if(typeof mcache.frontmatter.tags === 'string'){
-				let tag = `#`+mcache.frontmatter.tags
-				if(!tags.contains(tag)){
+			} else if (typeof mcache.frontmatter.tags === 'string') {
+				let tag = `#` + mcache.frontmatter.tags
+				if (!tags.contains(tag)) {
 					tags.push(tag)
 				}
 			}
-			
+
 		}
 		return tags
 	}
@@ -415,9 +415,9 @@ export class File {
 		}
 	}
 
-	async read_binary_to_base64(tfile:TFile){
+	async read_binary_to_base64(tfile: TFile) {
 		tfile = this.get_tfile(tfile)
-		if(!tfile){return null}
+		if (!tfile) { return null }
 		let buffer = await this.app.vault.readBinary(tfile)
 
 		let binary = '';
@@ -431,44 +431,67 @@ export class File {
 		return bs64
 	}
 
+	async select_tfile_cards(tfiles: TFile[], options: CardNavigatorOptions = {}) {
+		if (!tfiles || tfiles.length === 0) {
+			return null;
+		}
+
+		let data = tfiles.map(file => ({
+			name: file.basename,
+			detail: file.path,
+			image: this.api.editor.get_frontmatter(file, 'cover') || "file",
+			file: file, // 👈 自定义挂载，方便后面用
+			async action(item: CardItem) {
+				// 这里直接返回，不做打开动作
+				return item;
+			}
+		}))
+
+		// 4️⃣ 打开卡片选择器
+		let result = await this.api.dialog_cards(this.app, data, options);
+
+		// 5️⃣ 返回选中的 TFile
+		return result?.file || null;
+	}
+
 	/** 卡片导航选择：先将 `tfiles` 按父文件夹分组，再打开卡片选择器。 */
 	async select_tfile_cards_by_folder(tfiles: TFile[], options: CardNavigatorOptions = {}) {
-        if (!tfiles || tfiles.length === 0) {
-            return null;
-          }
-        
-          // 2️⃣ 按文件夹分组
-          const groups: Record<string, TFile[]> = {};
-          for (let file of tfiles) {
-            const folder = file.parent?.path || "根目录";
-            if (!groups[folder]) groups[folder] = [];
-            groups[folder].push(file);
-          }
-        
-          // 3️⃣ 转成 CardItem 结构
-          const data = Object.entries(groups).map(([folder, files]) => {
-            return {
-              name: folder.split('/').pop(), // 只显示最后一级目录名
-              detail: `${files.length} 个笔记`,
-              image: "folder",
-              action: files.map(file => ({
-                name: file.basename,
-                detail: file.path,
-                image: this.api.editor.get_frontmatter(file,'cover') || "file",
-                file: file, // 👈 自定义挂载，方便后面用
-                async action(item: CardItem) {
-                  // 这里直接返回，不做打开动作
-                  return item;
-                }
-              }))
-            };
-          });
-        
-          // 4️⃣ 打开卡片选择器
-          const result = await this.api.dialog_cards(this.app, data, options);
-        
-          // 5️⃣ 返回选中的 TFile
-          return result?.file || null;
-    }
+		if (!tfiles || tfiles.length === 0) {
+			return null;
+		}
+
+		// 2️⃣ 按文件夹分组
+		const groups: Record<string, TFile[]> = {};
+		for (let file of tfiles) {
+			const folder = file.parent?.path || "根目录";
+			if (!groups[folder]) groups[folder] = [];
+			groups[folder].push(file);
+		}
+
+		// 3️⃣ 转成 CardItem 结构
+		const data = Object.entries(groups).map(([folder, files]) => {
+			return {
+				name: folder.split('/').pop(), // 只显示最后一级目录名
+				detail: `${files.length} 个笔记`,
+				image: this.api.editor.get_frontmatter(folder, 'cover') || "folder",
+				action: files.map(file => ({
+					name: file.basename,
+					detail: file.path,
+					image: this.api.editor.get_frontmatter(file, 'cover') || "file",
+					file: file, // 👈 自定义挂载，方便后面用
+					async action(item: CardItem) {
+						// 这里直接返回，不做打开动作
+						return item;
+					}
+				}))
+			};
+		});
+
+		// 4️⃣ 打开卡片选择器
+		const result = await this.api.dialog_cards(this.app, data, options);
+
+		// 5️⃣ 返回选中的 TFile
+		return result?.file || null;
+	}
 }
 

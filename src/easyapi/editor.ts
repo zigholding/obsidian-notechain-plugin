@@ -1,7 +1,7 @@
 
 
 
-import { App, TAbstractFile, TFile } from 'obsidian';
+import { App, TAbstractFile, TFile,TFolder } from 'obsidian';
 
 import { EasyAPI } from 'src/easyapi/easyapi'
 
@@ -102,32 +102,40 @@ export class EasyEditor {
         return false;
     }
 
-    get_frontmatter(tfile: TFile, key: string): any {
+    get_frontmatter(tfile: TAbstractFile|string, key: string): any {
         try {
             if (!tfile) { return null; }
-            const meta = this.app.metadataCache.getFileCache(tfile);
-            if (meta?.frontmatter) {
-                if (meta.frontmatter[key]) {
-                    return meta.frontmatter[key];
-                }
-                const keys = key.split('.');
-                let cfm: any = meta.frontmatter;
-                for (const k of keys) {
-                    const items = k.match(/^(.*?)(\[-?\d+\])?$/);
-                    if (!items) { return null; }
-                    if (items[1]) {
-                        cfm = cfm[items[1]];
+            if (typeof tfile === 'string') {
+                tfile = this.ea.file.get_tfile(tfile) as TFile;
+            }
+            if (tfile instanceof TFile) {
+                const meta = this.app.metadataCache.getFileCache(tfile);
+                if (meta?.frontmatter) {
+                    if (meta.frontmatter[key]) {
+                        return meta.frontmatter[key];
                     }
-                    if (!cfm) { return null; }
-                    if (Array.isArray(cfm) && items[2]) {
-                        let i = parseInt(items[2].slice(1, items[2].length - 1));
-                        if (i < 0) {
-                            i = i + cfm.length;
+                    const keys = key.split('.');
+                    let cfm: any = meta.frontmatter;
+                    for (const k of keys) {
+                        const items = k.match(/^(.*?)(\[-?\d+\])?$/);
+                        if (!items) { return null; }
+                        if (items[1]) {
+                            cfm = cfm[items[1]];
                         }
-                        cfm = cfm[i];
+                        if (!cfm) { return null; }
+                        if (Array.isArray(cfm) && items[2]) {
+                            let i = parseInt(items[2].slice(1, items[2].length - 1));
+                            if (i < 0) {
+                                i = i + cfm.length;
+                            }
+                            cfm = cfm[i];
+                        }
                     }
+                    return cfm;
                 }
-                return cfm;
+            }else if (tfile instanceof TFolder) {
+                let sfile = this.ea.file.get_tfile(tfile.path+'/'+tfile.name+'.md');
+                return this.get_frontmatter(sfile,key)
             }
         } catch {
             return null;

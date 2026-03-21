@@ -1,5 +1,6 @@
 import { Notice, TFile } from 'obsidian';
 
+import type { CardItem } from '../easyapi/gui/inputCardSuggester';
 import type NoteChainPlugin from '../../main';
 import { WebViewLLMSettings_DEFAULT } from './setting';
 import { strings } from './strings';
@@ -252,25 +253,45 @@ export class WebViewerLLMModule {
 
 		const ea = this.easyapi;
 		const cfile = ea.cfile;
+		let selection = ea.ceditor.getSelection()
 
 		if (!tfile) {
 			const tfiles = ea.file.get_all_tfiles_of_tags(
 				this.plugin.settings.webviewllm.prompt_name.trim().split('\n')
 			);
-			if (ea.cfile && tfiles.contains(ea.cfile)) {
-				tfile = ea.cfile;
-			} else {
-				if (ea.cfile && !tfiles.contains(ea.cfile)) {
-					tfiles.unshift(ea.cfile);
-				}
-				tfile = await ea.file.select_tfile_cards_by_folder(tfiles);
+			if (ea.cfile && !tfiles.contains(ea.cfile)) {
+				tfiles.unshift(ea.cfile);
 			}
+			const data: CardItem[] = tfiles.map((file) => ({
+				name: file.basename,
+				detail: file.path,
+				image: this.easyapi.editor.get_frontmatter(file, 'cover') || 'file',
+				file,
+				async action(_item: CardItem): Promise<void> {},
+			}));
+			if (selection) {
+				data.unshift({
+					name: '选择文本',
+					detail: selection,
+					image: 'paste',
+					file: selection,
+					async action(_item: CardItem): Promise<void> {},
+				});
+			}
+	
+			// 4️⃣ 打开卡片选择器
+			let sel = await this.easyapi.dialog_cards(this.app, data);
+			tfile = sel?.file;
 		}
 		if (!tfile) {
 			return;
 		}
-
-		let prompt = await this.get_prompt(tfile);
+		let prompt = '';
+		if(tfile instanceof TFile){ 
+			prompt = await this.get_prompt(tfile);
+		}else{
+			prompt = tfile as string;
+		}
 		prompt = prompt.replace(/^\s*%%[\s\S]*?%%/, '').trim();
 		const conditionalRegex = /\$\{([a-zA-Z0-9.]+)\?([a-zA-Z0-9.]+)\}/g;
 		let selectionValue = null;
@@ -369,7 +390,8 @@ export class WebViewerLLMModule {
 				prompt = prompt.replace(`\${${k}}`, target[k]);
 			}
 		}
-
+		console.log('----------------');
+		console.log('prompt',prompt);
 		if (llm) {
 			const req = await llm.request(prompt);
 			const codes = await ea.editor.extract_code_block(tfile, 'js //templater');
