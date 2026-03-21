@@ -263,7 +263,7 @@ export class WebViewerLLMModule {
 				if (ea.cfile && !tfiles.contains(ea.cfile)) {
 					tfiles.unshift(ea.cfile);
 				}
-				tfile = await ea.nc.chain.sugguster_note(tfiles);
+				tfile = await ea.file.select_tfile_cards_by_folder(tfiles);
 			}
 		}
 		if (!tfile) {

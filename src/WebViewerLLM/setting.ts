@@ -34,7 +34,7 @@ export function renderWebViewerLLMSettings(plugin: NoteChainPlugin, containerEl:
 		.setName(strings.setting_prompt_name)
 		.addTextArea((text) =>
 			text
-				.setValue(plugin.settings.prompt_name)
+				.setValue(settings.prompt_name)
 				.onChange(async (value) => {
 					settings.prompt_name = value;
 					await plugin.saveSettings();

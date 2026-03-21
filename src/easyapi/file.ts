@@ -2,6 +2,7 @@
 
 
 import { App, View, WorkspaceLeaf,TFile,TFolder,TAbstractFile } from 'obsidian';
+import { CardNavigatorOptions, type CardItem } from './gui/inputCardSuggester'
 
 import {EasyAPI} from 'src/easyapi/easyapi'
 
@@ -429,5 +430,45 @@ export class File {
 		let bs64 = `data:image/png;base64,${text}`;
 		return bs64
 	}
+
+	/** 卡片导航选择：先将 `tfiles` 按父文件夹分组，再打开卡片选择器。 */
+	async select_tfile_cards_by_folder(tfiles: TFile[], options: CardNavigatorOptions = {}) {
+        if (!tfiles || tfiles.length === 0) {
+            return null;
+          }
+        
+          // 2️⃣ 按文件夹分组
+          const groups: Record<string, TFile[]> = {};
+          for (let file of tfiles) {
+            const folder = file.parent?.path || "根目录";
+            if (!groups[folder]) groups[folder] = [];
+            groups[folder].push(file);
+          }
+        
+          // 3️⃣ 转成 CardItem 结构
+          const data = Object.entries(groups).map(([folder, files]) => {
+            return {
+              name: folder.split('/').pop(), // 只显示最后一级目录名
+              detail: `${files.length} 个笔记`,
+              image: "folder",
+              action: files.map(file => ({
+                name: file.basename,
+                detail: file.path,
+                image: this.api.editor.get_frontmatter(file,'cover') || "file",
+                file: file, // 👈 自定义挂载，方便后面用
+                async action(item: CardItem) {
+                  // 这里直接返回，不做打开动作
+                  return item;
+                }
+              }))
+            };
+          });
+        
+          // 4️⃣ 打开卡片选择器
+          const result = await this.api.dialog_cards(this.app, data, options);
+        
+          // 5️⃣ 返回选中的 TFile
+          return result?.file || null;
+    }
 }
 

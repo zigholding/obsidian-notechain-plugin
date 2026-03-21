@@ -1,10 +1,11 @@
 
 
-import { App, View, WorkspaceLeaf } from 'obsidian';
+import { App, View, WorkspaceLeaf, TFile } from 'obsidian';
 
 import {dialog_suggest} from './gui/inputSuggester'
+import { dialog_multi_suggest } from './gui/inputMultiSuggester'
 import {dialog_prompt} from './gui/inputPrompt'
-import {openCardNavigator} from './gui/inputCardSuggester'
+import { openCardNavigator, type CardItem } from './gui/inputCardSuggester'
 import {EasyEditor } from './editor';
 import {File } from './file';
 import {Random } from './random';
@@ -16,6 +17,7 @@ import { Web } from './web';
 export class EasyAPI {
     app: App;
     dialog_suggest: Function
+	dialog_multi_suggest: Function
 	dialog_prompt: Function
     dialog_cards: Function
     editor: EasyEditor
@@ -29,6 +31,7 @@ export class EasyAPI {
     constructor(app: App) {
         this.app = app;
         this.dialog_suggest = dialog_suggest;
+		this.dialog_multi_suggest = dialog_multi_suggest;
 		this.dialog_prompt = dialog_prompt;
 		this.dialog_cards = openCardNavigator;
         this.editor = new EasyEditor(app,this);
