@@ -292,12 +292,16 @@ export async function dialog_multi_suggest<T = string>(
 	title = "",
 ): Promise<T[] | null> {
 	try {
-		return await InputMultiSuggester.open(
+		let res = await InputMultiSuggester.open(
 			(this as { app: App }).app,
 			displayItems,
 			items,
 			{ placeholder, title },
 		);
+		if(res && res.length > 0){
+			return res;
+		}
+		return null;
 	} catch {
 		return null;
 	}
