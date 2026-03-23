@@ -292,6 +292,7 @@ export class WebViewerLLMModule {
 			prompt = await this.get_prompt(tfile);
 		}else{
 			prompt = tfile as string;
+			tfile = ea.cfile as TFile;
 		}
 		prompt = prompt.replace(/^\s*%%[\s\S]*?%%/, '').trim();
 		const conditionalRegex = /\$\{([a-zA-Z0-9.]+)\?([a-zA-Z0-9.]+)\}/g;
@@ -396,27 +397,40 @@ export class WebViewerLLMModule {
 			}
 		}
 
+		// 选择参考笔记
 		if (tfile instanceof TFile) {
-			let linkFiles = ea.file.get_links(tfile);
-			let ciinks = ea.file.get_links(ea.cfile);
-			for(let clink of ciinks){
-				if(!linkFiles.contains(clink)){
-					linkFiles.push(clink);
+			let ref = ea.editor.get_frontmatter(tfile, 'reference','link');
+			let refFiles: TFile[] = [];
+			if(ref == 'link'){
+				let linkFiles = ea.file.get_links(tfile);
+				let ciinks = ea.file.get_links(ea.cfile);
+				for(let clink of ciinks){
+					if(!linkFiles.contains(clink)){
+						linkFiles.push(clink);
+					}
 				}
+				refFiles = [...linkFiles]
+			}else if(ref == 'all'){
+				refFiles = ea.file.get_all_tfiles();
+			}else if(ref == 'folder'){
+				refFiles = ea.file.get_tfiles_of_folder(tfile.parent);
+				refFiles = ea.nc.chain.sort_tfiles_by_chain(refFiles);
+			}else if(ref){
+				refFiles = ea.file.get_group(ref);
 			}
-			if (linkFiles.length > 0) {
+			if (refFiles.length > 0) {
 				const selectedLinks = await ea.dialog_multi_suggest(
-					linkFiles.map((x: TFile) => x.basename),
-					linkFiles,
+					refFiles.map((x: TFile) => x.basename),
+					refFiles,
 					'',
 					'选择参考链接笔记 / Select reference notes',
 				);
 				if (selectedLinks?.length) {
 					// v2: 不用 Markdown # 标题，避免与摘录正文里的标题层级混淆；魔串尽量长以降低撞车概率。
-					const B = '<<NC_REF_v2|BEGIN>>';
-					const E = '<<NC_REF_v2|END>>';
-					const D0 = '<<NC_REF_v2|DOC>>';
-					const D1 = '<<NC_REF_v2|/DOC>>';
+					const B = '<<NC_REF|BEGIN>>';
+					const E = '<<NC_REF|END>>';
+					const D0 = '<<NC_REF|DOC>>';
+					const D1 = '<<NC_REF|/DOC>>';
 					const refPreamble = [
 						B,
 						'[Supplementary · 只读摘录] Everything above this marker is the main task. Below: linked vault notes as context only.',

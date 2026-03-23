@@ -216,33 +216,6 @@ export default class NoteChainPlugin extends Plugin {
 		}
 	}
 
-	async replace_notes_with_regx() {
-		let notes = await this.chain.suggester_notes();
-		if (notes?.length > 0) {
-			try {
-				let regs = await this.easyapi.dialog_prompt('Enter the regular expression to replace.');
-				if (regs == null) {
-					return;
-				}
-				let reg = new RegExp(regs, 'g');
-
-				let target = await this.easyapi.dialog_prompt('Enter the target string.');
-				if (target == null) {
-					return;
-				}
-				target = target.replace(
-					/\\n/g, '\n'
-				);
-				for (let note of notes) {
-					await this.easyapi.editor.replace(note, reg, target);
-				}
-			} catch (error) {
-
-			}
-
-		}
-	}
-
 	async cmd_chain_insert_node() {
 
 		let selector = document.querySelectorAll(

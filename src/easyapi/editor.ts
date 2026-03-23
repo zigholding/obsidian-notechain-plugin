@@ -102,27 +102,27 @@ export class EasyEditor {
         return false;
     }
 
-    get_frontmatter(tfile: TAbstractFile|string, key: string): any {
+    get_frontmatter(tfile: TAbstractFile|string, key: string, default_value: any = null): any {
         try {
-            if (!tfile) { return null; }
+            if (!tfile) { return default_value; }
             if (typeof tfile === 'string') {
                 tfile = this.ea.file.get_tfile(tfile) as TFile;
             }
             if (tfile instanceof TFile) {
                 const meta = this.app.metadataCache.getFileCache(tfile);
                 if (meta?.frontmatter) {
-                    if (meta.frontmatter[key]) {
-                        return meta.frontmatter[key];
+                    if (Object.prototype.hasOwnProperty.call(meta.frontmatter, key)) {
+                        return meta.frontmatter[key] ?? default_value;
                     }
                     const keys = key.split('.');
                     let cfm: any = meta.frontmatter;
                     for (const k of keys) {
                         const items = k.match(/^(.*?)(\[-?\d+\])?$/);
-                        if (!items) { return null; }
+                        if (!items) { return default_value; }
                         if (items[1]) {
                             cfm = cfm[items[1]];
                         }
-                        if (!cfm) { return null; }
+                        if (cfm == null) { return default_value; }
                         if (Array.isArray(cfm) && items[2]) {
                             let i = parseInt(items[2].slice(1, items[2].length - 1));
                             if (i < 0) {
@@ -133,12 +133,16 @@ export class EasyEditor {
                     }
                     return cfm;
                 }
+                // If the file has no frontmatter (or cache hasn't loaded yet),
+                // keep behavior consistent and return the provided default.
+                return default_value;
             }else if (tfile instanceof TFolder) {
                 let sfile = this.ea.file.get_tfile(tfile.path+'/'+tfile.name+'.md');
-                return this.get_frontmatter(sfile,key)
+                return this.get_frontmatter(sfile,key,default_value)
             }
+            return default_value;
         } catch {
-            return null;
+            return default_value;
         }
     }
 

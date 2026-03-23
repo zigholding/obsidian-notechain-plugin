@@ -203,8 +203,31 @@ const replace_notes_with_regx = (plugin:NoteChainPlugin) => ({
 	id: 'replace_notes_with_regx',
 	name: plugin.strings.replace_notes_with_regx,
 	icon:'regex',
-	callback: () => {
-		plugin.replace_notes_with_regx();
+	callback: async () => {
+		let notes = await plugin.chain.suggester_notes();
+		if (notes?.length > 0) {
+			try {
+				let regs = await plugin.easyapi.dialog_prompt('Enter the regular expression to replace.');
+				if (regs == null) {
+					return;
+				}
+				let reg = new RegExp(regs, 'g');
+
+				let target = await plugin.easyapi.dialog_prompt('Enter the target string.');
+				if (target == null) {
+					return;
+				}
+				target = target.replace(
+					/\\n/g, '\n'
+				);
+				for (let note of notes) {
+					await plugin.easyapi.editor.replace(note, reg, target);
+				}
+			} catch (error) {
+
+			}
+
+		}
 	}
 });
 
