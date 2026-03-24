@@ -61,7 +61,7 @@ export class EasyAPI {
     }
 
     get wv(){
-        return this.get_plugin('webview-llm');
+        return this.nc?.webviewer_llm;
     }
 
     get qa(){

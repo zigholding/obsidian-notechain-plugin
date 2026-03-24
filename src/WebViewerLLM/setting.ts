@@ -7,11 +7,15 @@ export interface WebviewLLMSettings {
 	auto_stop: string;
 	prompt_name: string;
 	turndown_styles: string;
+	preprocess: string;
+	postprocess: string;
 }
 
 export const WebViewLLMSettings_DEFAULT: WebviewLLMSettings = {
 	prompt_name: 'prompt\n提示词',
 	auto_stop: '修改完成\n修改完成。',
+	preprocess: '',
+	postprocess: '',
 	turndown_styles: `
 class:
 - ybc-li-component_dot # 元宝列表小黑点
@@ -37,6 +41,28 @@ export function renderWebViewerLLMSettings(plugin: NoteChainPlugin, containerEl:
 				.setValue(settings.prompt_name)
 				.onChange(async (value) => {
 					settings.prompt_name = value;
+					await plugin.saveSettings();
+				})
+		);
+
+	new Setting(containerEl)
+		.setName(strings.setting_preprocess)
+		.addTextArea((text) =>
+			text
+				.setValue(settings.preprocess)
+				.onChange(async (value) => {
+					settings.preprocess = value;
+					await plugin.saveSettings();
+				})
+		);
+	
+	new Setting(containerEl)
+		.setName(strings.setting_postprocess)
+		.addTextArea((text) =>
+			text
+				.setValue(settings.postprocess)
+				.onChange(async (value) => {
+					settings.postprocess = value;
 					await plugin.saveSettings();
 				})
 		);

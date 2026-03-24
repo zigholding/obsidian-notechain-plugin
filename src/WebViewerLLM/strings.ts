@@ -73,6 +73,24 @@ export class Strings{
         }
     }
 
+    get setting_preprocess(){
+        if(this.language=='zh'){
+            return '预处理'
+        }else{
+            return 'Pre-process'
+        }
+    }
+
+    get setting_postprocess(){
+        if(this.language=='zh'){
+            return '后处理'
+        }else{
+            return 'Post-process'
+        }
+    }
+
+
+
     get setting_prompt_name(){
         if(this.language=='zh'){
             return '提示词名称（用于标题或代码块）'

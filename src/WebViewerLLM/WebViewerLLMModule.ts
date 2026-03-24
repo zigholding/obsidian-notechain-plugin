@@ -456,20 +456,37 @@ export class WebViewerLLMModule {
 				}
 			}
 		}
+		
+		for(let line of this.plugin.settings.webviewllm.preprocess.split('\n')){
+			let xfile = ea.file.get_tfile(line);
+			if(xfile){
+				let ctx = await ea.tpl.parse_templater(xfile, true, {tfile, cfile, prompt });
+				prompt = ctx.join('\n');
+			}
+		}
 
+		let response = '';
 		if (llm) {
-			const req = await llm.request(prompt);
+			response = (await llm.request(prompt)) ?? '';
 			const codes = await ea.editor.extract_code_block(tfile, 'js //templater');
-			if (codes.length === 0 && req) {
+			if (codes.length === 0 && response) {
 				if (llm.view) {
 					this.app.workspace.setActiveLeaf(llm.view.leaf);
 				}
 			} else {
-				await ea.tpl.parse_templater(tfile, true, { cfile, llm: req });
+				await ea.tpl.parse_templater(tfile, true, { cfile, llm: response });
 			}
 		} else {
 			await navigator.clipboard.writeText(prompt);
 		}
+
+		for(let line of this.plugin.settings.webviewllm.postprocess.split('\n')){
+			let xfile = ea.file.get_tfile(line);
+			if(xfile){
+				await ea.tpl.parse_templater(xfile, true, {tfile, cfile, prompt,llm:response });
+			}
+		}
+
 	}
 
 	async cmd_paste_last_active_llm() {
