@@ -398,7 +398,7 @@ export class WebViewerLLMModule {
 		}
 
 		// 选择参考笔记
-		if (tfile instanceof TFile) {
+		if (tfile instanceof TFile && this.plugin.settings.webviewllm.add_reference) {
 			let ref = ea.editor.get_frontmatter(tfile, 'reference','link');
 			let refFiles: TFile[] = [];
 			if(ref == 'link'){
@@ -457,7 +457,7 @@ export class WebViewerLLMModule {
 			}
 		}
 		
-		for(let line of this.plugin.settings.webviewllm.preprocess.split('\n')){
+		for(let line of this.plugin.settings.webviewllm.preprocess?.trim().split('\n') ?? []){
 			let xfile = ea.file.get_tfile(line);
 			if(xfile){
 				let ctx = await ea.tpl.parse_templater(xfile, true, {tfile, cfile, prompt });
@@ -466,6 +466,11 @@ export class WebViewerLLMModule {
 		}
 
 		let response = '';
+
+		if(this.plugin.settings.webviewllm.write_clipboard){
+			await navigator.clipboard.writeText(prompt);
+		}
+
 		if (llm) {
 			response = (await llm.request(prompt)) ?? '';
 			const codes = await ea.editor.extract_code_block(tfile, 'js //templater');
@@ -474,16 +479,14 @@ export class WebViewerLLMModule {
 					this.app.workspace.setActiveLeaf(llm.view.leaf);
 				}
 			} else {
-				await ea.tpl.parse_templater(tfile, true, { cfile, llm: response });
+				await ea.tpl.parse_templater(tfile, true, {tfile,cfile, prompt, response, llm });
 			}
-		} else {
-			await navigator.clipboard.writeText(prompt);
 		}
 
-		for(let line of this.plugin.settings.webviewllm.postprocess.split('\n')){
+		for(let line of this.plugin.settings.webviewllm.postprocess?.trim().split('\n') ?? []){
 			let xfile = ea.file.get_tfile(line);
 			if(xfile){
-				await ea.tpl.parse_templater(xfile, true, {tfile, cfile, prompt,llm:response });
+				await ea.tpl.parse_templater(xfile, true, {tfile, cfile, prompt,response,llm });
 			}
 		}
 

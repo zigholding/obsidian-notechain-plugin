@@ -73,6 +73,22 @@ export class Strings{
         }
     }
 
+    get setting_add_reference(){
+        if(this.language=='zh'){
+            return '添加参考笔记'
+        }else{
+            return 'Add Reference Notes'
+        }
+    }
+
+    get setting_write_clipboard(){
+        if(this.language=='zh'){
+            return '写入剪贴板'
+        }else{
+            return 'Write to Clipboard'
+        }
+    }
+
     get setting_preprocess(){
         if(this.language=='zh'){
             return '预处理'

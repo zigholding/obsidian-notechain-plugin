@@ -7,6 +7,7 @@ export interface WebviewLLMSettings {
 	auto_stop: string;
 	prompt_name: string;
 	turndown_styles: string;
+	add_reference: boolean;
 	preprocess: string;
 	postprocess: string;
 }
@@ -14,6 +15,7 @@ export interface WebviewLLMSettings {
 export const WebViewLLMSettings_DEFAULT: WebviewLLMSettings = {
 	prompt_name: 'prompt\n提示词',
 	auto_stop: '修改完成\n修改完成。',
+	add_reference: true,
 	preprocess: '',
 	postprocess: '',
 	turndown_styles: `
@@ -45,6 +47,17 @@ export function renderWebViewerLLMSettings(plugin: NoteChainPlugin, containerEl:
 				})
 		);
 
+	
+	new Setting(containerEl)
+		.setName(strings.setting_add_reference)
+		.addToggle(text => text
+			.setValue(settings.add_reference)
+			.onChange(async (value) => {
+				settings.add_reference = value;
+				await plugin.saveSettings();
+			})
+		);
+
 	new Setting(containerEl)
 		.setName(strings.setting_preprocess)
 		.addTextArea((text) =>
@@ -54,6 +67,16 @@ export function renderWebViewerLLMSettings(plugin: NoteChainPlugin, containerEl:
 					settings.preprocess = value;
 					await plugin.saveSettings();
 				})
+		);
+
+	new Setting(containerEl)
+		.setName(strings.setting_write_clipboard)
+		.addToggle(text => text
+			.setValue(settings.write_clipboard)
+			.onChange(async (value) => {
+				settings.write_clipboard = value;
+				await plugin.saveSettings();
+			})
 		);
 	
 	new Setting(containerEl)
