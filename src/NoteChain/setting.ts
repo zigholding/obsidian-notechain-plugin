@@ -143,6 +143,7 @@ export function renderNoteChainSettings(plugin: NoteChainPlugin, containerEl: HT
 					await plugin.saveSettings();
 				})
 			);
+			
 		new Setting(containerEl)
 			.setName(strings.setting_field_of_prevnote)
 			.addText(text => text

@@ -8,6 +8,7 @@ export interface WebviewLLMSettings {
 	prompt_name: string;
 	turndown_styles: string;
 	add_reference: boolean;
+	write_clipboard: boolean;
 	preprocess: string;
 	postprocess: string;
 }
@@ -16,6 +17,7 @@ export const WebViewLLMSettings_DEFAULT: WebviewLLMSettings = {
 	prompt_name: 'prompt\n提示词',
 	auto_stop: '修改完成\n修改完成。',
 	add_reference: true,
+	write_clipboard: true,
 	preprocess: '',
 	postprocess: '',
 	turndown_styles: `
