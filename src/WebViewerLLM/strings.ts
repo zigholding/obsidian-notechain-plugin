@@ -49,6 +49,22 @@ export class Strings{
         }
     }
 
+    get cmd_probe_active_llm_elements(){
+        if(this.language=='zh'){
+            return 'WebviewLLM: 探测当前AI页面元素（输入/发送/复制）'
+        }else{
+            return 'WebviewLLM: Probe Active AI Elements (input/send/copy)'
+        }
+    }
+
+    get cmd_copy_active_llm_profile_snippet(){
+        if(this.language=='zh'){
+            return 'WebviewLLM: 复制当前AI页面 profile 片段'
+        }else{
+            return 'WebviewLLM: Copy Active AI Profile Snippet'
+        }
+    }
+
     get cmd_chat_with_target_tfile(){
         if(this.language=='zh'){
             return 'WebviewLLM: 与目标文件对话'

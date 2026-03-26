@@ -56,6 +56,22 @@ const cmd_paste_last_active_llm = (plugin: NoteChainPlugin) => ({
 	},
 });
 
+const cmd_probe_active_llm_elements = (plugin: NoteChainPlugin) => ({
+	id: 'note-chain-wv-cmd_probe_active_llm_elements',
+	name: strings.cmd_probe_active_llm_elements,
+	callback: async () => {
+		await plugin.webviewerllm.cmd_probe_active_llm_elements();
+	},
+});
+
+const cmd_copy_active_llm_profile_snippet = (plugin: NoteChainPlugin) => ({
+	id: 'note-chain-wv-cmd_copy_active_llm_profile_snippet',
+	name: strings.cmd_copy_active_llm_profile_snippet,
+	callback: async () => {
+		await plugin.webviewerllm.cmd_copy_active_llm_profile_snippet();
+	},
+});
+
 const cmd_paste_ai_contents_as_list2tab = (plugin: NoteChainPlugin) => ({
 	id: 'note-chain-wv-cmd_paste_ai_contents_as_list2tab',
 	name: strings.cmd_paste_ai_contents_as_list2tab,
@@ -91,6 +107,8 @@ const commandBuildersDesktop: Array<(p: NoteChainPlugin) => ReturnType<typeof cm
 	cmd_chat_sequence,
 	cmd_chat_sequence_stop,
 	cmd_paste_last_active_llm,
+	cmd_probe_active_llm_elements,
+	cmd_copy_active_llm_profile_snippet,
 	cmd_paste_ai_contents_as_list2tab,
 	cmd_paste_ai_contents_as_list2card,
 ];

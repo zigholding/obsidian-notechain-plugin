@@ -169,6 +169,75 @@ export class BaseWebViewer {
         return '';
     }
 
+    async copy_last_content() {
+        return false;
+    }
+
+    async probe_action_elements() {
+        if (!this.webview) {
+            return null;
+        }
+        const result = await this.webview.executeJavaScript(
+            `
+            (() => {
+                const toBrief = (el) => {
+                    if (!el) return null;
+                    const attrs = {};
+                    const keys = ['id', 'class', 'name', 'role', 'type', 'data-testid', 'aria-label', 'placeholder'];
+                    for (const key of keys) {
+                        const v = el.getAttribute?.(key);
+                        if (v) attrs[key] = v;
+                    }
+                    return {
+                        tag: el.tagName?.toLowerCase?.() || '',
+                        text: (el.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 80),
+                        attrs
+                    };
+                };
+                const pick = (selectors) => {
+                    for (const selector of selectors) {
+                        const el = document.querySelector(selector);
+                        if (el) return { selector, element: toBrief(el) };
+                    }
+                    return null;
+                };
+                const inputs = [
+                    'textarea',
+                    '[contenteditable="true"]',
+                    'div#prompt-textarea.ProseMirror',
+                    '.ProseMirror',
+                    '.ql-editor[contenteditable="true"]'
+                ];
+                const sends = [
+                    'button#composer-submit-button',
+                    'button[aria-label*="Send"]',
+                    'button[aria-label*="发送"]',
+                    'button.send-button',
+                    'button.send-button.submit',
+                    '[role="button"][aria-label*="Send"]',
+                    '[role="button"][aria-label*="发送"]',
+                    '#flow-end-msg-send',
+                    'a[class^="style__send-btn"]'
+                ];
+                const copies = [
+                    'button[data-testid*="copy"]',
+                    '[class*="copy"]',
+                    '[aria-label*="Copy"]',
+                    '[aria-label*="复制"]',
+                    '.segment-actions-content-btn'
+                ];
+                return {
+                    url: location.href,
+                    input: pick(inputs),
+                    send: pick(sends),
+                    copy: pick(copies)
+                };
+            })()
+            `
+        );
+        return result;
+    }
+
     async request(ctx: string, timeout = 120) {
 
         let N1 = await this.number_of_receive_msg();

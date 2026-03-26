@@ -504,6 +504,57 @@ export class WebViewerLLMModule {
 		this.easyapi.ceditor.replaceSelection(rsp);
 	}
 
+	async cmd_probe_active_llm_elements() {
+		const llm = await this.get_last_active_llm();
+		if (!llm) {
+			new Notice('No active LLM webview found');
+			return;
+		}
+		const result = await llm.probe_action_elements();
+		if (!result) {
+			new Notice(`${llm.name}: probe failed`);
+			return;
+		}
+		console.log('[note-chain][WebViewerLLM probe]', llm.name, result);
+		const okCount = [result.input, result.send, result.copy].filter(Boolean).length;
+		new Notice(`${llm.name}: probe ${okCount}/3 (see console)`);
+	}
+
+	async cmd_copy_active_llm_profile_snippet() {
+		const llm = await this.get_last_active_llm();
+		if (!llm) {
+			new Notice('No active LLM webview found');
+			return;
+		}
+		const result = await llm.probe_action_elements();
+		if (!result) {
+			new Notice(`${llm.name}: probe failed`);
+			return;
+		}
+		const quote = (x: string) => `'${x.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+		const lines: string[] = [];
+		lines.push(`// ${llm.name} (${result.url || llm.homepage})`);
+		lines.push('{');
+		if (result.input?.selector) {
+			lines.push(`\tinputSelectors: [${quote(result.input.selector)}],`);
+		}
+		if (result.send?.selector) {
+			lines.push(`\tsendButtonSelectors: [${quote(result.send.selector)}],`);
+		}
+		if (result.copy?.selector) {
+			lines.push(`\tcopyButtonSelectors: [${quote(result.copy.selector)}],`);
+		}
+		lines.push('}');
+		const snippet = lines.join('\n');
+		try {
+			await navigator.clipboard.writeText(snippet);
+			new Notice(`${llm.name}: profile snippet copied`);
+		} catch (e) {
+			console.log('[note-chain][WebViewerLLM profile snippet]', snippet);
+			new Notice(`${llm.name}: copy failed, snippet in console`);
+		}
+	}
+
 	async cmd_paste_to_markdown(anyblock = 'list2tab') {
 		const tfile = this.easyapi.cfile;
 		if (!tfile) {
