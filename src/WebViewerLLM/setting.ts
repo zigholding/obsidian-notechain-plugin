@@ -81,8 +81,8 @@ export function renderWebViewerLLMSettings(plugin: NoteChainPlugin, containerEl:
 			  .addOption('3', is_zh ? '不复制' : 'Not copy')  
 			  .setValue(settings.write_clipboard)  
 			  .onChange(async (value) => {  
-				settings.write_clipboard = value;  
-				 await this.plugin.saveSettings();  
+				 settings.write_clipboard = value;  
+				 await plugin.saveSettings();  
 			  })  
 		);
 

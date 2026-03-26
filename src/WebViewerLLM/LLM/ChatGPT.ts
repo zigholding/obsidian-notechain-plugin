@@ -17,77 +17,86 @@ export class ChatGPT extends BaseWebViewer {
 	}
 
 	async paste_msg(ctx: string) {
-		let msg;
 		ctx = this.get_safe_ctx(ctx);
-		const maxRetries = 1; // 最大重试次数
-		for (let attempt = 0; attempt < maxRetries; attempt++) {
-			msg = await this.webview.executeJavaScript(
-				`
-				function delay(ms) {
-					return new Promise(resolve => {
-					setTimeout(resolve, ms);
-					});
+		const msg = await this.webview.executeJavaScript(
+			`
+			(async () => {
+				const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+				let editor = document.querySelector('div#prompt-textarea.ProseMirror');
+				let retries = 80;
+				while (!editor && retries-- > 0) {
+					await delay(50);
+					editor = document.querySelector('div#prompt-textarea.ProseMirror');
 				}
-
-				// 将异步逻辑封装到一个 async 函数中
-				async function insertTextAndSend(ctx) {
-					// 获取 textarea 并聚焦
-					
-					let item = document.querySelector('div#prompt-textarea.ProseMirror');
-					item.focus();
-
-					// 插入文本
-					setTimeout(() => {
-						document.execCommand('insertText', false, ctx);
-					}, 1000);
-					let i = 100;
-					// 等待按钮可点击
-					while (true) {
-						let item = document.querySelector('button#composer-submit-button')
-						if(!item){
-							await delay(100);
-						}else{
-							break;
-						}
-						i = i-1;
-						if(i<0){break}
-					}
+				if (!editor) {
+					return false;
 				}
+				editor.focus();
 
-				// 调用 async 函数
-				insertTextAndSend(\`${ctx}\`);
-				`
-			);
-			// 检查是否成功粘贴
-			if (msg) {
-				break; // 如果成功，退出重试循环
-			}
-			await this.delay(1000); // 等待一段时间后重试
-		}
+				// 直接写入文本并主动触发 input 事件，避免固定等待导致的卡顿
+				editor.textContent = \`${ctx}\`;
+				editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: \`${ctx}\` }));
 
+				let button = document.querySelector('button#composer-submit-button');
+				retries = 80;
+				while ((!button || button.disabled) && retries-- > 0) {
+					await delay(50);
+					button = document.querySelector('button#composer-submit-button');
+				}
+				return !!button && !button.disabled;
+			})()
+			`
+		);
 		return msg;
 	}
 
 	async click_btn_of_send() {
 		let msg = await this.webview.executeJavaScript(
 			`
-			function delay(ms) {
-				return new Promise(resolve => {
-					setTimeout(resolve, ms);
-				});
-			}
 			async function click(){
+				const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 				let button = document.querySelector('button#composer-submit-button');
-				while(!button){
-					await delay(100);
+				let retries = 80;
+				while((!button || button.disabled) && retries-- > 0){
+					await delay(50);
 					button = document.querySelector('button#composer-submit-button');
 				}
+				if(!button || button.disabled){
+					return false;
+				}
 				button.click();
+				return true;
 			}
 			click();
 			`
 		)
 		return msg;
+	}
+
+	async request(ctx: string, timeout = 120) {
+		let N1 = await this.number_of_receive_msg();
+		await this.paste_msg(ctx);
+		await this.click_btn_of_send();
+
+		let N2 = await this.number_of_receive_msg();
+		while (N2 != N1 + 1) {
+			await this.delay(800);
+			N2 = await this.number_of_receive_msg();
+			timeout = timeout - 1;
+			if (timeout < 0) {
+				break;
+			}
+		}
+
+		if (N2 == N1 + 1) {
+			const rsp = await this.get_last_content();
+			new Notice(`${this.name} 说了点什么`);
+			return rsp;
+		} else {
+			new Notice(`${this.name} 不说话`);
+			console.log(this.name, N1, N2);
+			return null;
+		}
 	}
 
 	async number_of_receive_msg() {
