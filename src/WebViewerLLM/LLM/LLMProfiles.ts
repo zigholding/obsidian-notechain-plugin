@@ -68,9 +68,5 @@ export const chatGPTProfile: WebViewerSelectorProfile = {
 	inputSelectors: ['div#prompt-textarea.ProseMirror'],
 	sendButtonSelectors: ['button#composer-submit-button'],
 	receiveMessageSelectors: ['div[data-message-author-role="assistant"]'],
-	receiveDoneSelectors: [
-		'button[data-testid="good-response-turn-action-button"]',
-		'button[data-testid="copy-turn-action-button"]'
-	],
-	lastContentSelectors: ['div[data-message-author-role="assistant"] div.markdown']
+	lastContentSelectors: ['div[data-message-author-role="assistant"]']
 };

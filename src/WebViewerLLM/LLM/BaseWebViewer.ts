@@ -130,7 +130,7 @@ export class BaseWebViewer {
     
     async html_to_markdown(html: string): Promise<string> {
         const nc = (this.app as any).plugins.plugins['note-chain'];
-        const md = nc?.webViewerLLM ? await nc.webViewerLLM.html_to_markdown(html) : '';
+        const md = nc?.webviewerllm ? await nc.webviewerllm.html_to_markdown(html) : '';
         return md;
     }
 
@@ -246,7 +246,7 @@ export class BaseWebViewer {
         await this.click_btn_of_send();
         let N2 = await this.number_of_receive_msg();
 
-        while (N2 != N1 + 1) {
+        while (N2 < N1 + 1) {
             await this.delay(1000);
             N2 = await this.number_of_receive_msg();
             timeout = timeout - 1;
@@ -255,8 +255,31 @@ export class BaseWebViewer {
             }
         }
 
-        if (N2 == N1 + 1) {
-            let ctx = await this.get_last_content();
+        if (N2 >= N1 + 1) {
+            // 回复开始后继续轮询，直到内容稳定后再返回
+            let prevCtx = '';
+            let stableRounds = 0;
+            let ctx = '';
+            while (timeout >= 0) {
+                const cur = (await this.get_last_content()) ?? '';
+                if (cur !== '' && cur === prevCtx) {
+                    stableRounds = stableRounds + 1;
+                } else {
+                    stableRounds = 0;
+                }
+                if (cur !== '') {
+                    prevCtx = cur;
+                }
+                if (prevCtx !== '' && stableRounds >= 1) {
+                    ctx = prevCtx;
+                    break;
+                }
+                await this.delay(1000);
+                timeout = timeout - 1;
+            }
+            if (ctx === '' && prevCtx !== '') {
+                ctx = prevCtx;
+            }
             new Notice(`${this.name} 说了点什么`)
             return ctx;
         } else {

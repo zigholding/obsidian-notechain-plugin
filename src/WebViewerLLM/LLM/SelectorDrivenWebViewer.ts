@@ -230,8 +230,9 @@ export class SelectorDrivenWebViewer extends BaseWebViewer {
 				break;
 			}
 		}
-		if (this.profile.lastContentFilterSelector) {
-			items = items.filter(item => !item.closest(this.profile.lastContentFilterSelector));
+		const filterSelector = this.profile.lastContentFilterSelector;
+		if (filterSelector) {
+			items = items.filter(item => !item.closest(filterSelector));
 		}
 		if (items.length < 1) {
 			return '';
