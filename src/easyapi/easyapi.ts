@@ -48,10 +48,6 @@ export class EasyAPI {
         return (this.app as any).plugins?.plugins[name]
     }
     
-    get ea(){
-        return this.get_plugin('easyapi');
-    }
-
     get nc(){
         return this.get_plugin('note-chain');
     }
@@ -61,7 +57,7 @@ export class EasyAPI {
     }
 
     get wv(){
-        return this.nc?.webviewer_llm;
+        return this.nc?.webviewerllm;
     }
 
     get qa(){
