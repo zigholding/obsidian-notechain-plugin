@@ -8,7 +8,7 @@ export interface WebviewLLMSettings {
 	prompt_name: string;
 	turndown_styles: string;
 	add_reference: boolean;
-	write_clipboard: boolean;
+	write_clipboard: string;
 	preprocess: string;
 	postprocess: string;
 }
@@ -17,7 +17,7 @@ export const WebViewLLMSettings_DEFAULT: WebviewLLMSettings = {
 	prompt_name: 'prompt\n提示词',
 	auto_stop: '修改完成\n修改完成。',
 	add_reference: true,
-	write_clipboard: true,
+	write_clipboard: `1`,
 	preprocess: '',
 	postprocess: '',
 	turndown_styles: `
@@ -37,6 +37,7 @@ key+value:
 
 export function renderWebViewerLLMSettings(plugin: NoteChainPlugin, containerEl: HTMLElement): void {
 	let settings = plugin.settings.webviewllm;
+	let is_zh = window.localStorage.getItem('language') == 'zh';
 
 	new Setting(containerEl)
 		.setName(strings.setting_prompt_name)
@@ -71,15 +72,20 @@ export function renderWebViewerLLMSettings(plugin: NoteChainPlugin, containerEl:
 				})
 		);
 
-	new Setting(containerEl)
-		.setName(strings.setting_write_clipboard)
-		.addToggle(text => text
-			.setValue(settings.write_clipboard)
-			.onChange(async (value) => {
-				settings.write_clipboard = value;
-				await plugin.saveSettings();
-			})
+	new Setting(containerEl)  
+		.setName(strings.setting_write_clipboard)  
+		.addDropdown((dropdown) =>  
+		   dropdown  
+			  .addOption('1', is_zh ? '仅复制' : 'Only copy')  
+			  .addOption('2', is_zh ? '复制并发送' : 'Copy and send')  
+			  .addOption('3', is_zh ? '不复制' : 'Not copy')  
+			  .setValue(settings.write_clipboard)  
+			  .onChange(async (value) => {  
+				settings.write_clipboard = value;  
+				 await this.plugin.saveSettings();  
+			  })  
 		);
+
 	
 	new Setting(containerEl)
 		.setName(strings.setting_postprocess)

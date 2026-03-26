@@ -467,11 +467,10 @@ export class WebViewerLLMModule {
 
 		let response = '';
 
-		if(this.plugin.settings.webviewllm.write_clipboard){
+		if(this.plugin.settings.webviewllm.write_clipboard == '1'){
 			await navigator.clipboard.writeText(prompt);
-		}
-
-		if (llm) {
+		}else if(this.plugin.settings.webviewllm.write_clipboard == '2'){
+			await navigator.clipboard.writeText(prompt);
 			response = (await llm.request(prompt)) ?? '';
 			const codes = await ea.editor.extract_code_block(tfile, 'js //templater');
 			if (codes.length === 0 && response) {
@@ -481,6 +480,8 @@ export class WebViewerLLMModule {
 			} else {
 				await ea.tpl.parse_templater(tfile, true, {tfile,cfile, prompt, response, llm });
 			}
+		}else if(this.plugin.settings.webviewllm.write_clipboard == '3'){
+			response = (await llm.request(prompt)) ?? '';
 		}
 
 		for(let line of this.plugin.settings.webviewllm.postprocess?.trim().split('\n') ?? []){
@@ -489,7 +490,6 @@ export class WebViewerLLMModule {
 				await ea.tpl.parse_templater(xfile, true, {tfile, cfile, prompt,response,llm });
 			}
 		}
-
 	}
 
 	async cmd_paste_last_active_llm() {
