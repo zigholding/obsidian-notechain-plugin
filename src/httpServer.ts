@@ -79,6 +79,8 @@ export class HTTPServer {
     private app: App;
     private templater: Templater;
     private server: any = null;
+    /** 合并并发 stop，且避免对同一 server 调用两次 close() */
+    private stopPromise: Promise<void> | null = null;
     private port: number;
     private host: string;
     private sseConnections: Map<string, any> = new Map();
@@ -529,17 +531,26 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
         // 生成连接 ID
         let connectionId = sessionId;
         
-        // 保存连接
-        this.sseConnections.set(connectionId, {
-            res: res,
-            sessionId: sessionId,
-            connectedAt: new Date()
-        });
+        let connRecord: {
+            res: any;
+            sessionId: string;
+            connectedAt: Date;
+            heartbeatInterval: ReturnType<typeof setInterval> | null;
+        } = {
+            res,
+            sessionId,
+            connectedAt: new Date(),
+            heartbeatInterval: null,
+        };
+        this.sseConnections.set(connectionId, connRecord);
 
         // 清理函数
         let cleanup = () => {
             this.sseConnections.delete(connectionId);
-            clearInterval(heartbeatInterval);
+            if (connRecord.heartbeatInterval) {
+                clearInterval(connRecord.heartbeatInterval);
+                connRecord.heartbeatInterval = null;
+            }
         };
 
         // 监听连接事件
@@ -554,7 +565,7 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
         });
 
         // 发送心跳 ping（SSE 注释格式）
-        let heartbeatInterval = setInterval(() => {
+        connRecord.heartbeatInterval = setInterval(() => {
             try {
                 if (this.sseConnections.has(connectionId)) {
                     let now = new Date().toISOString();
@@ -563,10 +574,9 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
                         res.flush();
                     }
                 } else {
-                    clearInterval(heartbeatInterval);
+                    cleanup();
                 }
             } catch (error) {
-                clearInterval(heartbeatInterval);
                 cleanup();
             }
         }, 30000); // 30秒心跳
@@ -827,26 +837,53 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
     }
 
     stop(): Promise<void> {
-        return new Promise((resolve) => {
-            if (this.server) {
-                // 关闭所有 SSE 连接
-                for (let [connId, conn] of this.sseConnections.entries()) {
-                    try {
-                        conn.res.end();
-                    } catch (e) {
-                        // 忽略错误
-                    }
-                }
-                this.sseConnections.clear();
-                
-                this.server.close(() => {
+        if (this.stopPromise) {
+            return this.stopPromise;
+        }
+        if (!this.server) {
+            return Promise.resolve();
+        }
+
+        const srv = this.server;
+
+        this.stopPromise = new Promise((resolve) => {
+            let settled = false;
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                if (this.server === srv) {
                     this.server = null;
-                    resolve();
-                });
-            } else {
+                }
+                this.stopPromise = null;
                 resolve();
+            };
+
+            for (let [, conn] of this.sseConnections.entries()) {
+                try {
+                    if (conn.heartbeatInterval) {
+                        clearInterval(conn.heartbeatInterval);
+                        conn.heartbeatInterval = null;
+                    }
+                    conn.res.end();
+                    conn.res.socket?.destroy();
+                } catch (e) {
+                    // ignore
+                }
             }
+            this.sseConnections.clear();
+
+            // 立刻拆掉普通 HTTP 的 keep-alive 连接，否则 close() 可能卡到 keepAliveTimeout（默认很长）
+            if (typeof srv.closeAllConnections === 'function') {
+                srv.closeAllConnections();
+            }
+            if (typeof srv.closeIdleConnections === 'function') {
+                srv.closeIdleConnections();
+            }
+
+            srv.close(() => finish());
         });
+
+        return this.stopPromise;
     }
 
     setHost(host: string) {

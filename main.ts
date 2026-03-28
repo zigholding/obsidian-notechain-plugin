@@ -138,11 +138,16 @@ export default class NoteChainPlugin extends Plugin {
 
 
 	async onunload() {
+		// 先停 HTTP，避免 explorer 等耗时逻辑拖后导致退出时端口仍被占用
+		if (this.httpServer) {
+			try {
+				await this.httpServer.stop();
+			} catch (e) {
+				console.error('Note Chain: HTTP server stop failed', e);
+			}
+		}
 		await this.explorer.unregister();
 		await this.explorer.sort();
-		if (this.httpServer) {
-			await this.httpServer.stop();
-		}
 	}
 
 	async ufunc_on_file_open(file: TFile) {
