@@ -12,6 +12,20 @@ export function normalizeHexForColorInput(v: unknown): string {
 	return "#888888";
 }
 
+/** Normalize a list of palette entries to unique `#rrggbb` values (order preserved). */
+export function normalizePaletteInput(colors: unknown): string[] {
+	if (!Array.isArray(colors)) return [];
+	const seen = new Set<string>();
+	const out: string[] = [];
+	for (const c of colors) {
+		const h = normalizeHexForColorInput(c);
+		if (seen.has(h)) continue;
+		seen.add(h);
+		out.push(h);
+	}
+	return out;
+}
+
 /** Modal color picker; same Promise / Ok–Cancel pattern as InputPrompt. */
 export default class SelectColor extends Modal {
 	public waitForClose: Promise<string>;
@@ -21,19 +35,29 @@ export default class SelectColor extends Modal {
 	private didSubmit = false;
 	private color: string;
 	private colorInputEl!: HTMLInputElement;
+	private previewEl!: HTMLDivElement;
+	private hexEl!: HTMLSpanElement;
+	private readonly palette: string[];
 
-	public static Prompt(app: App, header: string, initial?: unknown): Promise<string> {
-		const modal = new SelectColor(app, header, initial);
+	public static Prompt(
+		app: App,
+		header: string,
+		initial?: unknown,
+		colors?: unknown
+	): Promise<string> {
+		const modal = new SelectColor(app, header, initial, colors);
 		return modal.waitForClose;
 	}
 
 	protected constructor(
 		app: App,
 		private header: string,
-		initial?: unknown
+		initial?: unknown,
+		colors?: unknown
 	) {
 		super(app);
 		this.color = normalizeHexForColorInput(initial);
+		this.palette = normalizePaletteInput(colors);
 
 		this.waitForClose = new Promise<string>((resolve, reject) => {
 			this.resolvePromise = resolve;
@@ -44,16 +68,62 @@ export default class SelectColor extends Modal {
 		this.open();
 	}
 
+	private syncColorUI() {
+		this.previewEl.style.backgroundColor = this.color;
+		this.hexEl.setText(this.color.toUpperCase());
+	}
+
 	private display() {
 		this.containerEl.addClass("ncSelectColorModal");
 		this.contentEl.empty();
 		this.titleEl.textContent = this.header;
 
-		const mainContentContainer = this.contentEl.createDiv();
-		this.colorInputEl = mainContentContainer.createEl("input", { type: "color" });
+		const mainContentContainer = this.contentEl.createDiv({
+			cls: "nc-select-color-body",
+		});
+
+		if (this.palette.length > 0) {
+			const paletteEl = mainContentContainer.createDiv({
+				cls: "nc-color-palette",
+			});
+			for (const hex of this.palette) {
+				const btn = paletteEl.createEl("button", {
+					type: "button",
+					cls: "nc-color-swatch",
+					attr: { "aria-label": hex },
+				});
+				btn.style.backgroundColor = hex;
+				btn.addEventListener("click", () => {
+					this.color = hex;
+					this.colorInputEl.value = hex;
+					this.syncColorUI();
+					this.didSubmit = true;
+					this.close();
+				});
+			}
+		}
+
+		const pickerWrap = mainContentContainer.createDiv({
+			cls: "nc-color-picker-wrap",
+		});
+		const surface = pickerWrap.createEl("label", {
+			cls: "nc-color-picker-surface",
+		});
+
+		this.colorInputEl = surface.createEl("input", {
+			type: "color",
+			cls: "nc-color-picker-native",
+		});
 		this.colorInputEl.value = this.color;
+		this.previewEl = surface.createDiv({ cls: "nc-color-picker-preview" });
+
+		const meta = pickerWrap.createDiv({ cls: "nc-color-picker-meta" });
+		this.hexEl = meta.createEl("span", { cls: "nc-color-picker-hex" });
+		this.syncColorUI();
+
 		this.colorInputEl.addEventListener("input", () => {
 			this.color = this.colorInputEl.value;
+			this.syncColorUI();
 		});
 
 		const buttonBarContainer = mainContentContainer.createDiv();
@@ -96,10 +166,11 @@ export default class SelectColor extends Modal {
 
 export async function selectColor(
 	header: string,
-	initial?: unknown
+	initial?: unknown,
+	colors: unknown = []
 ): Promise<string | null> {
 	try {
-		return await SelectColor.Prompt(this.app, header, initial);
+		return await SelectColor.Prompt(this.app, header, initial, colors);
 	} catch {
 		return null;
 	}
