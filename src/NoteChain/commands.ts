@@ -31,10 +31,10 @@ const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 						let note = plugin.easyapi.file.get_tfile(scenes);
 						if(note){
 							let slevel = '\t'.repeat(level);
-							let prelevel = plugin.editor.get_frontmatter(note,plugin.settings.field_of_confluence_tab_format);
+							let prelevel = plugin.editor.get_frontmatter(note,plugin.settings.notechain.field_of_confluence_tab_format);
 							if(prelevel==slevel || (prelevel==null && slevel=='')){return;}
 							await plugin.editor.set_frontmatter(
-								note,plugin.settings.field_of_confluence_tab_format,
+								note,plugin.settings.notechain.field_of_confluence_tab_format,
 								slevel
 							);
 						}
@@ -320,7 +320,7 @@ const create_new_note = (plugin:NoteChainPlugin) => ({
 						await (plugin.chain as any)[target](dst,curr);
 						if(target=='chain_insert_node_after'||target=='chain_insert_node_before'){
 							await plugin.editor.set_frontmatter_align_file(
-								curr,dst,plugin.settings.field_of_confluence_tab_format
+								curr,dst,plugin.settings.notechain.field_of_confluence_tab_format
 							)
 						}
 					}
@@ -582,7 +582,7 @@ const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
 				tfiles.push(f);
 			}
 		}
-		let items = plugin.settings.tpl_tags_folder.trim().split('\n');
+		let items = plugin.settings.notechain.tpl_tags_folder.trim().split('\n');
 		if(items.length>0){
 			for(let item of items){
 				let xfiles = plugin.easyapi.file.get_group(item);
@@ -664,7 +664,7 @@ const cmd_move_next_level = (plugin: NoteChainPlugin) => ({
 	hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'L' }],
 	icon: 'arrow-right-from-line',
     callback: async () => {
-		let key = plugin.settings.field_of_confluence_tab_format
+		let key = plugin.settings.notechain.field_of_confluence_tab_format
 		if(!key){return}
 		let tfiles = plugin.easyapi.file.get_selected_files()
 		for(let tfile of tfiles){
@@ -684,7 +684,7 @@ const cmd_move_none_level = (plugin: NoteChainPlugin) => ({
 	hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'K' }],
 	icon:'align-justify',
     callback: async () => {
-		let key = plugin.settings.field_of_confluence_tab_format
+		let key = plugin.settings.notechain.field_of_confluence_tab_format
 		if(!key){return}
 		let tfiles = plugin.easyapi.file.get_selected_files()
 		for(let tfile of tfiles){
@@ -702,7 +702,7 @@ const cmd_move_prev_level = (plugin: NoteChainPlugin) => ({
 	hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'J' }],
 	icon:'arrow-left-from-line',
     callback: async () => {
-		let key = plugin.settings.field_of_confluence_tab_format
+		let key = plugin.settings.notechain.field_of_confluence_tab_format
 		if(!key){return}
 		let tfiles = plugin.easyapi.file.get_selected_files()
 		for(let tfile of tfiles){
@@ -821,7 +821,7 @@ const cmd_generate_mcp_skill = (plugin: NoteChainPlugin) => ({
 			new Notice('Save to computer is only available on desktop');
 			return;
 		}
-		const baseUrl = `http://${plugin.settings.httpServerHost}:${plugin.settings.httpServerPort}`;
+		const baseUrl = `http://${plugin.settings.notechain.httpServerHost}:${plugin.settings.httpServerPort}`;
 		const content = await plugin.httpServer.getMCPSkillMarkdownAsync(baseUrl);
 		try {
 			const { dialog } = require('electron').remote;

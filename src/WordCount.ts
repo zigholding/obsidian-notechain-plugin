@@ -30,7 +30,7 @@ export class WordCount{
         if(tfile.extension!='md'){return false;}
         if(tfile.basename==tfile.parent?.name){return true}
         
-        let xfolders = this.plugin.settings.wordcountxfolder.split('\n').filter((x:string)=>x!='');
+        let xfolders = this.plugin.settings.notechain.wordcountxfolder.split('\n').filter((x:string)=>x!='');
         for(let item of xfolders){
             if(tfile.path.startsWith(item)){
                 return false;
@@ -89,7 +89,7 @@ export class WordCount{
                 let t = moment.unix(tfile.stat.mtime/1000);
                 let mtime = t.format('YYYY-MM-DD');
                 if(fm[key]==null){
-                    if(val>0){
+                    if(val>=0){
                         fm[key] = {};
                         if(mtime== moment().format('YYYY-MM-DD') && mtime!=moment.unix(tfile.stat.ctime/1000).format('YYYY-MM-DD')){
                             fm[key][t.add(-1,'days').format('YYYY-MM-DD')] = val;
@@ -100,15 +100,11 @@ export class WordCount{
                 }else{
                     let ts = Object.keys(fm[key]).sort((b,a)=>a.localeCompare(b)).filter(x=>!(x==mtime));
                     if(ts.length==0){
-                        if(val>0){
-                            fm[key][mtime] = val;
-                        }else if(fm[key][mtime]){
-                            fm[key][mtime] = val;
-                        }
+                        fm[key][mtime] = val;
                     }else{
                         if((val-fm[key][ts[0]])!=0){
                             fm[key][mtime] = val;
-                        }else if(fm[key][mtime]){
+                        }else if(fm[key][mtime]){// 如果val与ts[0]的值相同，则删除mtime
                             delete fm[key][mtime];
                         }
                     }
@@ -203,7 +199,7 @@ export class WordCount{
     }
 
     register(){
-		if(this.plugin.settings.wordcout){
+		if(this.plugin.settings.notechain.wordcout){
 			this.regeister_editor_change();
 			this.regeister_active_leaf_change();
 		}else{

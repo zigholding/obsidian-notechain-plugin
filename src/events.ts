@@ -42,7 +42,7 @@ const onRenameFile = (plugin: NoteChainPlugin) => {
 			const oldFolder = plugin.app.vault.getFolderByPath(
 				oldPath.slice(0, oldPath.lastIndexOf('/'))
 			);
-			if (oldFolder != file.parent && plugin.settings.auto_notechain) {
+			if (oldFolder != file.parent && plugin.settings.notechain.auto_notechain) {
 				await plugin.chain.chain_pop_node(file);
 				await plugin.auto_notechain(file);
 			}
@@ -73,7 +73,7 @@ const onFileMenuCreateNextNote = (plugin: NoteChainPlugin) => {
 								await plugin.chain.chain_insert_node_after(tfile, file);
 
 								await plugin.editor.set_frontmatter_align_file(
-									file, tfile, plugin.settings.field_of_confluence_tab_format
+									file, tfile, plugin.settings.notechain.field_of_confluence_tab_format
 								);
 
 								await plugin.chain.open_note(tfile, false, false);
@@ -98,7 +98,7 @@ const onFileMenuMoveAsNextNote = (plugin: NoteChainPlugin) => {
 							if (anchor) {
 								await plugin.chain.chain_insert_node_after(file, anchor);
 								await plugin.editor.set_frontmatter_align_file(
-									anchor, file, plugin.settings.field_of_confluence_tab_format
+									anchor, file, plugin.settings.notechain.field_of_confluence_tab_format
 								);
 
 								if (file.parent != anchor.parent) {
@@ -161,7 +161,7 @@ const onFileMenuMoveAsNextNote = (plugin: NoteChainPlugin) => {
 							await plugin.chain.chain_concat_tfiles(tfiles);
 							for (let dst of tfiles.slice(1, tfiles.length - 1)) {
 								await plugin.editor.set_frontmatter_align_file(
-									anchor, dst, plugin.settings.field_of_confluence_tab_format
+									anchor, dst, plugin.settings.notechain.field_of_confluence_tab_format
 								);
 							}
 						});
@@ -187,7 +187,7 @@ const onMetadataChanged = (plugin: NoteChainPlugin) => {
 					}
 					plugin.explorer.sort(0, false);
 
-					if (plugin.settings.field_of_display_text) {
+					if (plugin.settings.notechain.field_of_display_text) {
 						const txt = plugin.explorer.get_display_text(file);
 						const items = (plugin.explorer.file_explorer as any).fileItems;
 						plugin.explorer._set_display_text_(items[file.path], txt);
@@ -196,7 +196,7 @@ const onMetadataChanged = (plugin: NoteChainPlugin) => {
 						plugin.explorer._set_display_text_(canvas, txt);
 
 						if ((file.parent && file.basename == file.parent.name) || (file.parent && file.parent.path == '/')) {
-							const field = plugin.editor.get_frontmatter(file, plugin.settings.field_of_display_text);
+							const field = plugin.editor.get_frontmatter(file, plugin.settings.notechain.field_of_display_text);
 							const prev = (file as any).note_chain_display_field;
 							if (!prev || prev != field) {
 								for (let key in items) {

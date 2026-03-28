@@ -66,7 +66,7 @@ export class WebViewerLLMModule {
 		];
 		this.basewv = new BaseWebViewer(this.app, '');
 	}
-
+ 
 	get app() {
 		return this.plugin.app;
 	}
