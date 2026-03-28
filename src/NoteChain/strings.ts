@@ -189,6 +189,14 @@ export class Strings{
         }
     }
 
+    get cmd_pick_note_background_color(){
+        if(this.language=='zh'){
+            return '用颜色选择器设置笔记背景色字段'
+        }else{
+            return "Set background color field via color picker";
+        }
+    }
+
     get cmd_move_next_level(){
         if(this.language=='zh'){
             return '提高缩进层级'

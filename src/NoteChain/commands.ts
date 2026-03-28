@@ -4,7 +4,6 @@ import {
 
 import NoteChainPlugin from '../../main';
 
-
 const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 	id: "longform2notechain",
     name: plugin.strings.cmd_longform2notechain,
@@ -658,6 +657,36 @@ const cmd_set_frontmatter = (plugin: NoteChainPlugin) => ({
     }
 });
 
+const cmd_pick_note_background_color = (plugin: NoteChainPlugin) => ({
+	id: 'pick-note-background-color',
+	name: plugin.strings.cmd_pick_note_background_color,
+	icon: 'palette',
+	callback: async () => {
+		const field = plugin.settings.notechain.field_of_background_color?.trim();
+		if (!field) {
+			new Notice(
+				plugin.strings.language === 'zh'
+					? '请先在 Note Chain 设置中填写「背景色字段」'
+					: 'Set the background color field name in Note Chain settings first'
+			);
+			return;
+		}
+		const tfile = plugin.chain.current_note;
+		if (!tfile) {
+			new Notice(plugin.strings.language === 'zh' ? '没有当前笔记' : 'No active note');
+			return;
+		}
+		const initial = plugin.editor.get_frontmatter(tfile, field);
+		const color = await plugin.easyapi.dialog_color(
+			plugin.app,
+			plugin.strings.cmd_pick_note_background_color,
+			initial
+		);
+		if (color == null) return;
+		await plugin.editor.set_frontmatter(tfile, field, color, 1);
+	}
+});
+
 const cmd_move_next_level = (plugin: NoteChainPlugin) => ({
     id: 'move_next_level',
     name: plugin.strings.cmd_move_next_level,
@@ -821,7 +850,7 @@ const cmd_generate_mcp_skill = (plugin: NoteChainPlugin) => ({
 			new Notice('Save to computer is only available on desktop');
 			return;
 		}
-		const baseUrl = `http://${plugin.settings.notechain.httpServerHost}:${plugin.settings.httpServerPort}`;
+		const baseUrl = `http://${plugin.settings.notechain.httpServerHost}:${plugin.settings.notechain.httpServerPort}`;
 		const content = await plugin.httpServer.getMCPSkillMarkdownAsync(baseUrl);
 		try {
 			const { dialog } = require('electron').remote;
@@ -871,6 +900,7 @@ const commandBuilders = [
 	cmd_execute_template_modal,
 	cmd_toogle_css_block_in_note,
 	cmd_set_frontmatter,
+	cmd_pick_note_background_color,
 	cmd_move_next_level,
 	cmd_move_none_level,
 	cmd_move_prev_level,
