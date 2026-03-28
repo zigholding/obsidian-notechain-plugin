@@ -209,8 +209,8 @@ export class NCFileExplorer{
 	}
 
 	get_field_of_display_text(tfile:TAbstractFile):string{
-		if(this.plugin.settings.field_of_display_text){
-			let item =  this.plugin.editor.get_frontmatter_config(tfile,this.plugin.settings.field_of_display_text)
+		if(this.plugin.settings.notechain.field_of_display_text){
+			let item =  this.plugin.editor.get_frontmatter_config(tfile,this.plugin.settings.notechain.field_of_display_text)
 			if(typeof(item) != 'string'){
 				return ''
 			}
@@ -267,10 +267,10 @@ export class NCFileExplorer{
 		let str = this.get_field_of_display_text(tfile)
 
 		
-		if(!str && this.plugin.settings.field_of_confluence_tab_format){
-			str = `<${this.plugin.settings.field_of_confluence_tab_format}><$0>`
+		if(!str && this.plugin.settings.notechain.field_of_confluence_tab_format){
+			str = `<${this.plugin.settings.notechain.field_of_confluence_tab_format}><$0>`
 		}else{
-			str = `<${this.plugin.settings.field_of_confluence_tab_format}>${str}`
+			str = `<${this.plugin.settings.notechain.field_of_confluence_tab_format}>${str}`
 		}
 		
 		if(!str || str=='$0' || str=='<$0>'){
@@ -305,8 +305,8 @@ export class NCFileExplorer{
 	}
 
 	async get_fileitem_style(tfile:TAbstractFile){
-		if(this.plugin.settings.field_of_background_color){
-			let style = this.plugin.editor.get_frontmatter_config(tfile,this.plugin.settings.field_of_background_color)
+		if(this.plugin.settings.notechain.field_of_background_color){
+			let style = this.plugin.editor.get_frontmatter_config(tfile,this.plugin.settings.notechain.field_of_background_color)
 			if(typeof(style)=='string'){
 				let func = await this.plugin.utils.get_str_func(this.app,style)
 				if(func){
