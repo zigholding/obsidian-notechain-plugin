@@ -1,5 +1,5 @@
 import {
-	App, PluginSettingTab, Setting, ButtonComponent
+	App, PluginSettingTab
 } from 'obsidian';
 
 import NoteChainPlugin from '../main';
@@ -10,34 +10,52 @@ import { renderWebViewerLLMSettings } from 'src/WebViewerLLM/setting';
 export class NCSettingTab extends PluginSettingTab {
 	plugin: NoteChainPlugin;
 	activeTab: string = 'notechain';
-	tabs: { id: string; name: string }[] = [];
+	private readonly tabIds = ['notechain', 'webviewer_llm'] as const;
 
 	constructor(app: App, plugin: NoteChainPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
-		this.tabs = [
-			{ id: "notechain", name: "notechain" }, 
-			{ id: "webviewer_llm", name: "webviewer_llm" },
-		]
+	}
+
+	private tabLabel(id: string): string {
+		switch (id) {
+			case 'notechain':
+				return this.plugin.strings.setting_tab_notechain;
+			case 'webviewer_llm':
+				return this.plugin.strings.setting_tab_webviewer_llm;
+			default:
+				return id;
+		}
 	}
 
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		const tabsContainer = containerEl.createDiv("nav-buttons-container");
-		tabsContainer.addClasses(["modal-opener-tabs"]);
-		this.tabs.forEach((tab) => {
-			const btn = new ButtonComponent(tabsContainer).setButtonText(tab.name).onClick(() => {
-				this.activeTab = tab.id;
-				this.display();
+		const tabsEl = containerEl.createDiv({ cls: 'nc-setting-tabs', attr: { role: 'tablist' } });
+		this.tabIds.forEach((tabId) => {
+			const isActive = this.activeTab === tabId;
+			const btn = tabsEl.createEl('button', {
+				type: 'button',
+				cls: 'nc-setting-tab' + (isActive ? ' is-active' : ''),
+				attr: {
+					role: 'tab',
+					'aria-selected': isActive ? 'true' : 'false',
+				},
 			});
-			if (this.activeTab === tab.id) {
-				btn.buttonEl.addClass("is-active");
-			}
+			btn.setText(this.tabLabel(tabId));
+			btn.addEventListener('click', () => {
+				if (this.activeTab !== tabId) {
+					this.activeTab = tabId;
+					this.display();
+				}
+			});
 		});
 
-		const panelEl = containerEl.createDiv('nc-setting-tab-panel');
+		const panelEl = containerEl.createDiv({
+			cls: 'nc-setting-tab-panel',
+			attr: { role: 'tabpanel' },
+		});
 		switch (this.activeTab) {
 			case 'notechain':
 				renderNoteChainSettings(this.plugin, panelEl);

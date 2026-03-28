@@ -776,7 +776,7 @@ const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
 
 		let ctx = await plugin.app.vault.cachedRead(cfile);
 		let flag = false;
-		if(ctx.search('\n```js //templater\n')>0){
+		if (/\n```js\s*(\/\/)?(templater|tpl)\n/.test(ctx)){
 			new Notice(`执行当前脚本：${cfile.basename}`)
 			flag = true;
 			plugin.easyapi.tpl.parse_templater(cfile.basename)
