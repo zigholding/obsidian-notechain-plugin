@@ -81,10 +81,11 @@ export default class NoteChainPlugin extends Plugin {
 		this.debug = true;
 		await this.loadSettings();
 
+		this.easyapi = new EasyAPI(this.app);
+
 		this.utils = require('./src/utils');
 		this.ob = require('obsidian');
-
-		this.easyapi = new EasyAPI(this.app);
+		
 		this.chain = new NoteChain(
 			this,
 			this.settings.notechain.field_of_prevnote, this.settings.notechain.field_of_nextnote
@@ -104,7 +105,7 @@ export default class NoteChainPlugin extends Plugin {
 			this.settings.notechain.httpServerPort
 		);
 		// 如果启用，自动启动 HTTP 服务器
-		if (this.settings.notechain.httpServerEnabled) {
+		if (!this.easyapi.isMobile && this.settings.notechain.httpServerEnabled) {
 			this.httpServer.start()
 				.then(() => {
 					console.log(`HTTP Server auto-started on ${this.settings.notechain.httpServerHost}:${this.settings.notechain.httpServerPort}`);

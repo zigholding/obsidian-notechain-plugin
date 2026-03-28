@@ -110,5 +110,9 @@ export class EasyAPI {
         let editor = this.cview?.editor;
         return editor;
     }
+
+    get isMobile(){
+        return (this.app as any).isMobile === true;
+    }
 }
 
