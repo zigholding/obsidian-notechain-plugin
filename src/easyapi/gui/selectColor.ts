@@ -38,6 +38,7 @@ export default class SelectColor extends Modal {
 	private previewEl!: HTMLDivElement;
 	private hexEl!: HTMLSpanElement;
 	private readonly palette: string[];
+	private swatchButtons: HTMLButtonElement[] = [];
 
 	public static Prompt(
 		app: App,
@@ -68,40 +69,32 @@ export default class SelectColor extends Modal {
 		this.open();
 	}
 
+	/** Sync preview, hex label, native `<input type="color">`, and preset swatch highlight. */
 	private syncColorUI() {
+		this.colorInputEl.value = this.color;
 		this.previewEl.style.backgroundColor = this.color;
 		this.hexEl.setText(this.color.toUpperCase());
+		for (const btn of this.swatchButtons) {
+			const h = btn.getAttribute("data-nc-hex");
+			if (h) btn.toggleClass("is-active", h === this.color);
+		}
+	}
+
+	/** Single-click preset: set current color (opens system picker from this value next). */
+	private applyPreset(hex: string) {
+		this.color = hex;
+		this.syncColorUI();
 	}
 
 	private display() {
 		this.containerEl.addClass("ncSelectColorModal");
 		this.contentEl.empty();
 		this.titleEl.textContent = this.header;
+		this.swatchButtons = [];
 
 		const mainContentContainer = this.contentEl.createDiv({
 			cls: "nc-select-color-body",
 		});
-
-		if (this.palette.length > 0) {
-			const paletteEl = mainContentContainer.createDiv({
-				cls: "nc-color-palette",
-			});
-			for (const hex of this.palette) {
-				const btn = paletteEl.createEl("button", {
-					type: "button",
-					cls: "nc-color-swatch",
-					attr: { "aria-label": hex },
-				});
-				btn.style.backgroundColor = hex;
-				btn.addEventListener("click", () => {
-					this.color = hex;
-					this.colorInputEl.value = hex;
-					this.syncColorUI();
-					this.didSubmit = true;
-					this.close();
-				});
-			}
-		}
 
 		const pickerWrap = mainContentContainer.createDiv({
 			cls: "nc-color-picker-wrap",
@@ -119,12 +112,35 @@ export default class SelectColor extends Modal {
 
 		const meta = pickerWrap.createDiv({ cls: "nc-color-picker-meta" });
 		this.hexEl = meta.createEl("span", { cls: "nc-color-picker-hex" });
-		this.syncColorUI();
 
 		this.colorInputEl.addEventListener("input", () => {
 			this.color = this.colorInputEl.value;
 			this.syncColorUI();
 		});
+
+		if (this.palette.length > 0) {
+			const paletteEl = mainContentContainer.createDiv({
+				cls: "nc-color-palette",
+			});
+			mainContentContainer.insertBefore(paletteEl, pickerWrap);
+			for (const hex of this.palette) {
+				const btn = paletteEl.createEl("button", {
+					type: "button",
+					cls: "nc-color-swatch",
+					attr: { "aria-label": hex, "data-nc-hex": hex },
+				});
+				btn.style.backgroundColor = hex;
+				btn.addEventListener("click", () => this.applyPreset(hex));
+				btn.addEventListener("dblclick", (ev) => {
+					ev.preventDefault();
+					this.applyPreset(hex);
+					this.submit();
+				});
+				this.swatchButtons.push(btn);
+			}
+		}
+
+		this.syncColorUI();
 
 		const buttonBarContainer = mainContentContainer.createDiv();
 		buttonBarContainer.classList.add("button-bar");
@@ -165,9 +181,9 @@ export default class SelectColor extends Modal {
 }
 
 export async function selectColor(
-	header: string,
 	initial?: unknown,
-	colors: unknown = []
+	colors: unknown = [],
+	header: string='',
 ): Promise<string | null> {
 	try {
 		return await SelectColor.Prompt(this.app, header, initial, colors);

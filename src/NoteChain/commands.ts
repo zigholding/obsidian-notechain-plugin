@@ -676,11 +676,11 @@ const cmd_pick_note_background_color = (plugin: NoteChainPlugin) => ({
 			new Notice(plugin.strings.language === 'zh' ? '没有当前笔记' : 'No active note');
 			return;
 		}
-		const initial = plugin.editor.get_frontmatter(tfile, field);
-		const color = await plugin.easyapi.dialog_color(
-			plugin.app,
+		const initial = plugin.editor.get_frontmatter(tfile, field) || '#add8e6';
+		const color = await plugin.easyapi.dialog_color(	
+			initial,
+			[],
 			plugin.strings.cmd_pick_note_background_color,
-			initial
 		);
 		if (color == null) return;
 		await plugin.editor.set_frontmatter(tfile, field, color, 1);
