@@ -27,6 +27,7 @@ export default class InputMultiSuggester<T = string> extends Modal {
 	private rejectPromise!: (reason?: unknown) => void;
 	public promise: Promise<T[]>;
 	private resolved = false;
+	private isZh: boolean;
 
 	private readonly displayItems: string[];
 	private readonly items: T[];
@@ -57,6 +58,7 @@ export default class InputMultiSuggester<T = string> extends Modal {
 		private options: Options<T> = {},
 	) {
 		super(app);
+		this.isZh = window.localStorage.getItem('language') == 'zh';
 		const n = Math.min(displayItems.length, items.length);
 		this.displayItems = displayItems.slice(0, n);
 		this.items = items.slice(0, n) as T[];
@@ -89,22 +91,22 @@ export default class InputMultiSuggester<T = string> extends Modal {
 			}
 		});
 
-		root.createDiv({ cls: "nc-multi-suggest-section-title", text: "已选" });
+		root.createDiv({ cls: "nc-multi-suggest-section-title", text: this.isZh ? "已选" : "Selected" });
 		this.selectedContainer = root.createDiv({
 			cls: "nc-multi-suggest-list nc-multi-suggest-selected",
 		});
 
-		root.createDiv({ cls: "nc-multi-suggest-section-title", text: "待选" });
+		root.createDiv({ cls: "nc-multi-suggest-section-title", text: this.isZh ? "待选" : "Candidates" });
 		this.candidateContainer = root.createDiv({
 			cls: "nc-multi-suggest-list nc-multi-suggest-candidates",
 		});
 
 		const bar = root.createDiv({ cls: "nc-multi-suggest-actions" });
 		new ButtonComponent(bar)
-			.setButtonText("确定")
+			.setButtonText(this.isZh ? "确定" : "Confirm")
 			.setCta()
 			.onClick(() => this.confirm());
-		new ButtonComponent(bar).setButtonText("取消").onClick(() => this.close());
+		new ButtonComponent(bar).setButtonText(this.isZh ? "取消" : "Cancel").onClick(() => this.close());
 
 		this.refreshLists();
 		this.searchInput.focus();
@@ -191,7 +193,7 @@ export default class InputMultiSuggester<T = string> extends Modal {
 		if (this.selectedOrder.length === 0) {
 			this.selectedContainer.createDiv({
 				cls: "nc-multi-suggest-empty",
-				text: this.options.emptySelectedText ?? "（未选择）",
+				text: this.options.emptySelectedText ?? (this.isZh ? "（未选择）" : "(No selection)"),
 			});
 		} else {
 			const rowEls: HTMLElement[] = [];
@@ -204,7 +206,7 @@ export default class InputMultiSuggester<T = string> extends Modal {
 				rowEls.push(row);
 				const handle = row.createDiv({
 					cls: "nc-multi-suggest-drag-handle",
-					attr: { title: "拖动排序", draggable: "true" },
+					attr: { title: this.isZh ? "拖动排序" : "Drag to sort", draggable: "true" },
 				});
 				setIcon(handle, "grip-vertical");
 				handle.addEventListener("dragstart", (e: DragEvent) => {
@@ -223,7 +225,7 @@ export default class InputMultiSuggester<T = string> extends Modal {
 				label.setText(this.displayItems[idx]);
 				const removeBtn = row.createDiv({
 					cls: "nc-multi-suggest-row-action",
-					attr: { title: "移除" },
+					attr: { title: this.isZh ? "移除" : "Remove" },
 				});
 				setIcon(removeBtn, "cross");
 				removeBtn.addEventListener("click", (ev: MouseEvent) => {
@@ -239,7 +241,7 @@ export default class InputMultiSuggester<T = string> extends Modal {
 		if (candidates.length === 0) {
 			this.candidateContainer.createDiv({
 				cls: "nc-multi-suggest-empty",
-				text: this.options.emptyCandidateText ?? "无匹配项",
+				text: this.options.emptyCandidateText ?? (this.isZh ? "无匹配项" : "No matches"),
 			});
 		} else {
 			for (const idx of candidates) {
