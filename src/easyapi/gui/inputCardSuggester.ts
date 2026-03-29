@@ -426,6 +426,6 @@ export class CardNavigatorModal extends Modal {
     }
 }
 
-export async function openCardNavigator(app: App, data: CardItem[], options?: CardNavigatorOptions) {
-    return new CardNavigatorModal(app, data, options).openAndWait();
+export async function openCardNavigator(data: CardItem[], options?: CardNavigatorOptions) {
+    return new CardNavigatorModal(this.app, data, options).openAndWait();
 }
