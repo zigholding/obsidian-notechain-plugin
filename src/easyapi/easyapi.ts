@@ -117,5 +117,9 @@ export class EasyAPI {
     get isMobile(){
         return (this.app as any).isMobile === true;
     }
+
+    get isZh(){
+        return window.localStorage.getItem('language') == 'zh';
+    }
 }
 

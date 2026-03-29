@@ -272,16 +272,27 @@ export class WebViewerLLMModule {
 			}));
 			if (selection) {
 				data.unshift({
-					name: '选择文本',
+					name: this.easyapi.isZh ? '选择文本' : 'Select text',
 					detail: selection,
 					image: 'paste',
 					file: selection,
 					async action(_item: CardItem): Promise<void> {},
 				});
 			}
+
+			let clp = await navigator.clipboard.readText();
+			if(clp){
+				data.unshift({
+					name: this.easyapi.isZh ? '剪贴板' : 'Clipboard',
+					detail: clp,
+					image: 'paste',
+					file: clp,
+					async action(_item: CardItem): Promise<void> {},
+				});
+			}
 	
 			// 4️⃣ 打开卡片选择器
-			let sel = await this.easyapi.dialog_cards(this.app, data);
+			let sel = await this.easyapi.dialog_cards(data);
 			tfile = sel?.file;
 		}
 		if (!tfile) {
