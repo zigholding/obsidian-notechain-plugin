@@ -240,9 +240,10 @@ export class File {
 				}
 			}
 		}
-		if (!only_md && mcache.embeds) {
+		if (mcache.embeds) {
 			for (let link of mcache.embeds) {
 				let tfile = this.get_tfile(link.link);
+				if (only_md && tfile && tfile.extension != 'md') { continue; }
 				if (tfile && !res.contains(tfile)) {
 					res.push(tfile);
 				}
@@ -448,7 +449,7 @@ export class File {
 		}))
 
 		// 4️⃣ 打开卡片选择器
-		let result = await this.api.dialog_cards(this.app, data, options);
+		let result = await this.api.dialog_cards(data, options);
 
 		// 5️⃣ 返回选中的 TFile
 		return result?.file || null;
@@ -488,7 +489,7 @@ export class File {
 		});
 
 		// 4️⃣ 打开卡片选择器
-		const result = await this.api.dialog_cards(this.app, data, options);
+		const result = await this.api.dialog_cards(data, options);
 
 		// 5️⃣ 返回选中的 TFile
 		return result?.file || null;
