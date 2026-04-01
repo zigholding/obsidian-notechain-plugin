@@ -14,6 +14,7 @@ import { Waiter } from './waiter';
 import { Templater } from './templater';
 import {Time} from './time'
 import { Web } from './web';
+import { FsEditor } from './fseditor';
 
 export class EasyAPI {
     app: App;
@@ -29,6 +30,7 @@ export class EasyAPI {
     tpl: Templater
     time: Time
     web: Web
+    fs: FsEditor
 
     constructor(app: App) {
         this.app = app;
@@ -44,6 +46,7 @@ export class EasyAPI {
         this.tpl = new Templater(app,this);
         this.time = new Time(app,this);
         this.web = new Web(app);
+        this.fs = new FsEditor(app,this);
         (window as any).ea = this;
     }
 

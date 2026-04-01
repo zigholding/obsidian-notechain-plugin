@@ -5,6 +5,7 @@ import { App, View, WorkspaceLeaf, TFile, TFolder, TAbstractFile } from 'obsidia
 import { CardNavigatorOptions, type CardItem } from './gui/inputCardSuggester'
 
 import { EasyAPI } from 'src/easyapi/easyapi'
+import { chownSync } from 'fs';
 
 export class File {
 	app: App;

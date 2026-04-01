@@ -7,11 +7,11 @@ export class FsEditor{
     fs;
     app:App;
     path;
-    api: EasyAPI;
+    easyapi: EasyAPI;
 
-    constructor(app: App, api:EasyAPI) {
+    constructor(app: App, easyapi:EasyAPI) {
         this.app = app;
-        this.api = api;
+        this.easyapi = easyapi;
         this.fs = (app.vault.adapter as any).fs;
         this.path = (app.vault.adapter as any).path;
     }
@@ -20,80 +20,6 @@ export class FsEditor{
         let a = this.app.vault.adapter as any;
         return a.basePath.replace(/\\/g,'/');
     }
-
-    get_tfile(path:string,only_first=true){
-		try{
-			path = path.split('|')[0].replace('[[','').replace(']]','');
-			let tfile = this.app.vault.getFileByPath(path)
-			if(tfile){
-				return tfile;
-			}
-            
-            if(only_first){
-                let tfile = (this.app.metadataCache as any).getFirstLinkpathDest(path.split('/').last());
-                if(tfile){
-                    return tfile;
-                }
-            }else{
-                let tfiles = (this.app.metadataCache as any).getLinkpathDest(path.split('/').last());
-                if(tfiles && tfiles.length>0){
-                    return tfiles;
-                }
-            }
-			return null;
-		}catch{
-			return null
-		}
-	}
-
-    get_inlinks(tfile:TFile,only_md=true):Array<TFile>{
-		if(tfile==null){return [];}
-		let res:Array<TFile> = []
-
-		let inlinks = (this.app.metadataCache as any).getBacklinksForFile(tfile);
-		for(let [k,v] of inlinks.data){
-			let curr = this.app.vault.getFileByPath(k);
-			if(curr){
-				res.push(curr)
-			}
-		}
-		return res;
-	}
-
-	get_outlinks(tfile:TFile,only_md=true):Array<TFile>{
-		if(tfile==null){return [];}
-
-		let mcache = this.app.metadataCache.getFileCache(tfile);
-		if(!mcache){return [];}
-
-		let res:Array<TFile> = [];
-		if(mcache.links){
-			for(let link of mcache.links){
-				let tfile = this.get_tfile(link.link);
-				if(tfile && !res.contains(tfile) && !(only_md && tfile.extension!='md')){
-					res.push(tfile);
-				}
-			}
-		}
-		if(mcache.frontmatterLinks){
-			for(let link of mcache.frontmatterLinks){
-				let tfile = this.get_tfile(link.link);
-				if(tfile && !res.contains(tfile) && !(only_md && tfile.extension!='md')){
-					res.push(tfile);
-				}
-			}
-		}
-		if(!only_md && mcache.embeds){
-			for(let link of mcache.embeds){
-				let tfile = this.get_tfile(link.link);
-				if(tfile && !res.contains(tfile)){
-					res.push(tfile);
-				}
-			}
-		}
-		return res;
-	}
-
 
     abspath(tfile:TFile|TFolder){
 		if(tfile){
@@ -109,6 +35,36 @@ export class FsEditor{
 
     isdir(path:string){
         return this.fs.existsSync(path) && this.fs.statSync(path).isDirectory();
+    }
+
+    
+	get_outfiles(tfile = this.easyapi.cfile): string[] | null {
+		if (tfile == null) { return []; }
+		let res: string[] = [];
+		let mcache = this.app.metadataCache.getFileCache(tfile);
+		if (mcache && mcache.embeds) {
+			for (let link of mcache.embeds) {
+				let tfile = this.easyapi.file.get_tfile(link.link);
+				if(!tfile){
+					let url = link.link.split('|')[0]
+					if(this.isfile(url)){
+						res.push(url);
+					}
+				}
+			}
+		}
+		return res;
+	}
+
+    async read_file(path:string,encoding='utf8'){
+        let tfile = this.easyapi.file.get_tfile(path);
+        if(tfile){
+            return await this.app.vault.read(tfile);
+        }
+
+        if(!this.isfile(path)){return null}
+
+        return await this.fs.readFileSync(path,encoding);
     }
 
     list_dir(path:string,as_fullpath=true){
@@ -144,10 +100,10 @@ export class FsEditor{
         let xpaths = paths.filter((p:string)=>this.isdir(p));
         let path = null;
         if(xpaths.length>0){
-            path = await this.api.dialog_suggest(xpaths,xpaths);
+            path = await this.easyapi.dialog_suggest(xpaths,xpaths);
         }
         if(!path && prompt_if_null){
-            path = await this.api.dialog_prompt("Root of vault");
+            path = await this.easyapi.dialog_prompt("Root of vault");
             if(!this.isdir(path)){
                 path = null
             }
@@ -213,7 +169,7 @@ export class FsEditor{
             this.mkdir_recursive(this.path.dirname(dst));
 			this.copy_file(src,dst,mode);
             if(attachment){
-                let tfiles = this.get_outlinks(tfile,false);
+                let tfiles = this.easyapi.file.get_outlinks(tfile,false);
                 for(let t of tfiles){
                     if(!(t.extension==='md')){
                         this.sync_tfile(t,vault_root,mode,false);

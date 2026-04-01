@@ -409,13 +409,22 @@ export class WebViewerLLMModule {
 		}
 
 		// 选择参考笔记
-		let refFiles: TFile[] = [];
-		let ciinks = ea.file.get_links(ea.cfile);
+		let refFiles: (TFile | string)[] = [];
+		let ciinks = ea.file.get_links(ea.cfile) || [];
 		for(let clink of ciinks){
 			if(!refFiles.contains(clink)){
 				refFiles.push(clink);
 			}
 		}
+
+		let outfiles = ea.fs.get_outfiles(ea.cfile) || [];
+		for(let outfile of outfiles){
+			if(!refFiles.contains(outfile)){
+				refFiles.push(outfile);
+			}
+		}
+
+
 		if (tfile instanceof TFile && this.plugin.settings.webviewllm.add_reference) {
 			let ref = ea.editor.get_frontmatter(tfile, 'reference','link');
 			
@@ -426,6 +435,14 @@ export class WebViewerLLMModule {
 						refFiles.push(clink);
 					}
 				}
+
+				let outfiles = ea.fs.get_outfiles(tfile) || [];
+				for(let outfile of outfiles){
+					if(!refFiles.contains(outfile)){
+						refFiles.push(outfile);
+					}
+				}
+				
 			}else if(ref == 'all'){
 				refFiles = ea.file.get_all_tfiles();
 			}else if(ref == 'folder'){
@@ -438,7 +455,7 @@ export class WebViewerLLMModule {
 
 		if (refFiles.length > 0) {
 			const selectedLinks = await ea.dialog_multi_suggest(
-				refFiles.map((x: TFile) => x.basename),
+				refFiles.map((x: TFile|string) => x instanceof TFile ? x.basename : x),
 				refFiles,
 				'',
 				(this.easyapi.isZh) ? '选择参考链接笔记' : 'Select reference link notes',
@@ -458,12 +475,12 @@ export class WebViewerLLMModule {
 				].join('\n');
 				const refBlocks: string[] = [];
 				for (const link of selectedLinks) {
-					const body = await ea.nc.editor.remove_metadata(link);
+					const body = link instanceof TFile ? await ea.nc.editor.remove_metadata(link) : await ea.fs.read_file(link);
 					refBlocks.push(
 						[
 							D0,
-							`name: ${link.basename}`,
-							`path: ${link.path}`,
+							`name: ${link instanceof TFile ? link.basename : ea.fs.path.basename(link)}`,
+							`path: ${link instanceof TFile ? link.path : link}`,
 							'',
 							body,
 							D1,
