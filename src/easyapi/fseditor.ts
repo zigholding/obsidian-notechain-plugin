@@ -22,16 +22,16 @@ export class FsEditor{
     }
 
 	/**
-	 * `${key@[[note]]}` → frontmatter `key` of resolved note `[[note]]` (supports dotted keys like `a.b`).
+	 * `${key@noteRef}` → frontmatter `key` of note resolved by `noteRef` (path, `[[link]]`, or basename; dotted keys like `a.b`).
 	 */
 	private expandPropertyAtLinkPath(s: string): string {
 		return s.replace(
-			/\$\{([^@}]+)@\[\[([^\]]+)\]\]\}/g,
-			(_m, rawKey: string, rawLink: string) => {
+			/\$\{([^@}]+)@([^}]+)\}/g,
+			(_m, rawKey: string, rawNoteRef: string) => {
 				const key = rawKey.trim();
-				const link = rawLink.trim();
-				if (!key || !link) return "";
-				const linked = this.easyapi.file.get_tfile(`[[${link}]]`);
+				const noteRef = rawNoteRef.trim();
+				if (!key || !noteRef) return "";
+				const linked = this.easyapi.file.get_tfile(noteRef);
 				if (!linked || !(linked instanceof TFile)) return "";
 				const v = this.easyapi.editor.get_frontmatter(linked, key, null);
 				return this.frontmatterValueToPathString(v);
@@ -101,6 +101,7 @@ export class FsEditor{
     isPath(path:string){
         return this.fs.existsSync(path);
     }
+
     isfile(path:string){
         return this.fs.existsSync(path) && this.fs.statSync(path).isFile();
     }
@@ -118,7 +119,7 @@ export class FsEditor{
 			for (let link of mcache.embeds) {
 				let tfile = this.easyapi.file.get_tfile(link.link);
 				if(!tfile){
-					let url = link.link.split('|')[0]
+					let url = this.abspath(link.link,true) || link.link;
 					if(this.isfile(url)){
 						res.push(url);
 					}
@@ -134,6 +135,7 @@ export class FsEditor{
             return await this.app.vault.read(tfile);
         }
 
+        path = this.abspath(path,true) || path;
         if(!this.isfile(path)){return null}
 
         return await this.fs.readFileSync(path,encoding);
