@@ -21,14 +21,86 @@ export class FsEditor{
         return a.basePath.replace(/\\/g,'/');
     }
 
-    abspath(tfile:TFile|TFolder){
-		if(tfile){
-			return (this.root+'/'+tfile.path).replace(/\\/g,'/');
-		}else{
-			return null;
+	/**
+	 * `${key@[[note]]}` → frontmatter `key` of resolved note `[[note]]` (supports dotted keys like `a.b`).
+	 */
+	private expandPropertyAtLinkPath(s: string): string {
+		return s.replace(
+			/\$\{([^@}]+)@\[\[([^\]]+)\]\]\}/g,
+			(_m, rawKey: string, rawLink: string) => {
+				const key = rawKey.trim();
+				const link = rawLink.trim();
+				if (!key || !link) return "";
+				const linked = this.easyapi.file.get_tfile(`[[${link}]]`);
+				if (!linked || !(linked instanceof TFile)) return "";
+				const v = this.easyapi.editor.get_frontmatter(linked, key, null);
+				return this.frontmatterValueToPathString(v);
+			},
+		);
+	}
+
+	private frontmatterValueToPathString(v: unknown): string {
+		if (v == null) return "";
+		if (typeof v === "string") return v;
+		if (typeof v === "number" || typeof v === "boolean") return String(v);
+		if (Array.isArray(v)) {
+			const paths = v.filter((x): x is string => typeof x === "string");
+			if (paths.length === 0) return "";
+			const hit = this.first_valid_path(paths);
+			return hit ?? "";
+		}
+		try {
+			return JSON.stringify(v);
+		} catch {
+			return "";
 		}
 	}
 
+    abspath(tfile:TFile|TFolder|string,strict=true): string | null {
+		if(tfile instanceof TFile){
+			return (this.root+'/'+tfile.path).replace(/\\/g,'/');
+		}
+        
+        if(tfile instanceof TFolder){
+			return (this.root+'/'+tfile.path).replace(/\\/g,'/');
+		}
+        
+        if(typeof tfile === 'string'){
+            tfile = tfile.replace(/\$\{ROOT\}/g,this.root);
+            tfile = tfile.replace(/\$\{VAULT\}/g,this.app.vault.getName());
+            tfile = this.expandPropertyAtLinkPath(tfile);
+
+
+            let xfile = this.easyapi.file.get_tfile(tfile);
+            if(xfile){
+                return this.abspath(xfile);
+            }
+            
+            let xfolder = this.app.vault.getFolderByPath(tfile);
+            if(xfolder){
+                return this.abspath(xfolder);
+            }
+            
+            if(!strict){
+                return tfile;
+            }
+
+            if(this.isfile(tfile)){
+                return tfile;
+            }
+
+            if(this.isdir(tfile)){
+                return tfile;
+            }
+            return null;
+		}
+        
+        return null;
+	}
+
+    isPath(path:string){
+        return this.fs.existsSync(path);
+    }
     isfile(path:string){
         return this.fs.existsSync(path) && this.fs.statSync(path).isFile();
     }
@@ -78,6 +150,38 @@ export class FsEditor{
             )
         }   
         return items
+    }
+
+    first_valid_path(paths:Array<string>|string){
+        if(typeof(paths)=='string'){
+            if(this.isfile(paths) || this.isdir(paths)){
+                return paths
+            }else{
+                return null
+            }
+        }
+        for(let path of paths){
+            if(this.isfile(path)||this.isdir(path)){
+                return path
+            }
+        }
+        return null
+    }
+
+    first_valid_file(paths:Array<string>|string){
+        if(typeof(paths)=='string'){
+            if(this.isfile(paths)){
+                return paths
+            }else{
+                return null
+            }
+        }
+        for(let path of paths){
+            if(this.isfile(path)){
+                return path
+            }
+        }
+        return null
     }
 
     first_valid_dir(paths:Array<string>|string){
