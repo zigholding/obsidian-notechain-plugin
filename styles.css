@@ -302,6 +302,31 @@
   text-overflow: ellipsis;
 }
 
+/* 无封面图：仅标题 + 副文，标题占主导 */
+.nc-card-btn.nc-card-text-only {
+  justify-content: center;
+}
+
+.nc-card-btn.nc-card-text-only .nc-card-info {
+  padding: 14px 14px 16px;
+  justify-content: center;
+  gap: 6px;
+}
+
+.nc-card-btn.nc-card-text-only .nc-card-name {
+  font-size: calc(14px + 0.28rem);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--text-normal);
+}
+
+.nc-card-btn.nc-card-text-only .nc-card-detail {
+  font-size: 12px;
+  font-weight: 450;
+  opacity: 0.92;
+}
+
 /* 文件夹区分 */
 .nc-is-folder .nc-card-cover {
   background: radial-gradient(

@@ -5,7 +5,7 @@ export type StyledValue = string | [string, Record<string, string>];
 export interface CardItem {
     name: StyledValue;
     detail?: StyledValue;
-    image?: StyledValue;
+    image?: StyledValue | null;
     action?: CardItem[] | ((item: CardItem) => void | Promise<void>);
     [key: string]: any;
 }
@@ -160,12 +160,16 @@ export class CardNavigatorModal extends Modal {
 			const slice = currentList.slice(renderedCount, renderedCount + pageSize);
 			slice.forEach((item) => {
 				const isFolder = Array.isArray(item.action);
+				const hasImage = item.image != null;
 				const classes = [`nc-card-btn`];
 				if (isFolder) classes.push("nc-is-folder");
+				if (!hasImage) classes.push("nc-card-text-only");
 				if (revealTarget && item === revealTarget) classes.push("nc-card-reveal");
 				const card = container.createDiv({ cls: classes.join(" ") });
-				const cover = card.createDiv({ cls: "nc-card-cover" });
-				this.renderIconOrImage(cover, item.image, isFolder, session);
+				if (hasImage) {
+					const cover = card.createDiv({ cls: "nc-card-cover" });
+					this.renderIconOrImage(cover, item.image, isFolder, session);
+				}
 				const info = card.createDiv({ cls: "nc-card-info" });
 				this.renderStyledElement(info.createDiv(), item.name, "nc-card-name");
 				if (item.detail) this.renderStyledElement(info.createDiv(), item.detail, "nc-card-detail");
@@ -235,9 +239,14 @@ export class CardNavigatorModal extends Modal {
         container.empty();
         filteredItems.forEach((item) => {
             const isFolder = Array.isArray(item.action);
-            const card = container.createDiv({ cls: `nc-card-btn ${isFolder ? 'nc-is-folder' : ''}` });
-            const cover = card.createDiv({ cls: "nc-card-cover" });
-            this.renderIconOrImage(cover, item.image, isFolder, session);
+            const hasImage = item.image != null;
+            const card = container.createDiv({
+                cls: `nc-card-btn ${isFolder ? "nc-is-folder" : ""}${hasImage ? "" : " nc-card-text-only"}`.trim(),
+            });
+            if (hasImage) {
+                const cover = card.createDiv({ cls: "nc-card-cover" });
+                this.renderIconOrImage(cover, item.image, isFolder, session);
+            }
             const info = card.createDiv({ cls: "nc-card-info" });
             this.renderStyledElement(info.createDiv(), item.name, "nc-card-name");
             if (item.detail) this.renderStyledElement(info.createDiv(), item.detail, "nc-card-detail");
@@ -275,7 +284,7 @@ export class CardNavigatorModal extends Modal {
         return [...new Set(results)]; // 去重
     }
 
-    private renderIconOrImage(el: HTMLElement, imageVal: StyledValue | undefined, isFolder: boolean, session: number) {
+    private renderIconOrImage(el: HTMLElement, imageVal: StyledValue | null | undefined, isFolder: boolean, session: number) {
 		
         let rawImage: unknown = "";
         let style: Record<string, string> = {};

@@ -266,7 +266,7 @@ export class WebViewerLLMModule {
 			const data: CardItem[] = tfiles.map((file) => ({
 				name: file.basename,
 				detail: file.path,
-				image: this.easyapi.editor.get_frontmatter(file, 'cover') || 'file',
+				image: this.easyapi.editor.get_frontmatter(file, 'cover'),
 				file,
 				async action(_item: CardItem): Promise<void> {},
 			}));
