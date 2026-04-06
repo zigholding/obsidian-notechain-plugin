@@ -110,25 +110,63 @@ export class FsEditor{
         return this.fs.existsSync(path) && this.fs.statSync(path).isDirectory();
     }
 
+    get_outfiles(tfile= this.easyapi.cfile): string[] | null {
+        let fs = this;
     
-	get_outfiles(tfile = this.easyapi.cfile): string[] | null {
-		if (tfile == null) { return []; }
-		let res: string[] = [];
-		let mcache = this.app.metadataCache.getFileCache(tfile);
-		if (mcache && mcache.embeds) {
-			for (let link of mcache.embeds) {
-				let tfile = this.easyapi.file.get_tfile(link.link);
-				if(!tfile){
-					let url = this.abspath(link.link,true) || link.link;
-					if(this.isfile(url)){
-						res.push(url);
-					}
-				}
-			}
-		}
-		return res;
-	}
-
+        // 内部函数：修复语法 + 逻辑
+        function get_paths(url:string) {
+            url = url.split('|')[0]
+            let file = fs.easyapi.file.get_tfile(url);
+            if (file) {
+                return [];
+            }
+            // 错误1：你写了 path = fs.abspath(path) → 变量未定义
+            let path = fs.abspath(url, true) || url;
+            // 错误2：内部函数里 this 丢失 → 改用 fs
+            if (fs.isfile(path)) {
+                return [path];
+            }
+            if (fs.isdir(path)){
+                return fs.list_dir(path).filter(x=>fs.isfile(x))
+            }
+            return [];
+        }
+    
+        if (tfile == null) {
+            return [];
+        }
+        let res: string[] = [];
+        let mcache = this.app.metadataCache.getFileCache(tfile);
+    
+        // 错误3：mcache 可能为空，必须先判断
+        if (mcache && mcache.links) {
+            for (let link of mcache.links) {
+                // 错误4：link 是对象，不是字符串 → 必须用 link.displayText
+                let ii = get_paths(link.displayText || link.link);
+                for (let i of ii) {
+                    // 错误5：contains{i} → 语法错误，应该是 .includes(i)
+                    if (!res.includes(i)) {
+                        res.push(i);
+                    }
+                }
+            }
+        }
+    
+        if (mcache && mcache.embeds) {
+            for (let link of mcache.embeds) {
+                let ii = get_paths(link.link);
+                for (let i of ii) {
+                    // 同上错误修复
+                    if (!res.includes(i)) {
+                        res.push(i);
+                    }
+                }
+            }
+        }
+    
+        return res;
+    }
+    
     async read_file(path:string,encoding='utf8'){
         let tfile = this.easyapi.file.get_tfile(path);
         if(tfile){
