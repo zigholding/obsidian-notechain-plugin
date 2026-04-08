@@ -111,40 +111,17 @@ export class FsEditor{
     }
 
     get_outfiles(tfile= this.easyapi.cfile): string[] | null {
-        let fs = this;
-    
-        // 内部函数：修复语法 + 逻辑
-        function get_paths(url:string) {
-            url = url.split('|')[0]
-            let file = fs.easyapi.file.get_tfile(url);
-            if (file) {
-                return [];
-            }
-            // 错误1：你写了 path = fs.abspath(path) → 变量未定义
-            let path = fs.abspath(url, true) || url;
-            // 错误2：内部函数里 this 丢失 → 改用 fs
-            if (fs.isfile(path)) {
-                return [path];
-            }
-            if (fs.isdir(path)){
-                return fs.list_dir(path).filter(x=>fs.isfile(x))
-            }
-            return [];
-        }
-    
         if (tfile == null) {
             return [];
         }
         let res: string[] = [];
         let mcache = this.app.metadataCache.getFileCache(tfile);
     
-        // 错误3：mcache 可能为空，必须先判断
+        
         if (mcache && mcache.links) {
             for (let link of mcache.links) {
-                // 错误4：link 是对象，不是字符串 → 必须用 link.displayText
-                let ii = get_paths(link.displayText || link.link);
+                let ii = this.list_dir(link.link,true,-1,true);
                 for (let i of ii) {
-                    // 错误5：contains{i} → 语法错误，应该是 .includes(i)
                     if (!res.includes(i)) {
                         res.push(i);
                     }
@@ -154,9 +131,8 @@ export class FsEditor{
     
         if (mcache && mcache.embeds) {
             for (let link of mcache.embeds) {
-                let ii = get_paths(link.link);
+                let ii = this.list_dir(link.link,true,-1,true);
                 for (let i of ii) {
-                    // 同上错误修复
                     if (!res.includes(i)) {
                         res.push(i);
                     }
@@ -179,16 +155,27 @@ export class FsEditor{
         return await this.fs.readFileSync(path,encoding);
     }
 
-    list_dir(path:string,as_fullpath=true){
+    list_dir(path:string,only_files=false,recursive=0,exclude_hidden=true):string[]{
+        path = this.abspath(path,true) || path;
+        if(this.isfile(path)){return [path]}
         if(!this.isdir(path)){return []}
-        let items = this.fs.readdirSync(path)
-        if(as_fullpath){
-            items = items.map(
-                (x:string)=>{
-                    return path+'/'+x
-                }
-            )
-        }   
+        let names = this.fs.readdirSync(path)
+        if(exclude_hidden){
+            names = names.filter((x:string)=>!x.startsWith('.'))
+        }
+        const fullPaths = names.map((x:string)=>path+'/'+x)
+        const files: string[] = []
+        const subdirs: string[] = []
+        for (const fp of fullPaths) {
+            if (this.isfile(fp)) files.push(fp)
+            else if (this.isdir(fp)) subdirs.push(fp)
+        }
+        let items: string[] = only_files ? [...files] : [...files, ...subdirs]
+        if(recursive!=0){
+            for (const dir of subdirs) {
+                items.push(...this.list_dir(dir, only_files, recursive-1, exclude_hidden));
+            }
+        }
         return items
     }
 

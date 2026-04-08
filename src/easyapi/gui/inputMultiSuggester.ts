@@ -23,6 +23,7 @@ type Options<T = string> = {
  * 布局自上而下：搜索框、已选列表、待选列表。确认时仅返回选中的 items[]（顺序与已选列表一致）。
  */
 export default class InputMultiSuggester<T = string> extends Modal {
+	private static readonly DEFAULT_CANDIDATE_LIMIT = 200;
 	private resolvePromise!: (value: T[]) => void;
 	private rejectPromise!: (reason?: unknown) => void;
 	public promise: Promise<T[]>;
@@ -161,11 +162,24 @@ export default class InputMultiSuggester<T = string> extends Modal {
 		}
 	}
 
-	private getFilteredCandidateIndices(): number[] {
-		const pool = this.allIndices.filter((i) => !this.selectedSet.has(i));
+	private getCandidateLimit(): number {
+		const lim = this.options.limit;
+		if (lim != null && lim > 0) return lim;
+		return InputMultiSuggester.DEFAULT_CANDIDATE_LIMIT;
+	}
+
+	private getFilteredCandidates(): { indices: number[]; matches: Map<number, SearchResult> } {
+		const pool: number[] = [];
+		for (const i of this.allIndices) {
+			if (!this.selectedSet.has(i)) pool.push(i);
+		}
 		const q = this.searchInput?.value?.trim() ?? "";
+		const limit = this.getCandidateLimit();
 		if (!q) {
-			return pool;
+			return {
+				indices: pool.slice(0, limit),
+				matches: new Map<number, SearchResult>(),
+			};
 		}
 		const searchFn = prepareSimpleSearch(q);
 		const scored: { i: number; score: number; match: SearchResult }[] = [];
@@ -174,21 +188,18 @@ export default class InputMultiSuggester<T = string> extends Modal {
 			if (m) scored.push({ i, score: m.score, match: m });
 		}
 		scored.sort((a, b) => b.score - a.score);
-		let ordered = scored.map((s) => s.i);
-		const lim = this.options.limit;
-		if (lim != null && lim > 0) ordered = ordered.slice(0, lim);
-		return ordered;
-	}
-
-	private getMatchForCandidate(index: number, query: string): SearchResult | null {
-		const q = query.trim();
-		if (!q) return null;
-		return prepareSimpleSearch(q)(this.displayItems[index]);
+		const limited = scored.slice(0, limit);
+		const matches = new Map<number, SearchResult>();
+		for (const item of limited) {
+			matches.set(item.i, item.match);
+		}
+		return {
+			indices: limited.map((s) => s.i),
+			matches,
+		};
 	}
 
 	private refreshLists(): void {
-		const query = this.searchInput?.value ?? "";
-
 		this.selectedContainer.empty();
 		if (this.selectedOrder.length === 0) {
 			this.selectedContainer.createDiv({
@@ -237,7 +248,7 @@ export default class InputMultiSuggester<T = string> extends Modal {
 		}
 
 		this.candidateContainer.empty();
-		const candidates = this.getFilteredCandidateIndices();
+		const { indices: candidates, matches } = this.getFilteredCandidates();
 		if (candidates.length === 0) {
 			this.candidateContainer.createDiv({
 				cls: "nc-multi-suggest-empty",
@@ -250,7 +261,7 @@ export default class InputMultiSuggester<T = string> extends Modal {
 				});
 				const label = row.createDiv({ cls: "nc-multi-suggest-row-label" });
 				const text = this.displayItems[idx];
-				const match = this.getMatchForCandidate(idx, query);
+				const match = matches.get(idx) ?? null;
 				label.empty();
 				renderMatches(label, text, match?.matches ?? null);
 				row.addEventListener("click", () => this.toggleSelected(idx, true));

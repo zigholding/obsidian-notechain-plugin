@@ -5,6 +5,42 @@ import { App, TAbstractFile, TFile,TFolder } from 'obsidian';
 
 import { EasyAPI } from 'src/easyapi/easyapi'
 
+/** 至少 3 个 ` 或 ~，支持 ```` / ~~~~ 等围栏 */
+function codeFenceStartsWithLanguage(trimmed: string, ctype: string): boolean {
+    const m = trimmed.match(/^(`{3,}|~{3,})/);
+    if (!m) return false;
+    if (!ctype) return true;
+    return trimmed.startsWith(m[1] + ctype);
+}
+
+function fencedCodeInnerContent(c: string): string | null {
+    const m = c.match(/^(`{3,}|~{3,})([^\n]*)\r?\n([\s\S]*)/);
+    if (!m) return null;
+    const n = m[1].length;
+    const ch = m[1][0];
+    const esc = ch === '`' ? '`' : '~';
+    const closeRe = new RegExp('^' + esc + '{' + n + ',}\\s*$');
+    const lines = m[3].split(/\r?\n/);
+    for (let i = lines.length - 1; i >= 0; i--) {
+        if (closeRe.test(lines[i])) {
+            return lines.slice(0, i).join('\n');
+        }
+    }
+    return null;
+}
+
+/** 首行开围栏 + 末行闭围栏（与解析失败时兜底） */
+function fencedCodeInnerLoose(c: string): string | null {
+    const lines = c.split(/\r?\n/);
+    if (lines.length < 2) return null;
+    const top = lines[0].match(/^(`{3,}|~{3,})/);
+    const bot = lines[lines.length - 1].match(/^(`{3,}|~{3,})\s*$/);
+    if (!top || !bot || top[1][0] !== bot[1][0] || bot[1].length < top[1].length) {
+        return null;
+    }
+    return lines.slice(1, -1).join('\n');
+}
+
 export class EasyEditor {
     yamljs = require('js-yaml');
     app: App;
@@ -617,7 +653,7 @@ export class EasyEditor {
             ?.filter(x => x.type == 'code')
             .filter(x => {
                 let c = ctx.slice(x.position.start.offset, x.position.end.offset).trim();
-                return c.startsWith('```' + ctype) || c.startsWith('~~~' + ctype);
+                return codeFenceStartsWithLanguage(c, ctype);
             });
 
         if (!sections || sections.length == 0) {
@@ -646,7 +682,15 @@ export class EasyEditor {
         );
 
         if (as_simple) {
-            return c.slice(4 + ctype.length, c.length - 4);
+            let inner =
+                fencedCodeInnerContent(c) ??
+                fencedCodeInnerLoose(c);
+            if (inner === null) {
+                const o = c.match(/^(`{3,}|~{3,})/);
+                const n = o?.[1].length ?? 3;
+                inner = c.slice(n + ctype.length + 1, c.length - n);
+            }
+            return inner;
         } else {
             return {
                 code: c,
