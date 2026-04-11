@@ -68,7 +68,6 @@ export class NoteContentView extends ItemView {
 	}
 
 	async setContent(content: string, sourcePath: string) {
-		console.log('setContent', content, sourcePath);
 		let cssClasses: unknown = null;
 		if (sourcePath) {
 			const cfile = this.plugin.easyapi.file.get_tfile(sourcePath);
