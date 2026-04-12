@@ -265,6 +265,27 @@ export class WordCount{
         ).filter(x=>x);
     }
 
+    /** 指定日期相对前一条记录字数有变化的 md 笔记（与 {@link get_new_words} 同一天参数） */
+    get_daily_edited_tfiles(day: string|TFile|null=null) {
+        if(!day){
+            day = this.plugin.chain.get_last_daily_note();
+            if(!day){
+                return [];
+            }
+        }
+
+        let tfile = this.plugin.easyapi.file.get_tfile(day);
+        let tfiles = this.app.vault.getMarkdownFiles().filter(
+            (x: TFile) => Math.abs(this.get_new_words(x, tfile.basename) ?? 0) > 0
+        );
+        if (tfile) {
+            const i = tfiles.findIndex((f) => f.path === tfile.path);
+            if (i >= 0) tfiles.splice(i, 1);
+            tfiles.unshift(tfile);
+        }
+        return tfiles;
+    }
+
     sum_words_of_tifles(files:Array<TFile>|null=null, begt:number|string=10, endt:number|string=0) {
         files = this.get_words_of_tfiles(files)
         if(typeof(begt)=='number'){
