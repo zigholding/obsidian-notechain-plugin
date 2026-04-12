@@ -448,6 +448,24 @@ export class EasyEditor {
         return tfile;
     }
 
+    /** Inline ```js //templater``` (and sibling info strings) → `<%* … -%>`, matching {@link extract_templater_block} so full-text `parse_commands` runs fenced tpl. */
+    expand_fenced_templater_in_full_text(content: string): string {
+        const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const types = ['js //templater', 'js templater', 'js tpl', 'js //tpl'];
+        const fenceInfo = `(?:${types.map(escapeRegExp).join('|')})`;
+        let s = content;
+        const replaceFences = (mark: string) => {
+            const reg = new RegExp(
+                mark + fenceInfo + String.raw`\r?\n([\s\S]*?)\r?\n` + mark,
+                'g'
+            );
+            s = s.replace(reg, (_m, inner: string) => `<%*\n${inner.trim()}\n-%>`);
+        };
+        replaceFences('```');
+        replaceFences('~~~');
+        return s;
+    }
+
     async extract_templater_block(tfile: TFile | string, reg = /<%\*\s*([\s\S]*?)\s*-?%>/g): Promise<string[]> {
         let xfile = this.ea.file.get_tfile(tfile);
         if (xfile) {
@@ -731,6 +749,10 @@ export class EasyEditor {
 
 
     async get_heading_section(tfile: TFile, heading: string, idx = 0, with_heading = true) {
+        tfile = this.ea.file.get_tfile(tfile);
+        if(!tfile){
+            return '';
+        }
         let dvmeta = this.app.metadataCache.getFileCache(tfile);
         let ctx = await this.app.vault.cachedRead(tfile);
 

@@ -1506,7 +1506,6 @@ export class NoteChain {
 			keys = await this.lexorank_get_ids(tfiles);
 			let  i = 0;
 			while(!this.lexorank_check_keys(keys)){
-				console.log('i','lexorank_gen_keys--',i)
 				keys = this.lexorank_gen_keys(keys);
 				i = i+1;
 				if(i>5){

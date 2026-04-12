@@ -89,14 +89,14 @@ export class Templater {
             if(extract){
                 blocks = await this.extract_templater_block(template);
             }else{
-                let item = await this.app.vault.cachedRead(template)
-                blocks = [item]
+                let item = await this.ea.editor.remove_metadata(template)
+                blocks = [this.ea.editor.expand_fenced_templater_in_full_text(item)]
             }
         }else{
             if(extract){
                 blocks = await this.extract_templater_block(template);
             }else{
-                blocks = [template]
+                blocks = [this.ea.editor.expand_fenced_templater_in_full_text(template)]
             }
         }
         

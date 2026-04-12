@@ -416,8 +416,9 @@ export class WebViewerLLMModule {
 			}
 		}
 
+		let prompts = await ea.tpl.parse_templater(prompt, false, {tfile, cfile, prompt });
+		prompt = prompts.join('\n');
 		// 选择参考笔记
-		console.log('tfile -->',tfile);
 		if(tfile instanceof TFile && ea.editor.get_frontmatter(tfile, 'reference','link') != false){
 			let refFiles: (TFile | string)[] = [];
 			let ciinks = ea.file.get_links(ea.cfile) || [];
@@ -436,7 +437,6 @@ export class WebViewerLLMModule {
 
 			if (tfile instanceof TFile) {
 				let ref = ea.editor.get_frontmatter(tfile, 'reference','link');
-				console.log('ref',ref);
 				if(ref == 'link'){
 					let linkFiles = ea.file.get_links(tfile);
 					for(let clink of linkFiles){
@@ -490,14 +490,26 @@ export class WebViewerLLMModule {
 		}else if(llm && this.plugin.settings.webviewllm.write_clipboard == '2'){
 			await navigator.clipboard.writeText(prompt);
 			response = (await llm.request(prompt)) ?? '';
-			const codes = await ea.editor.extract_code_block(tfile, 'js //templater');
-			if (codes.length === 0 && response) {
-				if (llm.view) {
-					this.app.workspace.setActiveLeaf(llm.view.leaf);
-				}
-			} else {
-				await ea.tpl.parse_templater(tfile, true, {tfile,cfile, prompt, response, llm });
+			let postprocess = await ea.editor.get_heading_section(tfile,'后处理');
+			if(postprocess?.length==0){
+				postprocess = await ea.editor.get_heading_section(tfile,'Postprocess');
 			}
+			if(postprocess){
+				const codes = await ea.editor.extract_code_block(postprocess, [
+					'js //templater',
+					'js templater',
+					'js tpl',
+					'js //tpl',
+				]);
+				if (codes.length === 0 && response) {
+					if (llm.view) {
+						this.app.workspace.setActiveLeaf(llm.view.leaf);
+					}
+				} else {
+					await ea.tpl.parse_templater(postprocess, true, {tfile,cfile, prompt, response, llm });
+				}
+			}
+			
 		}else if(llm && this.plugin.settings.webviewllm.write_clipboard == '3'){
 			response = (await llm.request(prompt)) ?? '';
 		}
@@ -569,7 +581,6 @@ export class WebViewerLLMModule {
 			new Notice(`${llm.name}: probe failed`);
 			return;
 		}
-		console.log('[note-chain][WebViewerLLM probe]', llm.name, result);
 		const okCount = [result.input, result.send, result.copy].filter(Boolean).length;
 		new Notice(`${llm.name}: probe ${okCount}/3 (see console)`);
 	}
@@ -604,7 +615,6 @@ export class WebViewerLLMModule {
 			await navigator.clipboard.writeText(snippet);
 			new Notice(`${llm.name}: profile snippet copied`);
 		} catch (e) {
-			console.log('[note-chain][WebViewerLLM profile snippet]', snippet);
 			new Notice(`${llm.name}: copy failed, snippet in console`);
 		}
 	}
