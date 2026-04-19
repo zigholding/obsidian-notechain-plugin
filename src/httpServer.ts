@@ -150,10 +150,11 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     </style>
 </head>
 <body>
-    <h1>在线查看 / 编辑笔记</h1>
+    <h1>Obsidian Online</h1>
     <div class="row">
         <input type="search" id="q" placeholder="按路径或标题搜索…" autocomplete="off">
         <button type="button" class="primary" id="btnSearch">搜索</button>
+        <button type="button" class="secondary hidden" id="btnHome" title="返回 URL 指定的入口笔记">🏠</button>
     </div>
     <ul id="results"></ul>
     <div class="panel">
@@ -171,6 +172,7 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
 (function () {
     var q = document.getElementById('q');
     var btnSearch = document.getElementById('btnSearch');
+    var btnHome = document.getElementById('btnHome');
     var results = document.getElementById('results');
     var currentLabel = document.getElementById('currentLabel');
     var btnView = document.getElementById('btnView');
@@ -181,6 +183,12 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     var msg = document.getElementById('msg');
     var currentPath = '';
     var mode = 'none';
+    /** URL ?filename= / ?path= 解析后的库内路径，供 🏠 返回 */
+    var homeEntryPath = '';
+    /** 与 resolve-note 请求一致的名字（解码后），首次解析失败时点击 🏠 可重试 */
+    var homeEntryQuery = '';
+    /** 存在 ?filename= 时写入搜索框的短名（解码后），不用库内完整路径 */
+    var homeSearchBoxLabel = '';
 
     function setMsg(text, kind) {
         msg.textContent = text || '';
@@ -357,13 +365,14 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         var taBtn = t.closest('[data-nc-online-fname]');
         if (taBtn && currentPath) {
             var container = taBtn.closest('.textarea-container');
-            var area = container && container.querySelector('textarea.code_block_textarea');
-            if (!area) {
-                area = container && container.querySelector('textarea:not(.nc-ta-block-meta)');
-            }
-            if (area) {
+            if (container) {
                 e.preventDefault();
                 e.stopPropagation();
+                var area = container.querySelector('textarea.code_block_textarea');
+                if (!area) {
+                    area = container.querySelector('textarea:not(.nc-ta-block-meta)');
+                }
+                var textareaVal = area ? area.value : '';
                 var fname = taBtn.getAttribute('data-nc-online-fname') || '';
                 var ps = taBtn.getAttribute('data-nc-online-params');
                 var params;
@@ -373,30 +382,34 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
                 var meta = container.querySelector('textarea.nc-ta-block-meta');
                 var src = meta ? meta.value : '';
                 if (fname === 'clear_area') {
-                    area.value = '';
-                    setMsg('', '');
+                    if (area) {
+                        area.value = '';
+                        setMsg('', '');
+                    }
                     return;
                 }
                 if (fname === 'copy_area') {
-                    area.select();
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                        navigator.clipboard.writeText(area.value).then(function () {
-                            setMsg('已复制', 'ok');
-                        }).catch(function () {
-                            setMsg('复制失败', 'err');
-                        });
-                    } else {
-                        try {
-                            document.execCommand('copy');
-                            setMsg('已复制', 'ok');
-                        } catch (x) {
-                            setMsg('复制失败', 'err');
+                    if (area) {
+                        area.select();
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(area.value).then(function () {
+                                setMsg('已复制', 'ok');
+                            }).catch(function () {
+                                setMsg('复制失败', 'err');
+                            });
+                        } else {
+                            try {
+                                document.execCommand('copy');
+                                setMsg('已复制', 'ok');
+                            } catch (x) {
+                                setMsg('复制失败', 'err');
+                            }
                         }
                     }
                     return;
                 }
                 if (fname === 'log_area') {
-                    console.log('[Online textarea]', area.value);
+                    console.log('[Online textarea]', textareaVal);
                     setMsg('已输出到控制台', 'ok');
                     return;
                 }
@@ -407,7 +420,7 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
                     body: JSON.stringify({
                         path: currentPath,
                         fname: fname,
-                        textareaValue: area.value,
+                        textareaValue: textareaVal,
                         source: src,
                         params: params
                     })
@@ -419,7 +432,7 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
                             return;
                         }
                         var d = x.d;
-                        if (d.newValue !== undefined && d.newValue !== null) {
+                        if (area && d.newValue !== undefined && d.newValue !== null) {
                             area.value = String(d.newValue);
                         }
                         if (d.notice) {
@@ -447,7 +460,50 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
             });
     });
 
+    function goHomeNote() {
+        if (homeEntryPath) {
+            if (q && homeSearchBoxLabel) {
+                q.value = homeSearchBoxLabel;
+            }
+            loadNote(homeEntryPath);
+            return;
+        }
+        if (!homeEntryQuery) {
+            return;
+        }
+        setMsg('正在打开入口笔记…', '');
+        fetch('/online/api/resolve-note?name=' + encodeURIComponent(homeEntryQuery))
+            .then(function (res) {
+                return res.json().then(function (d) {
+                    return { res: res, d: d };
+                });
+            })
+            .then(function (x) {
+                if (!x.res.ok) {
+                    setMsg((x.d && x.d.error) || '找不到入口笔记', 'err');
+                    return;
+                }
+                if (x.d.path) {
+                    homeEntryPath = x.d.path;
+                    if (q) {
+                        q.value = homeSearchBoxLabel || x.d.path;
+                    }
+                    loadNote(x.d.path);
+                }
+            })
+            .catch(function (e3) {
+                setMsg(e3.message || '打开失败', 'err');
+            });
+    }
+
+    if (btnHome) {
+        btnHome.onclick = function () {
+            goHomeNote();
+        };
+    }
+
     var bootParams = new URLSearchParams(window.location.search);
+    var hasFilenameParam = !!(bootParams.get('filename') || '').trim();
     var bootPath = bootParams.get('filename') || bootParams.get('path');
     if (bootPath) {
         bootPath = bootPath.trim();
@@ -456,6 +512,13 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
                 bootPath = decodeURIComponent(bootPath);
             } catch (e2) {
                 // 已是解码后的路径
+            }
+            if (hasFilenameParam) {
+                homeSearchBoxLabel = bootPath;
+            }
+            homeEntryQuery = bootPath;
+            if (btnHome) {
+                btnHome.classList.remove('hidden');
             }
             fetch('/online/api/resolve-note?name=' + encodeURIComponent(bootPath))
                 .then(function (res) {
@@ -469,9 +532,10 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
                         return;
                     }
                     if (q) {
-                        q.value = x.d.path || bootPath;
+                        q.value = homeSearchBoxLabel || (x.d.path || bootPath);
                     }
                     if (x.d.path) {
+                        homeEntryPath = x.d.path;
                         loadNote(x.d.path);
                     }
                 })
@@ -1622,7 +1686,10 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
                 res.end(JSON.stringify({ error: 'note-chain plugin not available' }));
                 return;
             }
-            let textareaValue = typeof data.textareaValue === 'string' ? data.textareaValue : '';
+            let textareaValue =
+                data.textareaValue === undefined || data.textareaValue === null
+                    ? ''
+                    : String(data.textareaValue);
             let source = typeof data.source === 'string' ? data.source : '';
             let params = data.params;
 
@@ -1736,13 +1803,34 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
                     mockArea.style = {};
                     mockArea.focus = () => {};
                     mockArea.select = () => {};
-                    await nc.easyapi.tpl.parse_templater(fname, true, {
+                    let tplExtra: any = {
                         area: mockArea,
                         source: source,
                         el: {},
                         ctx: { sourcePath: sourceFile.path },
                         params: params,
+                    };
+                    Object.defineProperty(tplExtra, 'textareaValue', {
+                        configurable: true,
+                        enumerable: true,
+                        get() {
+                            return val;
+                        },
+                        set(v: string) {
+                            val = String(v);
+                        },
                     });
+                    Object.defineProperty(tplExtra, 'text', {
+                        configurable: true,
+                        enumerable: true,
+                        get() {
+                            return val;
+                        },
+                        set(v: string) {
+                            val = String(v);
+                        },
+                    });
+                    await nc.easyapi.tpl.parse_templater(fname, true, tplExtra);
                     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                     res.end(JSON.stringify({ ok: true, newValue: val }));
                     return;
@@ -1967,15 +2055,15 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
 
     /** /online 渲染调试日志（输出到 Obsidian 开发者工具控制台） */
     private logOnlineRender(phase: string, detail?: Record<string, unknown>): void {
-        let extra = '';
-        if (detail && Object.keys(detail).length > 0) {
-            try {
-                extra = ' ' + JSON.stringify(detail);
-            } catch {
-                extra = ' [detail stringify failed]';
-            }
-        }
-        console.log('[note-chain /online/render] ' + phase + extra);
+        // let extra = '';
+        // if (detail && Object.keys(detail).length > 0) {
+        //     try {
+        //         extra = ' ' + JSON.stringify(detail);
+        //     } catch {
+        //         extra = ' [detail stringify failed]';
+        //     }
+        // }
+        // console.log('[note-chain /online/render] ' + phase + extra);
     }
 
     /**

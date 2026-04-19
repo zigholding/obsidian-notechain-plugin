@@ -205,15 +205,38 @@ export class NCTextarea {
 										x=>nc.settings.notechain.tpl_tags_folder.contains(x)
 									);
 									if(tags.length>0){
-										nc.easyapi.tpl.parse_templater(
-											fname, true, {
-												area: area,
-												source: source,
-												el: el,
-												ctx: ctx,
-												params: btn[3]
-											}
-										);
+										let tplExtra: any = {
+											area: area,
+											source: source,
+											el: el,
+											ctx: ctx,
+											params: btn[3],
+										};
+										Object.defineProperty(tplExtra, 'textareaValue', {
+											configurable: true,
+											enumerable: true,
+											get() {
+												return area ? String((area as HTMLTextAreaElement).value) : '';
+											},
+											set(v: string) {
+												if (area) {
+													(area as HTMLTextAreaElement).value = String(v);
+												}
+											},
+										});
+										Object.defineProperty(tplExtra, 'text', {
+											configurable: true,
+											enumerable: true,
+											get() {
+												return area ? String((area as HTMLTextAreaElement).value) : '';
+											},
+											set(v: string) {
+												if (area) {
+													(area as HTMLTextAreaElement).value = String(v);
+												}
+											},
+										});
+										nc.easyapi.tpl.parse_templater(fname, true, tplExtra);
 									}else{
 										nc.chain.open_note_in_modal(tfile.path)
 									}
