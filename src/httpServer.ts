@@ -1,4 +1,4 @@
-import { App, Component, MarkdownRenderer, TFile } from 'obsidian';
+import { App, Component, MarkdownRenderer, TFile, normalizePath } from 'obsidian';
 import { Templater } from './easyapi/templater';
 
 let http = require('http');
@@ -244,12 +244,40 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     async function renderPreview(path, markdown) {
         var res = await fetch('/online/api/render', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
             body: JSON.stringify({ path: path, markdown: markdown })
         });
-        var data = await res.json().catch(function () { return {}; });
-        if (!res.ok) throw new Error(data.error || res.statusText);
-        viewer.innerHTML = '<div class="markdown-rendered">' + (data.html || '') + '</div>';
+        if (!res.ok) {
+            var errText = await res.text();
+            var errJson = {};
+            try { errJson = JSON.parse(errText); } catch (_) {}
+            throw new Error(errJson.error || res.statusText);
+        }
+        var ct = (res.headers.get('content-type') || '').toLowerCase();
+        if (ct.indexOf('ndjson') < 0 || !res.body || !res.body.getReader) {
+            var data = await res.json().catch(function () { return {}; });
+            viewer.innerHTML = '<div class="markdown-rendered">' + (data.html || '') + '</div>';
+            return;
+        }
+        var reader = res.body.getReader();
+        var dec = new TextDecoder();
+        var buf = '';
+        while (true) {
+            var rd = await reader.read();
+            if (rd.done) break;
+            buf += dec.decode(rd.value, { stream: true });
+            for (;;) {
+                var nl = buf.indexOf(String.fromCharCode(10));
+                if (nl < 0) break;
+                var line = buf.slice(0, nl).trim();
+                buf = buf.slice(nl + 1);
+                if (!line) continue;
+                var frame = JSON.parse(line);
+                if (frame.error) throw new Error(frame.error);
+                viewer.innerHTML = '<div class="markdown-rendered">' + (frame.html || '') + '</div>';
+                if (frame.done) return;
+            }
+        }
     }
 
     async function loadNote(path) {
@@ -257,7 +285,7 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         currentPath = path;
         currentLabel.textContent = path;
         setMode('view');
-        viewer.innerHTML = '<p class="online-loading">加载中…</p>';
+        viewer.innerHTML = '<p class="online-loading">加载…</p>';
         viewer.classList.remove('hidden');
         try {
             var res = await fetch('/online/api/note?path=' + encodeURIComponent(path));
@@ -280,7 +308,7 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     btnView.onclick = async function () {
         if (!currentPath) return;
         setMode('view');
-        viewer.innerHTML = '<p class="online-loading">渲染中…</p>';
+        viewer.innerHTML = '<p class="online-loading">渲染…</p>';
         try {
             await renderPreview(currentPath, editor.value);
         } catch (e) {
@@ -307,7 +335,7 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
             if (!res.ok) throw new Error(data.error || res.statusText);
             setMsg('已保存', 'ok');
             setMode('view');
-            viewer.innerHTML = '<p class="online-loading">渲染中…</p>';
+            viewer.innerHTML = '<p class="online-loading">渲染…</p>';
             try {
                 await renderPreview(currentPath, editor.value);
             } catch (re) {
@@ -408,6 +436,8 @@ export class HTTPServer {
                         await this.handleOnlineRender(req, res);
                     } else if (parsedUrl.pathname === '/online/api/resolve-link' && req.method === 'GET') {
                         await this.handleOnlineResolveLink(req, res, parsedUrl);
+                    } else if (parsedUrl.pathname === '/online/api/media' && req.method === 'GET') {
+                        await this.handleOnlineMedia(req, res, parsedUrl);
                     } else {
                         console.warn(`Unknown route: ${req.method} ${parsedUrl.pathname}`);
                         res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -1164,6 +1194,244 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
         return abs;
     }
 
+    private getVaultRootAbsNorm(): string | null {
+        let adapter = this.app.vault.adapter as any;
+        let getFullPath = adapter.getFullPath as undefined | ((p: string) => string);
+        if (typeof getFullPath !== 'function') {
+            return null;
+        }
+        for (let key of ['.', '']) {
+            try {
+                let abs = getFullPath.call(adapter, key);
+                if (abs && typeof abs === 'string') {
+                    return abs.replace(/\\/g, '/');
+                }
+            } catch {
+                // try next
+            }
+        }
+        return null;
+    }
+
+    private absPathToVaultRel(fsPathRaw: string): string | null {
+        let fsPath = fsPathRaw.replace(/\\/g, '/').trim();
+        let root = this.getVaultRootAbsNorm();
+        if (!root) {
+            return null;
+        }
+        let lowerRoot = root.toLowerCase();
+        let lowerPath = fsPath.toLowerCase();
+        if (!lowerPath.startsWith(lowerRoot)) {
+            return null;
+        }
+        let rest = fsPath.slice(root.length).replace(/^\/+/, '');
+        if (!rest.length || rest.includes('..')) {
+            return null;
+        }
+        let f = this.app.vault.getAbstractFileByPath(rest);
+        return f instanceof TFile ? rest : null;
+    }
+
+    private joinMediaPathFromSource(sourcePath: string, href: string): string | null {
+        let h = href.trim();
+        if (!h.length) {
+            return null;
+        }
+        if (/^[a-z][a-z0-9+.-]*:\/\//i.test(h)) {
+            return null;
+        }
+        let dir = '';
+        if (sourcePath.includes('/')) {
+            dir = sourcePath.slice(0, sourcePath.lastIndexOf('/'));
+        }
+        let joined = dir.length ? normalizePath(dir + '/' + h) : normalizePath(h);
+        joined = joined.replace(/\\/g, '/');
+        let norm = this.normalizeOnlineVaultPath(joined);
+        if (!norm) {
+            return null;
+        }
+        let f = this.app.vault.getAbstractFileByPath(norm);
+        return f instanceof TFile ? norm : null;
+    }
+
+    /** app://…、file://… 转为 vault 相对路径 */
+    private resolveSpecialUrlToVaultPath(raw: string): string | null {
+        let s = raw.trim();
+        try {
+            s = decodeURIComponent(s);
+        } catch {
+            // keep
+        }
+        if (!s.length) {
+            return null;
+        }
+        if (/^app:\/\/local\//i.test(s)) {
+            let tail = s.slice('app://local/'.length);
+            try {
+                tail = decodeURIComponent(tail.replace(/\+/g, '%20'));
+            } catch {
+                // keep
+            }
+            let fsNorm = tail.replace(/\\/g, '/');
+            return this.absPathToVaultRel(fsNorm);
+        }
+        let mHost = s.match(/^app:\/\/[^/]+\/(.+)$/i);
+        if (mHost) {
+            let rest = mHost[1];
+            try {
+                rest = decodeURIComponent(rest.replace(/\+/g, '%20'));
+            } catch {
+                // keep
+            }
+            rest = rest.replace(/\\/g, '/').replace(/^\/+/, '');
+            if (!rest.includes('..')) {
+                let f = this.app.vault.getAbstractFileByPath(rest);
+                if (f instanceof TFile) {
+                    return rest;
+                }
+                let byAbs = this.absPathToVaultRel(rest);
+                if (byAbs) {
+                    return byAbs;
+                }
+            }
+        }
+        if (/^file:\/\//i.test(s)) {
+            let p = s.replace(/^file:\/\//i, '');
+            if (p.startsWith('///')) {
+                p = p.slice(2);
+            } else if (p.startsWith('//')) {
+                p = p.slice(1);
+            }
+            try {
+                p = decodeURIComponent(p);
+            } catch {
+                // keep
+            }
+            let fsNorm = p.replace(/\\/g, '/');
+            return this.absPathToVaultRel(fsNorm);
+        }
+        return null;
+    }
+
+    private resolveSrcToVaultPathForOnline(src: string, sourcePath: string): string | null {
+        if (!src.trim().length || src.includes('/online/api/media?')) {
+            return null;
+        }
+        let decoded = src.trim();
+        try {
+            decoded = decodeURIComponent(decoded);
+        } catch {
+            // keep
+        }
+        if (/^(app|file):/i.test(decoded)) {
+            return this.resolveSpecialUrlToVaultPath(decoded);
+        }
+        if (/^https?:\/\//i.test(decoded)) {
+            return null;
+        }
+        let rel = this.joinMediaPathFromSource(sourcePath, decoded);
+        if (rel) {
+            return rel;
+        }
+        let only = this.normalizeOnlineVaultPath(decoded.replace(/\\/g, '/'));
+        if (only) {
+            let f = this.app.vault.getAbstractFileByPath(only);
+            if (f instanceof TFile) {
+                return only;
+            }
+        }
+        return null;
+    }
+
+    private rewriteOnlinePreviewHtml(html: string, sourcePath: string): string {
+        if (!html.length) {
+            return html;
+        }
+        let wrap = document.createElement('div');
+        wrap.innerHTML = html;
+        let sel = 'img[src], video[src], audio[src], source[src]';
+        wrap.querySelectorAll(sel).forEach((node) => {
+            let src = node.getAttribute('src');
+            if (!src) {
+                return;
+            }
+            let vaultPath = this.resolveSrcToVaultPathForOnline(src, sourcePath);
+            if (vaultPath) {
+                node.setAttribute('src', '/online/api/media?path=' + encodeURIComponent(vaultPath));
+            }
+        });
+        wrap.querySelectorAll('img[data-src], video[data-src]').forEach((node) => {
+            let ds = node.getAttribute('data-src');
+            if (!ds) {
+                return;
+            }
+            let vaultPath = this.resolveSrcToVaultPathForOnline(ds, sourcePath);
+            if (vaultPath) {
+                node.setAttribute('data-src', '/online/api/media?path=' + encodeURIComponent(vaultPath));
+            }
+        });
+        return wrap.innerHTML;
+    }
+
+    private onlineMediaMime(extension: string): string {
+        let ext = (extension || '').toLowerCase().replace(/^\./, '');
+        let map: Record<string, string> = {
+            png: 'image/png',
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            gif: 'image/gif',
+            webp: 'image/webp',
+            svg: 'image/svg+xml',
+            ico: 'image/x-icon',
+            bmp: 'image/bmp',
+            avif: 'image/avif',
+            mp4: 'video/mp4',
+            webm: 'video/webm',
+            ogv: 'video/ogg',
+            mp3: 'audio/mpeg',
+            wav: 'audio/wav',
+            ogg: 'audio/ogg',
+            pdf: 'application/pdf',
+            woff: 'font/woff',
+            woff2: 'font/woff2',
+        };
+        return map[ext] || 'application/octet-stream';
+    }
+
+    private async handleOnlineMedia(req: any, res: any, parsedUrl: any) {
+        try {
+            let pathParam = parsedUrl.query && (parsedUrl.query.path as string | undefined);
+            let p = this.normalizeOnlineVaultPath(pathParam);
+            if (!p) {
+                res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+                res.end('Bad path');
+                return;
+            }
+            let abs = this.app.vault.getAbstractFileByPath(p);
+            if (!abs || !(abs instanceof TFile)) {
+                res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+                res.end('Not found');
+                return;
+            }
+            let raw = await this.app.vault.readBinary(abs);
+            let body =
+                raw instanceof ArrayBuffer
+                    ? Buffer.from(raw)
+                    : Buffer.isBuffer(raw)
+                      ? raw
+                      : Buffer.from(raw as Uint8Array);
+            res.writeHead(200, {
+                'Content-Type': this.onlineMediaMime(abs.extension),
+                'Access-Control-Allow-Origin': '*',
+                'Cache-Control': 'public, max-age=3600',
+            });
+            res.end(body);
+        } catch (error: any) {
+            res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end(error.message || 'read failed');
+        }
+    }
+
     private async handleOnlineNoteGet(req: any, res: any, parsedUrl: any) {
         try {
             let pathParam = parsedUrl.query && (parsedUrl.query.path as string | undefined);
@@ -1214,14 +1482,39 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
     }
 
     /**
-     * dataview / dataviewjs 等在 MarkdownRenderer.render 的 Promise 结束后仍会异步改 DOM。
-     * 等待子树在一段时间内无变更后再序列化，避免只拿到空表格壳子。
+     * 将 Markdown 渲染为 HTML 并以 NDJSON 流推送：首帧尽快返回，Dataview 等异步更新时防抖刷新，最后 done:true。
+     * 每行一个 JSON：{ html, done? , error? }
      */
-    private waitForSubtreeQuiet(root: HTMLElement, idleMs: number, maxMs: number): Promise<void> {
-        return new Promise((resolve) => {
+    private async streamOnlineRenderNdjson(
+        res: any,
+        el: HTMLElement,
+        idleMs: number,
+        maxMs: number,
+        sourcePath: string,
+    ): Promise<void> {
+        let lastSentRaw = '';
+        const writeLine = (html: string, done: boolean) => {
+            if (res.writableEnded) {
+                return;
+            }
+            if (!done && html === lastSentRaw) {
+                return;
+            }
+            lastSentRaw = html;
+            let htmlOut = this.rewriteOnlinePreviewHtml(html, sourcePath);
+            res.write(JSON.stringify({ html: htmlOut, done }) + '\n');
+            if (typeof res.flush === 'function') {
+                (res as any).flush();
+            }
+        };
+
+        writeLine(el.innerHTML, false);
+
+        await new Promise<void>((resolve) => {
             let settled = false;
             let lastMutation = Date.now();
             let idleTimer: ReturnType<typeof setTimeout> | null = null;
+            let debouncePushTimer: ReturnType<typeof setTimeout> | null = null;
 
             const finish = () => {
                 if (settled) {
@@ -1232,9 +1525,26 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
                     clearTimeout(idleTimer);
                     idleTimer = null;
                 }
+                if (debouncePushTimer) {
+                    clearTimeout(debouncePushTimer);
+                    debouncePushTimer = null;
+                }
                 clearTimeout(maxTimer);
                 observer.disconnect();
+                writeLine(el.innerHTML, true);
                 resolve();
+            };
+
+            const queuePush = () => {
+                if (debouncePushTimer) {
+                    clearTimeout(debouncePushTimer);
+                }
+                debouncePushTimer = setTimeout(() => {
+                    debouncePushTimer = null;
+                    if (!settled) {
+                        writeLine(el.innerHTML, false);
+                    }
+                }, 55);
             };
 
             const schedule = () => {
@@ -1253,18 +1563,35 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
 
             const observer = new MutationObserver(() => {
                 lastMutation = Date.now();
+                queuePush();
                 schedule();
             });
-            observer.observe(root, {
+            // 不监听 attributes：类名/style 等抖动会让「静默」很难达成，普通笔记会白等很久
+            observer.observe(el, {
                 subtree: true,
                 childList: true,
                 characterData: true,
-                attributes: true,
             });
 
             schedule();
             const maxTimer = setTimeout(finish, maxMs);
         });
+    }
+
+    /** 是否含 Dataview 等需长时间异步填充的块（避免正文里出现 “dataview” 字样误触发） */
+    private needsExtendedOnlineRenderWait(markdown: string, el: HTMLElement): boolean {
+        if (
+            el.querySelector(
+                '.block-language-dataview, .block-language-dataviewjs, pre[class*="language-dataview"]',
+            )
+        ) {
+            return true;
+        }
+        let md = markdown || '';
+        return (
+            /(^|\r?\n)```[\t ]*dataviewjs\b/i.test(md) ||
+            /(^|\r?\n)```[\t ]*dataview\b/i.test(md)
+        );
     }
 
     /**
@@ -1302,23 +1629,45 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
                 'position:fixed;left:-99999px;top:0;width:920px;max-width:100vw;opacity:0;pointer-events:none;z-index:-1;overflow:hidden;';
             document.body.appendChild(host);
             host.appendChild(el);
+            res.writeHead(200, {
+                'Content-Type': 'application/x-ndjson; charset=utf-8',
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no',
+                'Access-Control-Allow-Origin': '*',
+            });
             await MarkdownRenderer.render(this.app, markdown, el, sourcePath, comp);
             await new Promise<void>((r) =>
                 requestAnimationFrame(() => requestAnimationFrame(() => r())),
             );
-            await this.waitForSubtreeQuiet(el, 480, 20000);
-            let html = el.innerHTML;
-            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-            res.end(JSON.stringify({ html }));
+            let extended = this.needsExtendedOnlineRenderWait(markdown, el);
+            let idleMs = extended ? 280 : 42;
+            let maxMs = extended ? 12000 : 280;
+            await this.streamOnlineRenderNdjson(res, el, idleMs, maxMs, sourcePath);
         } catch (error: any) {
-            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-            res.end(JSON.stringify({ error: error.message || 'render failed' }));
+            if (res.headersSent) {
+                try {
+                    res.write(
+                        JSON.stringify({
+                            error: error.message || 'render failed',
+                            done: true,
+                        }) + '\n',
+                    );
+                } catch {
+                    // ignore
+                }
+            } else {
+                res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: error.message || 'render failed' }));
+            }
         } finally {
             if (host && host.parentNode) {
                 host.parentNode.removeChild(host);
             }
             if (comp) {
                 comp.unload();
+            }
+            if (!res.writableEnded) {
+                res.end();
             }
         }
     }
