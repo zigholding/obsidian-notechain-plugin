@@ -1,4 +1,4 @@
-import { App } from 'obsidian';
+import { App, TFile } from 'obsidian';
 import { Templater } from './easyapi/templater';
 
 let http = require('http');
@@ -75,6 +75,196 @@ const MCP_TEST_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+/** 浏览器内搜索、查看、编辑库内 Markdown 笔记 */
+const ONLINE_PAGE_HTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线笔记</title>
+    <style>
+        :root { color-scheme: light dark; }
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 960px; margin: 0 auto; padding: 1rem 1.25rem 2rem; line-height: 1.45; }
+        h1 { font-size: 1.35rem; margin: 0 0 1rem; font-weight: 600; }
+        .row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
+        input[type="search"], input[type="text"] { flex: 1; min-width: 200px; padding: 0.5rem 0.65rem; border-radius: 6px; border: 1px solid #8884; box-sizing: border-box; }
+        button { padding: 0.45rem 0.85rem; border-radius: 6px; border: none; cursor: pointer; font-size: 0.95rem; }
+        button.primary { background: #2d7d46; color: #fff; }
+        button.primary:hover { filter: brightness(1.08); }
+        button.secondary { background: #4443; color: inherit; }
+        button.secondary:hover { background: #4445; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        #results { list-style: none; padding: 0; margin: 0 0 1rem; max-height: 220px; overflow: auto; border: 1px solid #8883; border-radius: 8px; }
+        #results li { padding: 0.45rem 0.65rem; cursor: pointer; border-bottom: 1px solid #8882; }
+        #results li:last-child { border-bottom: none; }
+        #results li:hover, #results li.active { background: #08f2; }
+        .path { font-size: 0.8rem; opacity: 0.75; }
+        .panel { border: 1px solid #8883; border-radius: 8px; padding: 0.75rem 1rem; min-height: 200px; }
+        .toolbar { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; }
+        .current { font-size: 0.85rem; opacity: 0.85; word-break: break-all; flex: 1; }
+        #viewer { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: ui-monospace, monospace; font-size: 0.88rem; max-height: 60vh; overflow: auto; }
+        #editor { width: 100%; min-height: 320px; box-sizing: border-box; padding: 0.6rem; font-family: ui-monospace, monospace; font-size: 0.88rem; border-radius: 6px; border: 1px solid #8884; resize: vertical; }
+        .msg { font-size: 0.9rem; margin-top: 0.5rem; }
+        .msg.err { color: #c22; }
+        .msg.ok { color: #2a7; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <h1>在线查看 / 编辑笔记</h1>
+    <div class="row">
+        <input type="search" id="q" placeholder="按路径或标题搜索…" autocomplete="off">
+        <button type="button" class="primary" id="btnSearch">搜索</button>
+    </div>
+    <ul id="results"></ul>
+    <div class="panel">
+        <div class="toolbar">
+            <span class="current" id="currentLabel">未选择笔记</span>
+            <button type="button" class="secondary hidden" id="btnView">查看</button>
+            <button type="button" class="secondary hidden" id="btnEdit">编辑</button>
+            <button type="button" class="primary hidden" id="btnSave">保存</button>
+        </div>
+        <pre id="viewer" class="hidden"></pre>
+        <textarea id="editor" class="hidden" spellcheck="false"></textarea>
+    </div>
+    <p class="msg" id="msg"></p>
+    <script>
+(function () {
+    var q = document.getElementById('q');
+    var btnSearch = document.getElementById('btnSearch');
+    var results = document.getElementById('results');
+    var currentLabel = document.getElementById('currentLabel');
+    var btnView = document.getElementById('btnView');
+    var btnEdit = document.getElementById('btnEdit');
+    var btnSave = document.getElementById('btnSave');
+    var viewer = document.getElementById('viewer');
+    var editor = document.getElementById('editor');
+    var msg = document.getElementById('msg');
+    var currentPath = '';
+    var mode = 'none';
+
+    function setMsg(text, kind) {
+        msg.textContent = text || '';
+        msg.className = 'msg' + (kind ? ' ' + kind : '');
+    }
+
+    function showToolbar(hasNote) {
+        btnView.classList.toggle('hidden', !hasNote);
+        btnEdit.classList.toggle('hidden', !hasNote);
+        btnSave.classList.toggle('hidden', mode !== 'edit');
+    }
+
+    function setMode(m) {
+        mode = m;
+        viewer.classList.toggle('hidden', m !== 'view');
+        editor.classList.toggle('hidden', m !== 'edit');
+        btnSave.classList.toggle('hidden', m !== 'edit');
+        btnView.classList.toggle('hidden', !currentPath);
+        btnEdit.classList.toggle('hidden', !currentPath);
+    }
+
+    async function search() {
+        var term = q.value.trim();
+        setMsg('');
+        results.innerHTML = '';
+        if (!term) { setMsg('请输入搜索关键词', 'err'); return; }
+        btnSearch.disabled = true;
+        try {
+            var res = await fetch('/online/api/search?q=' + encodeURIComponent(term));
+            var data = await res.json();
+            if (!res.ok) throw new Error(data.error || res.statusText);
+            var list = data.results || [];
+            if (list.length === 0) { setMsg('没有匹配的笔记'); return; }
+            list.forEach(function (item) {
+                var li = document.createElement('li');
+                li.dataset.path = item.path;
+                li.innerHTML = '<strong>' + escapeHtml(item.basename) + '</strong><div class="path">' + escapeHtml(item.path) + '</div>';
+                li.onclick = function () { selectItem(li, item.path); };
+                results.appendChild(li);
+            });
+        } catch (e) {
+            setMsg('搜索失败：' + e.message, 'err');
+        } finally {
+            btnSearch.disabled = false;
+        }
+    }
+
+    function escapeHtml(s) {
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function selectItem(li, path) {
+        Array.prototype.forEach.call(results.querySelectorAll('li'), function (x) { x.classList.remove('active'); });
+        if (li) li.classList.add('active');
+        loadNote(path);
+    }
+
+    async function loadNote(path) {
+        setMsg('');
+        currentPath = path;
+        currentLabel.textContent = path;
+        showToolbar(true);
+        setMode('view');
+        viewer.textContent = '加载中…';
+        viewer.classList.remove('hidden');
+        try {
+            var res = await fetch('/online/api/note?path=' + encodeURIComponent(path));
+            var data = await res.json();
+            if (!res.ok) throw new Error(data.error || res.statusText);
+            viewer.textContent = data.content || '';
+            editor.value = data.content || '';
+        } catch (e) {
+            viewer.textContent = '';
+            setMsg('读取失败：' + e.message, 'err');
+            currentPath = '';
+            currentLabel.textContent = '未选择笔记';
+            showToolbar(false);
+            setMode('none');
+        }
+    }
+
+    btnSearch.onclick = search;
+    q.onkeydown = function (e) { if (e.key === 'Enter') search(); };
+
+    btnView.onclick = function () {
+        if (!currentPath) return;
+        setMode('view');
+        viewer.textContent = editor.value;
+    };
+
+    btnEdit.onclick = function () {
+        if (!currentPath) return;
+        setMode('edit');
+    };
+
+    btnSave.onclick = async function () {
+        if (!currentPath) return;
+        setMsg('');
+        btnSave.disabled = true;
+        try {
+            var res = await fetch('/online/api/note', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: currentPath, content: editor.value })
+            });
+            var data = await res.json().catch(function () { return {}; });
+            if (!res.ok) throw new Error(data.error || res.statusText);
+            setMsg('已保存', 'ok');
+            viewer.textContent = editor.value;
+            setMode('view');
+        } catch (e) {
+            setMsg('保存失败：' + e.message, 'err');
+        } finally {
+            btnSave.disabled = false;
+        }
+    };
+})();
+    </script>
+</body>
+</html>`;
+
 export class HTTPServer {
     private app: App;
     private templater: Templater;
@@ -131,6 +321,14 @@ export class HTTPServer {
                         await this.handleMCPTestPage(req, res);
                     } else if (parsedUrl.pathname === '/mcp/skill' && req.method === 'GET') {
                         await this.handleMCPSkill(req, res);
+                    } else if (parsedUrl.pathname === '/online' && req.method === 'GET') {
+                        await this.handleOnlinePage(req, res);
+                    } else if (parsedUrl.pathname === '/online/api/search' && req.method === 'GET') {
+                        await this.handleOnlineSearch(req, res, parsedUrl);
+                    } else if (parsedUrl.pathname === '/online/api/note' && req.method === 'GET') {
+                        await this.handleOnlineNoteGet(req, res, parsedUrl);
+                    } else if (parsedUrl.pathname === '/online/api/note' && req.method === 'POST') {
+                        await this.handleOnlineNoteSave(req, res);
                     } else {
                         console.warn(`Unknown route: ${req.method} ${parsedUrl.pathname}`);
                         res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -818,6 +1016,121 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
                     data: error.message
                 }
             }));
+        }
+    }
+
+    /** 在线页：仅允许 vault 相对路径，拒绝明显越界 */
+    private normalizeOnlineVaultPath(raw: string | undefined): string | null {
+        if (!raw || typeof raw !== 'string') {
+            return null;
+        }
+        let p = raw.replace(/\\/g, '/').trim();
+        if (p.includes('..')) {
+            return null;
+        }
+        while (p.startsWith('/')) {
+            p = p.slice(1);
+        }
+        return p.length ? p : null;
+    }
+
+    private async handleOnlinePage(req: any, res: any) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(ONLINE_PAGE_HTML);
+    }
+
+    private async handleOnlineSearch(req: any, res: any, parsedUrl: any) {
+        try {
+            let qRaw = parsedUrl.query && (parsedUrl.query.q as string | undefined);
+            let term = (qRaw || '').trim().toLowerCase();
+            if (!term) {
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ results: [] }));
+                return;
+            }
+            let files = this.app.vault.getMarkdownFiles();
+            let hits: { path: string; basename: string }[] = [];
+            for (let f of files) {
+                let pathLower = f.path.toLowerCase();
+                let baseLower = f.basename.toLowerCase();
+                if (pathLower.includes(term) || baseLower.includes(term)) {
+                    hits.push({ path: f.path, basename: f.basename });
+                }
+            }
+            hits.sort((a, b) => a.path.localeCompare(b.path));
+            let limit = 100;
+            if (hits.length > limit) {
+                hits = hits.slice(0, limit);
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ results: hits }));
+        } catch (error: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ error: error.message || 'search failed' }));
+        }
+    }
+
+    private resolveOnlineMarkdownFile(pathParam: string | undefined): TFile | null {
+        let p = this.normalizeOnlineVaultPath(pathParam);
+        if (!p) {
+            return null;
+        }
+        let abs = this.app.vault.getAbstractFileByPath(p);
+        if (!abs || !(abs instanceof TFile)) {
+            return null;
+        }
+        if (abs.extension !== 'md') {
+            return null;
+        }
+        return abs;
+    }
+
+    private async handleOnlineNoteGet(req: any, res: any, parsedUrl: any) {
+        try {
+            let pathParam = parsedUrl.query && (parsedUrl.query.path as string | undefined);
+            let file = this.resolveOnlineMarkdownFile(pathParam);
+            if (!file) {
+                res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'Note not found or not a markdown file' }));
+                return;
+            }
+            let content = await this.app.vault.read(file);
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({
+                path: file.path,
+                basename: file.basename,
+                content
+            }));
+        } catch (error: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ error: error.message || 'read failed' }));
+        }
+    }
+
+    private async handleOnlineNoteSave(req: any, res: any) {
+        try {
+            let body = await this.readBody(req);
+            let data: any = {};
+            try {
+                data = JSON.parse(body);
+            } catch {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+                return;
+            }
+            let file = this.resolveOnlineMarkdownFile(data.path);
+            if (!file) {
+                res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'Note not found or not a markdown file' }));
+                return;
+            }
+            let content = typeof data.content === 'string' ? data.content : '';
+            await this.app.vault.modify(file, content);
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ ok: true, path: file.path }));
+        } catch (error: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ error: error.message || 'save failed' }));
         }
     }
 
