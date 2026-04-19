@@ -1,4 +1,4 @@
-import { App, TFile } from 'obsidian';
+import { App, Component, MarkdownRenderer, TFile } from 'obsidian';
 import { Templater } from './easyapi/templater';
 
 let http = require('http');
@@ -102,7 +102,43 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         .panel { border: 1px solid #8883; border-radius: 8px; padding: 0.75rem 1rem; min-height: 200px; }
         .toolbar { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; }
         .current { font-size: 0.85rem; opacity: 0.85; word-break: break-all; flex: 1; }
-        #viewer { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: ui-monospace, monospace; font-size: 0.88rem; max-height: 60vh; overflow: auto; }
+        /* 在线预览：结构由 MarkdownRenderer 生成，样式接近 Obsidian 阅读视图 */
+        #viewer.obsidian-online-render {
+            max-height: 60vh; overflow: auto; margin: 0; padding: 0.35rem 0.15rem;
+            font-size: 16px; line-height: 1.6; text-align: left;
+            --on-text: #1e1e1e; --on-muted: #5c5c5c; --on-border: #d4d4d4; --on-code-bg: #f3f3f3; --on-link: #0969da;
+        }
+        @media (prefers-color-scheme: dark) {
+            #viewer.obsidian-online-render {
+                --on-text: #dcddde; --on-muted: #a0a4a8; --on-border: #3d3d3d; --on-code-bg: #2a2a2a; --on-link: #79c0ff;
+            }
+        }
+        #viewer.obsidian-online-render { color: var(--on-text); }
+        #viewer.obsidian-online-render .online-loading { color: var(--on-muted); margin: 0.25rem 0; }
+        #viewer.obsidian-online-render .markdown-rendered > :first-child { margin-top: 0; }
+        #viewer.obsidian-online-render .markdown-rendered > :last-child { margin-bottom: 0; }
+        #viewer.obsidian-online-render p { margin: 0.65em 0; }
+        #viewer.obsidian-online-render h1 { font-size: 1.75em; font-weight: 600; margin: 0.75em 0 0.4em; line-height: 1.25; border-bottom: 1px solid var(--on-border); padding-bottom: 0.2em; }
+        #viewer.obsidian-online-render h2 { font-size: 1.45em; font-weight: 600; margin: 0.7em 0 0.35em; line-height: 1.3; }
+        #viewer.obsidian-online-render h3 { font-size: 1.2em; font-weight: 600; margin: 0.65em 0 0.3em; }
+        #viewer.obsidian-online-render h4, #viewer.obsidian-online-render h5, #viewer.obsidian-online-render h6 { font-weight: 600; margin: 0.55em 0 0.25em; }
+        #viewer.obsidian-online-render ul, #viewer.obsidian-online-render ol { margin: 0.55em 0; padding-left: 1.45em; }
+        #viewer.obsidian-online-render li { margin: 0.2em 0; }
+        #viewer.obsidian-online-render blockquote { margin: 0.6em 0; padding: 0 0 0 0.9em; border-left: 3px solid var(--on-border); color: var(--on-muted); }
+        #viewer.obsidian-online-render hr { border: none; border-top: 1px solid var(--on-border); margin: 1em 0; }
+        #viewer.obsidian-online-render code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; padding: 0.12em 0.35em; border-radius: 4px; background: var(--on-code-bg); }
+        #viewer.obsidian-online-render pre { margin: 0.65em 0; padding: 0.75rem 1rem; border-radius: 6px; background: var(--on-code-bg); overflow: auto; }
+        #viewer.obsidian-online-render pre code { padding: 0; background: none; font-size: 0.85em; }
+        #viewer.obsidian-online-render a.internal-link { color: var(--on-link); text-decoration: none; font-weight: 500; }
+        #viewer.obsidian-online-render a.internal-link:hover { text-decoration: underline; }
+        #viewer.obsidian-online-render a.external-link { color: var(--on-link); }
+        #viewer.obsidian-online-render img { max-width: 100%; height: auto; border-radius: 4px; }
+        #viewer.obsidian-online-render table { border-collapse: collapse; width: 100%; margin: 0.65em 0; font-size: 0.95em; }
+        #viewer.obsidian-online-render th, #viewer.obsidian-online-render td { border: 1px solid var(--on-border); padding: 0.35em 0.55em; }
+        #viewer.obsidian-online-render th { background: var(--on-code-bg); font-weight: 600; }
+        #viewer.obsidian-online-render .callout { margin: 0.65em 0; padding: 0.5em 0.75em; border-radius: 6px; border: 1px solid var(--on-border); background: var(--on-code-bg); }
+        #viewer.obsidian-online-render .callout-title { font-weight: 600; margin-bottom: 0.35em; }
+        #viewer.obsidian-online-render .task-list-item-checkbox { margin-right: 0.4em; }
         #editor { width: 100%; min-height: 320px; box-sizing: border-box; padding: 0.6rem; font-family: ui-monospace, monospace; font-size: 0.88rem; border-radius: 6px; border: 1px solid #8884; resize: vertical; }
         .msg { font-size: 0.9rem; margin-top: 0.5rem; }
         .msg.err { color: #c22; }
@@ -124,7 +160,7 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
             <button type="button" class="secondary hidden" id="btnEdit">编辑</button>
             <button type="button" class="primary hidden" id="btnSave">保存</button>
         </div>
-        <pre id="viewer" class="hidden"></pre>
+        <div id="viewer" class="markdown-preview-view obsidian-online-render hidden" role="document"></div>
         <textarea id="editor" class="hidden" spellcheck="false"></textarea>
     </div>
     <p class="msg" id="msg"></p>
@@ -148,19 +184,23 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         msg.className = 'msg' + (kind ? ' ' + kind : '');
     }
 
-    function showToolbar(hasNote) {
-        btnView.classList.toggle('hidden', !hasNote);
-        btnEdit.classList.toggle('hidden', !hasNote);
-        btnSave.classList.toggle('hidden', mode !== 'edit');
-    }
-
     function setMode(m) {
         mode = m;
+        if (m === 'none') {
+            viewer.innerHTML = '';
+            viewer.classList.add('hidden');
+            editor.classList.add('hidden');
+            btnSave.classList.add('hidden');
+            btnView.classList.add('hidden');
+            btnEdit.classList.add('hidden');
+            return;
+        }
         viewer.classList.toggle('hidden', m !== 'view');
         editor.classList.toggle('hidden', m !== 'edit');
         btnSave.classList.toggle('hidden', m !== 'edit');
-        btnView.classList.toggle('hidden', !currentPath);
-        btnEdit.classList.toggle('hidden', !currentPath);
+        // 查看态不显示「查看」；编辑态不显示「编辑」（编辑态显示「查看」可回到预览）
+        btnView.classList.toggle('hidden', m !== 'edit' || !currentPath);
+        btnEdit.classList.toggle('hidden', m !== 'view' || !currentPath);
     }
 
     async function search() {
@@ -201,26 +241,35 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         loadNote(path);
     }
 
+    async function renderPreview(path, markdown) {
+        var res = await fetch('/online/api/render', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: path, markdown: markdown })
+        });
+        var data = await res.json().catch(function () { return {}; });
+        if (!res.ok) throw new Error(data.error || res.statusText);
+        viewer.innerHTML = '<div class="markdown-rendered">' + (data.html || '') + '</div>';
+    }
+
     async function loadNote(path) {
         setMsg('');
         currentPath = path;
         currentLabel.textContent = path;
-        showToolbar(true);
         setMode('view');
-        viewer.textContent = '加载中…';
+        viewer.innerHTML = '<p class="online-loading">加载中…</p>';
         viewer.classList.remove('hidden');
         try {
             var res = await fetch('/online/api/note?path=' + encodeURIComponent(path));
             var data = await res.json();
             if (!res.ok) throw new Error(data.error || res.statusText);
-            viewer.textContent = data.content || '';
             editor.value = data.content || '';
+            await renderPreview(path, data.content || '');
         } catch (e) {
-            viewer.textContent = '';
+            viewer.innerHTML = '';
             setMsg('读取失败：' + e.message, 'err');
             currentPath = '';
             currentLabel.textContent = '未选择笔记';
-            showToolbar(false);
             setMode('none');
         }
     }
@@ -228,10 +277,15 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     btnSearch.onclick = search;
     q.onkeydown = function (e) { if (e.key === 'Enter') search(); };
 
-    btnView.onclick = function () {
+    btnView.onclick = async function () {
         if (!currentPath) return;
         setMode('view');
-        viewer.textContent = editor.value;
+        viewer.innerHTML = '<p class="online-loading">渲染中…</p>';
+        try {
+            await renderPreview(currentPath, editor.value);
+        } catch (e) {
+            setMsg('渲染失败：' + e.message, 'err');
+        }
     };
 
     btnEdit.onclick = function () {
@@ -252,14 +306,35 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
             var data = await res.json().catch(function () { return {}; });
             if (!res.ok) throw new Error(data.error || res.statusText);
             setMsg('已保存', 'ok');
-            viewer.textContent = editor.value;
             setMode('view');
+            viewer.innerHTML = '<p class="online-loading">渲染中…</p>';
+            try {
+                await renderPreview(currentPath, editor.value);
+            } catch (re) {
+                setMsg('已保存，但预览渲染失败：' + re.message, 'err');
+            }
         } catch (e) {
             setMsg('保存失败：' + e.message, 'err');
         } finally {
             btnSave.disabled = false;
         }
     };
+
+    viewer.addEventListener('click', function (e) {
+        var t = e.target;
+        if (!t || !t.closest) return;
+        var a = t.closest('a.internal-link');
+        if (!a || !currentPath) return;
+        e.preventDefault();
+        var href = a.getAttribute('href') || '';
+        if (!href) return;
+        fetch('/online/api/resolve-link?from=' + encodeURIComponent(currentPath) + '&to=' + encodeURIComponent(href))
+            .then(function (res) { return res.json().then(function (d) { return { res: res, d: d }; }); })
+            .then(function (x) {
+                if (!x.res.ok || !x.d.path) return;
+                loadNote(x.d.path);
+            });
+    });
 })();
     </script>
 </body>
@@ -329,6 +404,10 @@ export class HTTPServer {
                         await this.handleOnlineNoteGet(req, res, parsedUrl);
                     } else if (parsedUrl.pathname === '/online/api/note' && req.method === 'POST') {
                         await this.handleOnlineNoteSave(req, res);
+                    } else if (parsedUrl.pathname === '/online/api/render' && req.method === 'POST') {
+                        await this.handleOnlineRender(req, res);
+                    } else if (parsedUrl.pathname === '/online/api/resolve-link' && req.method === 'GET') {
+                        await this.handleOnlineResolveLink(req, res, parsedUrl);
                     } else {
                         console.warn(`Unknown route: ${req.method} ${parsedUrl.pathname}`);
                         res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -1131,6 +1210,74 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
         } catch (error: any) {
             res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify({ error: error.message || 'save failed' }));
+        }
+    }
+
+    /**
+     * 使用 Obsidian MarkdownRenderer 将 Markdown 转为 HTML，供 /online 浏览器预览
+     *（与库内预览一致：链接、callout、任务列表等由 Obsidian 解析）
+     */
+    private async handleOnlineRender(req: any, res: any) {
+        try {
+            let body = await this.readBody(req);
+            let data: any = {};
+            try {
+                data = JSON.parse(body);
+            } catch {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+                return;
+            }
+            let pathNorm = this.normalizeOnlineVaultPath(data.path);
+            if (!pathNorm) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'Invalid path' }));
+                return;
+            }
+            let markdown = typeof data.markdown === 'string' ? data.markdown : '';
+            let file = this.resolveOnlineMarkdownFile(data.path);
+            let sourcePath = file ? file.path : pathNorm;
+            let el = document.createElement('div');
+            el.classList.add('markdown-rendered');
+            let comp = new Component();
+            comp.load();
+            try {
+                await MarkdownRenderer.render(this.app, markdown, el, sourcePath, comp);
+                let html = el.innerHTML;
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ html }));
+            } finally {
+                comp.unload();
+            }
+        } catch (error: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ error: error.message || 'render failed' }));
+        }
+    }
+
+    /** 解析 [[wikilink]] / 内部链接，供浏览器内跳转 */
+    private async handleOnlineResolveLink(req: any, res: any, parsedUrl: any) {
+        try {
+            let fromRaw = parsedUrl.query && (parsedUrl.query.from as string | undefined);
+            let toRaw = parsedUrl.query && (parsedUrl.query.to as string | undefined);
+            let from = this.normalizeOnlineVaultPath(fromRaw);
+            let to = (toRaw || '').trim();
+            if (!from || !to) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'from and to are required' }));
+                return;
+            }
+            let dest = this.app.metadataCache.getFirstLinkpathDest(to, from);
+            if (!dest || !(dest instanceof TFile) || dest.extension !== 'md') {
+                res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'Linked note not found' }));
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ path: dest.path, basename: dest.basename }));
+        } catch (error: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ error: error.message || 'resolve failed' }));
         }
     }
 
