@@ -1214,10 +1214,66 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
     }
 
     /**
+     * dataview / dataviewjs 等在 MarkdownRenderer.render 的 Promise 结束后仍会异步改 DOM。
+     * 等待子树在一段时间内无变更后再序列化，避免只拿到空表格壳子。
+     */
+    private waitForSubtreeQuiet(root: HTMLElement, idleMs: number, maxMs: number): Promise<void> {
+        return new Promise((resolve) => {
+            let settled = false;
+            let lastMutation = Date.now();
+            let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+            const finish = () => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                if (idleTimer) {
+                    clearTimeout(idleTimer);
+                    idleTimer = null;
+                }
+                clearTimeout(maxTimer);
+                observer.disconnect();
+                resolve();
+            };
+
+            const schedule = () => {
+                if (idleTimer) {
+                    clearTimeout(idleTimer);
+                }
+                idleTimer = setTimeout(() => {
+                    idleTimer = null;
+                    if (Date.now() - lastMutation >= idleMs) {
+                        finish();
+                    } else {
+                        schedule();
+                    }
+                }, idleMs);
+            };
+
+            const observer = new MutationObserver(() => {
+                lastMutation = Date.now();
+                schedule();
+            });
+            observer.observe(root, {
+                subtree: true,
+                childList: true,
+                characterData: true,
+                attributes: true,
+            });
+
+            schedule();
+            const maxTimer = setTimeout(finish, maxMs);
+        });
+    }
+
+    /**
      * 使用 Obsidian MarkdownRenderer 将 Markdown 转为 HTML，供 /online 浏览器预览
      *（与库内预览一致：链接、callout、任务列表等由 Obsidian 解析）
      */
     private async handleOnlineRender(req: any, res: any) {
+        let host: HTMLElement | null = null;
+        let comp: Component | null = null;
         try {
             let body = await this.readBody(req);
             let data: any = {};
@@ -1239,19 +1295,31 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
             let sourcePath = file ? file.path : pathNorm;
             let el = document.createElement('div');
             el.classList.add('markdown-rendered');
-            let comp = new Component();
+            comp = new Component();
             comp.load();
-            try {
-                await MarkdownRenderer.render(this.app, markdown, el, sourcePath, comp);
-                let html = el.innerHTML;
-                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-                res.end(JSON.stringify({ html }));
-            } finally {
-                comp.unload();
-            }
+            host = document.createElement('div');
+            host.style.cssText =
+                'position:fixed;left:-99999px;top:0;width:920px;max-width:100vw;opacity:0;pointer-events:none;z-index:-1;overflow:hidden;';
+            document.body.appendChild(host);
+            host.appendChild(el);
+            await MarkdownRenderer.render(this.app, markdown, el, sourcePath, comp);
+            await new Promise<void>((r) =>
+                requestAnimationFrame(() => requestAnimationFrame(() => r())),
+            );
+            await this.waitForSubtreeQuiet(el, 480, 20000);
+            let html = el.innerHTML;
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ html }));
         } catch (error: any) {
             res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify({ error: error.message || 'render failed' }));
+        } finally {
+            if (host && host.parentNode) {
+                host.parentNode.removeChild(host);
+            }
+            if (comp) {
+                comp.unload();
+            }
         }
     }
 
