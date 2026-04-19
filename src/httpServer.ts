@@ -446,6 +446,40 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
                 loadNote(x.d.path);
             });
     });
+
+    var bootParams = new URLSearchParams(window.location.search);
+    var bootPath = bootParams.get('filename') || bootParams.get('path');
+    if (bootPath) {
+        bootPath = bootPath.trim();
+        if (bootPath) {
+            try {
+                bootPath = decodeURIComponent(bootPath);
+            } catch (e2) {
+                // 已是解码后的路径
+            }
+            fetch('/online/api/resolve-note?name=' + encodeURIComponent(bootPath))
+                .then(function (res) {
+                    return res.json().then(function (d) {
+                        return { res: res, d: d };
+                    });
+                })
+                .then(function (x) {
+                    if (!x.res.ok) {
+                        setMsg((x.d && x.d.error) || '找不到笔记', 'err');
+                        return;
+                    }
+                    if (q) {
+                        q.value = x.d.path || bootPath;
+                    }
+                    if (x.d.path) {
+                        loadNote(x.d.path);
+                    }
+                })
+                .catch(function (e3) {
+                    setMsg(e3.message || '打开失败', 'err');
+                });
+        }
+    }
 })();
     </script>
 </body>
@@ -507,8 +541,13 @@ export class HTTPServer {
                         await this.handleMCPTestPage(req, res);
                     } else if (parsedUrl.pathname === '/mcp/skill' && req.method === 'GET') {
                         await this.handleMCPSkill(req, res);
-                    } else if (parsedUrl.pathname === '/online' && req.method === 'GET') {
+                    } else if (
+                        (parsedUrl.pathname === '/online' || parsedUrl.pathname === '/online/') &&
+                        req.method === 'GET'
+                    ) {
                         await this.handleOnlinePage(req, res);
+                    } else if (parsedUrl.pathname === '/online/api/resolve-note' && req.method === 'GET') {
+                        await this.handleOnlineResolveNote(req, res, parsedUrl);
                     } else if (parsedUrl.pathname === '/online/api/search' && req.method === 'GET') {
                         await this.handleOnlineSearch(req, res, parsedUrl);
                     } else if (parsedUrl.pathname === '/online/api/note' && req.method === 'GET') {
@@ -1231,6 +1270,36 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
     private async handleOnlinePage(req: any, res: any) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(ONLINE_PAGE_HTML);
+    }
+
+    /** 与 easyapi.file.get_tfile 一致：标题、basename、部分路径、[[链接]] 等均可解析为 vault 路径 */
+    private async handleOnlineResolveNote(req: any, res: any, parsedUrl: any) {
+        try {
+            let nameRaw = parsedUrl.query && (parsedUrl.query.name as string | undefined);
+            let name = (nameRaw || '').trim();
+            if (!name) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'name query parameter is required' }));
+                return;
+            }
+            let nc = (this.app as any).plugins?.getPlugin?.('note-chain');
+            if (!nc?.easyapi?.file?.get_tfile) {
+                res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'note-chain plugin not available' }));
+                return;
+            }
+            let tfile = nc.easyapi.file.get_tfile(name, true);
+            if (!tfile || !(tfile instanceof TFile) || tfile.extension !== 'md') {
+                res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'Note not found' }));
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ path: tfile.path, basename: tfile.basename }));
+        } catch (error: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ error: error.message || 'resolve-note failed' }));
+        }
     }
 
     private async handleOnlineSearch(req: any, res: any, parsedUrl: any) {
