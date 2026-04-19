@@ -139,6 +139,9 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         #viewer.obsidian-online-render .callout { margin: 0.65em 0; padding: 0.5em 0.75em; border-radius: 6px; border: 1px solid var(--on-border); background: var(--on-code-bg); }
         #viewer.obsidian-online-render .callout-title { font-weight: 600; margin-bottom: 0.35em; }
         #viewer.obsidian-online-render .task-list-item-checkbox { margin-right: 0.4em; }
+        #viewer.obsidian-online-render .textarea-container textarea.code_block_textarea { pointer-events: auto; }
+        #viewer.obsidian-online-render .code_block_textarea_btn_container { pointer-events: auto; }
+        #viewer.obsidian-online-render button.code_block_textarea_btn { cursor: pointer; }
         #editor { width: 100%; min-height: 320px; box-sizing: border-box; padding: 0.6rem; font-family: ui-monospace, monospace; font-size: 0.88rem; border-radius: 6px; border: 1px solid #8884; resize: vertical; }
         .msg { font-size: 0.9rem; margin-top: 0.5rem; }
         .msg.err { color: #c22; }
@@ -351,6 +354,86 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     viewer.addEventListener('click', function (e) {
         var t = e.target;
         if (!t || !t.closest) return;
+        var taBtn = t.closest('[data-nc-online-fname]');
+        if (taBtn && currentPath) {
+            var container = taBtn.closest('.textarea-container');
+            var area = container && container.querySelector('textarea.code_block_textarea');
+            if (!area) {
+                area = container && container.querySelector('textarea:not(.nc-ta-block-meta)');
+            }
+            if (area) {
+                e.preventDefault();
+                e.stopPropagation();
+                var fname = taBtn.getAttribute('data-nc-online-fname') || '';
+                var ps = taBtn.getAttribute('data-nc-online-params');
+                var params;
+                if (ps) {
+                    try { params = JSON.parse(ps); } catch (_) { params = undefined; }
+                }
+                var meta = container.querySelector('textarea.nc-ta-block-meta');
+                var src = meta ? meta.value : '';
+                if (fname === 'clear_area') {
+                    area.value = '';
+                    setMsg('', '');
+                    return;
+                }
+                if (fname === 'copy_area') {
+                    area.select();
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(area.value).then(function () {
+                            setMsg('已复制', 'ok');
+                        }).catch(function () {
+                            setMsg('复制失败', 'err');
+                        });
+                    } else {
+                        try {
+                            document.execCommand('copy');
+                            setMsg('已复制', 'ok');
+                        } catch (x) {
+                            setMsg('复制失败', 'err');
+                        }
+                    }
+                    return;
+                }
+                if (fname === 'log_area') {
+                    console.log('[Online textarea]', area.value);
+                    setMsg('已输出到控制台', 'ok');
+                    return;
+                }
+                setMsg('处理中…', '');
+                fetch('/online/api/textarea-exec', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        path: currentPath,
+                        fname: fname,
+                        textareaValue: area.value,
+                        source: src,
+                        params: params
+                    })
+                })
+                    .then(function (res) { return res.json().then(function (d) { return { res: res, d: d }; }); })
+                    .then(function (x) {
+                        if (!x.res.ok) {
+                            setMsg(x.d.error || '请求失败', 'err');
+                            return;
+                        }
+                        var d = x.d;
+                        if (d.newValue !== undefined && d.newValue !== null) {
+                            area.value = String(d.newValue);
+                        }
+                        if (d.notice) {
+                            setMsg(d.notice, 'ok');
+                        } else {
+                            setMsg('', '');
+                        }
+                    })
+                    .catch(function (err) {
+                        setMsg(err.message || '请求失败', 'err');
+                    });
+                return;
+            }
+        }
         var a = t.closest('a.internal-link');
         if (!a || !currentPath) return;
         e.preventDefault();
@@ -438,6 +521,8 @@ export class HTTPServer {
                         await this.handleOnlineResolveLink(req, res, parsedUrl);
                     } else if (parsedUrl.pathname === '/online/api/media' && req.method === 'GET') {
                         await this.handleOnlineMedia(req, res, parsedUrl);
+                    } else if (parsedUrl.pathname === '/online/api/textarea-exec' && req.method === 'POST') {
+                        await this.handleOnlineTextareaExec(req, res);
                     } else {
                         console.warn(`Unknown route: ${req.method} ${parsedUrl.pathname}`);
                         res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -1429,6 +1514,185 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
         } catch (error: any) {
             res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
             res.end(error.message || 'read failed');
+        }
+    }
+
+    /** 与 NCTextarea 按钮逻辑对齐：命令 / get_str_func / templater 文件（Online 浏览器端交互） */
+    private async handleOnlineTextareaExec(req: any, res: any) {
+        try {
+            let body = await this.readBody(req);
+            let data: any = {};
+            try {
+                data = JSON.parse(body);
+            } catch {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+                return;
+            }
+            let pathNorm = this.normalizeOnlineVaultPath(data.path);
+            if (!pathNorm) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'Invalid path' }));
+                return;
+            }
+            let sourceFile = this.resolveOnlineMarkdownFile(data.path);
+            if (!sourceFile) {
+                res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'Note not found' }));
+                return;
+            }
+            let fname = String(data.fname || '').trim();
+            if (!fname) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'fname required' }));
+                return;
+            }
+            let nc = (this.app as any).plugins?.getPlugin?.('note-chain');
+            if (!nc) {
+                res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'note-chain plugin not available' }));
+                return;
+            }
+            let textareaValue = typeof data.textareaValue === 'string' ? data.textareaValue : '';
+            let source = typeof data.source === 'string' ? data.source : '';
+            let params = data.params;
+
+            let cmd = (this.app as any).commands?.findCommand?.(fname);
+            if (cmd) {
+                (this.app as any).commands.executeCommandById(fname);
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ ok: true }));
+                return;
+            }
+
+            let taMethod = (nc.textarea as any)[fname];
+            if (typeof taMethod === 'function') {
+                let val = textareaValue;
+                let mockArea: any = {};
+                Object.defineProperty(mockArea, 'value', {
+                    configurable: true,
+                    enumerable: true,
+                    get() {
+                        return val;
+                    },
+                    set(v: string) {
+                        val = String(v);
+                    },
+                });
+                mockArea.style = {};
+                mockArea.focus = () => {};
+                mockArea.select = () => {};
+                let mockEl: any = {};
+                let mockCtx: any = { sourcePath: sourceFile.path };
+                let ret =
+                    params !== undefined && params !== null
+                        ? taMethod.call(nc.textarea, mockArea, source, mockEl, mockCtx, params)
+                        : taMethod.call(nc.textarea, mockArea, source, mockEl, mockCtx);
+                if (ret && typeof (ret as any).then === 'function') {
+                    await ret;
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ ok: true, newValue: val }));
+                return;
+            }
+
+            let ufunc = await nc.utils.get_str_func(this.app, fname);
+            if (typeof ufunc === 'function') {
+                let val = textareaValue;
+                let mockArea: any = {};
+                Object.defineProperty(mockArea, 'value', {
+                    configurable: true,
+                    enumerable: true,
+                    get() {
+                        return val;
+                    },
+                    set(v: string) {
+                        val = String(v);
+                    },
+                });
+                mockArea.style = {};
+                mockArea.focus = () => {};
+                mockArea.select = () => {};
+                let mockEl: any = {};
+                let mockCtx: any = { sourcePath: sourceFile.path };
+                let ret =
+                    params !== undefined && params !== null
+                        ? ufunc(mockArea, source, mockEl, mockCtx, params)
+                        : ufunc(mockArea, source, mockEl, mockCtx);
+                if (ret && typeof (ret as any).then === 'function') {
+                    await ret;
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ ok: true, newValue: val }));
+                return;
+            }
+
+            let tfile = nc.easyapi.file.get_tfile(fname);
+            if (tfile) {
+                let tplTags = nc.settings?.notechain?.tpl_tags_folder as any;
+                let tagInTplFolder = (tag: string): boolean => {
+                    if (!tplTags) {
+                        return false;
+                    }
+                    if (typeof tplTags.contains === 'function') {
+                        return tplTags.contains(tag);
+                    }
+                    if (typeof tplTags === 'string') {
+                        let lines = tplTags
+                            .trim()
+                            .split(/\n/)
+                            .map((s: string) => s.trim())
+                            .filter(Boolean);
+                        return lines.indexOf(tag) >= 0;
+                    }
+                    return false;
+                };
+                let tags = nc.easyapi.file
+                    .get_tags(tfile)
+                    .map((x: string) => x.slice(1))
+                    .filter((x: string) => tagInTplFolder(x));
+                if (tags.length > 0) {
+                    let val = textareaValue;
+                    let mockArea: any = {};
+                    Object.defineProperty(mockArea, 'value', {
+                        configurable: true,
+                        enumerable: true,
+                        get() {
+                            return val;
+                        },
+                        set(v: string) {
+                            val = String(v);
+                        },
+                    });
+                    mockArea.style = {};
+                    mockArea.focus = () => {};
+                    mockArea.select = () => {};
+                    await nc.easyapi.tpl.parse_templater(fname, true, {
+                        area: mockArea,
+                        source: source,
+                        el: {},
+                        ctx: { sourcePath: sourceFile.path },
+                        params: params,
+                    });
+                    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ ok: true, newValue: val }));
+                    return;
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(
+                    JSON.stringify({
+                        ok: false,
+                        notice: '该文件需在 Obsidian 内打开（无 templater 标签）',
+                    }),
+                );
+                return;
+            }
+
+            res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ error: 'Unknown button target: ' + fname }));
+        } catch (error: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ error: error.message || 'textarea-exec failed' }));
         }
     }
 

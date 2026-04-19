@@ -7,7 +7,6 @@ import {
 } from 'obsidian';
 
 import NoteChainPlugin from "../main";
-import { config } from 'process';
 
 export class NCTextarea {
 	yamljs = require('js-yaml')
@@ -54,6 +53,14 @@ export class NCTextarea {
 			}
 			
 			let container = el.createEl("div", { cls: 'textarea-container' });
+			// Online 预览：块内保存 source，按钮带 data-nc-online-fname，由浏览器端委托点击并调 /online/api/textarea-exec
+			let metaSrc = container.createEl('textarea', {
+				cls: 'nc-ta-block-meta',
+				attr: { readonly: 'readonly', tabindex: '-1', 'aria-hidden': 'true' },
+			});
+			metaSrc.value = source;
+			metaSrc.style.cssText =
+				'position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;opacity:0;pointer-events:none;';
 
 			let area: any = null;
 			if (config['textarea'] != false) {
@@ -138,6 +145,15 @@ export class NCTextarea {
 							}
 							if (ufunc) {
 								let xbtn = buttonContainer.createEl('button', { text: name, cls: cls });
+								xbtn.type = 'button';
+								xbtn.setAttribute('data-nc-online-fname', String(fname));
+								if (btn[3] !== undefined && btn[3] !== null) {
+									try {
+										xbtn.setAttribute('data-nc-online-params', JSON.stringify(btn[3]));
+									} catch {
+										// ignore
+									}
+								}
 								if (btnStyle) {
 									await applyBtnStyle(xbtn, btnStyle);
 								}
@@ -151,6 +167,15 @@ export class NCTextarea {
 							let c = (nc.app as any).commands?.findCommand(fname);
 							if (c) {
 								let xbtn = buttonContainer.createEl('button', { text: name, cls: cls });
+								xbtn.type = 'button';
+								xbtn.setAttribute('data-nc-online-fname', String(fname));
+								if (btn[3] !== undefined && btn[3] !== null) {
+									try {
+										xbtn.setAttribute('data-nc-online-params', JSON.stringify(btn[3]));
+									} catch {
+										// ignore
+									}
+								}
 								if (btnStyle) {
 									await applyBtnStyle(xbtn, btnStyle);
 								}
@@ -163,12 +188,21 @@ export class NCTextarea {
 							let tfile = nc.easyapi.file.get_tfile(fname)
 							if (tfile) {
 								let xbtn = buttonContainer.createEl('button', { text: name, cls: cls });
+								xbtn.type = 'button';
+								xbtn.setAttribute('data-nc-online-fname', String(fname));
+								if (btn[3] !== undefined && btn[3] !== null) {
+									try {
+										xbtn.setAttribute('data-nc-online-params', JSON.stringify(btn[3]));
+									} catch {
+										// ignore
+									}
+								}
 								if (btnStyle) {
 									await applyBtnStyle(xbtn, btnStyle);
 								}
 								xbtn.addEventListener('click', () => {
 									let tags = nc.easyapi.file.get_tags(tfile).map(x=>x.slice(1)).filter(
-										x=>nc.settings.tpl_tags_folder.contains(x)
+										x=>nc.settings.notechain.tpl_tags_folder.contains(x)
 									);
 									if(tags.length>0){
 										nc.easyapi.tpl.parse_templater(
