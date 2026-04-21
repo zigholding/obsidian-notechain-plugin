@@ -15,6 +15,10 @@ export class File {
 		this.app = app;
 		this.api = api;
 	}
+	
+	get_last_activate_file(only_md = true, skip_conote = true) {
+		return this.api.nc?.chain?.get_last_activate_file(only_md, skip_conote);
+	}
 
 	get_tfile(path: string | TFile | null, only_first = true) {
 		try {

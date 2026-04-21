@@ -253,8 +253,8 @@ export class WebViewerLLMModule {
 		const llm = await this.get_last_active_llm();
 
 		const ea = this.easyapi;
-		const cfile = ea.cfile;
-		let selection = ea.ceditor.getSelection()
+		const cfile = ea.file.get_last_activate_file();
+		let selection = ea.ceditor?.getSelection()
 
 		if (!tfile) {
 			const tfiles = ea.file.get_all_tfiles_of_tags(

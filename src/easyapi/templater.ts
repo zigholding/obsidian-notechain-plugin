@@ -87,7 +87,7 @@ export class Templater {
         }
 
         const path = `note-chain-templater-target.md`;
-        const existed = this.app.vault.getFileByPath(path);
+        const existed = this.ea.file.get_tfile(path);
         if (existed) {
             this.temp_target_file = existed;
             return existed;
