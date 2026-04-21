@@ -254,7 +254,7 @@ export class WebViewerLLMModule {
 
 		const ea = this.easyapi;
 		const cfile = ea.file.get_last_activate_file();
-		let selection = ea.ceditor?.getSelection()
+		let selection = await ea.editor.get_selection();
 
 		if (!tfile) {
 			const tfiles = ea.file.get_all_tfiles_of_tags(
@@ -272,6 +272,7 @@ export class WebViewerLLMModule {
 				file,
 				async action(_item: CardItem): Promise<void> {},
 			}));
+
 			if (selection) {
 				data.unshift({
 					name: this.easyapi.isZh ? '选择文本' : 'Select text',
@@ -281,6 +282,14 @@ export class WebViewerLLMModule {
 					async action(_item: CardItem): Promise<void> {},
 				});
 			}
+
+			data.unshift({
+				name: this.easyapi.isZh ? '输入' : 'Input text',
+				detail: selection,
+				image: 'pencil',
+				file: '__input__',
+				async action(_item: CardItem): Promise<void> {},
+			});
 
 			let clp = await navigator.clipboard.readText();
 			if(clp){
@@ -295,7 +304,21 @@ export class WebViewerLLMModule {
 	
 			// 4️⃣ 打开卡片选择器
 			let sel = await this.easyapi.dialog_cards(data);
-			tfile = sel?.file;
+			if(sel?.file == '__input__'){
+				let input = await this.easyapi.dialog_prompt(
+					this.easyapi.isZh ? '输入' : 'Input text', 
+					this.easyapi.isZh ? '请输入文本' : 'Enter text...',
+					selection ?? ''
+				);
+				if(input){
+					tfile = input;
+				}else{
+					return;
+				}
+			}else{
+				tfile = sel?.file;
+			}
+			
 		}
 		if (!tfile) {
 			return;
@@ -305,7 +328,7 @@ export class WebViewerLLMModule {
 			prompt = await this.get_prompt(tfile);
 		}else{
 			prompt = tfile as string;
-			tfile = ea.cfile as TFile;
+			tfile = cfile as TFile;
 		}
 		prompt = prompt.replace(/^\s*%%[\s\S]*?%%/, '').trim();
 		const conditionalRegex = /\$\{([a-zA-Z0-9.]+)\?([a-zA-Z0-9.]+)\}/g;
@@ -330,23 +353,23 @@ export class WebViewerLLMModule {
 			replacements.set('${selection}', selectionValue);
 		}
 
-		if (ea.cfile) {
-			replacements.set('${tfile.basename}', ea.cfile.basename);
-			replacements.set('${tfile.path}', ea.cfile.path);
+		if (cfile) {
+			replacements.set('${tfile.basename}', cfile.basename);
+			replacements.set('${tfile.path}', cfile.path);
 
 			if (prompt.includes('${tfile.content}')) {
-				const ctx = await ea.nc.editor.remove_metadata(ea.cfile);
+				const ctx = await ea.nc.editor.remove_metadata(cfile);
 				replacements.set('${tfile.content}', ctx);
 			}
 
 			if (prompt.includes('${tfile.brothers}')) {
-				const ctx = '- ' + ea.file.get_brothers(ea.cfile).map((x: TFile) => x.basename).join('\n- ');
+				const ctx = '- ' + ea.file.get_brothers(cfile).map((x: TFile) => x.basename).join('\n- ');
 				replacements.set('${tfile.brothers}', ctx);
 			}
 
 			if (prompt.includes('${tfile}')) {
 				let ctx = await ea.ccontent;
-				ctx = `Name: ${ea.cfile.basename}\n\nPath: ${ea.cfile.path}\n\n${ctx}`;
+				ctx = `Name: ${cfile.basename}\n\nPath: ${cfile.path}\n\n${ctx}`;
 				replacements.set('${tfile}', ctx);
 			}
 		}
@@ -366,7 +389,7 @@ export class WebViewerLLMModule {
 		for (const am of amatches) {
 			const xfile = ea.file.get_tfile(am);
 			if (xfile) {
-				let ctx = await ea.tpl.parse_templater(xfile, true, { cfile: ea.cfile });
+				let ctx = await ea.tpl.parse_templater(xfile, true, { cfile: cfile });
 				let actx = ctx.join('\n');
 				if(actx.length>0){
 					replacements.set(`\$\{[[${am}]]\}`, actx);
@@ -420,15 +443,15 @@ export class WebViewerLLMModule {
 		prompt = prompts.join('\n');
 		// 选择参考笔记
 		if(tfile instanceof TFile && ea.editor.get_frontmatter(tfile, 'reference','link') != false){
-			let refFiles: (TFile | string)[] = [];
-			let ciinks = ea.file.get_links(ea.cfile) || [];
+			let refFiles: (TFile | string)[] = [tfile];
+			let ciinks = ea.file.get_links(cfile) || [];
 			for(let clink of ciinks){
 				if(!refFiles.contains(clink)){
 					refFiles.push(clink);
 				}
 			}
 
-			let outfiles = ea.fs.get_outfiles(ea.cfile) || [];
+			let outfiles = ea.fs.get_outfiles(cfile) || [];
 			for(let outfile of outfiles){
 				if(!refFiles.contains(outfile)){
 					refFiles.push(outfile);
