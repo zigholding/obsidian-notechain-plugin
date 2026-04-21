@@ -1,10 +1,11 @@
-import { App, TFile,moment } from "obsidian";
+import { App, TFile } from "obsidian";
 import { EasyAPI } from "./easyapi";
 
 
 export class Templater {
     app:App;
     ea:EasyAPI;
+    private temp_target_file: TFile | null = null;
     constructor(app:App,ea:EasyAPI){
         this.app = app;
         this.ea = ea;
@@ -76,6 +77,34 @@ export class Templater {
         return this.ea.editor.extract_templater_block(tfile, reg);
     }
 
+    private async ensure_temp_target_file() {
+        if (this.temp_target_file) {
+            const existed = this.app.vault.getFileByPath(this.temp_target_file.path);
+            if (existed) {
+                this.temp_target_file = existed;
+                return this.temp_target_file;
+            }
+        }
+
+        const path = `note-chain-templater-target.md`;
+        const existed = this.app.vault.getFileByPath(path);
+        if (existed) {
+            this.temp_target_file = existed;
+            return existed;
+        }
+        try {
+            this.temp_target_file = await this.app.vault.create(path, "");
+            return this.temp_target_file;
+        } catch {
+            const createdByOtherCall = this.app.vault.getFileByPath(path);
+            if (createdByOtherCall) {
+                this.temp_target_file = createdByOtherCall;
+                return createdByOtherCall;
+            }
+            throw new Error(`Failed to create templater temp target: ${path}`);
+        }
+    }
+
     // target_file：target>activate>template
     async parse_templater(template:string|TFile,extract=true,extra:any=null,idx:number[]|null=null,target='') {
         let file = this.ea.file.get_tfile(template)
@@ -102,17 +131,31 @@ export class Templater {
         
         let active_file = this.ea.cfile;
         let target_file:any = this.ea.file.get_tfile(target);
-        if(!target){
+        if(!target_file && extra){
+            // Allow passing target context in extra for headless scenarios.
+            target_file = this.ea.file.get_tfile(extra.target_file || extra.tfile || extra.cfile);
+        }
+        if(!target_file){
             if(active_file){
                 target_file = active_file;
             }else if (file){
                 target_file = file;
             }else{
-                throw new Error("Target File must be TFile");
+                target_file = await this.ensure_temp_target_file();
             }
         }
+        if(!active_file){
+            // Templater internal dynamic functions may access active_file.path.
+            active_file = target_file;
+        }
 
-        let templateFunc = await this.templater$1(template_file,active_file,target_file,extra=extra);
+        const runtime_extra = extra ? { ...extra } : null;
+
+        // Templater internals may read template_file.path even in dynamic mode.
+        // When input template is raw text, fallback to target_file to avoid null access.
+        const runtime_template_file = template_file || target_file;
+
+        let templateFunc = await this.templater$1(runtime_template_file,active_file,target_file,extra=runtime_extra);
         if(templateFunc){
             let res = []
             if(idx){
