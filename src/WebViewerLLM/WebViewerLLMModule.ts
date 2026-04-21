@@ -250,7 +250,7 @@ export class WebViewerLLMModule {
 	}
 
 	async cmd_chat_with_target_tfile(tfile: TFile | null = null, target: any = null) {
-		const llm = await this.get_last_active_llm();
+		let llm: BaseWebViewer | undefined;
 
 		const ea = this.easyapi;
 		const cfile = ea.file.get_last_activate_file();
@@ -510,7 +510,13 @@ export class WebViewerLLMModule {
 
 		if(this.plugin.settings.webviewllm.write_clipboard == '1'){
 			await navigator.clipboard.writeText(prompt);
-		}else if(llm && this.plugin.settings.webviewllm.write_clipboard == '2'){
+		}else if(this.plugin.settings.webviewllm.write_clipboard == '2'){
+			llm = await this.get_last_active_llm();
+			if (!llm) {
+				new Notice(this.easyapi.isZh ? '未找到活动的 LLM Webview，已复制提示词' : 'No active LLM webview found, prompt copied to clipboard');
+				await navigator.clipboard.writeText(prompt);
+				return;
+			}
 			await navigator.clipboard.writeText(prompt);
 			response = (await llm.request(prompt)) ?? '';
 			let postprocess = await ea.editor.get_heading_section(tfile,'后处理');
@@ -533,7 +539,12 @@ export class WebViewerLLMModule {
 				}
 			}
 			
-		}else if(llm && this.plugin.settings.webviewllm.write_clipboard == '3'){
+		}else if(this.plugin.settings.webviewllm.write_clipboard == '3'){
+			llm = await this.get_last_active_llm();
+			if (!llm) {
+				new Notice(this.easyapi.isZh ? '未找到活动的 LLM Webview' : 'No active LLM webview found');
+				return;
+			}
 			response = (await llm.request(prompt)) ?? '';
 		}
 

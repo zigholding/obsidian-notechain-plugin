@@ -97,13 +97,14 @@ const cmd_chat_with_target_tfile = (plugin: NoteChainPlugin) => ({
 	},
 });
 
-const commandBuilders: Array<(p: NoteChainPlugin) => ReturnType<typeof cmd_open_new_llm>> = [];
+const commandBuilders: Array<(p: NoteChainPlugin) => ReturnType<typeof cmd_open_new_llm>> = [
+	cmd_chat_with_target_tfile,
+];
 
 const commandBuildersDesktop: Array<(p: NoteChainPlugin) => ReturnType<typeof cmd_open_new_llm>> = [
 	cmd_open_new_llm,
 	cmd_chat_first_llms,
 	cmd_chat_every_llms,
-	cmd_chat_with_target_tfile,
 	cmd_chat_sequence,
 	cmd_chat_sequence_stop,
 	cmd_paste_last_active_llm,
