@@ -273,8 +273,24 @@ export class WordCount{
                 return [];
             }
         }
+        
+        if (typeof day === 'string') {
+            const s = day.trim().toLowerCase();
+            if (s === 'yesterday') {
+                day = moment().add(-1, 'days').format('YYYY-MM-DD');
+            } else {
+                const m = s.match(/^today([+-]\d+)?$/);
+                if (m) {
+                    const offset = m[1] ? parseInt(m[1], 10) : 0;
+                    day = moment().add(offset, 'days').format('YYYY-MM-DD');
+                }
+            }
+        }
 
         let tfile = this.plugin.easyapi.file.get_tfile(day);
+        if(!tfile){
+            return [];
+        }
         let tfiles = this.app.vault.getMarkdownFiles().filter(
             (x: TFile) => Math.abs(this.get_new_words(x, tfile.basename) ?? 0) > 0
         );

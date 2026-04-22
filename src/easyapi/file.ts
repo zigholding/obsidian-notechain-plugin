@@ -15,7 +15,7 @@ export class File {
 		this.app = app;
 		this.api = api;
 	}
-	
+
 	get_last_activate_file(only_md = true, skip_conote = true) {
 		return this.api.nc?.chain?.get_last_activate_file(only_md, skip_conote);
 	}
@@ -69,6 +69,10 @@ export class File {
 	get_all_tfiles() {
 		let files = this.app.vault.getMarkdownFiles();
 		return files;
+	}
+	
+	get_daily_edited_tfiles(day: string | TFile | null = null) {
+		return this.api.nc?.wordcount?.get_daily_edited_tfiles(day);
 	}
 
 	get_tfiles_of_folder(tfolder: TFolder | null, n = 0): any {
