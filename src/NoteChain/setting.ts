@@ -231,7 +231,7 @@ export function renderNoteChainSettings(plugin: NoteChainPlugin, containerEl: HT
 				.onChange(async (value) => {
 					settings.wordcout = value;
 					await plugin.saveSettings();
-					plugin.wordcout.register();
+					plugin.wordcount.register();
 				})
 			);
 

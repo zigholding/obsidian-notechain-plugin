@@ -33,7 +33,7 @@ export default class NoteChainPlugin extends Plugin {
 	explorer: NCFileExplorer;
 	mermaid: MermaidGraph;
 	canvas: CanvasGraph;
-	wordcout: WordCount;
+	wordcount: WordCount;
 	dailyjob: DailyJob;
 	webviewerllm: WebViewerLLMModule;
 	strings: Strings;
@@ -131,7 +131,7 @@ export default class NoteChainPlugin extends Plugin {
 		);
 
 
-		this.wordcout = new WordCount(this, this.app);
+		this.wordcount = new WordCount(this, this.app);
 		this.textarea = new NCTextarea(this);
 		this.status = 'loaded'
 	}
@@ -168,7 +168,7 @@ export default class NoteChainPlugin extends Plugin {
 	async auto_notechain(file: TFile) {
 		let notes = this.easyapi.file.get_brothers(file);
 		if (notes.length == 0) { return; }
-		if (!this.wordcout.filter(file)) { return; }
+		if (!this.wordcount.filter(file)) { return; }
 		if (this.explorer?.file_explorer) {
 			notes = this.chain.sort_tfiles(notes, (this.explorer.file_explorer as any).sortOrder);
 			notes = this.chain.sort_tfiles(notes, 'chain');

@@ -1313,7 +1313,7 @@ export class NoteChain {
 			console.log(`set ${xfile.basename} ${this.fid} as ${key}`)
 			await this.plugin.editor.set_frontmatter(xfile, this.fid, key)
 		} else if (tfile instanceof TFile) {
-			if (!this.plugin.wordcout.filter(tfile)) { return }
+			if (!this.plugin.wordcount.filter(tfile)) { return }
 			console.log(`set ${tfile.basename} ${this.nid} as ${key}`)
 			await this.plugin.editor.set_frontmatter(tfile, this.nid, key);
 		}
@@ -1329,7 +1329,7 @@ export class NoteChain {
 				return undefined;
 			}
 		} else if (tfile instanceof TFile) {
-			if (this.plugin.wordcout.filter(tfile)) {
+			if (this.plugin.wordcount.filter(tfile)) {
 				return this.plugin.editor.get_frontmatter(tfile, this.nid);
 			}
 		}

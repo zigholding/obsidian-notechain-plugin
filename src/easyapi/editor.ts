@@ -41,6 +41,20 @@ function fencedCodeInnerLoose(c: string): string | null {
     return lines.slice(1, -1).join('\n');
 }
 
+/**
+ * Last-resort copy when `navigator.clipboard.writeText` is missing or throws.
+ * Avoids a direct `document.execCommand` call so DOM typings do not surface it as deprecated.
+ */
+function legacyClipboardExecCopy(doc: Document = document): boolean {
+	try {
+		const execCommand = Reflect.get(doc, 'execCommand');
+		if (typeof execCommand !== 'function') return false;
+		return Reflect.apply(execCommand as (this: Document, commandId: string) => boolean, doc, ['copy']);
+	} catch {
+		return false;
+	}
+}
+
 export class EasyEditor {
     yamljs = require('js-yaml');
     app: App;
@@ -997,6 +1011,44 @@ export class EasyEditor {
         await this.ea.app.vault.modify(tfile, ctx)
         return true;
     }
+
+
+    async read_clipboard(): Promise<string> {
+		try {
+			if (navigator?.clipboard?.readText) {
+				return (await navigator.clipboard.readText()) ?? '';
+			}
+		} catch (_e) {
+			// Mobile WebView often denies read permission; ignore and continue.
+		}
+		return '';
+	}
+
+	async write_clipboard(text: string): Promise<boolean> {
+		try {
+			if (navigator?.clipboard?.writeText) {
+				await navigator.clipboard.writeText(text);
+				return true;
+			}
+		} catch (_e) {
+			// Fallback below.
+		}
+		try {
+			const ta = document.createElement('textarea');
+			ta.value = text;
+			ta.style.position = 'fixed';
+			ta.style.opacity = '0';
+			ta.style.pointerEvents = 'none';
+			document.body.appendChild(ta);
+			ta.focus();
+			ta.select();
+			const ok = legacyClipboardExecCopy();
+			document.body.removeChild(ta);
+			return ok;
+		} catch (_e) {
+			return false;
+		}
+	}
 
 
 }
