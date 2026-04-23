@@ -66,6 +66,34 @@ export class File {
 		}
 	}
 
+	get_tfiles(path:string|TFile|null):Array<TFile>{
+		let tfiles = this.get_tfile(path,false);
+		if(tfiles instanceof TFile){
+			return [tfiles];
+		}
+		if(tfiles instanceof Array){
+			return tfiles;
+		}
+		const regex = /\[\[(.*?)\]\]/g;
+		const matches = typeof path === 'string' ? path.match(regex):[];
+		if(matches){
+			let tfiles: Array<TFile> = [];
+			for (const match of matches) {
+				let tfile = this.get_tfile(match,false);
+				if(tfile instanceof TFile){
+					tfiles.push(tfile);
+				}else if(Array.isArray(tfile)){
+					tfiles.push(...tfile);
+				}
+			}
+			if(tfiles.length > 0){
+				return tfiles;
+			}
+		}		
+		return []
+
+	}
+
 	get_all_tfiles() {
 		let files = this.app.vault.getMarkdownFiles();
 		return files;
