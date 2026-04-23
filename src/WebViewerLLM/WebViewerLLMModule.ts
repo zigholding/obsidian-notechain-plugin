@@ -291,7 +291,7 @@ export class WebViewerLLMModule {
 				async action(_item: CardItem): Promise<void> {},
 			});
 
-			let clp = await navigator.clipboard.readText();
+			let clp = await this.easyapi.editor.read_clipboard();
 			if(clp){
 				data.unshift({
 					name: this.easyapi.isZh ? '剪贴板' : 'Clipboard',
@@ -509,15 +509,15 @@ export class WebViewerLLMModule {
 		let response = '';
 
 		if(this.plugin.settings.webviewllm.write_clipboard == '1'){
-			await navigator.clipboard.writeText(prompt);
+			await this.easyapi.editor.write_clipboard(prompt);
 		}else if(this.plugin.settings.webviewllm.write_clipboard == '2'){
 			llm = await this.get_last_active_llm();
 			if (!llm) {
 				new Notice(this.easyapi.isZh ? '未找到活动的 LLM Webview，已复制提示词' : 'No active LLM webview found, prompt copied to clipboard');
-				await navigator.clipboard.writeText(prompt);
+				await this.easyapi.editor.write_clipboard(prompt);
 				return;
 			}
-			await navigator.clipboard.writeText(prompt);
+			await this.easyapi.editor.write_clipboard(prompt);
 			response = (await llm.request(prompt)) ?? '';
 			let postprocess = await ea.editor.get_heading_section(tfile,'后处理');
 			if(postprocess?.length==0){
@@ -646,7 +646,7 @@ export class WebViewerLLMModule {
 		lines.push('}');
 		const snippet = lines.join('\n');
 		try {
-			await navigator.clipboard.writeText(snippet);
+			await this.easyapi.editor.write_clipboard(snippet);
 			new Notice(`${llm.name}: profile snippet copied`);
 		} catch (e) {
 			new Notice(`${llm.name}: copy failed, snippet in console`);
