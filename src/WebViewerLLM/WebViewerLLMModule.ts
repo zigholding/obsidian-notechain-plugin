@@ -509,7 +509,12 @@ export class WebViewerLLMModule {
 		let response = '';
 
 		if(this.plugin.settings.webviewllm.write_clipboard == '1'){
-			await this.easyapi.editor.write_clipboard(prompt);
+			const copied = await this.easyapi.editor.write_clipboard(prompt);
+			if (!copied) {
+				new Notice(this.easyapi.isZh ? '复制失败，请检查剪贴板权限' : 'Copy failed, please check clipboard permission');
+			} else {
+				new Notice(this.easyapi.isZh ? '提示词已复制' : 'Prompt copied');
+			}
 		}else if(this.plugin.settings.webviewllm.write_clipboard == '2'){
 			llm = await this.get_last_active_llm();
 			if (!llm) {
@@ -517,7 +522,10 @@ export class WebViewerLLMModule {
 				await this.easyapi.editor.write_clipboard(prompt);
 				return;
 			}
-			await this.easyapi.editor.write_clipboard(prompt);
+			const copied = await this.easyapi.editor.write_clipboard(prompt);
+			if (!copied) {
+				new Notice(this.easyapi.isZh ? '复制失败，请检查剪贴板权限' : 'Copy failed, please check clipboard permission');
+			}
 			response = (await llm.request(prompt)) ?? '';
 			let postprocess = await ea.editor.get_heading_section(tfile,'后处理');
 			if(postprocess?.length==0){
