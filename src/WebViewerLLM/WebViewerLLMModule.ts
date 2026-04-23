@@ -255,7 +255,7 @@ export class WebViewerLLMModule {
 		const ea = this.easyapi;
 		const cfile = ea.file.get_last_activate_file();
 		let selection = await ea.editor.get_selection();
-
+		let xrefiles: Array<TFile> = [];
 		if (!tfile) {
 			const tfiles = ea.file.get_all_tfiles_of_tags(
 				this.plugin.settings.webviewllm.prompt_name.trim().split('\n')
@@ -281,6 +281,12 @@ export class WebViewerLLMModule {
 					file: selection,
 					async action(_item: CardItem): Promise<void> {},
 				});
+				let curr = ea.file.get_tfiles(selection);
+				for(let c of curr){
+					if(!xrefiles.includes(c)){
+						xrefiles.push(c)
+					}
+				}
 			}
 
 			data.unshift({
@@ -300,6 +306,12 @@ export class WebViewerLLMModule {
 					file: clp,
 					async action(_item: CardItem): Promise<void> {},
 				});
+				let curr = ea.file.get_tfiles(clp);
+				for(let c of curr){
+					if(!xrefiles.includes(c)){
+						xrefiles.push(c)
+					}
+				}
 			}
 	
 			// 4️⃣ 打开卡片选择器
@@ -312,6 +324,12 @@ export class WebViewerLLMModule {
 				);
 				if(input){
 					tfile = input;
+					let curr = ea.file.get_tfiles(input);
+					for(let c of curr){
+						if(!xrefiles.includes(c)){
+							xrefiles.push(c)
+						}
+					}
 				}else{
 					return;
 				}
@@ -444,6 +462,11 @@ export class WebViewerLLMModule {
 		// 选择参考笔记
 		if(tfile instanceof TFile && ea.editor.get_frontmatter(tfile, 'reference','link') != false){
 			let refFiles: (TFile | string)[] = [tfile];
+			for(let xfile of xrefiles){
+				if(!refFiles.contains(xfile)){
+					refFiles.push(xfile);
+				}
+			}
 			let ciinks = ea.file.get_links(cfile) || [];
 			for(let clink of ciinks){
 				if(!refFiles.contains(clink)){
