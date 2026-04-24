@@ -693,3 +693,57 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+.qaMultInputPrompt .qa-mult-input-main {
+  min-width: min(92vw, 900px);
+}
+
+.qaMultInputPrompt .qa-mult-input-editor {
+  margin-bottom: 10px;
+}
+
+.qaMultInputPrompt .qa-mult-input-leaf-host {
+  min-height: 420px;
+}
+
+.qaMultInputPrompt .qa-mult-input-leaf {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  overflow: hidden;
+  min-height: 420px;
+  max-height: 65vh;
+}
+
+.qaMultInputPrompt .qa-mult-input-leaf .view-header {
+  display: none;
+}
+
+.qaMultInputPrompt .qa-mult-input-leaf .workspace-leaf-content[data-type="markdown"] {
+  height: 100%;
+}
+
+.qaMultInputPrompt .qa-mult-input-leaf .markdown-source-view {
+  padding: 8px 10px;
+  height: 100%;
+}
+
+.qaMultInputPrompt .qa-mult-input-leaf .cm-editor {
+  height: 100%;
+}
+
+.qaMultInputPrompt .qa-mult-input-leaf .cm-scroller {
+  overflow: auto;
+}
+
+.qaMultInputPrompt .qa-mult-fallback-editor {
+  width: 100%;
+  min-height: 420px;
+  resize: vertical;
+}
+
+.qaMultInputPrompt .button-bar {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
