@@ -3,6 +3,7 @@ import {
 	ButtonComponent,
 	Modal,
 	TFile,
+	TextAreaComponent,
 	TextComponent
 } from "obsidian";
 
@@ -16,13 +17,16 @@ export default class InputPrompt extends Modal {
 	private resolvePromise: (input: string) => void;
 	private rejectPromise: (reason?: unknown) => void;
 	private didSubmit = false;
-	private inputComponent: TextComponent;
+	private inputComponent: TextComponent | TextAreaComponent;
 	private input: string;
 	private readonly placeholder: string;
+	private readonly multiLine: boolean;
 	private allNoteNames: string[] = [];
+	private allTagNames: string[] = [];
 	private linkSuggestions: string[] = [];
 	private selectedSuggestionIndex = 0;
 	private linkTriggerStart = -1;
+	private suggestionMode: "link" | "tag" | null = null;
 	private suggestionContainerEl: HTMLDivElement | null = null;
 	private readonly updateSuggestionPosition = () => this.positionSuggestionList();
 
@@ -30,13 +34,15 @@ export default class InputPrompt extends Modal {
 		app: App,
 		header: string,
 		placeholder?: string,
-		value?: string
+		value?: string,
+		multiLine: boolean = false
 	): Promise<string> {
 		const newPromptModal = new InputPrompt(
 			app,
 			header,
 			placeholder,
-			value
+			value,
+			multiLine
 		);
 		return newPromptModal.waitForClose;
 	}
@@ -45,11 +51,13 @@ export default class InputPrompt extends Modal {
 		app: App,
 		private header: string,
 		placeholder?: string,
-		value?: string
+		value?: string,
+		multiLine: boolean = false
 	) {
 		super(app);
 		this.placeholder = placeholder ?? "";
 		this.input = value ?? "";
+		this.multiLine = multiLine;
 
 		this.waitForClose = new Promise<string>((resolve, reject) => {
 			this.resolvePromise = resolve;
@@ -82,6 +90,7 @@ export default class InputPrompt extends Modal {
 		});
 		this.createButtonBar(mainContentContainer);
 		this.cacheNoteNames();
+		this.cacheTagNames();
 	}
 
 	protected createInputField(
@@ -89,10 +98,16 @@ export default class InputPrompt extends Modal {
 		placeholder?: string,
 		value?: string
 	) {
-		const textComponent = new TextComponent(container);
-		textComponent.inputEl.classList.add("input-field", "qa-input-field");
+		const textComponent = this.multiLine
+			? new TextAreaComponent(container)
+			: new TextComponent(container);
+		textComponent.inputEl.classList.add(
+			"input-field",
+			"qa-input-field",
+			this.multiLine ? "qa-input-field-multiline" : "qa-input-field-singleline"
+		);
 		textComponent.inputEl.style.width = "100%";
-		(textComponent as any)
+		textComponent
 			.setPlaceholder(placeholder ?? "")
 			.setValue(value ?? "")
 			.onChange((value:string) => (this.input = value))
@@ -159,7 +174,11 @@ export default class InputPrompt extends Modal {
 			}
 		}
 
-		if (!evt.isComposing && evt.key === "Enter") {
+		if (
+			!this.multiLine &&
+			!evt.isComposing &&
+			evt.key === "Enter"
+		) {
 			evt.preventDefault();
 			this.submit();
 		}
@@ -172,6 +191,16 @@ export default class InputPrompt extends Modal {
 			.map((file: TFile) => file.basename);
 	}
 
+	private cacheTagNames() {
+		// @ts-expect-error getTags exists on metadataCache at runtime
+		const tagObj = this.app.metadataCache.getTags?.() ?? {};
+		const tags = Object.keys(tagObj)
+			.map((tag) => tag.replace(/^#/, ""))
+			.filter((tag) => tag.length > 0)
+			.sort((a, b) => a.localeCompare(b));
+		this.allTagNames = tags;
+	}
+
 	private linkSuggestCallback = () => {
 		this.updateInlineSuggestions();
 	};
@@ -180,20 +209,51 @@ export default class InputPrompt extends Modal {
 		const inputEl = this.inputComponent.inputEl;
 		const cursor = inputEl.selectionStart ?? inputEl.value.length;
 		const textBeforeCursor = inputEl.value.slice(0, cursor);
-		const match = textBeforeCursor.match(/\[\[([^\]\n]*)$/);
-		if (!match) {
-			this.closeSuggestionList();
+		const linkMatch = textBeforeCursor.match(/\[\[([^\]\n]*)$/);
+		if (linkMatch) {
+			const query = (linkMatch[1] ?? "").trim().toLowerCase();
+			this.linkTriggerStart = cursor - linkMatch[0].length;
+			this.suggestionMode = "link";
+			const candidates = this.allNoteNames.filter((name) =>
+				query.length === 0 ? true : name.toLowerCase().includes(query)
+			);
+			this.linkSuggestions = candidates.slice(0, 12);
+			this.selectedSuggestionIndex = 0;
+			this.renderSuggestionList();
 			return;
 		}
 
-		const query = (match[1] ?? "").trim().toLowerCase();
-		this.linkTriggerStart = cursor - match[0].length;
-		const candidates = this.allNoteNames.filter((name) =>
-			query.length === 0 ? true : name.toLowerCase().includes(query)
-		);
-		this.linkSuggestions = candidates.slice(0, 12);
-		this.selectedSuggestionIndex = 0;
-		this.renderSuggestionList();
+		const tagMatch = this.getTagMatch(textBeforeCursor);
+		if (tagMatch) {
+			this.cacheTagNames();
+			this.linkTriggerStart = tagMatch.start;
+			this.suggestionMode = "tag";
+			const query = tagMatch.query.toLowerCase();
+			const candidates = this.allTagNames.filter((name) =>
+				query.length === 0 ? true : name.toLowerCase().includes(query)
+			);
+			this.linkSuggestions = candidates.slice(0, 12);
+			this.selectedSuggestionIndex = 0;
+			this.renderSuggestionList();
+			return;
+		}
+
+		this.closeSuggestionList();
+	}
+
+	private getTagMatch(textBeforeCursor: string): { start: number; query: string } | null {
+		// When inside a wikilink ([[...]]), '#' should be treated as heading reference, not tag.
+		const lastWikiOpen = textBeforeCursor.lastIndexOf("[[");
+		const lastWikiClose = textBeforeCursor.lastIndexOf("]]");
+		if (lastWikiOpen > lastWikiClose) return null;
+
+		const match = /(?:^|\s)#([^\s#\]]*)$/.exec(textBeforeCursor);
+		if (!match || match.index == null) return null;
+		const hashIndex = match.index + (match[0].startsWith(" ") ? 1 : 0);
+		return {
+			start: hashIndex,
+			query: match[1] ?? ""
+		};
 	}
 
 	private renderSuggestionList() {
@@ -235,7 +295,10 @@ export default class InputPrompt extends Modal {
 		const cursor = inputEl.selectionStart ?? inputEl.value.length;
 		const before = inputEl.value.slice(0, this.linkTriggerStart);
 		const after = inputEl.value.slice(cursor);
-		const inserted = `[[${selected}]]`;
+		const inserted =
+			this.suggestionMode === "tag"
+				? `#${selected}`
+				: `[[${selected}]]`;
 		inputEl.value = `${before}${inserted}${after}`;
 		this.input = inputEl.value;
 		const nextCursor = before.length + inserted.length;
@@ -270,6 +333,7 @@ export default class InputPrompt extends Modal {
 		this.linkSuggestions = [];
 		this.selectedSuggestionIndex = 0;
 		this.linkTriggerStart = -1;
+		this.suggestionMode = null;
 		if (!this.suggestionContainerEl) return;
 		window.removeEventListener("resize", this.updateSuggestionPosition);
 		window.removeEventListener("scroll", this.updateSuggestionPosition, true);
@@ -323,13 +387,19 @@ export default class InputPrompt extends Modal {
 }
 
 
-export async function dialog_prompt(header: string='Input', placeholder: string='',value:string='') {
+export async function dialog_prompt(
+	header: string = "Input",
+	placeholder: string = "",
+	value: string = "",
+	multiLine: boolean = false
+) {
 	try{
 		return await InputPrompt.Prompt(
 			this.app,
 			header,
 			placeholder,
-            value
+            value,
+			multiLine
 		)
 	}catch{
 		return null

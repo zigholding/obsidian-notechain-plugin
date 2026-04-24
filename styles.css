@@ -770,6 +770,11 @@
   box-sizing: border-box;
 }
 
+.qaInputPrompt .qa-input-field-multiline {
+  min-height: 120px;
+  resize: vertical;
+}
+
 .qaInputPrompt .qa-inline-suggest {
   display: none;
   position: fixed;

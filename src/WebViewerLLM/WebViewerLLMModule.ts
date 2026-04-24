@@ -320,7 +320,8 @@ export class WebViewerLLMModule {
 				let input = await this.easyapi.dialog_prompt(
 					this.easyapi.isZh ? '输入' : 'Input text', 
 					this.easyapi.isZh ? '请输入文本' : 'Enter text...',
-					selection ?? ''
+					selection ?? '',
+					true
 				);
 				if(input){
 					tfile = input;
