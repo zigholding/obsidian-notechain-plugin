@@ -1,9 +1,7 @@
 import type { App } from "obsidian";
 import {
 	ButtonComponent,
-	Component,
 	MarkdownView,
-	MarkdownRenderer,
 	Modal,
 	Notice,
 	TFile,
@@ -32,9 +30,6 @@ class MarkdownInputPrompt extends Modal {
 	private tempFile?: TFile;
 	private readonly tempFilePath = "note-chain-templater-target.md";
 	private vaultChangeRef?: (file: TFile) => void;
-	private previewContainer!: HTMLElement;
-	private previewComponent: Component | null = null;
-	private renderToken = 0;
 	private readonly isZh: boolean;
 	private syncTimer: number | null = null;
 	private isSyncing = false;
@@ -65,9 +60,6 @@ class MarkdownInputPrompt extends Modal {
 
 		const root = this.contentEl.createDiv({ cls: "nc-markdown-input-root" });
 		const editorWrap = root.createDiv({ cls: "nc-markdown-input-editor-wrap" });
-		this.previewContainer = root.createDiv({ cls: "nc-markdown-input-preview markdown-rendered" });
-		this.previewComponent = new Component();
-		this.previewComponent.load();
 		void this.mountEditor(editorWrap).catch((error) => {
 			this.closeReason = error;
 			new Notice((error as Error)?.message || "Failed to mount WorkspaceLeaf editor.");
@@ -83,21 +75,6 @@ class MarkdownInputPrompt extends Modal {
 			.setButtonText(this.options.cancelText ?? (this.isZh ? "取消" : "Cancel"))
 			.onClick(() => this.close());
 
-		void this.renderPreview();
-	}
-
-	private async renderPreview(): Promise<void> {
-		const token = ++this.renderToken;
-		this.previewContainer.empty();
-		const source =
-			this.input.trim().length > 0
-				? this.input
-				: this.isZh
-					? "*预览为空*"
-					: "*Preview is empty*";
-		if (!this.previewComponent) return;
-		await MarkdownRenderer.render(this.app, source, this.previewContainer, "", this.previewComponent);
-		if (token !== this.renderToken) return;
 	}
 
 	private async ensureTempFile(): Promise<TFile> {
@@ -154,7 +131,7 @@ class MarkdownInputPrompt extends Modal {
 		this.syncTimer = window.setTimeout(() => {
 			this.syncTimer = null;
 			void this.syncInputFromTempFileAndRender();
-		}, 120);
+		}, 220);
 	}
 
 	private async syncInputFromTempFileAndRender(): Promise<void> {
@@ -164,8 +141,10 @@ class MarkdownInputPrompt extends Modal {
 			return;
 		}
 		this.isSyncing = true;
-		this.input = await this.app.vault.read(this.tempFile);
-		void this.renderPreview();
+		const nextInput = await this.app.vault.read(this.tempFile);
+		if (nextInput !== this.input) {
+			this.input = nextInput;
+		}
 		this.isSyncing = false;
 		if (this.hasPendingSync) {
 			this.hasPendingSync = false;
@@ -204,10 +183,6 @@ class MarkdownInputPrompt extends Modal {
 			this.modalLeafRef = undefined;
 		}
 		this.tempFile = undefined;
-		if (this.previewComponent) {
-			this.previewComponent.unload();
-			this.previewComponent = null;
-		}
 		this.contentEl.empty();
 	}
 }
