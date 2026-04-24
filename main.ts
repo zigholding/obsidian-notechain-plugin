@@ -151,7 +151,7 @@ export default class NoteChainPlugin extends Plugin {
 	}
 
 	async ufunc_on_file_open(file: TFile) {
-		if (file.basename == 'note-chain-templater-target') {
+		if (file?.basename == 'note-chain-templater-target') {
 			return;
 		}
 		if (this.settings.notechain.refreshDataView) {

@@ -723,6 +723,12 @@
   display: none;
 }
 
+.nc-markdown-input-modal .nc-markdown-input-leaf .view-header-title-container,
+.nc-markdown-input-modal .nc-markdown-input-leaf .view-header-title,
+.nc-markdown-input-modal .nc-markdown-input-leaf .inline-title {
+  display: none !important;
+}
+
 .nc-markdown-input-modal .nc-markdown-input-leaf-host {
   min-height: 420px;
 }

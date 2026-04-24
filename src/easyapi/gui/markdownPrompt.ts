@@ -107,10 +107,14 @@ class MarkdownInputPrompt extends Modal {
 		}
 
 		if (this.modalLeafRef.view instanceof MarkdownView) {
-			if ((this.options.value ?? "").length > 0) {
-				this.modalLeafRef.view.editor?.setValue(this.options.value ?? "");
+			const initialValue = this.options.value ?? "";
+			const editor = this.modalLeafRef.view.editor;
+			const currentValue = editor?.getValue() ?? "";
+			// Avoid unnecessary full-document writes on open.
+			if (editor && currentValue !== initialValue) {
+				editor.setValue(initialValue);
 			}
-			this.modalLeafRef.view.editor?.focus();
+			window.requestAnimationFrame(() => editor?.focus());
 		}
 	}
 
