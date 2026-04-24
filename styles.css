@@ -747,3 +747,67 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ==========================================================================
+   8. Single input prompt (QuickAdd-like layout)
+   ========================================================================== */
+
+.qaInputPrompt .modal-content {
+  padding-bottom: 8px;
+  overflow: visible;
+}
+
+.qaInputPrompt .qa-input-main {
+  position: relative;
+}
+
+.qaInputPrompt .qa-input-wrap {
+  position: relative;
+}
+
+.qaInputPrompt .qa-input-field {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.qaInputPrompt .qa-inline-suggest {
+  display: none;
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  max-height: 360px;
+  overflow-y: auto;
+  z-index: 30;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.qaInputPrompt .qa-inline-suggest.is-open {
+  display: block;
+}
+
+.qaInputPrompt .qa-inline-suggest-item {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+}
+
+.qaInputPrompt .qa-inline-suggest-item:last-child {
+  border-bottom: none;
+}
+
+.qaInputPrompt .qa-inline-suggest-item:hover,
+.qaInputPrompt .qa-inline-suggest-item.is-selected {
+  background: color-mix(in srgb, var(--interactive-accent) 14%, var(--background-primary));
+}
+
+.qaInputPrompt .button-bar {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+  gap: 8px;
+}
