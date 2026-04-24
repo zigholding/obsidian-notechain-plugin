@@ -6,6 +6,7 @@ import {dialog_suggest} from './gui/inputSuggester'
 import { dialog_multi_suggest } from './gui/inputMultiSuggester'
 import { dialog_prompt } from './gui/inputPrompt'
 import { dialog_mult_prompt } from './gui/multInputPrompt'
+import { dialog_markdown_prompt } from './gui/markdownPrompt'
 import {selectColor} from './gui/selectColor'
 import { openCardNavigator, type CardItem } from './gui/inputCardSuggester'
 import {EasyEditor } from './editor';
@@ -23,6 +24,7 @@ export class EasyAPI {
 	dialog_multi_suggest: Function
 	dialog_prompt: Function
 	dialog_mult_prompt: Function
+	dialog_markdown_prompt: Function
     dialog_cards: Function
     dialog_color: Function
     editor: EasyEditor
@@ -40,6 +42,7 @@ export class EasyAPI {
 		this.dialog_multi_suggest = dialog_multi_suggest;
 		this.dialog_prompt = dialog_prompt;
 		this.dialog_mult_prompt = dialog_mult_prompt;
+		this.dialog_markdown_prompt = dialog_markdown_prompt;
 		this.dialog_cards = openCardNavigator;
         this.dialog_color = selectColor;
         this.editor = new EasyEditor(app,this);
