@@ -209,7 +209,7 @@ export class WordCount{
 
     regeister_editor_change(){    
         let e = this.app.workspace.on('editor-change',async (editor,info)=>{
-            if(info.file?.extension!='md'){
+            if(info.file?.extension!='md' || info.file?.basename=='note-chain-templater-target'){
                 return;
             }
             if(this.timerId!==null){
@@ -229,7 +229,7 @@ export class WordCount{
         let e = this.app.workspace.on('active-leaf-change',async (leaf)=>{
 
             let tfile = (leaf?.view as any).file;
-            if(!leaf?.view){
+            if(!leaf?.view || tfile?.basename=='note-chain-templater-target'){
                 return;
             }
             if(!((leaf.view as any)?.file?.extension=='md')){

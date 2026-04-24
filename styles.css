@@ -718,6 +718,23 @@
   display: none;
 }
 
+/* markdownPrompt: hide embedded leaf header (e.g. "编辑内容") */
+.nc-markdown-input-modal .nc-markdown-input-leaf .view-header {
+  display: none;
+}
+
+.nc-markdown-input-modal .nc-markdown-input-leaf-host {
+  min-height: 420px;
+}
+
+.nc-markdown-input-modal .nc-markdown-input-leaf {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  overflow: hidden;
+  min-height: 420px;
+  max-height: 65vh;
+}
+
 .qaMultInputPrompt .qa-mult-input-leaf .workspace-leaf-content[data-type="markdown"] {
   height: 100%;
 }

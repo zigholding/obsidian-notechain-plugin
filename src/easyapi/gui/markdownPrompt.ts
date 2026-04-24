@@ -29,11 +29,7 @@ class MarkdownInputPrompt extends Modal {
 	private modalLeafRef?: WorkspaceLeaf;
 	private tempFile?: TFile;
 	private readonly tempFilePath = "note-chain-templater-target.md";
-	private vaultChangeRef?: (file: TFile) => void;
 	private readonly isZh: boolean;
-	private syncTimer: number | null = null;
-	private isSyncing = false;
-	private hasPendingSync = false;
 	private closeReason: unknown = "no input given.";
 
 	public static open(app: App, options: MarkdownPromptOptions = {}): Promise<string> {
@@ -98,8 +94,6 @@ class MarkdownInputPrompt extends Modal {
 		(this.modalLeafRef as any).containerEl.style.display = "none";
 
 		this.tempFile = await this.ensureTempFile();
-		await this.app.vault.modify(this.tempFile, this.options.value ?? "");
-		this.input = this.options.value ?? "";
 		await this.modalLeafRef.openFile(this.tempFile, { state: { mode: "source" } });
 
 		const hostEl = this.modalLeafRef.view.containerEl;
@@ -113,47 +107,19 @@ class MarkdownInputPrompt extends Modal {
 		}
 
 		if (this.modalLeafRef.view instanceof MarkdownView) {
+			if ((this.options.value ?? "").length > 0) {
+				this.modalLeafRef.view.editor?.setValue(this.options.value ?? "");
+			}
 			this.modalLeafRef.view.editor?.focus();
-		}
-
-		this.vaultChangeRef = (file: TFile) => {
-			if (file.path !== this.tempFilePath) return;
-			this.scheduleSyncFromTempFile();
-		};
-		this.app.vault.on("modify", this.vaultChangeRef);
-		this.scheduleSyncFromTempFile();
-	}
-
-	private scheduleSyncFromTempFile() {
-		if (this.syncTimer !== null) {
-			window.clearTimeout(this.syncTimer);
-		}
-		this.syncTimer = window.setTimeout(() => {
-			this.syncTimer = null;
-			void this.syncInputFromTempFileAndRender();
-		}, 220);
-	}
-
-	private async syncInputFromTempFileAndRender(): Promise<void> {
-		if (!this.tempFile) return;
-		if (this.isSyncing) {
-			this.hasPendingSync = true;
-			return;
-		}
-		this.isSyncing = true;
-		const nextInput = await this.app.vault.read(this.tempFile);
-		if (nextInput !== this.input) {
-			this.input = nextInput;
-		}
-		this.isSyncing = false;
-		if (this.hasPendingSync) {
-			this.hasPendingSync = false;
-			this.scheduleSyncFromTempFile();
 		}
 	}
 
 	private async confirm(): Promise<void> {
-		await this.syncInputFromTempFileAndRender();
+		if (this.modalLeafRef?.view instanceof MarkdownView) {
+			this.input = this.modalLeafRef.view.editor?.getValue() ?? "";
+		} else if (this.tempFile) {
+			this.input = await this.app.vault.read(this.tempFile);
+		}
 		this.submitted = true;
 		this.closeReason = null;
 		this.resolvePromise(this.input);
@@ -167,14 +133,6 @@ class MarkdownInputPrompt extends Modal {
 
 	private async handleClose(): Promise<void> {
 		if (!this.submitted) this.rejectPromise(this.closeReason);
-		if (this.vaultChangeRef) {
-			this.app.vault.off("modify", this.vaultChangeRef);
-			this.vaultChangeRef = undefined;
-		}
-		if (this.syncTimer !== null) {
-			window.clearTimeout(this.syncTimer);
-			this.syncTimer = null;
-		}
 		if (this.modalLeafRef?.view?.containerEl) {
 			this.modalLeafRef.view.containerEl.remove();
 		}
