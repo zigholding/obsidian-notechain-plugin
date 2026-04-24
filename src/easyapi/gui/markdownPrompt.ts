@@ -5,7 +5,7 @@ import {
 	MarkdownView,
 	MarkdownRenderer,
 	Modal,
-	TextAreaComponent,
+	Notice,
 	TFile,
 	WorkspaceLeaf,
 } from "obsidian";
@@ -28,11 +28,9 @@ class MarkdownInputPrompt extends Modal {
 	public readonly promise: Promise<string>;
 	private submitted = false;
 	private input = "";
-	private editorComponent: TextAreaComponent | null = null;
 	private modalLeafRef?: WorkspaceLeaf;
 	private tempFile?: TFile;
-	private tempFilePath = "";
-	private readonly tempFolder = ".obsidian/plugins/note-chain/.temp";
+	private readonly tempFilePath = "note-chain-templater-target.md";
 	private vaultChangeRef?: (file: TFile) => void;
 	private previewContainer!: HTMLElement;
 	private previewComponent: Component | null = null;
@@ -41,6 +39,7 @@ class MarkdownInputPrompt extends Modal {
 	private syncTimer: number | null = null;
 	private isSyncing = false;
 	private hasPendingSync = false;
+	private closeReason: unknown = "no input given.";
 
 	public static open(app: App, options: MarkdownPromptOptions = {}): Promise<string> {
 		const modal = new MarkdownInputPrompt(app, options);
@@ -69,7 +68,11 @@ class MarkdownInputPrompt extends Modal {
 		this.previewContainer = root.createDiv({ cls: "nc-markdown-input-preview markdown-rendered" });
 		this.previewComponent = new Component();
 		this.previewComponent.load();
-		void this.mountEditor(editorWrap);
+		void this.mountEditor(editorWrap).catch((error) => {
+			this.closeReason = error;
+			new Notice((error as Error)?.message || "Failed to mount WorkspaceLeaf editor.");
+			this.close();
+		});
 
 		const actions = this.contentEl.createDiv({ cls: "nc-markdown-input-actions" });
 		new ButtonComponent(actions)
@@ -97,66 +100,51 @@ class MarkdownInputPrompt extends Modal {
 		if (token !== this.renderToken) return;
 	}
 
-	private mountFallbackEditor(container: HTMLElement): void {
-		const editor = new TextAreaComponent(container);
-		editor.inputEl.addClass("nc-markdown-input-textarea");
-		editor
-			.setPlaceholder(this.options.placeholder ?? "")
-			.setValue(this.options.value ?? "")
-			.onChange((value) => {
-				this.input = value;
-				void this.renderPreview();
-			});
-		this.editorComponent = editor;
-		this.input = editor.getValue();
-		void this.renderPreview();
-	}
-
-	private async ensureTempFolder(): Promise<void> {
-		const existing = this.app.vault.getAbstractFileByPath(this.tempFolder);
-		if (existing) return;
-		await this.app.vault.createFolder(this.tempFolder);
+	private async ensureTempFile(): Promise<TFile> {
+		const existed = this.app.vault.getFileByPath(this.tempFilePath);
+		if (existed) return existed;
+		try {
+			return await this.app.vault.create(this.tempFilePath, "");
+		} catch {
+			const file = this.app.vault.getFileByPath(this.tempFilePath);
+			if (file) return file;
+			throw new Error(`Failed to create temp file: ${this.tempFilePath}`);
+		}
 	}
 
 	private async mountEditor(container: HTMLElement): Promise<void> {
-		try {
-			this.modalLeafRef = this.app.workspace.createLeafInParent(this.app.workspace.rootSplit, 0);
-			if (!this.modalLeafRef) {
-				this.mountFallbackEditor(container);
-				return;
-			}
-			// Prevent workspace split jitter while the leaf is being prepared.
-			(this.modalLeafRef as any).containerEl.style.display = "none";
-
-			await this.ensureTempFolder();
-			this.tempFilePath = `${this.tempFolder}/markdown-prompt-${Date.now()}.md`;
-			this.tempFile = await this.app.vault.create(this.tempFilePath, this.options.value ?? "");
-			this.input = this.options.value ?? "";
-			await this.modalLeafRef.openFile(this.tempFile, { state: { mode: "source" } });
-
-			const hostEl = this.modalLeafRef.view.containerEl;
-			hostEl.addClass("nc-markdown-input-leaf-host");
-			container.appendChild(hostEl);
-			const leafContent = container.querySelector(".workspace-leaf-content");
-			if (leafContent instanceof HTMLElement) {
-				leafContent.classList.add("nc-markdown-input-leaf");
-			} else {
-				hostEl.classList.add("nc-markdown-input-leaf");
-			}
-
-			if (this.modalLeafRef.view instanceof MarkdownView) {
-				this.modalLeafRef.view.editor?.focus();
-			}
-
-			this.vaultChangeRef = (file: TFile) => {
-				if (file.path !== this.tempFilePath) return;
-				this.scheduleSyncFromTempFile();
-			};
-			this.app.vault.on("modify", this.vaultChangeRef);
-			this.scheduleSyncFromTempFile();
-		} catch {
-			this.mountFallbackEditor(container);
+		this.modalLeafRef = this.app.workspace.createLeafInParent(this.app.workspace.rootSplit, 0);
+		if (!this.modalLeafRef) {
+			throw new Error("Failed to create WorkspaceLeaf.");
 		}
+		// Prevent workspace split jitter while the leaf is being prepared.
+		(this.modalLeafRef as any).containerEl.style.display = "none";
+
+		this.tempFile = await this.ensureTempFile();
+		await this.app.vault.modify(this.tempFile, this.options.value ?? "");
+		this.input = this.options.value ?? "";
+		await this.modalLeafRef.openFile(this.tempFile, { state: { mode: "source" } });
+
+		const hostEl = this.modalLeafRef.view.containerEl;
+		hostEl.addClass("nc-markdown-input-leaf-host");
+		container.appendChild(hostEl);
+		const leafContent = container.querySelector(".workspace-leaf-content");
+		if (leafContent instanceof HTMLElement) {
+			leafContent.classList.add("nc-markdown-input-leaf");
+		} else {
+			hostEl.classList.add("nc-markdown-input-leaf");
+		}
+
+		if (this.modalLeafRef.view instanceof MarkdownView) {
+			this.modalLeafRef.view.editor?.focus();
+		}
+
+		this.vaultChangeRef = (file: TFile) => {
+			if (file.path !== this.tempFilePath) return;
+			this.scheduleSyncFromTempFile();
+		};
+		this.app.vault.on("modify", this.vaultChangeRef);
+		this.scheduleSyncFromTempFile();
 	}
 
 	private scheduleSyncFromTempFile() {
@@ -186,12 +174,9 @@ class MarkdownInputPrompt extends Modal {
 	}
 
 	private async confirm(): Promise<void> {
-		if (this.tempFile) {
-			await this.syncInputFromTempFileAndRender();
-		} else {
-			this.input = this.editorComponent?.getValue() ?? this.input;
-		}
+		await this.syncInputFromTempFileAndRender();
 		this.submitted = true;
+		this.closeReason = null;
 		this.resolvePromise(this.input);
 		this.close();
 	}
@@ -202,7 +187,7 @@ class MarkdownInputPrompt extends Modal {
 	}
 
 	private async handleClose(): Promise<void> {
-		if (!this.submitted) this.rejectPromise("no input given.");
+		if (!this.submitted) this.rejectPromise(this.closeReason);
 		if (this.vaultChangeRef) {
 			this.app.vault.off("modify", this.vaultChangeRef);
 			this.vaultChangeRef = undefined;
@@ -211,7 +196,6 @@ class MarkdownInputPrompt extends Modal {
 			window.clearTimeout(this.syncTimer);
 			this.syncTimer = null;
 		}
-		this.editorComponent = null;
 		if (this.modalLeafRef?.view?.containerEl) {
 			this.modalLeafRef.view.containerEl.remove();
 		}
@@ -219,14 +203,7 @@ class MarkdownInputPrompt extends Modal {
 			this.modalLeafRef.detach();
 			this.modalLeafRef = undefined;
 		}
-		if (this.tempFile) {
-			try {
-				await this.app.vault.delete(this.tempFile, true);
-			} catch {
-				// ignore temp cleanup failures
-			}
-			this.tempFile = undefined;
-		}
+		this.tempFile = undefined;
 		if (this.previewComponent) {
 			this.previewComponent.unload();
 			this.previewComponent = null;
@@ -243,7 +220,11 @@ export async function dialog_markdown_prompt(
 	try {
 		const app = (this as { app: App }).app;
 		return await MarkdownInputPrompt.open(app, { title, placeholder, value });
-	} catch {
+	} catch (error) {
+		if (error === "no input given.") return null;
+		new Notice(
+			(error as Error)?.message || "Failed to open markdown prompt with WorkspaceLeaf."
+		);
 		return null;
 	}
 }
