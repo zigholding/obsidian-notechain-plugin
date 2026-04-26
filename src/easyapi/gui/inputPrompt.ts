@@ -113,6 +113,7 @@ export default class InputPrompt extends Modal {
 			.onChange((value:string) => (this.input = value))
 			.inputEl.addEventListener("keydown", this.submitEnterCallback);
 		textComponent.inputEl.addEventListener("input", this.linkSuggestCallback);
+		textComponent.inputEl.addEventListener("compositionend", this.linkSuggestCallback);
 		textComponent.inputEl.addEventListener("click", this.linkSuggestCallback);
 
 		return textComponent;
@@ -205,9 +206,24 @@ export default class InputPrompt extends Modal {
 		this.updateInlineSuggestions();
 	};
 
+	private normalizeWikiLinkTrigger(inputEl: HTMLInputElement | HTMLTextAreaElement): number {
+		const cursor = inputEl.selectionStart ?? inputEl.value.length;
+		const normalize = (value: string) =>
+			value
+				.replace(/(?:\[|【){2,}/g, "[[")
+				.replace(/(?:\]|】){2,}/g, "]]");
+		const normalizedValue = normalize(inputEl.value);
+		if (normalizedValue === inputEl.value) return cursor;
+		const nextCursor = normalize(inputEl.value.slice(0, cursor)).length;
+		inputEl.value = normalizedValue;
+		inputEl.setSelectionRange(nextCursor, nextCursor);
+		this.input = inputEl.value;
+		return nextCursor;
+	}
+
 	private updateInlineSuggestions() {
 		const inputEl = this.inputComponent.inputEl;
-		const cursor = inputEl.selectionStart ?? inputEl.value.length;
+		const cursor = this.normalizeWikiLinkTrigger(inputEl);
 		const textBeforeCursor = inputEl.value.slice(0, cursor);
 		const linkMatch = textBeforeCursor.match(/\[\[([^\]\n]*)$/);
 		if (linkMatch) {
@@ -363,6 +379,10 @@ export default class InputPrompt extends Modal {
 		);
 		this.inputComponent.inputEl.removeEventListener(
 			"input",
+			this.linkSuggestCallback
+		);
+		this.inputComponent.inputEl.removeEventListener(
+			"compositionend",
 			this.linkSuggestCallback
 		);
 		this.inputComponent.inputEl.removeEventListener(
