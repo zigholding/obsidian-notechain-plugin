@@ -656,6 +656,53 @@ export class EasyEditor {
             }
         }
 
+        // WebViewer plugin selection lives inside its webview context.
+        const wv = this.ea?.wv?.basewv;
+        const activeView = wv?.activeView as any;
+        const webview = activeView?.webview ?? wv?.webview;
+        if (webview?.executeJavaScript) {
+            const webSel = await webview.executeJavaScript(
+                `
+                (() => {
+                    const sel = window.getSelection?.();
+                    if (sel && !sel.isCollapsed) {
+                        const text = sel.toString();
+                        if (text) return text;
+                    }
+                    const ae = document.activeElement;
+                    if (ae instanceof HTMLTextAreaElement || ae instanceof HTMLInputElement) {
+                        const start = ae.selectionStart ?? 0;
+                        const end = ae.selectionEnd ?? 0;
+                        const text = ae.value?.slice(start, end) || '';
+                        if (text) return text;
+                    }
+                    return '';
+                })()
+                `
+            );
+            if (webSel) {
+                if (cancel_selection) {
+                    await webview.executeJavaScript(
+                        `
+                        (() => {
+                            const sel = window.getSelection?.();
+                            if (sel) {
+                                sel.removeAllRanges();
+                            }
+                            const ae = document.activeElement;
+                            if (ae instanceof HTMLTextAreaElement || ae instanceof HTMLInputElement) {
+                                const p = ae.selectionEnd ?? ae.value.length;
+                                ae.setSelectionRange?.(p, p);
+                                ae.blur?.();
+                            }
+                        })()
+                        `
+                    );
+                }
+                return webSel;
+            }
+        }
+
         let selection = window.getSelection();
         if (selection && !selection.isCollapsed) {
             const selectedText = selection.toString();
@@ -668,8 +715,10 @@ export class EasyEditor {
             let sel = area.value.slice(area.selectionStart, area.selectionEnd);
 
             if (sel) {
-                area.selectionStart = area.selectionEnd;
-                area.blur();
+                if (cancel_selection) {
+                    area.selectionStart = area.selectionEnd;
+                    area.blur();
+                }
                 return sel
             }
         }
