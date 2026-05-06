@@ -47,12 +47,42 @@ const MCP_TEST_HTML = `<!DOCTYPE html>
         function escapeHtml(s) {
             return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
+        /** 将 MCP 常见的 { type: text, text: "<JSON 字符串>" } 递归展开为对象，便于 YAML 分层展示 */
+        function expandMcpTextJsonForDisplay(v) {
+            if (typeof v === 'string') {
+                var ts = v.trim();
+                if ((ts.charAt(0) === '{' && ts.charAt(ts.length - 1) === '}') ||
+                    (ts.charAt(0) === '[' && ts.charAt(ts.length - 1) === ']')) {
+                    try { return expandMcpTextJsonForDisplay(JSON.parse(ts)); } catch (e0) {}
+                }
+                return v;
+            }
+            if (v === null || typeof v !== 'object') return v;
+            if (Array.isArray(v)) return v.map(expandMcpTextJsonForDisplay);
+            var keys = Object.keys(v);
+            var out = {};
+            for (var i = 0; i < keys.length; i++) {
+                var k = keys[i];
+                out[k] = expandMcpTextJsonForDisplay(v[k]);
+            }
+            if (out.type === 'text' && typeof out.text === 'string') {
+                var s = out.text.trim();
+                if ((s.charAt(0) === '{' && s.charAt(s.length - 1) === '}') ||
+                    (s.charAt(0) === '[' && s.charAt(s.length - 1) === ']')) {
+                    try {
+                        out.text = expandMcpTextJsonForDisplay(JSON.parse(s));
+                    } catch (e1) {}
+                }
+            }
+            return out;
+        }
         function formatResultAsYaml(data) {
             if (typeof jsyaml === 'undefined') {
                 return typeof data === 'object' && data !== null ? JSON.stringify(data, null, 2) : String(data);
             }
             try {
-                var y = jsyaml.dump(data, { lineWidth: 120, noRefs: true, skipInvalid: true });
+                var toDump = expandMcpTextJsonForDisplay(data);
+                var y = jsyaml.dump(toDump, { lineWidth: 120, noRefs: true, skipInvalid: true });
                 return y.replace(/\\n$/, '');
             } catch (e) {
                 return typeof data === 'object' && data !== null ? JSON.stringify(data, null, 2) : String(data);
