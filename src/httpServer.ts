@@ -14,6 +14,7 @@ const MCP_TEST_HTML = `<!DOCTYPE html>
         body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
         input, button { padding: 0.5rem 0.75rem; margin: 0.25rem 0; }
         input[type="url"] { width: 100%; box-sizing: border-box; }
+        textarea#toolArgs { width: 100%; box-sizing: border-box; min-height: 7rem; padding: 0.5rem 0.65rem; font-family: ui-monospace, Consolas, monospace; font-size: 0.9rem; line-height: 1.4; border-radius: 4px; border: 1px solid #ccc; resize: vertical; }
         button { cursor: pointer; background: #4a9; color: #fff; border: none; border-radius: 4px; }
         button:hover { background: #3a8; }
         pre { background: #f4f4f4; padding: 1rem; overflow: auto; border-radius: 4px; white-space: pre-wrap; }
@@ -33,15 +34,30 @@ const MCP_TEST_HTML = `<!DOCTYPE html>
         </label>
     </p>
     <p>
-        <label>参数 (JSON)：<br>
-            <input type="text" id="toolArgs" value='{"query": "test"}' placeholder='{"query": "test"}'>
+        <label>参数：<br>
+            <textarea id="toolArgs" spellcheck="false" placeholder="query: test">query: test</textarea>
         </label>
     </p>
     <p>
         <button id="btn">调用 call_tool</button>
     </p>
     <p id="out"></p>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js" crossorigin="anonymous"></script>
     <script>
+        function escapeHtml(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+        function formatResultAsYaml(data) {
+            if (typeof jsyaml === 'undefined') {
+                return typeof data === 'object' && data !== null ? JSON.stringify(data, null, 2) : String(data);
+            }
+            try {
+                var y = jsyaml.dump(data, { lineWidth: 120, noRefs: true, skipInvalid: true });
+                return y.replace(/\\n$/, '');
+            } catch (e) {
+                return typeof data === 'object' && data !== null ? JSON.stringify(data, null, 2) : String(data);
+            }
+        }
         document.getElementById('btn').onclick = async function () {
             var base = document.getElementById('baseUrl').value.replace(/\\/$/, '');
             var name = document.getElementById('toolName').value.trim();
@@ -49,10 +65,21 @@ const MCP_TEST_HTML = `<!DOCTYPE html>
             var out = document.getElementById('out');
             var args = {};
             if (argsStr) {
-                try { args = JSON.parse(argsStr); } catch (e) {
-                    out.innerHTML = '<pre class="error">参数不是合法 JSON：' + e.message + '</pre>';
+                if (typeof jsyaml === 'undefined') {
+                    out.innerHTML = '<pre class="error">未加载 js-yaml（请检查网络能否访问 CDN），无法解析 YAML。</pre>';
                     return;
                 }
+                var parsed;
+                try { parsed = jsyaml.load(argsStr); } catch (e) {
+                    out.innerHTML = '<pre class="error">参数不是合法 YAML：' + e.message + '</pre>';
+                    return;
+                }
+                if (parsed == null) args = {};
+                else if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+                    out.innerHTML = '<pre class="error">YAML 顶层必须是对象（键值对），不能是数组或标量。</pre>';
+                    return;
+                }
+                else args = parsed;
             }
             var url = base + '/mcp/call_tool';
             out.innerHTML = '<pre>请求中… ' + url + '</pre>';
@@ -66,7 +93,7 @@ const MCP_TEST_HTML = `<!DOCTYPE html>
                 var data;
                 try { data = JSON.parse(text); } catch (_) { data = text; }
                 out.innerHTML = (res.ok ? '' : '<pre class="error">HTTP ' + res.status + '</pre>') +
-                    '<pre>' + (typeof data === 'object' ? JSON.stringify(data, null, 2) : data) + '</pre>';
+                    '<pre>' + escapeHtml(formatResultAsYaml(data)) + '</pre>';
             } catch (e) {
                 out.innerHTML = '<pre class="error">请求失败：' + e.message + '</pre>';
             }
