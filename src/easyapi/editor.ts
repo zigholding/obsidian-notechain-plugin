@@ -661,8 +661,9 @@ export class EasyEditor {
         const activeView = wv?.activeView as any;
         const webview = activeView?.webview ?? wv?.webview;
         if (webview?.executeJavaScript) {
-            const webSel = await webview.executeJavaScript(
-                `
+            try {
+                const webSel = await webview.executeJavaScript(
+                    `
                 (() => {
                     const sel = window.getSelection?.();
                     if (sel && !sel.isCollapsed) {
@@ -679,11 +680,11 @@ export class EasyEditor {
                     return '';
                 })()
                 `
-            );
-            if (webSel) {
-                if (cancel_selection) {
-                    await webview.executeJavaScript(
-                        `
+                );
+                if (webSel) {
+                    if (cancel_selection) {
+                        await webview.executeJavaScript(
+                            `
                         (() => {
                             const sel = window.getSelection?.();
                             if (sel) {
@@ -697,9 +698,16 @@ export class EasyEditor {
                             }
                         })()
                         `
-                    );
+                        );
+                    }
+                    return webSel;
                 }
-                return webSel;
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                // Electron: executeJavaScript before dom-ready / while detached throws.
+                if (!msg.includes('dom-ready') && !msg.includes('WebView must be attached')) {
+                    return '';
+                }
             }
         }
 
