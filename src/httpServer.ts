@@ -187,8 +187,6 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     var homeEntryPath = '';
     /** 与 resolve-note 请求一致的名字（解码后），首次解析失败时点击 🏠 可重试 */
     var homeEntryQuery = '';
-    /** 存在 ?filename= 时写入搜索框的短名（解码后），不用库内完整路径 */
-    var homeSearchBoxLabel = '';
 
     function setMsg(text, kind) {
         msg.textContent = text || '';
@@ -462,9 +460,6 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
 
     function goHomeNote() {
         if (homeEntryPath) {
-            if (q && homeSearchBoxLabel) {
-                q.value = homeSearchBoxLabel;
-            }
             loadNote(homeEntryPath);
             return;
         }
@@ -485,9 +480,6 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
                 }
                 if (x.d.path) {
                     homeEntryPath = x.d.path;
-                    if (q) {
-                        q.value = homeSearchBoxLabel || x.d.path;
-                    }
                     loadNote(x.d.path);
                 }
             })
@@ -503,7 +495,6 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     }
 
     var bootParams = new URLSearchParams(window.location.search);
-    var hasFilenameParam = !!(bootParams.get('filename') || '').trim();
     var bootPath = bootParams.get('filename') || bootParams.get('path');
     if (bootPath) {
         bootPath = bootPath.trim();
@@ -512,9 +503,6 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
                 bootPath = decodeURIComponent(bootPath);
             } catch (e2) {
                 // 已是解码后的路径
-            }
-            if (hasFilenameParam) {
-                homeSearchBoxLabel = bootPath;
             }
             homeEntryQuery = bootPath;
             if (btnHome) {
@@ -531,9 +519,6 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
                         setMsg((x.d && x.d.error) || '找不到笔记', 'err');
                         return;
                     }
-                    if (q) {
-                        q.value = homeSearchBoxLabel || (x.d.path || bootPath);
-                    }
                     if (x.d.path) {
                         homeEntryPath = x.d.path;
                         loadNote(x.d.path);
@@ -543,6 +528,19 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
                     setMsg(e3.message || '打开失败', 'err');
                 });
         }
+    }
+    var bootQueryRaw = bootParams.get('query');
+    if (bootQueryRaw != null && String(bootQueryRaw).trim()) {
+        var bootQuery = String(bootQueryRaw).trim();
+        try {
+            bootQuery = decodeURIComponent(bootQuery);
+        } catch (e4) {
+            // 已是解码后的字符串
+        }
+        if (q) {
+            q.value = bootQuery;
+        }
+        search();
     }
 })();
     </script>
