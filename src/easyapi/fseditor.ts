@@ -142,17 +142,66 @@ export class FsEditor{
     
         return res;
     }
-    
-    async read_file(path:string,encoding='utf8'){
-        let tfile = this.easyapi.file.get_tfile(path);
-        if(tfile){
+
+    /** Extensions where UTF-8 text reads are wrong or useless; use Templater `obsidian_read_file` when available. */
+    private static readonly READ_VIA_TEMPLATER_EXT = new Set([
+        "pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "odt", "odp", "ods",
+        "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "tif", "tiff", "heic",
+        "zip", "rar", "7z", "gz", "mp3", "mp4", "wav", "webm", "mov", "avi",
+        "exe", "dll", "bin",
+    ]);
+
+    private readViaTemplaterExt(ext: string): boolean {
+        const e = ext.replace(/^\./, "").toLowerCase();
+        return FsEditor.READ_VIA_TEMPLATER_EXT.has(e);
+    }
+
+    private vaultRelFromAbs(absPath: string): string | null {
+        const root = this.root.replace(/\\/g, "/");
+        const norm = absPath.replace(/\\/g, "/");
+        if (norm === root || norm.startsWith(root + "/")) {
+            return norm.slice(root.length + 1);
+        }
+        return null;
+    }
+
+    private async readBinaryViaTemplater(file_path: string): Promise<string> {
+        const fallback = `![[${file_path}]]`;
+        try {
+            if (!this.easyapi.get_plugin("templater-obsidian")) {
+                return fallback;
+            }
+            const parts = await this.easyapi.tpl.parse_templater("obsidian_read_file", true, { file_path });
+            const xctx = (Array.isArray(parts) ? parts.join("\n") : String(parts ?? "")).trim();
+            return xctx || fallback;
+        } catch {
+            return fallback;
+        }
+    }
+
+    async read_file(path: string, encoding: BufferEncoding = "utf8") {
+        const tfile = this.easyapi.file.get_tfile(path);
+        if (tfile) {
+            if (encoding === "utf8" && this.readViaTemplaterExt(tfile.extension)) {
+                return await this.readBinaryViaTemplater(tfile.path);
+            }
             return await this.app.vault.read(tfile);
         }
 
-        path = this.abspath(path,true) || path;
-        if(!this.isfile(path)){return null}
+        const absPath = this.abspath(path, true) || path;
+        if (!this.isfile(absPath)) {
+            return null;
+        }
 
-        return await this.fs.readFileSync(path,encoding);
+        if (encoding === "utf8") {
+            const rel = this.vaultRelFromAbs(absPath);
+            const ext = this.path.extname(absPath);
+            if (rel && this.readViaTemplaterExt(ext)) {
+                return await this.readBinaryViaTemplater(rel);
+            }
+        }
+
+        return this.fs.readFileSync(absPath, encoding);
     }
 
     list_dir(path:string,only_files=false,recursive=0,exclude_hidden=true):string[]{
