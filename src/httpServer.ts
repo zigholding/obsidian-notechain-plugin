@@ -420,7 +420,8 @@ const ONLINE_PAGE_HTML = `<!DOCTYPE html>
                         fname: fname,
                         textareaValue: textareaVal,
                         source: src,
-                        params: params
+                        params: params,
+                        from_online: true,
                     })
                 })
                     .then(function (res) { return res.json().then(function (d) { return { res: res, d: d }; }); })
@@ -1690,6 +1691,27 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
                     : String(data.textareaValue);
             let source = typeof data.source === 'string' ? data.source : '';
             let params = data.params;
+            let pe =
+                params &&
+                typeof params === 'object' &&
+                !Array.isArray(params) &&
+                (params as any).extra &&
+                typeof (params as any).extra === 'object' &&
+                !Array.isArray((params as any).extra)
+                    ? { ...(params as any).extra }
+                    : {};
+            let reFlat =
+                data.extra && typeof data.extra === 'object' && !Array.isArray(data.extra)
+                    ? { ...(data.extra as Record<string, unknown>) }
+                    : {};
+            /** 合并进 parse_templater 第三参（即 tpl.config.extra）顶层，避免 extra.extra */
+            let flatAddon: Record<string, unknown> = { ...pe, ...reFlat, from_online: true };
+            let fifthArg =
+                params !== undefined && params !== null && typeof params === 'object' && !Array.isArray(params)
+                    ? { ...(params as Record<string, unknown>), ...flatAddon }
+                    : params !== undefined && params !== null
+                      ? { params, ...flatAddon }
+                      : { ...flatAddon };
 
             let cmd = (this.app as any).commands?.findCommand?.(fname);
             if (cmd) {
@@ -1718,10 +1740,7 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
                 mockArea.select = () => {};
                 let mockEl: any = {};
                 let mockCtx: any = { sourcePath: sourceFile.path };
-                let ret =
-                    params !== undefined && params !== null
-                        ? taMethod.call(nc.textarea, mockArea, source, mockEl, mockCtx, params)
-                        : taMethod.call(nc.textarea, mockArea, source, mockEl, mockCtx);
+                let ret = taMethod.call(nc.textarea, mockArea, source, mockEl, mockCtx, fifthArg);
                 if (ret && typeof (ret as any).then === 'function') {
                     await ret;
                 }
@@ -1749,10 +1768,7 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
                 mockArea.select = () => {};
                 let mockEl: any = {};
                 let mockCtx: any = { sourcePath: sourceFile.path };
-                let ret =
-                    params !== undefined && params !== null
-                        ? ufunc(mockArea, source, mockEl, mockCtx, params)
-                        : ufunc(mockArea, source, mockEl, mockCtx);
+                let ret = ufunc(mockArea, source, mockEl, mockCtx, fifthArg);
                 if (ret && typeof (ret as any).then === 'function') {
                     await ret;
                 }
@@ -1807,6 +1823,7 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
                         el: {},
                         ctx: { sourcePath: sourceFile.path },
                         params: params,
+                        ...flatAddon,
                     };
                     Object.defineProperty(tplExtra, 'textareaValue', {
                         configurable: true,
