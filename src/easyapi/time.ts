@@ -472,6 +472,7 @@ export class Time{
 	 * - 今天晚上8点打游戏2小时
 	 * - 明天下午两点耗时2分钟打怪兽（耗时/花了等后为持续时间）
 	 * - 明天11:30到下午3点打怪兽（到/至/— 后为结束时刻，与开始同一天）
+	 * - 最近15分钟打架（「最近」紧接 {@link parse_minutes} 可解析的时长：结束为当前时刻，开始为 结束−时长）
 	 * 
 	 * 返回：
 	 * {
@@ -498,6 +499,18 @@ export class Time{
 		if(dateRes?.date){
 			date = dateRes.date;
 			rest = dateRes.text.trim();
+		}
+
+		let duration = NaN;
+		let recentEndWindow = false;
+		if (/^最近\s*/.test(rest)) {
+			const afterRecent = rest.replace(/^最近\s*/, "").trim();
+			const dr = this.parse_minutes(afterRecent);
+			if (!Number.isNaN(dr.duration) && dr.prefix.trim() === "") {
+				recentEndWindow = true;
+				duration = dr.duration;
+				rest = (dr.suffix || "").trim();
+			}
 		}
 	
 		// =========================
@@ -538,22 +551,22 @@ export class Time{
 		// =========================
 		// 3. 提取持续时间
 		// =========================
-		let duration = NaN;
-	
-		const durationLead =
-			/^(共耗时|共花费|共用时|共花了|耗时|花费|用时|用了|用掉|花了|持续|大约|大概|约|差不多)\s*/;
-		const restForDuration = rest.replace(durationLead, "");
-	
-		const durationRes = this.parse_minutes(restForDuration);
-	
-		if(!Number.isNaN(durationRes.duration)){
-			duration = durationRes.duration;
-	
-			rest = (
-				(durationRes.prefix || "") +
-				" " +
-				(durationRes.suffix || "")
-			).trim();
+		if (!recentEndWindow) {
+			const durationLead =
+				/^(共耗时|共花费|共用时|共花了|耗时|花费|用时|用了|用掉|花了|持续|大约|大概|约|差不多)\s*/;
+			const restForDuration = rest.replace(durationLead, "");
+
+			const durationRes = this.parse_minutes(restForDuration);
+
+			if (!Number.isNaN(durationRes.duration)) {
+				duration = durationRes.duration;
+
+				rest = (
+					(durationRes.prefix || "") +
+					" " +
+					(durationRes.suffix || "")
+				).trim();
+			}
 		}
 	
 		// =========================
@@ -568,17 +581,20 @@ export class Time{
 		// =========================
 		let st = null;
 		let et = null;
-	
-		if(startTime){
-			st = this.parse_time(startTime, date);
-		}
-		if(endTime){
-			et = this.parse_time(endTime, date);
-		} else if(
-			st &&
-			!Number.isNaN(duration)
-		){
-			et = st.clone().add(duration, "minutes");
+
+		if (recentEndWindow && !Number.isNaN(duration)) {
+			et = moment();
+			st = et.clone().subtract(duration, "minutes");
+			startTime = st.format("HH:mm");
+		} else {
+			if (startTime) {
+				st = this.parse_time(startTime, date);
+			}
+			if (endTime) {
+				et = this.parse_time(endTime, date);
+			} else if (st && !Number.isNaN(duration)) {
+				et = st.clone().add(duration, "minutes");
+			}
 		}
 	
 		if(
