@@ -237,13 +237,24 @@ export class Time{
 		// 没有匹配任何时间表达式
 		return { prefix: xt, suffix: '', duration: NaN };
 	};
+
+	/** 将时刻按 base 分钟粒度对齐（从当日 0:00 起的总分钟数向下取整到 base 的倍数）。base<=1 时不调整。 */
+	snapTimeToBase(m: Moment, base: number) {
+		const t = m.clone();
+		if (!base || base <= 1) {
+			return t;
+		}
+		const total = t.hour() * 60 + t.minute();
+		const floored = Math.floor(total / base) * base;
+		return t.clone().startOf('day').add(floored, 'minutes');
+	}
 	
-	parse_time(st:string|Moment, date:Moment|string = this.today,nearest=true) {
+	parse_time(st:string|Moment, date:Moment|string = this.today,nearest=true, base = 5) {
 		if(!st){return null}
-		if(moment.isMoment(st)){return st}
+		if(moment.isMoment(st)){return this.snapTimeToBase(st, base)}
 
 		if (typeof st === 'string' && st.trim() === '现在') {
-			return moment();
+			return this.snapTimeToBase(moment(), base);
 		}
 
 		if(moment.isMoment(date)){
@@ -254,7 +265,7 @@ export class Time{
 
 		if(items){
 			let t = moment(`${date} ${items[1]}:${items[2]}:00`, "YYYY-MM-DD HH:mm:ss");
-			if(t.isValid()){return t}
+			if(t.isValid()){return this.snapTimeToBase(t, base)}
 		}
 	
 		let cnTimeRegex = /^(早上|上午|凌晨|下午|晚上)?([零一二两三四五六七八九十百]+|[\d]+)点(半|([零一二两三四五六七八九十]+)分?|([\d]+)分?)?$/;
@@ -285,7 +296,8 @@ export class Time{
 			}
 	
 			hour %= 24;
-			return moment(`${date} ${hour}:${minute}`, "YYYY-MM-DD HH:mm");
+			let t = moment(`${date} ${hour}:${minute}`, "YYYY-MM-DD HH:mm");
+			return this.snapTimeToBase(t, base);
 		}
 		return null
 	}
@@ -296,8 +308,9 @@ export class Time{
 	 * - 中文：时段 + `…点` + `半` | 中文分 | 阿拉伯分（小时含「百」；分钟分支与 parse_time 对齐）
 	 * - `现在`：解析为当前时刻的 `HH:mm`（与 {@link parse_time} 整串 `现在` 一致）
 	 * - 无时段时可用 `nearest` 做 12 小时制消歧（与 parse_time 一致）
+	 * - `base`：分钟对齐粒度（默认 5），向下取整到倍数，与 {@link parse_time} 的 `base` 一致
 	 */
-	extract_chinese_time(text: string, nearest = true) {
+	extract_chinese_time(text: string, nearest = true, base = 5) {
 		type Hit = { start: number; end: number; timeStr: string };
 		let best: Hit | null = null;
 
@@ -309,7 +322,9 @@ export class Time{
 		while ((dm = digRe.exec(text)) !== null) {
 			const t = moment(`${dateStr} ${dm[1]}:${dm[2]}:00`, 'YYYY-MM-DD HH:mm:ss');
 			if (t.isValid()) {
-				const h: Hit = { start: dm.index, end: dm.index + dm[0].length, timeStr: `${dm[1]}:${dm[2]}` };
+				const snapped = this.snapTimeToBase(t, base);
+				const timeStr = `${String(snapped.hour()).padStart(2, '0')}:${String(snapped.minute()).padStart(2, '0')}`;
+				const h: Hit = { start: dm.index, end: dm.index + dm[0].length, timeStr };
 				if (best === null || h.start < best.start) {
 					best = h;
 				}
@@ -353,11 +368,13 @@ export class Time{
 			}
 
 			hour %= 24;
+			const snapped = this.snapTimeToBase(moment(`${dateStr} ${hour}:${minute}`, 'YYYY-MM-DD HH:mm'), base);
+			const timeStr = `${String(snapped.hour()).padStart(2, '0')}:${String(snapped.minute()).padStart(2, '0')}`;
 			const start = cm.index ?? text.indexOf(cm[0]);
 			const h: Hit = {
 				start,
 				end: start + cm[0].length,
-				timeStr: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+				timeStr,
 			};
 			if (best === null || h.start < best.start) {
 				best = h;
@@ -366,10 +383,11 @@ export class Time{
 
 		const nowIdx = text.indexOf('现在');
 		if (nowIdx !== -1) {
+			const snapped = this.snapTimeToBase(moment(), base);
 			const h: Hit = {
 				start: nowIdx,
 				end: nowIdx + 2,
-				timeStr: moment().format('HH:mm'),
+				timeStr: `${String(snapped.hour()).padStart(2, '0')}:${String(snapped.minute()).padStart(2, '0')}`,
 			};
 			if (best === null || h.start < best.start) {
 				best = h;
