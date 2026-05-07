@@ -242,6 +242,10 @@ export class Time{
 		if(!st){return null}
 		if(moment.isMoment(st)){return st}
 
+		if (typeof st === 'string' && st.trim() === '现在') {
+			return moment();
+		}
+
 		if(moment.isMoment(date)){
 			date = date.format('YYYY-MM-DD');
 		}
@@ -290,6 +294,7 @@ export class Time{
 	 * 从任意文本中提取第一时间片段，规则尽量与 {@link parse_time} 一致：
 	 * - 数字：`HH:mm` / `HHmm`（两位小时，与 parse_time 整串相同）
 	 * - 中文：时段 + `…点` + `半` | 中文分 | 阿拉伯分（小时含「百」；分钟分支与 parse_time 对齐）
+	 * - `现在`：解析为当前时刻的 `HH:mm`（与 {@link parse_time} 整串 `现在` 一致）
 	 * - 无时段时可用 `nearest` 做 12 小时制消歧（与 parse_time 一致）
 	 */
 	extract_chinese_time(text: string, nearest = true) {
@@ -353,6 +358,18 @@ export class Time{
 				start,
 				end: start + cm[0].length,
 				timeStr: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+			};
+			if (best === null || h.start < best.start) {
+				best = h;
+			}
+		}
+
+		const nowIdx = text.indexOf('现在');
+		if (nowIdx !== -1) {
+			const h: Hit = {
+				start: nowIdx,
+				end: nowIdx + 2,
+				timeStr: moment().format('HH:mm'),
 			};
 			if (best === null || h.start < best.start) {
 				best = h;
