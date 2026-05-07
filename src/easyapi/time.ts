@@ -472,7 +472,8 @@ export class Time{
 	 * - 今天晚上8点打游戏2小时
 	 * - 明天下午两点耗时2分钟打怪兽（耗时/花了等后为持续时间）
 	 * - 明天11:30到下午3点打怪兽（到/至/— 后为结束时刻，与开始同一天）
-	 * - 最近15分钟打架（「最近」紧接 {@link parse_minutes} 可解析的时长：结束为当前时刻，开始为 结束−时长）
+	 * - 最近15分钟打架（「最近」紧接 {@link parse_minutes} 可解析的时长：结束为当前时刻对齐 {@link snapTimeToBase}，开始为 结束−时长）
+	 * - `base`：分钟对齐粒度（默认 5），与 {@link parse_time} / {@link extract_chinese_time} 一致
 	 * 
 	 * 返回：
 	 * {
@@ -484,7 +485,7 @@ export class Time{
 	 *   raw         // 原始文本
 	 * }
 	 */
-	extract_job(text:string){
+	extract_job(text: string, base = 5) {
 	
 		let raw = text.trim();
 	
@@ -518,7 +519,7 @@ export class Time{
 		// =========================
 		let startTime = null;
 	
-		const timeRes = this.extract_chinese_time(rest);
+		const timeRes = this.extract_chinese_time(rest, true, base);
 	
 		if(timeRes?.time){
 			startTime = timeRes.time;
@@ -537,7 +538,7 @@ export class Time{
 		const rangeLead = /^(?:到|至|[-—－~～])\s*/;
 		if (startTime && rangeLead.test(rest)) {
 			const afterRange = rest.replace(rangeLead, "").trim();
-			const endRes = this.extract_chinese_time(afterRange);
+			const endRes = this.extract_chinese_time(afterRange, true, base);
 			if (endRes?.time) {
 				endTime = endRes.time;
 				rest = (
@@ -583,15 +584,15 @@ export class Time{
 		let et = null;
 
 		if (recentEndWindow && !Number.isNaN(duration)) {
-			et = moment();
+			et = this.snapTimeToBase(moment(), base);
 			st = et.clone().subtract(duration, "minutes");
 			startTime = st.format("HH:mm");
 		} else {
 			if (startTime) {
-				st = this.parse_time(startTime, date);
+				st = this.parse_time(startTime, date, true, base);
 			}
 			if (endTime) {
-				et = this.parse_time(endTime, date);
+				et = this.parse_time(endTime, date, true, base);
 			} else if (st && !Number.isNaN(duration)) {
 				et = st.clone().add(duration, "minutes");
 			}
