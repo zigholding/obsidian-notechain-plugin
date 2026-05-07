@@ -267,6 +267,33 @@ export class Time{
 			let t = moment(`${date} ${items[1]}:${items[2]}:00`, "YYYY-MM-DD HH:mm:ss");
 			if(t.isValid()){return this.snapTimeToBase(t, base)}
 		}
+
+		const mix = st.trim().match(/^(凌晨|早上|上午|中午|下午|晚上|傍晚)\s*(\d{1,2})\s*[:：]\s*(\d{1,2})$/);
+		if (mix) {
+			let hour = parseInt(mix[2], 10);
+			let minute = parseInt(mix[3], 10);
+			if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+				return null;
+			}
+			const period = mix[1];
+			if (period === '凌晨' && hour === 12) {
+				hour = 0;
+			} else if (['下午'].includes(period)) {
+				hour = hour >= 12 ? hour : hour + 12;
+			} else if (['晚上', '傍晚'].includes(period)) {
+				hour = hour >= 5 && hour < 12 ? hour + 12 : hour;
+			} else if (period === '中午') {
+				if (hour > 0 && hour < 12) {
+					hour += 12;
+				}
+			}
+			hour %= 24;
+			let t = moment(`${date} ${hour}:${minute}`, 'YYYY-MM-DD HH:mm');
+			if (t.isValid()) {
+				return this.snapTimeToBase(t, base);
+			}
+			return null;
+		}
 	
 		let cnTimeRegex = /^(早上|上午|凌晨|下午|晚上)?([零一二两三四五六七八九十百]+|[\d]+)点(半|([零一二两三四五六七八九十]+)分?|([\d]+)分?)?$/;
 		let match = st.match(cnTimeRegex);
@@ -305,6 +332,7 @@ export class Time{
 	/**
 	 * 从任意文本中提取第一时间片段，规则尽量与 {@link parse_time} 一致：
 	 * - 数字：`HH:mm` / `HHmm`（两位小时，与 parse_time 整串相同）
+	 * - 时段 + 阿拉伯：`早上6:45`、`晚上10:30`（与 parse_time 整串一致，转 24 小时制）
 	 * - 中文：时段 + `…点` + `半` | 中文分 | 阿拉伯分（小时含「百」；分钟分支与 parse_time 对齐）
 	 * - `现在`：解析为当前时刻的 `HH:mm`（与 {@link parse_time} 整串 `现在` 一致）
 	 * - 无时段时可用 `nearest` 做 12 小时制消歧（与 parse_time 一致）
@@ -328,6 +356,36 @@ export class Time{
 				if (best === null || h.start < best.start) {
 					best = h;
 				}
+			}
+		}
+
+		const mixRe = /(凌晨|早上|上午|中午|下午|晚上|傍晚)\s*(\d{1,2})\s*[:：]\s*(\d{1,2})/g;
+		let mm: RegExpExecArray | null;
+		while ((mm = mixRe.exec(text)) !== null) {
+			let hour = parseInt(mm[2], 10);
+			let minute = parseInt(mm[3], 10);
+			if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+				continue;
+			}
+			const period = mm[1];
+			if (period === '凌晨' && hour === 12) {
+				hour = 0;
+			} else if (['下午'].includes(period)) {
+				hour = hour >= 12 ? hour : hour + 12;
+			} else if (['晚上', '傍晚'].includes(period)) {
+				hour = hour >= 5 && hour < 12 ? hour + 12 : hour;
+			} else if (period === '中午') {
+				if (hour > 0 && hour < 12) {
+					hour += 12;
+				}
+			}
+			hour %= 24;
+			const snapped = this.snapTimeToBase(moment(`${dateStr} ${hour}:${minute}`, 'YYYY-MM-DD HH:mm'), base);
+			const timeStr = `${String(snapped.hour()).padStart(2, '0')}:${String(snapped.minute()).padStart(2, '0')}`;
+			const start = mm.index ?? 0;
+			const h: Hit = { start, end: start + mm[0].length, timeStr };
+			if (best === null || h.start < best.start) {
+				best = h;
 			}
 		}
 
