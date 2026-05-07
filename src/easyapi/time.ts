@@ -461,6 +461,147 @@ export class Time{
 			suffix: text.slice(best.end),
 		};
 	}
+
+	/**
+	 * 从自然语言中提取任务信息
+	 * 
+	 * 支持：
+	 * - 明天下午三点开会两小时
+	 * - 周五14:30写周报30分钟
+	 * - 后天上午十点半体检
+	 * - 今天晚上8点打游戏2小时
+	 * - 明天下午两点耗时2分钟打怪兽（耗时/花了等后为持续时间）
+	 * - 明天11:30到下午3点打怪兽（到/至/— 后为结束时刻，与开始同一天）
+	 * 
+	 * 返回：
+	 * {
+	 *   date,       // YYYY-MM-DD
+	 *   st,         // Moment | null
+	 *   et,         // Moment | null
+	 *   duration,   // 分钟
+	 *   content,    // 事项文本
+	 *   raw         // 原始文本
+	 * }
+	 */
+	extract_job(text:string){
+	
+		let raw = text.trim();
+	
+		// =========================
+		// 1. 提取日期
+		// =========================
+		let date = this.today.format("YYYY-MM-DD");
+		let rest = raw;
+	
+		const dateRes = this.extract_chinese_date(rest);
+	
+		if(dateRes?.date){
+			date = dateRes.date;
+			rest = dateRes.text.trim();
+		}
+	
+		// =========================
+		// 2. 提取开始时间
+		// =========================
+		let startTime = null;
+	
+		const timeRes = this.extract_chinese_time(rest);
+	
+		if(timeRes?.time){
+			startTime = timeRes.time;
+	
+			rest = (
+				(timeRes.prefix || "") +
+				" " +
+				(timeRes.suffix || "")
+			).trim();
+		}
+	
+		// =========================
+		// 2b. 时间段：开始 到/至/— 结束
+		// =========================
+		let endTime = null;
+		const rangeLead = /^(?:到|至|[-—－~～])\s*/;
+		if (startTime && rangeLead.test(rest)) {
+			const afterRange = rest.replace(rangeLead, "").trim();
+			const endRes = this.extract_chinese_time(afterRange);
+			if (endRes?.time) {
+				endTime = endRes.time;
+				rest = (
+					(endRes.prefix || "") +
+					" " +
+					(endRes.suffix || "")
+				).trim();
+			}
+		}
+	
+		// =========================
+		// 3. 提取持续时间
+		// =========================
+		let duration = NaN;
+	
+		const durationLead =
+			/^(共耗时|共花费|共用时|共花了|耗时|花费|用时|用了|用掉|花了|持续|大约|大概|约|差不多)\s*/;
+		const restForDuration = rest.replace(durationLead, "");
+	
+		const durationRes = this.parse_minutes(restForDuration);
+	
+		if(!Number.isNaN(durationRes.duration)){
+			duration = durationRes.duration;
+	
+			rest = (
+				(durationRes.prefix || "") +
+				" " +
+				(durationRes.suffix || "")
+			).trim();
+		}
+	
+		// =========================
+		// 4. 事项内容
+		// =========================
+		const content = rest
+			.replace(/\s+/g, " ")
+			.trim();
+	
+		// =========================
+		// 5. 构造 st / et
+		// =========================
+		let st = null;
+		let et = null;
+	
+		if(startTime){
+			st = this.parse_time(startTime, date);
+		}
+		if(endTime){
+			et = this.parse_time(endTime, date);
+		} else if(
+			st &&
+			!Number.isNaN(duration)
+		){
+			et = st.clone().add(duration, "minutes");
+		}
+	
+		if(
+			st &&
+			et &&
+			Number.isNaN(duration)
+		){
+			duration = et.diff(st, "minutes");
+		}
+	
+		return {
+			raw,
+			date,
+			st,
+			et,
+			start_time: startTime,
+			end_time: endTime ?? (et ? et.format("HH:mm") : null),
+			duration: Number.isNaN(duration)
+				? null
+				: duration,
+			content
+		};
+	}
 	
 	
 	time_plus_minutes(st:string,xt:string){
