@@ -286,36 +286,87 @@ export class Time{
 		return null
 	}
 
-	extract_chinese_time(text:string) {
-		const timeRegex = /(凌晨|早上|上午|中午|下午|晚上|傍晚)?\s*([零一二两三四五六七八九十\d]+)\s*点\s*(?:(半)|([零一二两三四五六七八九十\d]+)\s*分?)?/;
-		const match = text.match(timeRegex);
-		if (!match) {
-			return { prefix: text, value: null, suffix: "" };
+	/**
+	 * 从任意文本中提取第一时间片段，规则尽量与 {@link parse_time} 一致：
+	 * - 数字：`HH:mm` / `HHmm`（两位小时，与 parse_time 整串相同）
+	 * - 中文：时段 + `…点` + `半` | 中文分 | 阿拉伯分（小时含「百」；分钟分支与 parse_time 对齐）
+	 * - 无时段时可用 `nearest` 做 12 小时制消歧（与 parse_time 一致）
+	 */
+	extract_chinese_time(text: string, nearest = true) {
+		type Hit = { start: number; end: number; timeStr: string };
+		let best: Hit | null = null;
+
+		const dateStr = this.today.format('YYYY-MM-DD');
+
+		// 数字时间（parse_time 的 ^(\d{2}):?(\d{2})$）
+		const digRe = /(?<![0-9])(\d{2}):?(\d{2})(?![0-9])/g;
+		let dm: RegExpExecArray | null;
+		while ((dm = digRe.exec(text)) !== null) {
+			const t = moment(`${dateStr} ${dm[1]}:${dm[2]}:00`, 'YYYY-MM-DD HH:mm:ss');
+			if (t.isValid()) {
+				const h: Hit = { start: dm.index, end: dm.index + dm[0].length, timeStr: `${dm[1]}:${dm[2]}` };
+				if (best === null || h.start < best.start) {
+					best = h;
+				}
+			}
 		}
-	
-		const fullMatch = match[0];
-		const startIndex = match.index ?? text.indexOf(fullMatch);
-		const before = text.slice(0, startIndex);
-		const after = text.slice(startIndex + fullMatch.length);
-	
-		let hour = this.ea.editor.cn2num(match[2]);
-		let minute = 0;
-	
-		if (match[3] === "半") {
-			minute = 30;
-		} else if (match[4] !== undefined) {
-			minute = this.ea.editor.cn2num(match[4]);
+
+		// 中文时间（嵌入长句；点后的分支对齐 parse_time：半 | 中文分? | 数字分?）
+		const cnRe =
+			/(凌晨|早上|上午|中午|下午|晚上|傍晚)?\s*([零一二两三四五六七八九十百\d]+)\s*点\s*(?:(半)|([零一二两三四五六七八九十]+)\s*分?|([0-9]+)\s*分?)?/g;
+		let cm: RegExpExecArray | null;
+		while ((cm = cnRe.exec(text)) !== null) {
+			let hour = this.ea.editor.cn2num(cm[2]);
+			let minute = 0;
+			if (cm[3] === '半') {
+				minute = 30;
+			} else if (cm[4] !== undefined && cm[4] !== '') {
+				minute = this.ea.editor.cn2num(cm[4]);
+			} else if (cm[5] !== undefined && cm[5] !== '') {
+				minute = parseInt(cm[5], 10);
+			}
+
+			const period = cm[1];
+
+			if (period === '凌晨' && hour === 12) {
+				hour = 0;
+			} else if (period && ['下午'].includes(period)) {
+				hour = hour >= 12 ? hour : hour + 12;
+			} else if (period && ['晚上', '傍晚'].includes(period)) {
+				hour = hour >= 5 && hour < 12 ? hour + 12 : hour;
+			} else if (period === '中午') {
+				if (hour > 0 && hour < 12) {
+					hour += 12;
+				}
+			} else if (!period && nearest && hour <= 12) {
+				const now = moment();
+				const a = now.hour() * 60 + now.minute();
+				const b = hour * 60 + minute;
+				if (a > b && a - b > b - a + 12 * 60) {
+					hour = hour + 12;
+				}
+			}
+
+			hour %= 24;
+			const start = cm.index ?? text.indexOf(cm[0]);
+			const h: Hit = {
+				start,
+				end: start + cm[0].length,
+				timeStr: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+			};
+			if (best === null || h.start < best.start) {
+				best = h;
+			}
 		}
-	
-		const modifier = match[1];
-		if (modifier === "下午" || modifier === "晚上" || modifier === "傍晚") {
-			if (hour < 12) hour += 12;
-		} else if (modifier === "凌晨" && hour === 12) {
-			hour = 0;
+
+		if (best === null) {
+			return { prefix: text, value: null, suffix: '' };
 		}
-	
-		const timeStr = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-		return { prefix: before, time: timeStr, suffix: after };
+		return {
+			prefix: text.slice(0, best.start),
+			time: best.timeStr,
+			suffix: text.slice(best.end),
+		};
 	}
 	
 	
