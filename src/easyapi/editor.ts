@@ -275,13 +275,17 @@ export class EasyEditor {
         }
     }
 
-    cn2num(chinese: string) {
+    cn2num(chinese: string): number {
         let v = parseFloat(chinese);
         if (!Number.isNaN(v)) { return v }
 
+        if (chinese.startsWith('零') && chinese.length > 1) {
+            return this.cn2num(chinese.slice(1));
+        }
+
         chinese = chinese.trim()
         const cnNumbers: { [key: string]: number } = {
-            "零": 0, "一": 1, "二": 2, "三": 3, "四": 4,
+            "零": 0, "一": 1, "二": 2, "两": 2,"俩": 2, "三": 3, "四": 4,
             "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
             "十": 10, "百": 100, "千": 1000, "万": 10000
         };

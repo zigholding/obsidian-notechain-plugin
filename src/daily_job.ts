@@ -42,12 +42,12 @@ export class DailyJob {
 	    }
         const st = this.plugin.easyapi.time.parse_time(res['st'], this.date);
         const xt = this.plugin.easyapi.time.parse_minutes(res['xt']);
-		if (!st || Number.isNaN(xt)) {
+		if (!st || Number.isNaN(xt.duration)) {
 			return null;
 		}
         res['st'] = st;
-        res['xt'] = xt;
-        res['et'] = st.clone().add(xt, 'minutes');
+        res['xt'] = xt.duration;
+        res['et'] = st.clone().add(xt.duration, 'minutes');
         return res;
     }
 
@@ -115,7 +115,7 @@ export class DailyJob {
 			}
 			// console.log(st.format('YYYY-MM-DD HH:mm'),ct.format('YYYY-MM-DD HH:mm'))
 			xitems = xitems.filter(x=>{
-				let minutes = this.plugin.easyapi.time.parse_minutes(x);
+				let minutes = this.plugin.easyapi.time.parse_minutes(x).duration;
 				let t1 = stMoment.clone().add(minutes,'minutes');
 				if((t1.hour()>ct.hour())||(t1.hour()==ct.hour() && t1.minute()>ct.minute())){
 					return false	
@@ -134,10 +134,10 @@ export class DailyJob {
 					}
 				}
 			}
-			xitems = xitems.sort((a,b)=>this.plugin.easyapi.time.parse_minutes(a)-this.plugin.easyapi.time.parse_minutes(b))
+			xitems = xitems.sort((a,b)=>this.plugin.easyapi.time.parse_minutes(a).duration-this.plugin.easyapi.time.parse_minutes(b).duration)
 			xt = await this.nc.dialog_suggest(
 				xitems.map(x=>{
-					let minutes = this.plugin.easyapi.time.parse_minutes(x);
+					let minutes = this.plugin.easyapi.time.parse_minutes(x).duration;
 					return x+'🕐'+stMoment.clone().add(minutes,'minutes').format('HH:mm')
 				}),
 				xitems,
@@ -151,7 +151,7 @@ export class DailyJob {
         let items = xt.match(/^(\d+\.?\d*)(min|hour|day|h|m)?$/)
         if (items && items[1] && items[2]) {
             let xt = `${items[1]}${items[2]}`
-            return this.plugin.easyapi.time.parse_minutes(xt);
+            return this.plugin.easyapi.time.parse_minutes(xt).duration;
         } else if (items && items[1]) {
             return parseInt(items[1]);
         }
@@ -225,7 +225,7 @@ export class DailyJob {
 		let st = stMoment.format('HH:mm');
 		let xt = this.plugin.easyapi.time.parse_minutes(items[3]);
 		let job = items[2].trim();
-		return this.job_to_line(st, xt, job);
+		return this.job_to_line(st, xt.duration, job);
 	}
 
 	async prase_job_item_v2(ctx: string): Promise<string | null> {
@@ -247,7 +247,7 @@ export class DailyJob {
 		let job = items[1].trim();
 		let xt: any;
 		if(items[2]){
-			xt = this.plugin.easyapi.time.parse_minutes(items[2]);
+			xt = this.plugin.easyapi.time.parse_minutes(items[2]).duration;
 		}else{
 			let et = this.plugin.easyapi.time.parse_time(moment().format("HH:mm"),this.date);
 			if (!et) { return null; }
@@ -300,8 +300,8 @@ export class DailyJob {
 				let msg: any = this.plugin.easyapi.editor.parse_list_dataview(job);
 				let st = this.plugin.easyapi.time.parse_time(msg.st,this.date);
 				let xt = this.plugin.easyapi.time.parse_minutes(msg.xt);
-				if (area && st && !Number.isNaN(xt)) {
-					let nxt = st.clone().add(xt,'minutes').format('HH:mm');
+				if (area && st && !Number.isNaN(xt.duration)) {
+					let nxt = st.clone().add(xt.duration,'minutes').format('HH:mm');
 					area.value = nxt+'\n';
 				}
 			}

@@ -174,30 +174,69 @@ export class Time{
 	    return result;
 	}
 
+
 	
 
-	parse_minutes(xt:string) {
-		if(typeof xt == 'number'){return xt;}
-		if(xt.match(/^\d*$/) && parseInt(xt)){return parseInt(xt);}
+	parse_minutes(xt: string | number): { prefix: string; suffix: string; duration: number } {
+		if (typeof xt === 'number') {
+			return { prefix: '', suffix: '', duration: xt };
+		}
+		if (typeof xt !== 'string') {
+			return { prefix: String(xt), suffix: '', duration: NaN };
+		}
+	
+		// 辅助：将中文/阿拉伯数字字符串转为数字（复用原有的 cn2num）
+		const toNumber = (s:string) => {
+			if (!s) return 0;
+			// 如果是纯阿拉伯数字
+			if (/^\d+$/.test(s)) return parseInt(s, 10);
+			// 调用原有的中文数字转换函数
+			return this.ea.editor.cn2num(s);
+		};
+	
+		// 定义所有时间模式，按优先级排列（先尝试更长的模式避免误匹配）
+		const patterns = [
+			// 1. X个半小时
+			{ regex: /([零一二两三四五六七八九十\d]+)\s*个\s*半小时/, handler: (m:string[]) => toNumber(m[1]) * 60 + 30 },
+			// 2. X小时Y分钟（带单位）
+			{ regex: /([零一二两三四五六七八九十\d]+)\s*(?:小时|时)\s*([零一二两三四五六七八九十\d]+)\s*(?:分|分钟)/, handler: (m:string[]) => toNumber(m[1]) * 60 + toNumber(m[2]) },
+			// 3. X小时（单独）
+			{ regex: /([零一二两三四五六七八九十\d]+)\s*(?:小时|时)(?!\s*半)/, handler: (m:string[]) => toNumber(m[1]) * 60 },
+			// 4. X分钟（单独）
+			{ regex: /([零一二两三四五六七八九十\d]+)\s*(?:分|分钟)/, handler: (m:string[]) => toNumber(m[1]) },
+			// 5. X半 (如“一个半”小时？这里简单处理“半”作为0.5小时，但通常前面要有数字。为了全面，加一个“半”单独？)
+			// 但半通常出现在“半小时”或“个半小时”中，已被模式1覆盖。
+		];
+	
+		let bestMatch = null;
+		let bestHandler = null;
+		let bestIndex = Infinity;
+		let bestLength = 0;
+	
+		for (const pattern of patterns) {
+			const regex = new RegExp(pattern.regex.source, 'g');
+			let match;
+			while ((match = regex.exec(xt)) !== null) {
+				if (match.index < bestIndex) {
+					bestIndex = match.index;
+					bestLength = match[0].length;
+					bestMatch = match;
+					bestHandler = pattern.handler;
+				}
+			}
+		}
+	
+		if (bestMatch !== null) {
+			const duration = bestHandler?.(bestMatch);
+			if(!duration){return { prefix: xt, suffix: '', duration: NaN }}
+			const prefix = xt.slice(0, bestIndex);
+			const suffix = xt.slice(bestIndex + bestLength);
+			return { prefix, suffix, duration };
+		}
 		
-		let items = xt.match(/^(.{1,2})个半小时$/);
-		if(items){return this.ea.editor.cn2num(items[1])*60+30}
-	
-		let compoundMatch = xt.match(/^(.*?)(h|hour|hours|时|小时|个小时)(.*?)(m|min|minute|minutes|分|分钟)?$/i);
-		if (compoundMatch) {
-			let hours = this.ea.editor.cn2num(compoundMatch[1]) || 0;
-			let minutes = this.ea.editor.cn2num(compoundMatch[3]) || 0;
-			return Math.round(hours * 60 + minutes);
-		}
-		// 处理简单格式，仅分钟
-		let simpleMatch = xt.match(/^(.*?)(m|min|minute|minutes|分|分钟)$/i);
-		if (simpleMatch) {
-			let value = this.ea.editor.cn2num(simpleMatch[1]);
-			return Math.round(value);
-		}
-		return Number.NaN; 
-	}
-	
+		// 没有匹配任何时间表达式
+		return { prefix: xt, suffix: '', duration: NaN };
+	};
 	
 	parse_time(st:string|Moment, date:Moment|string = this.today,nearest=true) {
 		if(!st){return null}
@@ -214,7 +253,7 @@ export class Time{
 			if(t.isValid()){return t}
 		}
 	
-		let cnTimeRegex = /^(早上|上午|凌晨|下午|晚上)?([零一二三四五六七八九十百]+|[\d]+)点(半|([零一二三四五六七八九十]+)分?|([\d]+)分?)?$/;
+		let cnTimeRegex = /^(早上|上午|凌晨|下午|晚上)?([零一二两三四五六七八九十百]+|[\d]+)点(半|([零一二两三四五六七八九十]+)分?|([\d]+)分?)?$/;
 		let match = st.match(cnTimeRegex);
 	
 		if (match) {
@@ -246,12 +285,45 @@ export class Time{
 		}
 		return null
 	}
+
+	extract_chinese_time(text:string) {
+		const timeRegex = /(凌晨|早上|上午|中午|下午|晚上|傍晚)?\s*([零一二两三四五六七八九十\d]+)\s*点\s*(?:(半)|([零一二两三四五六七八九十\d]+)\s*分?)?/;
+		const match = text.match(timeRegex);
+		if (!match) {
+			return { prefix: text, value: null, suffix: "" };
+		}
+	
+		const fullMatch = match[0];
+		const startIndex = match.index ?? text.indexOf(fullMatch);
+		const before = text.slice(0, startIndex);
+		const after = text.slice(startIndex + fullMatch.length);
+	
+		let hour = this.ea.editor.cn2num(match[2]);
+		let minute = 0;
+	
+		if (match[3] === "半") {
+			minute = 30;
+		} else if (match[4] !== undefined) {
+			minute = this.ea.editor.cn2num(match[4]);
+		}
+	
+		const modifier = match[1];
+		if (modifier === "下午" || modifier === "晚上" || modifier === "傍晚") {
+			if (hour < 12) hour += 12;
+		} else if (modifier === "凌晨" && hour === 12) {
+			hour = 0;
+		}
+	
+		const timeStr = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+		return { prefix: before, time: timeStr, suffix: after };
+	}
+	
 	
 	time_plus_minutes(st:string,xt:string){
 		let t = this.parse_time(st);
 		let n = this.parse_minutes(xt);
-		if(!t || typeof t == 'string' || Number.isNaN(n)){return null}
-		return t.clone().add(xt, 'minutes');
+		if(!t || typeof t == 'string' || Number.isNaN(n.duration)){return null}
+		return t.clone().add(n.duration, 'minutes');
 	}
 	
 	generate_start_times(jobs:Array<any>,delta=10, is_today = true,st:string|Moment='06:45',compress=true) {
