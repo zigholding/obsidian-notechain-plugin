@@ -279,9 +279,22 @@ export class OnlineHttpHandlers {
                             val = String(v);
                         },
                     });
-                    await nc.easyapi.tpl.parse_templater(fname, true, tplExtra);
+                    // Online 需在 #msg 展示「解析结果」：extract=true 只跑 <%* %> / 围栏块，块返回值常为 ''。
+                    // extract=false 对去 frontmatter 后的全文做一次 parse，得到与阅读视图一致的拼接输出。
+                    let tplBlocks = await nc.easyapi.tpl.parse_templater(fname, false, tplExtra);
+                    let tplResult = Array.isArray(tplBlocks)
+                        ? tplBlocks.map((item: unknown) => {
+                              if (item == null) return '';
+                              if (typeof item === 'string') return item;
+                              try {
+                                  return JSON.stringify(item);
+                              } catch {
+                                  return String(item);
+                              }
+                          })
+                        : [];
                     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-                    res.end(JSON.stringify({ ok: true, newValue: val }));
+                    res.end(JSON.stringify({ ok: true, newValue: val, tplResult }));
                     return;
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });

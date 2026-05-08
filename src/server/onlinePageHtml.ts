@@ -65,7 +65,7 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         #viewer.obsidian-online-render .code_block_textarea_btn_container { pointer-events: auto; }
         #viewer.obsidian-online-render button.code_block_textarea_btn { cursor: pointer; }
         #editor { width: 100%; min-height: 320px; box-sizing: border-box; padding: 0.6rem; font-family: ui-monospace, monospace; font-size: 0.88rem; border-radius: 6px; border: 1px solid #8884; resize: vertical; }
-        .msg { font-size: 0.9rem; margin-top: 0.5rem; }
+        .msg { font-size: 0.9rem; margin-top: 0.5rem; white-space: pre-wrap; word-break: break-word; max-height: 45vh; overflow: auto; }
         .msg.err { color: #c22; }
         .msg.ok { color: #2a7; }
         .hidden { display: none !important; }
@@ -358,6 +358,18 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
                         }
                         if (d.notice) {
                             setMsg(d.notice, 'ok');
+                        } else if (Object.prototype.hasOwnProperty.call(d, 'tplResult') && Array.isArray(d.tplResult)) {
+                            var lines = d.tplResult.map(function (item) {
+                                if (item === null || item === undefined) return '';
+                                if (typeof item === 'string') return item;
+                                try { return JSON.stringify(item); } catch (e) { return String(item); }
+                            });
+                            var nonEmpty = lines.filter(function (s) { return String(s).length > 0; });
+                            if (nonEmpty.length) {
+                                setMsg(nonEmpty.join('\\n---\\n'), 'ok');
+                            } else {
+                                setMsg('已执行（模板无文本输出）', 'ok');
+                            }
                         } else {
                             setMsg('', '');
                         }
