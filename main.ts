@@ -21,7 +21,7 @@ import { addCommands } from 'src/commands';
 import { addEvents } from 'src/events';
 import { EasyAPI } from 'src/easyapi/easyapi'
 import { NoteContentView } from 'src/NCView';
-import { HTTPServer } from 'src/httpServer';
+import { HTTPServer } from 'src/server/httpServer';
 import { DailyJob} from 'src/daily_job'
 
 import {WebViewerLLMModule} from 'src/WebViewerLLM/WebViewerLLMModule';
