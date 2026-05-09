@@ -105,6 +105,8 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     var msg = document.getElementById('msg');
     var currentPath = '';
     var mode = 'none';
+    /** 每次打开/重渲染递增，防止慢速 render 流在切换笔记后仍写回 viewer */
+    var loadGeneration = 0;
     /** URL ?filename= / ?path= 解析后的库内路径，供 🏠 返回 */
     var homeEntryPath = '';
     /** 与 resolve-note 请求一致的名字（解码后），首次解析失败时点击 🏠 可重试 */
@@ -172,12 +174,18 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         loadNote(path);
     }
 
-    async function renderPreview(path, markdown) {
+    async function renderPreview(path, markdown, gen) {
         var res = await fetch('/online/api/render', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
             body: JSON.stringify({ path: path, markdown: markdown })
         });
+        if (gen !== loadGeneration) {
+            try {
+                if (res.body && res.body.cancel) res.body.cancel();
+            } catch (_) {}
+            return;
+        }
         if (!res.ok) {
             var errText = await res.text();
             var errJson = {};
@@ -187,6 +195,7 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         var ct = (res.headers.get('content-type') || '').toLowerCase();
         if (ct.indexOf('ndjson') < 0 || !res.body || !res.body.getReader) {
             var data = await res.json().catch(function () { return {}; });
+            if (gen !== loadGeneration) return;
             viewer.innerHTML = '<div class="markdown-rendered">' + (data.html || '') + '</div>';
             return;
         }
@@ -195,6 +204,10 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         var buf = '';
         while (true) {
             var rd = await reader.read();
+            if (gen !== loadGeneration) {
+                try { reader.cancel(); } catch (_) {}
+                return;
+            }
             if (rd.done) break;
             buf += dec.decode(rd.value, { stream: true });
             for (;;) {
@@ -205,6 +218,10 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
                 if (!line) continue;
                 var frame = JSON.parse(line);
                 if (frame.error) throw new Error(frame.error);
+                if (gen !== loadGeneration) {
+                    try { reader.cancel(); } catch (_) {}
+                    return;
+                }
                 viewer.innerHTML = '<div class="markdown-rendered">' + (frame.html || '') + '</div>';
                 if (frame.done) return;
             }
@@ -212,6 +229,8 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     }
 
     async function loadNote(path) {
+        loadGeneration++;
+        var gen = loadGeneration;
         setMsg('');
         currentPath = path;
         currentLabel.textContent = path;
@@ -221,10 +240,12 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         try {
             var res = await fetch('/online/api/note?path=' + encodeURIComponent(path));
             var data = await res.json();
+            if (gen !== loadGeneration) return;
             if (!res.ok) throw new Error(data.error || res.statusText);
             editor.value = data.content || '';
-            await renderPreview(path, data.content || '');
+            await renderPreview(path, data.content || '', gen);
         } catch (e) {
+            if (gen !== loadGeneration) return;
             viewer.innerHTML = '';
             setMsg('读取失败：' + e.message, 'err');
             currentPath = '';
@@ -238,11 +259,14 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
 
     btnView.onclick = async function () {
         if (!currentPath) return;
+        loadGeneration++;
+        var gen = loadGeneration;
         setMode('view');
         viewer.innerHTML = '<p class="online-loading">渲染…</p>';
         try {
-            await renderPreview(currentPath, editor.value);
+            await renderPreview(currentPath, editor.value, gen);
         } catch (e) {
+            if (gen !== loadGeneration) return;
             setMsg('渲染失败：' + e.message, 'err');
         }
     };
@@ -267,9 +291,12 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
             setMsg('已保存', 'ok');
             setMode('view');
             viewer.innerHTML = '<p class="online-loading">渲染…</p>';
+            loadGeneration++;
+            var gen = loadGeneration;
             try {
-                await renderPreview(currentPath, editor.value);
+                await renderPreview(currentPath, editor.value, gen);
             } catch (re) {
+                if (gen !== loadGeneration) return;
                 setMsg('已保存，但预览渲染失败：' + re.message, 'err');
             }
         } catch (e) {
