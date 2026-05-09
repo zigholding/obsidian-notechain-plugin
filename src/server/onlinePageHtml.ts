@@ -174,6 +174,63 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         loadNote(path);
     }
 
+    /** 预览区内正在输入时，避免整段 innerHTML 替换抢走焦点（手机键盘收起） */
+    function isEditableFocusInsideViewer() {
+        var ae = document.activeElement;
+        if (!ae || !viewer.contains(ae)) return false;
+        if (ae.isContentEditable) return true;
+        var t = ae.tagName;
+        if (t === 'TEXTAREA') return true;
+        if (t === 'INPUT') {
+            var typ = (ae.getAttribute('type') || '').toLowerCase();
+            if (['checkbox', 'radio', 'button', 'submit', 'file', 'hidden', 'range', 'color'].indexOf(typ) >= 0) {
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    function captureViewerTextareaState() {
+        var ae = document.activeElement;
+        var list = viewer.querySelectorAll('textarea');
+        var vals = Array.prototype.map.call(list, function (t) { return t.value; });
+        var focusIdx = -1;
+        if (ae && ae.tagName === 'TEXTAREA' && viewer.contains(ae)) {
+            for (var i = 0; i < list.length; i++) {
+                if (list[i] === ae) {
+                    focusIdx = i;
+                    break;
+                }
+            }
+        }
+        return { vals: vals, focusIdx: focusIdx };
+    }
+
+    function applyViewerMarkdownHtml(html, frameIsDone) {
+        if (!frameIsDone && isEditableFocusInsideViewer()) {
+            return;
+        }
+        var st = isEditableFocusInsideViewer() ? captureViewerTextareaState() : null;
+        viewer.innerHTML = '<div class="markdown-rendered">' + html + '</div>';
+        if (!st) return;
+        var tas = viewer.querySelectorAll('textarea');
+        var k = Math.min(tas.length, st.vals.length);
+        for (var j = 0; j < k; j++) {
+            tas[j].value = st.vals[j];
+        }
+        if (st.focusIdx >= 0 && st.focusIdx < tas.length) {
+            var ta = tas[st.focusIdx];
+            requestAnimationFrame(function () {
+                ta.focus();
+                try {
+                    var len = ta.value.length;
+                    ta.setSelectionRange(len, len);
+                } catch (e2) {}
+            });
+        }
+    }
+
     async function renderPreview(path, markdown, gen) {
         var res = await fetch('/online/api/render', {
             method: 'POST',
@@ -196,7 +253,7 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         if (ct.indexOf('ndjson') < 0 || !res.body || !res.body.getReader) {
             var data = await res.json().catch(function () { return {}; });
             if (gen !== loadGeneration) return;
-            viewer.innerHTML = '<div class="markdown-rendered">' + (data.html || '') + '</div>';
+            applyViewerMarkdownHtml(data.html || '', true);
             return;
         }
         var reader = res.body.getReader();
@@ -222,7 +279,7 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
                     try { reader.cancel(); } catch (_) {}
                     return;
                 }
-                viewer.innerHTML = '<div class="markdown-rendered">' + (frame.html || '') + '</div>';
+                applyViewerMarkdownHtml(frame.html || '', !!frame.done);
                 if (frame.done) return;
             }
         }
