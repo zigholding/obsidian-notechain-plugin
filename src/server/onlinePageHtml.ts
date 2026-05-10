@@ -231,7 +231,16 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         }
     }
 
-    async function renderPreview(path, markdown, gen) {
+    /** 锁屏、切后台等导致 fetch/流中断时的常见错误 */
+    function isTransientNetworkError(e) {
+        if (!e) return false;
+        var nm = e.name || '';
+        if (nm === 'TypeError' || nm === 'NetworkError' || nm === 'AbortError') return true;
+        var m = String(e.message || e);
+        return /network|fetch|fail|aborted|closed|reset|timeout|offline|interrupted|lost|断开|load failed/i.test(m);
+    }
+
+    async function renderPreviewOnce(path, markdown, gen) {
         var res = await fetch('/online/api/render', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
@@ -285,6 +294,27 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         }
     }
 
+    async function renderPreview(path, markdown, gen) {
+        var maxAttempts = 3;
+        var lastErr;
+        for (var a = 0; a < maxAttempts; a++) {
+            if (gen !== loadGeneration) return;
+            try {
+                if (a > 0) {
+                    await new Promise(function (r) { setTimeout(r, 400 + a * 350); });
+                    if (gen !== loadGeneration) return;
+                }
+                await renderPreviewOnce(path, markdown, gen);
+                return;
+            } catch (e) {
+                lastErr = e;
+                if (gen !== loadGeneration) return;
+                if (a + 1 >= maxAttempts || !isTransientNetworkError(e)) throw e;
+            }
+        }
+        throw lastErr;
+    }
+
     async function loadNote(path) {
         loadGeneration++;
         var gen = loadGeneration;
@@ -300,7 +330,6 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
             if (gen !== loadGeneration) return;
             if (!res.ok) throw new Error(data.error || res.statusText);
             editor.value = data.content || '';
-            await renderPreview(path, data.content || '', gen);
         } catch (e) {
             if (gen !== loadGeneration) return;
             viewer.innerHTML = '';
@@ -308,6 +337,26 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
             currentPath = '';
             currentLabel.textContent = '未选择笔记';
             setMode('none');
+            return;
+        }
+        try {
+            await renderPreview(path, editor.value, gen);
+        } catch (e) {
+            if (gen !== loadGeneration) return;
+            setMsg('预览中断，正在重试…', '');
+            viewer.innerHTML = '<p class="online-loading">恢复预览…</p>';
+            await new Promise(function (r) { setTimeout(r, 500); });
+            if (gen !== loadGeneration) return;
+            loadGeneration++;
+            var g2 = loadGeneration;
+            try {
+                await renderPreview(path, editor.value, g2);
+                setMsg('', '');
+            } catch (e2) {
+                if (g2 !== loadGeneration) return;
+                setMsg('预览失败：' + e2.message + '（亮屏后将自动再试）', 'err');
+                viewer.innerHTML = '<p class="online-loading">预览未加载</p>';
+            }
         }
     }
 
@@ -561,6 +610,29 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         }
         search();
     }
+
+    var resumePreviewTimer = null;
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState !== 'visible') return;
+        if (!currentPath || mode !== 'view') return;
+        clearTimeout(resumePreviewTimer);
+        resumePreviewTimer = setTimeout(function () {
+            if (!currentPath || mode !== 'view') return;
+            var hasRendered = !!viewer.querySelector('.markdown-rendered');
+            var loadEl = viewer.querySelector('.online-loading');
+            if (hasRendered && !loadEl) return;
+            loadGeneration++;
+            var g = loadGeneration;
+            var p = currentPath;
+            var md = editor.value;
+            viewer.innerHTML = '<p class="online-loading">恢复预览…</p>';
+            setMsg('', '');
+            renderPreview(p, md, g).catch(function (err) {
+                if (g !== loadGeneration) return;
+                setMsg('恢复失败：' + err.message, 'err');
+            });
+        }, 400);
+    });
 })();
     </script>
 </body>
