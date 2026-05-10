@@ -15,6 +15,35 @@ export class OnlineMarkdownRenderService {
         return profile === 'dataview' || profile === 'embed+dataview';
     }
 
+    /** 正文中 ```dataview / dataviewjs 块数量（嵌入子笔记里的围栏不在父 markdown 中） */
+    private static countDataviewFencesInMarkdown(md: string): number {
+        if (!md) {
+            return 0;
+        }
+        let m = md.match(/(^|\r?\n)```[\t ]*dataview(?:js)?\b/gim);
+        return m ? m.length : 0;
+    }
+
+    /** 多块 Dataview 串行/错峰更新时，需更长静默与总上限 */
+    private static scaledDataviewTiming(blockCount: number): { idleMs: number; maxMs: number } {
+        let n = Math.floor(blockCount);
+        if (n < 1) {
+            n = 1;
+        }
+        if (n > 32) {
+            n = 32;
+        }
+        let idleMs = Math.min(
+            12000,
+            OnlineMarkdownRenderService.ONLINE_DV_IDLE_MS + (n - 1) * 1400,
+        );
+        let maxMs = Math.min(
+            120000,
+            OnlineMarkdownRenderService.ONLINE_DV_MAX_MS + (n - 1) * 16000,
+        );
+        return { idleMs, maxMs };
+    }
+
     constructor(
         private app: App,
         private vault: OnlineVaultMediaService,
@@ -33,6 +62,7 @@ export class OnlineMarkdownRenderService {
         debugPath: string,
         debugSinceReqMs: number,
         streamProfile: string,
+        dvFenceHint: number,
     ): Promise<void> {
         let lastSentRaw = '';
         let pushedFrames = 0;
@@ -65,15 +95,106 @@ export class OnlineMarkdownRenderService {
             pushedFrames,
         });
 
+        /** 嵌入内 Dataview 可能晚于首次 timing 才挂 DOM，需在流式阶段升格为长等 */
+        const timing = { idleMs, maxMs, profile: streamProfile };
+        let peakDvBlocks = Math.max(this.countDataviewBlocks(el), dvFenceHint);
+
         await new Promise<void>((resolve) => {
             let settled = false;
             let lastMutation = Date.now();
             let idleTimer: ReturnType<typeof setTimeout> | null = null;
             let debouncePushTimer: ReturnType<typeof setTimeout> | null = null;
             let dvPollTimer: ReturnType<typeof setInterval> | null = null;
+            let embedProbeTimer: ReturnType<typeof setInterval> | null = null;
             let lastDvHtmlSnap = el.innerHTML;
             let pollChangeLogs = 0;
             let finishReason: 'idle' | 'max' | 'unknown' = 'unknown';
+            let maxTimer: ReturnType<typeof setTimeout> | null = null;
+
+            const applyDataviewTimingScale = () => {
+                if (!OnlineMarkdownRenderService.isDataviewDwellProfile(timing.profile)) {
+                    return;
+                }
+                let c = this.countDataviewBlocks(el);
+                if (c > peakDvBlocks) {
+                    peakDvBlocks = c;
+                }
+                let n = Math.max(1, peakDvBlocks);
+                let s = OnlineMarkdownRenderService.scaledDataviewTiming(n);
+                let bump = s.maxMs > timing.maxMs || s.idleMs > timing.idleMs;
+                if (s.maxMs > timing.maxMs) {
+                    timing.maxMs = s.maxMs;
+                }
+                if (s.idleMs > timing.idleMs) {
+                    timing.idleMs = s.idleMs;
+                }
+                if (bump) {
+                    armMaxTimer();
+                    schedule();
+                }
+            };
+
+            const armMaxTimer = () => {
+                if (maxTimer !== null) {
+                    clearTimeout(maxTimer);
+                }
+                maxTimer = setTimeout(() => finish('max'), timing.maxMs);
+            };
+
+            const startDvPollIfNeeded = () => {
+                if (dvPollTimer || settled) {
+                    return;
+                }
+                if (!OnlineMarkdownRenderService.isDataviewDwellProfile(timing.profile)) {
+                    return;
+                }
+                lastDvHtmlSnap = el.innerHTML;
+                dvPollTimer = setInterval(() => {
+                    if (settled) {
+                        return;
+                    }
+                    let htmlNow = el.innerHTML;
+                    if (htmlNow !== lastDvHtmlSnap) {
+                        lastDvHtmlSnap = htmlNow;
+                        mutationCount++;
+                        lastMutation = Date.now();
+                        pollChangeLogs++;
+                        if (pollChangeLogs <= 12) {
+                            this.logOnlineRender('stream poll html delta', {
+                                path: debugPath,
+                                n: pollChangeLogs,
+                                sinceStreamMs: Date.now() - tStream,
+                                htmlLen: htmlNow.length,
+                                dvBlocks: this.countDataviewBlocks(el),
+                            });
+                        }
+                        queuePush();
+                        applyDataviewTimingScale();
+                        schedule();
+                    }
+                    applyDataviewTimingScale();
+                }, OnlineMarkdownRenderService.ONLINE_DV_POLL_MS);
+            };
+
+            const tryUpgradeEmbedIfDvVisible = () => {
+                if (settled || timing.profile !== 'embed') {
+                    return;
+                }
+                if (this.countDataviewBlocks(el) < 1) {
+                    return;
+                }
+                timing.profile = 'embed+dataview';
+                timing.idleMs = OnlineMarkdownRenderService.ONLINE_DV_IDLE_MS;
+                timing.maxMs = OnlineMarkdownRenderService.ONLINE_DV_MAX_MS;
+                if (embedProbeTimer) {
+                    clearInterval(embedProbeTimer);
+                    embedProbeTimer = null;
+                }
+                startDvPollIfNeeded();
+                applyDataviewTimingScale();
+                armMaxTimer();
+                schedule();
+            };
 
             const finish = (reason: 'idle' | 'max') => {
                 if (settled) {
@@ -93,7 +214,14 @@ export class OnlineMarkdownRenderService {
                     clearInterval(dvPollTimer);
                     dvPollTimer = null;
                 }
-                clearTimeout(maxTimer);
+                if (embedProbeTimer) {
+                    clearInterval(embedProbeTimer);
+                    embedProbeTimer = null;
+                }
+                if (maxTimer !== null) {
+                    clearTimeout(maxTimer);
+                    maxTimer = null;
+                }
 
                 const pushDone = () => {
                     observer.disconnect();
@@ -104,12 +232,12 @@ export class OnlineMarkdownRenderService {
                         reason: finishReason,
                         sinceReqMs: Date.now() - debugSinceReqMs,
                         streamDurationMs: Date.now() - tStream,
-                        idleMs,
-                        maxMs,
+                        idleMs: timing.idleMs,
+                        maxMs: timing.maxMs,
                         mutationCount,
                         pushedFrames,
                         lastInnerLen: htmlSnap.length,
-                        streamProfile,
+                        streamProfile: timing.profile,
                         dvBlocks: this.countDataviewBlocks(el),
                         visibilityState:
                             typeof document !== 'undefined' ? document.visibilityState : 'n/a',
@@ -117,7 +245,7 @@ export class OnlineMarkdownRenderService {
                     resolve();
                 };
                 // Dataview 常在同一宏任务末尾再写 DOM；立刻读 innerHTML 会偶发截断
-                if (OnlineMarkdownRenderService.isDataviewDwellProfile(streamProfile)) {
+                if (OnlineMarkdownRenderService.isDataviewDwellProfile(timing.profile)) {
                     setTimeout(() => {
                         if (
                             typeof document !== 'undefined' &&
@@ -151,13 +279,18 @@ export class OnlineMarkdownRenderService {
                 }
                 idleTimer = setTimeout(() => {
                     idleTimer = null;
-                    if (Date.now() - lastMutation < idleMs) {
+                    tryUpgradeEmbedIfDvVisible();
+                    applyDataviewTimingScale();
+                    if (settled) {
+                        return;
+                    }
+                    if (Date.now() - lastMutation < timing.idleMs) {
                         schedule();
                         return;
                     }
                     // Dataview 往往晚于首帧才开始改 DOM；若尚无任一次 mutation 就 idle 结束，会截断表格
                     if (
-                        OnlineMarkdownRenderService.isDataviewDwellProfile(streamProfile) &&
+                        OnlineMarkdownRenderService.isDataviewDwellProfile(timing.profile) &&
                         mutationCount === 0 &&
                         Date.now() - tStream < OnlineMarkdownRenderService.ONLINE_DV_BOOTSTRAP_MS
                     ) {
@@ -165,7 +298,7 @@ export class OnlineMarkdownRenderService {
                         return;
                     }
                     finish('idle');
-                }, idleMs);
+                }, timing.idleMs);
             };
 
             const observer = new MutationObserver(() => {
@@ -174,8 +307,10 @@ export class OnlineMarkdownRenderService {
                 }
                 mutationCount++;
                 lastMutation = Date.now();
+                tryUpgradeEmbedIfDvVisible();
+                applyDataviewTimingScale();
                 if (
-                    OnlineMarkdownRenderService.isDataviewDwellProfile(streamProfile) &&
+                    OnlineMarkdownRenderService.isDataviewDwellProfile(timing.profile) &&
                     mutationCount <= 20
                 ) {
                     this.logOnlineRender('stream dom mutation', {
@@ -196,34 +331,17 @@ export class OnlineMarkdownRenderService {
                 characterData: true,
             });
 
-            if (OnlineMarkdownRenderService.isDataviewDwellProfile(streamProfile)) {
-                dvPollTimer = setInterval(() => {
-                    if (settled) {
-                        return;
-                    }
-                    let htmlNow = el.innerHTML;
-                    if (htmlNow !== lastDvHtmlSnap) {
-                        lastDvHtmlSnap = htmlNow;
-                        mutationCount++;
-                        lastMutation = Date.now();
-                        pollChangeLogs++;
-                        if (pollChangeLogs <= 12) {
-                            this.logOnlineRender('stream poll html delta', {
-                                path: debugPath,
-                                n: pollChangeLogs,
-                                sinceStreamMs: Date.now() - tStream,
-                                htmlLen: htmlNow.length,
-                                dvBlocks: this.countDataviewBlocks(el),
-                            });
-                        }
-                        queuePush();
-                        schedule();
-                    }
-                }, OnlineMarkdownRenderService.ONLINE_DV_POLL_MS);
+            startDvPollIfNeeded();
+            applyDataviewTimingScale();
+            if (timing.profile === 'embed') {
+                embedProbeTimer = setInterval(() => {
+                    tryUpgradeEmbedIfDvVisible();
+                    applyDataviewTimingScale();
+                }, 450);
             }
 
             schedule();
-            const maxTimer = setTimeout(() => finish('max'), maxMs);
+            armMaxTimer();
         });
     }
 
@@ -288,10 +406,13 @@ export class OnlineMarkdownRenderService {
                 '.internal-embed, .markdown-embed, .markdown-embed-content, .markdown-embed-title',
             );
         let dvBlocksAnywhere = this.countDataviewBlocks(el);
+        let dvFenceHint = OnlineMarkdownRenderService.countDataviewFencesInMarkdown(md);
         if (hasOwnDataview) {
+            let nScale = Math.max(1, dvBlocksAnywhere, dvFenceHint);
+            let s = OnlineMarkdownRenderService.scaledDataviewTiming(nScale);
             return {
-                idleMs: OnlineMarkdownRenderService.ONLINE_DV_IDLE_MS,
-                maxMs: OnlineMarkdownRenderService.ONLINE_DV_MAX_MS,
+                idleMs: s.idleMs,
+                maxMs: s.maxMs,
                 profile: 'dataview',
                 hasOwnDvDom,
                 hasDataviewFence,
@@ -300,9 +421,11 @@ export class OnlineMarkdownRenderService {
             };
         }
         if (hasEmbed && dvBlocksAnywhere > 0) {
+            let nScale = Math.max(1, dvBlocksAnywhere, dvFenceHint);
+            let s = OnlineMarkdownRenderService.scaledDataviewTiming(nScale);
             return {
-                idleMs: OnlineMarkdownRenderService.ONLINE_DV_IDLE_MS,
-                maxMs: OnlineMarkdownRenderService.ONLINE_DV_MAX_MS,
+                idleMs: s.idleMs,
+                maxMs: s.maxMs,
                 profile: 'embed+dataview',
                 hasOwnDvDom,
                 hasDataviewFence,
@@ -466,6 +589,7 @@ export class OnlineMarkdownRenderService {
                 visibilityState:
                     typeof document !== 'undefined' ? document.visibilityState : 'n/a',
             });
+            let dvFenceHint = OnlineMarkdownRenderService.countDataviewFencesInMarkdown(markdown);
             await this.streamOnlineRenderNdjson(
                 res,
                 el,
@@ -475,6 +599,7 @@ export class OnlineMarkdownRenderService {
                 pathNorm,
                 tReq,
                 timing.profile,
+                dvFenceHint,
             );
             this.logOnlineRender('handleOnlineRender complete', {
                 path: pathNorm,
