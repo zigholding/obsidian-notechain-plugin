@@ -554,20 +554,23 @@ export class Time{
 		// 3. 提取持续时间
 		// =========================
 		if (!recentEndWindow) {
-			const durationLead =
-				/^(共耗时|共花费|共用时|共花了|耗时|花费|用时|用了|用掉|花了|持续|大约|大概|约|差不多)\s*/;
+			const durationGlueLead =
+				"共耗时|共花费|共用时|共花了|耗时|花费|用时|用了|用掉|花了|持续|大约|大概|约|差不多";
+			// 事项与时长之间的尾部 glue 不用单独「约」，避免「约会30分钟」类误剥
+			const durationGlueTrail =
+				"共耗时|共花费|共用时|共花了|耗时|花费|用时|用了|用掉|花了|持续|大约|大概|差不多";
+			const durationLead = new RegExp(`^(${durationGlueLead})\\s*`);
+			const trailingDurationGlue = new RegExp(`(?:${durationGlueTrail})\\s*$`);
 			const restForDuration = rest.replace(durationLead, "");
 
 			const durationRes = this.parse_minutes(restForDuration);
 
 			if (!Number.isNaN(durationRes.duration)) {
 				duration = durationRes.duration;
-
-				rest = (
-					(durationRes.prefix || "") +
-					" " +
-					(durationRes.suffix || "")
-				).trim();
+				const trimmedPrefix = (durationRes.prefix || "")
+					.replace(trailingDurationGlue, "")
+					.trimEnd();
+				rest = (trimmedPrefix + " " + (durationRes.suffix || "")).trim();
 			}
 		}
 	
