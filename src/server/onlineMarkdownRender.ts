@@ -482,6 +482,22 @@ export class OnlineMarkdownRenderService {
             let markdown = typeof data.markdown === 'string' ? data.markdown : '';
             let file = this.vault.resolveOnlineMarkdownFile(data.path);
             let sourcePath = file ? file.path : pathNorm;
+            // 与磁盘一致时先展开 ![[…]] 多层嵌套再渲染，否则 MarkdownRenderer 对「A 嵌 B、B 嵌 C」常展不开 C（含内层 Dataview）
+            if (file) {
+                try {
+                    let rawOnDisk = await this.app.vault.read(file);
+                    let normNl = (s: string) => s.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                    if (normNl(markdown) === normNl(rawOnDisk)) {
+                        let nc = (this.app as any).plugins?.getPlugin?.('note-chain');
+                        let readEmb = nc?.easyapi?.file?.read_tfile_with_embeds;
+                        if (typeof readEmb === 'function') {
+                            markdown = await readEmb.call(nc.easyapi.file, file, 10);
+                        }
+                    }
+                } catch {
+                    /* 保持请求体 markdown */
+                }
+            }
             this.logOnlineRender('request parsed', {
                 path: pathNorm,
                 mdChars: markdown.length,
