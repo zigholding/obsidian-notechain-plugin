@@ -555,27 +555,7 @@ export class OnlineMarkdownRenderService {
                 visibilityState:
                     typeof document !== 'undefined' ? document.visibilityState : 'n/a',
             });
-            let dvBlocksForKick = this.countDataviewBlocks(el);
-            if (mdLikelyDataview || dvBlocksForKick > 0) {
-                let cmdErr: string | null = null;
-                try {
-                    await Promise.resolve(
-                        (this.app as any).commands?.executeCommandById?.(
-                            'dataview:dataview-force-refresh-views',
-                        ),
-                    );
-                } catch (e: any) {
-                    cmdErr = e?.message || String(e);
-                }
-                this.logOnlineRender('dataview force-refresh', {
-                    path: pathNorm,
-                    mdLikelyDataview,
-                    dvBlocksBefore: dvBlocksForKick,
-                    cmdErr,
-                    dvBlocksAfter: this.countDataviewBlocks(el),
-                });
-                await new Promise<void>((r) => setTimeout(r, 0));
-            }
+            // 勿在此调用 dataview:dataview-force-refresh-views：会全局重跑视图，MarkdownRenderer 刚写入的块常被再执行一次，出现 dv.span 等输出重复（双链接）
             // 不要用双 requestAnimationFrame：窗口在后台时 rAF 会拖到下一次 vsync（可达数秒）
             await new Promise<void>((r) => setTimeout(r, 0));
             const tYieldEnd = Date.now();
