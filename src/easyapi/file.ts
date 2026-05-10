@@ -134,6 +134,12 @@ export class File {
 		return ctx;
 	}
 
+	/** `cachedRead` 后展开 `![[…]]`，嵌入内容由 {@link EasyAPI.file.read_tfile} 负责（含 `#` / `^`），再统一去 YAML。 */
+    async read_tfile_with_embeds(tfile: TFile|string, maxDepth = 10): Promise<string> {
+        const raw = await this.read_tfile(tfile);
+        return this.api.editor.expand_wiki_embeds_in_string(raw, maxDepth, new Set());
+    }
+
 	get_tfiles(path:string|TFile|null):Array<TFile>{
 		let tfiles = this.get_tfile(path,false);
 		if(tfiles instanceof TFile){

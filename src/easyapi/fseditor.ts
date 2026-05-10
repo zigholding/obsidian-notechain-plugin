@@ -180,7 +180,6 @@ export class FsEditor{
     }
 
     async read_file(path: string, encoding: BufferEncoding = "utf8") {
-        console.log('read_file-->',path,encoding);
         const tfile = this.easyapi.file.get_tfile(path);
         if (tfile) {
             if (encoding === "utf8" && this.readViaTemplaterExt(tfile.extension)) {

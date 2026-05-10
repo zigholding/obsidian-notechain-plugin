@@ -466,15 +466,8 @@ export class EasyEditor {
         return tfile;
     }
 
-
-
-    /**
-     * 将字符串中的 `![[…]]` 换成 {@link EasyAPI.file.read_tfile} 读出的片段再经 {@link remove_metadata}。
-     * 相对路径以 `source.path` 为基准；`maxDepth` 控制嵌套层数，遇环则保留原 `![[…]]`。
-     */
-    private async expand_wiki_embeds_in_string(
+    async expand_wiki_embeds_in_string(
         content: string,
-        source: TFile,
         maxDepth: number,
         expanding: Set<string>,
     ): Promise<string> {
@@ -489,10 +482,7 @@ export class EasyEditor {
             parts.push(content.slice(lastIndex, m.index));
             lastIndex = re.lastIndex;
             const full = m[0];
-            const linkpath = m[1].split('|')[0].trim();
-            const dest =
-                this.app.metadataCache.getFirstLinkpathDest(linkpath, source.path) ??
-                this.ea.file.get_tfile(full);
+            const dest = this.ea.file.get_tfile(full);
             if (!dest || !(dest instanceof TFile) || dest.extension !== 'md') {
                 parts.push(full);
                 continue;
@@ -509,7 +499,7 @@ export class EasyEditor {
                 continue;
             }
             let body = await this.remove_metadata(raw);
-            body = await this.expand_wiki_embeds_in_string(body, dest, maxDepth - 1, expanding);
+            body = await this.expand_wiki_embeds_in_string(body, maxDepth - 1, expanding);
             expanding.delete(dest.path);
             parts.push(body);
         }
@@ -517,11 +507,7 @@ export class EasyEditor {
         return parts.join('');
     }
 
-    /** `cachedRead` 后展开 `![[…]]`，嵌入内容由 {@link EasyAPI.file.read_tfile} 负责（含 `#` / `^`），再统一去 YAML。 */
-    async expand_wiki_embeds(tfile: TFile, maxDepth = 10): Promise<string> {
-        const raw = await this.app.vault.cachedRead(tfile);
-        return this.expand_wiki_embeds_in_string(raw, tfile, maxDepth, new Set());
-    }
+    
 
     /** Inline ```js //templater``` (and sibling info strings) → `<%* … -%>`, matching {@link extract_templater_block} so full-text `parse_commands` runs fenced tpl. */
     expand_fenced_templater_in_full_text(content: string): string {
