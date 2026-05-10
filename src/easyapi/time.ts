@@ -262,11 +262,19 @@ export class Time{
 			date = date.format('YYYY-MM-DD');
 		}
 
-		let items = st.match(/^(\d{2}):?(\d{2})$/);
-
-		if(items){
-			let t = moment(`${date} ${items[1]}:${items[2]}:00`, "YYYY-MM-DD HH:mm:ss");
-			if(t.isValid()){return this.snapTimeToBase(t, base)}
+		const digitClock = st.trim().match(/^(\d{1,2}):?(\d{1,2})$/);
+		if (digitClock) {
+			const hour = parseInt(digitClock[1], 10);
+			const minute = parseInt(digitClock[2], 10);
+			if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+				const t = moment(
+					`${date} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`,
+					"YYYY-MM-DD HH:mm:ss"
+				);
+				if (t.isValid()) {
+					return this.snapTimeToBase(t, base);
+				}
+			}
 		}
 
 		const mix = st.trim().match(/^(凌晨|早上|上午|中午|下午|晚上|傍晚)\s*(\d{1,2})\s*[:：]\s*(\d{1,2})$/);
@@ -332,7 +340,7 @@ export class Time{
 
 	/**
 	 * 从任意文本中提取第一时间片段，规则尽量与 {@link parse_time} 一致：
-	 * - 数字：`HH:mm` / `HHmm`（两位小时，与 parse_time 整串相同）
+	 * - 数字：`H:mm` / `HH:mm` / 无冒号 `Hmm`（与 parse_time 整串相同，小时与分钟各 1～2 位）
 	 * - 时段 + 阿拉伯：`早上6:45`、`晚上10:30`（与 parse_time 整串一致，转 24 小时制）
 	 * - 中文：时段 + `…点` + `半` | 中文分 | 阿拉伯分（小时含「百」；分钟分支与 parse_time 对齐）
 	 * - `现在`：解析为当前时刻的 `HH:mm`（与 {@link parse_time} 整串 `现在` 一致）
@@ -345,11 +353,19 @@ export class Time{
 
 		const dateStr = this.today.format('YYYY-MM-DD');
 
-		// 数字时间（parse_time 的 ^(\d{2}):?(\d{2})$）
-		const digRe = /(?<![0-9])(\d{2}):?(\d{2})(?![0-9])/g;
+		// 数字时间（与 parse_time 的 ^(\d{1,2}):?(\d{1,2})$ 一致，从文中截取）
+		const digRe = /(?<![0-9])(\d{1,2}):?(\d{1,2})(?![0-9])/g;
 		let dm: RegExpExecArray | null;
 		while ((dm = digRe.exec(text)) !== null) {
-			const t = moment(`${dateStr} ${dm[1]}:${dm[2]}:00`, 'YYYY-MM-DD HH:mm:ss');
+			const hour = parseInt(dm[1], 10);
+			const minute = parseInt(dm[2], 10);
+			if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+				continue;
+			}
+			const t = moment(
+				`${dateStr} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`,
+				"YYYY-MM-DD HH:mm:ss"
+			);
 			if (t.isValid()) {
 				const snapped = this.snapTimeToBase(t, base);
 				const timeStr = `${String(snapped.hour()).padStart(2, '0')}:${String(snapped.minute()).padStart(2, '0')}`;
@@ -475,6 +491,7 @@ export class Time{
 	 * - 明天11:30到下午3点打怪兽（到/至/— 后为结束时刻，与开始同一天）
 	 * - 最近15分钟打架（「最近」紧接 {@link parse_minutes} 可解析的时长：结束为当前时刻对齐 {@link snapTimeToBase}，开始为 结束−时长）
 	 * - `base`：分钟对齐粒度（默认 5），与 {@link parse_time} / {@link extract_chinese_time} 一致
+	 * - `baseDate`：参考日（`YYYY-MM-DD` 或 `Moment`）；未传时为今日，用于默认 `date` 及 {@link extract_chinese_date} 中「明天」等相对语义
 	 * 
 	 * 返回：
 	 * {
@@ -486,17 +503,21 @@ export class Time{
 	 *   raw         // 原始文本
 	 * }
 	 */
-	extract_job(text: string, base = 5) {
+	extract_job(text: string, base = 5, baseDate: string | Moment | null = null) {
 	
 		let raw = text.trim();
 	
 		// =========================
 		// 1. 提取日期
 		// =========================
-		let date = this.today.format("YYYY-MM-DD");
+		const dateBaseMoment =
+			baseDate != null && String(baseDate).trim() !== ""
+				? this.as_date(moment(baseDate))
+				: this.today;
+		let date = dateBaseMoment.format("YYYY-MM-DD");
 		let rest = raw;
 	
-		const dateRes = this.extract_chinese_date(rest);
+		const dateRes = this.extract_chinese_date(rest, dateBaseMoment);
 	
 		if(dateRes?.date){
 			date = dateRes.date;
