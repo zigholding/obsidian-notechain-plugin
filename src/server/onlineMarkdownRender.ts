@@ -3,9 +3,6 @@ import { readHttpBody } from './httpUtil';
 import type { OnlineVaultMediaService } from './onlineVaultMedia';
 
 export class OnlineMarkdownRenderService {
-    /** 设为 false 可关闭 /online 渲染控制台日志 */
-    private static readonly ONLINE_RENDER_LOG = true;
-
     /** Dataview 慢查询时可能长时间无 mutation 事件；过短会提前 done，浏览器只收到半截表格 */
     private static readonly ONLINE_DV_IDLE_MS = 4200;
     private static readonly ONLINE_DV_MAX_MS = 25000;
@@ -245,20 +242,20 @@ export class OnlineMarkdownRenderService {
         return false;
     }
 
-    /** /online 渲染调试日志（输出到 Obsidian 开发者工具控制台：Ctrl+Shift+I） */
-    private logOnlineRender(phase: string, detail?: Record<string, unknown>): void {
-        if (!OnlineMarkdownRenderService.ONLINE_RENDER_LOG) {
-            return;
-        }
-        let extra = '';
-        if (detail && Object.keys(detail).length > 0) {
-            try {
-                extra = ' ' + JSON.stringify(detail);
-            } catch {
-                extra = ' [detail stringify failed]';
-            }
-        }
-        console.log('[note-chain /online/render] ' + phase + extra);
+    /** /online 渲染调试日志（排查时可取消注释） */
+    private logOnlineRender(_phase: string, _detail?: Record<string, unknown>): void {
+        // if (!OnlineMarkdownRenderService.ONLINE_RENDER_LOG) {
+        //     return;
+        // }
+        // let extra = '';
+        // if (detail && Object.keys(detail).length > 0) {
+        //     try {
+        //         extra = ' ' + JSON.stringify(detail);
+        //     } catch {
+        //         extra = ' [detail stringify failed]';
+        //     }
+        // }
+        // console.log('[note-chain /online/render] ' + phase + extra);
     }
 
     private countDataviewBlocks(el: HTMLElement): number {
