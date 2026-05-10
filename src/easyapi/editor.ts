@@ -466,6 +466,53 @@ export class EasyEditor {
         return tfile;
     }
 
+    /**
+     * 将字符串中的 `![[…]]` 换成被引 Markdown 笔记经 {@link remove_metadata} 后的正文。
+     * 链接相对 `source` 解析；`maxDepth` 控制嵌套嵌入展开层数，遇环则保留原 `![[…]]`。
+     */
+    private async expand_wiki_embeds_in_string(
+        content: string,
+        source: TFile,
+        maxDepth: number,
+        expanding: Set<string>,
+    ): Promise<string> {
+        if (maxDepth <= 0) {
+            return content;
+        }
+        const re = /!\[\[([^\]]+)\]\]/g;
+        const parts: string[] = [];
+        let lastIndex = 0;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(content)) !== null) {
+            parts.push(content.slice(lastIndex, m.index));
+            lastIndex = re.lastIndex;
+            const full = m[0];
+            const linkpath = m[1].split('|')[0].trim();
+            const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, source.path);
+            if (!dest || !(dest instanceof TFile) || dest.extension !== 'md') {
+                parts.push(full);
+                continue;
+            }
+            if (expanding.has(dest.path)) {
+                parts.push(full);
+                continue;
+            }
+            expanding.add(dest.path);
+            let body = await this.remove_metadata(dest);
+            body = await this.expand_wiki_embeds_in_string(body, dest, maxDepth - 1, expanding);
+            expanding.delete(dest.path);
+            parts.push(body);
+        }
+        parts.push(content.slice(lastIndex));
+        return parts.join('');
+    }
+
+    /** `cachedRead` 后展开文中 `![[…]]` 为被嵌笔记去掉 YAML 后的正文（相对当前笔记解析，默认嵌套至多 10 层）。 */
+    async expand_wiki_embeds(tfile: TFile, maxDepth = 10): Promise<string> {
+        const raw = await this.app.vault.cachedRead(tfile);
+        return this.expand_wiki_embeds_in_string(raw, tfile, maxDepth, new Set());
+    }
+
     /** Inline ```js //templater``` (and sibling info strings) → `<%* … -%>`, matching {@link extract_templater_block} so full-text `parse_commands` runs fenced tpl. */
     expand_fenced_templater_in_full_text(content: string): string {
         const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
