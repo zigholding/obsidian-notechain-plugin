@@ -28,7 +28,16 @@ export class File {
 			if (path instanceof TFile) {
 				return path;
 			}
-			path = path.split('|')[0].replace('![[', '').replace('[[', '').replace(']]', '');
+			path = path.replace('![[', '').replace('[[', '').replace(']]', '');
+			if(path.includes('|')){
+				path = path.split('|')[0]+'.md';
+			}
+			if(path.includes('#')){
+				path = path.split('#')[0]+'.md';
+			}
+			if(path.includes('^')){
+				path = path.split('^')[0]+'.md';
+			}
 			let tfile = this.app.vault.getFileByPath(path)
 			if (tfile) {
 				return tfile;
@@ -64,6 +73,53 @@ export class File {
 		} catch {
 			return null
 		}
+	}
+
+	async read_tfile(path: TFile|string){
+		if(path instanceof TFile){
+			return await this.app.vault.cachedRead(path);
+		}
+		
+		let tfile = this.get_tfile(path);
+		if(!tfile){
+			return undefined;
+		}
+		
+		
+		let heading = null;
+		if (typeof path === 'string') {
+			const embedMatch = path.match(/^!?\[\[([^#\]]+)(#([^\]]+))?\]\]$/);
+			if (embedMatch) {
+				heading = embedMatch[3];
+			}
+		}
+		if(heading){
+			return await this.api.editor.get_heading_section(tfile,heading);
+		}
+
+		let block_id = null;
+		if (typeof path === 'string') {
+			const embedMatch = path.match(
+				/^!?\[\[([^#\^\]]+)([#\^]([^\]]+))?\]\]$/
+			);
+	
+			if (embedMatch) {
+				block_id = embedMatch[3];
+			}
+		}
+		let ctx = await this.app.vault.cachedRead(tfile);
+		if(block_id){
+			let mcache = this.app.metadataCache.getFileCache(tfile);
+			if(mcache?.blocks){
+				let block_obj = mcache.blocks[block_id];
+				if(block_obj){
+					return ctx.slice(
+						block_obj.position.start.offset, block_obj.position.end.offset
+					).slice(0,-1-block_id.length);
+				}
+			}
+		}
+		return ctx;
 	}
 
 	get_tfiles(path:string|TFile|null):Array<TFile>{
