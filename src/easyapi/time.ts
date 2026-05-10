@@ -238,15 +238,15 @@ export class Time{
 		return { prefix: xt, suffix: '', duration: NaN };
 	};
 
-	/** 将时刻按 base 分钟粒度对齐（从当日 0:00 起的总分钟数向下取整到 base 的倍数）。base<=1 时不调整。 */
+	/** 将时刻按 base 分钟粒度对齐（从当日 0:00 起的总分钟数四舍五入到 base 的倍数）。base<=1 时不调整。 */
 	snapTimeToBase(m: Moment, base: number) {
 		const t = m.clone();
 		if (!base || base <= 1) {
 			return t;
 		}
 		const total = t.hour() * 60 + t.minute();
-		const floored = Math.floor(total / base) * base;
-		return t.clone().startOf('day').add(floored, 'minutes');
+		const rounded = Math.round(total / base) * base;
+		return t.clone().startOf('day').add(rounded, 'minutes');
 	}
 	
 	parse_time(st:string|Moment, date:Moment|string = this.today,nearest=true, base = 5) {
