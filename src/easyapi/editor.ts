@@ -466,9 +466,11 @@ export class EasyEditor {
         return tfile;
     }
 
+
+
     /**
-     * 将字符串中的 `![[…]]` 换成被引 Markdown 笔记经 {@link remove_metadata} 后的正文。
-     * 链接相对 `source` 解析；`maxDepth` 控制嵌套嵌入展开层数，遇环则保留原 `![[…]]`。
+     * 将字符串中的 `![[…]]` 换成 {@link EasyAPI.file.read_tfile} 读出的片段再经 {@link remove_metadata}。
+     * 相对路径以 `source.path` 为基准；`maxDepth` 控制嵌套层数，遇环则保留原 `![[…]]`。
      */
     private async expand_wiki_embeds_in_string(
         content: string,
@@ -488,7 +490,9 @@ export class EasyEditor {
             lastIndex = re.lastIndex;
             const full = m[0];
             const linkpath = m[1].split('|')[0].trim();
-            const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, source.path);
+            const dest =
+                this.app.metadataCache.getFirstLinkpathDest(linkpath, source.path) ??
+                this.ea.file.get_tfile(full);
             if (!dest || !(dest instanceof TFile) || dest.extension !== 'md') {
                 parts.push(full);
                 continue;
@@ -498,7 +502,13 @@ export class EasyEditor {
                 continue;
             }
             expanding.add(dest.path);
-            let body = await this.remove_metadata(dest);
+            const raw = await this.ea.file.read_tfile(full);
+            if (raw === full) {
+                expanding.delete(dest.path);
+                parts.push(full);
+                continue;
+            }
+            let body = await this.remove_metadata(raw);
             body = await this.expand_wiki_embeds_in_string(body, dest, maxDepth - 1, expanding);
             expanding.delete(dest.path);
             parts.push(body);
@@ -507,7 +517,7 @@ export class EasyEditor {
         return parts.join('');
     }
 
-    /** `cachedRead` 后展开文中 `![[…]]` 为被嵌笔记去掉 YAML 后的正文（相对当前笔记解析，默认嵌套至多 10 层）。 */
+    /** `cachedRead` 后展开 `![[…]]`，嵌入内容由 {@link EasyAPI.file.read_tfile} 负责（含 `#` / `^`），再统一去 YAML。 */
     async expand_wiki_embeds(tfile: TFile, maxDepth = 10): Promise<string> {
         const raw = await this.app.vault.cachedRead(tfile);
         return this.expand_wiki_embeds_in_string(raw, tfile, maxDepth, new Set());

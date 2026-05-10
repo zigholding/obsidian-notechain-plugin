@@ -75,50 +75,62 @@ export class File {
 		}
 	}
 
-	async read_tfile(path: TFile|string){
-		if(path instanceof TFile){
+	/** `fromSource`：相对嵌入时当前笔记的 `path`，供 `getFirstLinkpathDest`。 */
+	async read_tfile(path: string | TFile) {
+		if (path instanceof TFile) {
 			return await this.app.vault.cachedRead(path);
 		}
-		
+	
 		let tfile = this.get_tfile(path);
-		if(!tfile){
-			return undefined;
-		}
 		
+		if (!tfile) {
+			return path;
+		}
 		
 		let heading = null;
-		if (typeof path === 'string') {
-			const embedMatch = path.match(/^!?\[\[([^#\]]+)(#([^\]]+))?\]\]$/);
-			if (embedMatch) {
-				heading = embedMatch[3];
-			}
-		}
-		if(heading){
-			return await this.api.editor.get_heading_section(tfile,heading);
-		}
-
 		let block_id = null;
 		if (typeof path === 'string') {
-			const embedMatch = path.match(
-				/^!?\[\[([^#\^\]]+)([#\^]([^\]]+))?\]\]$/
-			);
-	
-			if (embedMatch) {
-				block_id = embedMatch[3];
-			}
-		}
-		let ctx = await this.app.vault.cachedRead(tfile);
-		if(block_id){
-			let mcache = this.app.metadataCache.getFileCache(tfile);
-			if(mcache?.blocks){
-				let block_obj = mcache.blocks[block_id];
-				if(block_obj){
-					return ctx.slice(
-						block_obj.position.start.offset, block_obj.position.end.offset
-					).slice(0,-1-block_id.length);
+			const wi = path.match(/^!?\[\[([^\]]+)\]\]$/);
+			if (wi) {
+				const core = wi[1].split('|')[0].trim();
+				const hashIdx = core.indexOf('#');
+				// Obsidian：`[[页#^块id]]` 为块嵌入，不是标题「^块id」
+				if (hashIdx !== -1 && core.slice(hashIdx, hashIdx + 2) === '#^') {
+					block_id = core.slice(hashIdx + 2);
+				} else if (hashIdx !== -1) {
+					heading = core.slice(hashIdx + 1);
+				} else {
+					const caretIdx = core.indexOf('^');
+					if (caretIdx !== -1) {
+						block_id = core.slice(caretIdx + 1);
+					}
 				}
 			}
 		}
+		if (block_id) {
+			let ctx = await this.app.vault.cachedRead(tfile);
+			let mcache = this.app.metadataCache.getFileCache(tfile);
+			if (mcache?.blocks) {
+				let block_obj = mcache.sections?.find(x=>x.id==block_id);
+				if (block_obj) {
+					
+					let x= ctx.slice(block_obj.position.start.offset, block_obj.position.end.offset);
+					if(x.endsWith(block_id)){
+						x = x.slice(0,-1-block_id.length)
+					}
+					return x
+				}
+			}
+			return path;
+		}
+		if (heading) {
+			let res = await this.api.editor.get_heading_section(tfile, heading);
+			if (res) {
+				return res;
+			}
+			return path;
+		}
+		let ctx = await this.app.vault.cachedRead(tfile);
 		return ctx;
 	}
 
