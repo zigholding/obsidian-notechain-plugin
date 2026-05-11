@@ -87,8 +87,8 @@ export class File {
 			return path;
 		}
 		
-		let heading = null;
-		let block_id = null;
+		let heading: string | null = null;
+		let block_id: string | null = null;
 		if (typeof path === 'string') {
 			const wi = path.match(/^!?\[\[([^\]]+)\]\]$/);
 			if (wi) {
