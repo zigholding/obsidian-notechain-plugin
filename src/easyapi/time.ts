@@ -357,6 +357,11 @@ export class Time{
 		const digRe = /(?<![0-9])(\d{1,2}):?(\d{1,2})(?![0-9])/g;
 		let dm: RegExpExecArray | null;
 		while ((dm = digRe.exec(text)) !== null) {
+			// 「20分钟」「20块钱」等会被误读为 2:0，紧跟时长/金额单位则跳过
+			const afterDig = text.slice(dm.index + dm[0].length);
+			if (/^(?:分钟|分|小时|时|块钱|元钱?|万元|角|毛|块)/.test(afterDig)) {
+				continue;
+			}
 			const hour = parseInt(dm[1], 10);
 			const minute = parseInt(dm[2], 10);
 			if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
@@ -490,6 +495,7 @@ export class Time{
 	 * - 明天下午两点耗时2分钟打怪兽（耗时/花了等后为持续时间）
 	 * - 明天11:30到下午3点打怪兽（到/至/— 后为结束时刻，与开始同一天）
 	 * - 最近15分钟打架（「最近」紧接 {@link parse_minutes} 可解析的时长：结束为当前时刻对齐 {@link snapTimeToBase}，开始为 结束−时长）
+	 * - 20分钟开会（行首时长须在时刻提取之前解析，避免「20」被当成 2:00）
 	 * - `base`：分钟对齐粒度（默认 5），与 {@link parse_time} / {@link extract_chinese_time} 一致
 	 * - `baseDate`：参考日（`YYYY-MM-DD` 或 `Moment`）；未传时为今日，用于默认 `date` 及 {@link extract_chinese_date} 中「明天」等相对语义
 	 * 
@@ -535,6 +541,15 @@ export class Time{
 				rest = (dr.suffix || "").trim();
 			}
 		}
+
+		// 行首时长（先于时刻提取，避免「20分钟」被 extract_chinese_time 误读为 2:00）
+		if (!recentEndWindow) {
+			const leadDr = this.parse_minutes(rest);
+			if (!Number.isNaN(leadDr.duration) && leadDr.prefix.trim() === "") {
+				duration = leadDr.duration;
+				rest = (leadDr.suffix || "").trim();
+			}
+		}
 	
 		// =========================
 		// 2. 提取开始时间
@@ -574,7 +589,7 @@ export class Time{
 		// =========================
 		// 3. 提取持续时间
 		// =========================
-		if (!recentEndWindow) {
+		if (!recentEndWindow && Number.isNaN(duration)) {
 			const durationGlueLead =
 				"共耗时|共花费|共用时|共花了|耗时|花费|用时|用了|用掉|花了|持续|大约|大概|约|差不多";
 			// 事项与时长之间的尾部 glue 不用单独「约」，避免「约会30分钟」类误剥
