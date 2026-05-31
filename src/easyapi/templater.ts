@@ -106,7 +106,7 @@ export class Templater {
     }
 
     // target_file：target>activate>template
-    async parse_templater(template:string|TFile,extract=true,extra:any=null,idx:number[]|null=null,target='') {
+    async parse_templater(template:string|TFile,extract=true,extra:any=null,idx:number[]|null|number=null,target='') {
         let file = this.ea.file.get_tfile(template)
         if(file){
             template = file
@@ -158,7 +158,11 @@ export class Templater {
         let templateFunc = await this.templater$1(runtime_template_file,active_file,target_file,extra=runtime_extra);
         if(templateFunc){
             let res = []
-            if(idx){
+            if(idx!=null){
+                let is_number = typeof idx === 'number';
+                if(typeof idx === 'number'){
+                    idx = [idx];
+                }
                 for(let i of idx){
                     let block = blocks[i];
                     if(block){
@@ -167,6 +171,9 @@ export class Templater {
                     }else{
                         res.push('');
                     }
+                }
+                if(is_number){
+                    return res[0];
                 }
             }else{
                 for(let block of blocks){
