@@ -2,7 +2,7 @@ let fs = require('fs');
 let path = require('path');
 let crypto = require('crypto');
 
-import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem, isUserSender } from './types';
+import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem, OldBuddyAvatarMap, isUserSender } from './types';
 import { OldBuddyWebSocketHub } from './oldbuddyWebSocket';
 import { Templater } from '../../easyapi/templater';
 
@@ -13,6 +13,7 @@ const QUICK_COMMANDS_TEMPLATE = 'nochain_oldbuddy_quick_commands';
 const QUERY_TEMPLATE = 'nochain_oldbuddy_query';
 const SAVE_TEMPLATE = 'nochain_oldbuddy_save';
 const REFERENCE_TEMPLATE = 'nochain_oldbuddy_reference';
+const AVATAR_TEMPLATE = 'nochain_oldbuddy_avatar';
 const MAX_MESSAGES = 5000;
 const DEFAULT_REPLY_TEMPLATE = 'nochain_oldbuddy_reply';
 const DEFAULT_TARGET = DEFAULT_TARGETS[0].text;
@@ -372,6 +373,42 @@ export class OldBuddyStore {
         }
     }
 
+    /** 头像/昵称；模板 nochain_oldbuddy_avatar 返回 { user: ['我','a.png'], buddy: ['你','b.png'], ... } */
+    async loadAvatars(target?: string): Promise<OldBuddyAvatarMap> {
+        if (!this.templater.ea.file.get_tfile(AVATAR_TEMPLATE)) {
+            return {};
+        }
+        try {
+            const result = await this.templater.parse_templater(AVATAR_TEMPLATE, true, {
+                oldbuddy: {
+                    action: 'avatar',
+                    target: target || null,
+                },
+            }, 0, '');
+            return normalizeAvatarMap(result);
+        } catch (e) {
+            console.warn('[oldbuddy] avatar failed:', e);
+            return {};
+        }
+    }
+
+    async readVaultAsset(relPath: string): Promise<{ data: Buffer; mime: string } | null> {
+        const safe = String(relPath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+        if (!safe || safe.includes('..')) {
+            return null;
+        }
+        const tfile = this.templater.ea.file.get_tfile(safe);
+        if (!tfile) {
+            return null;
+        }
+        try {
+            const data = await this.templater.app.vault.readBinary(tfile);
+            return { data: Buffer.from(data), mime: mimeFromExt(tfile.path) };
+        } catch {
+            return null;
+        }
+    }
+
     async addTextMessage(params: {
         content: string;
         sender?: string;
@@ -619,6 +656,33 @@ function normalizeQuickCommandsByTarget(result: unknown): Record<string, OldBudd
         return map;
     }
     return {};
+}
+
+function normalizeAvatarMap(result: unknown): OldBuddyAvatarMap {
+    const value = unwrapTemplaterValue(result);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return {};
+    }
+    const out: OldBuddyAvatarMap = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+        const id = String(key).trim();
+        if (!id) continue;
+        if (Array.isArray(val) && val.length >= 1) {
+            out[id] = {
+                id,
+                name: String(val[0] ?? id).trim() || id,
+                avatar: val.length >= 2 ? String(val[1] ?? '').trim() : '',
+            };
+            continue;
+        }
+        if (val && typeof val === 'object') {
+            const row = val as Record<string, unknown>;
+            const name = String(row.name ?? row.label ?? row.nickname ?? id).trim() || id;
+            const avatar = String(row.avatar ?? row.img ?? row.text ?? '').trim();
+            out[id] = { id, name, avatar };
+        }
+    }
+    return out;
 }
 
 function unwrapTemplaterValue(result: unknown): unknown {

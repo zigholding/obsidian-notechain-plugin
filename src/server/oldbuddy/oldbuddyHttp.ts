@@ -60,6 +60,16 @@ export class OldBuddyHttpHandlers {
             });
             return true;
         }
+        if (sub === 'api/avatars' && req.method === 'GET') {
+            const target = parsedUrl.query?.target as string | undefined;
+            jsonResponse(res, 200, { avatars: await this.store.loadAvatars(target) });
+            return true;
+        }
+        if (sub === 'api/vault_asset' && req.method === 'GET') {
+            const rel = parsedUrl.query?.path as string | undefined;
+            await this.serveVaultAsset(res, rel || '');
+            return true;
+        }
         if (sub === 'api/messages' && req.method === 'GET') {
             const limit = Math.min(100, Math.max(1, parseInt(String(parsedUrl.query?.limit || '10'), 10) || 10));
             const before = parsedUrl.query?.before as string | undefined;
@@ -185,6 +195,17 @@ export class OldBuddyHttpHandlers {
             const status = msg === 'content required' || msg === 'invalid type' ? 400 : 500;
             jsonResponse(res, status, { ok: false, error: msg });
         }
+    }
+
+    private async serveVaultAsset(res: any, relPath: string) {
+        const file = await this.store.readVaultAsset(relPath);
+        if (!file) {
+            res.writeHead(404);
+            res.end('Not Found');
+            return;
+        }
+        res.writeHead(200, { 'Content-Type': file.mime, 'Cache-Control': 'public, max-age=3600' });
+        res.end(file.data);
     }
 
     private async serveUpload(res: any, fname: string) {

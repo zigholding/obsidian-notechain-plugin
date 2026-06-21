@@ -84,6 +84,7 @@
     <script src="static/js/websocket.js?v=20260318"></script>
     <script src="static/js/markdown.js?v=20260417b"></script>
     <script src="static/js/message.js?v=20260422c"></script>
+    <script src="static/js/avatars.js?v=20260621"></script>
     <script src="static/js/quick_commands.js?v=20260420a"></script>
     <script src="static/js/reference.js?v=20260621"></script>
     <script src="static/js/upload.js?v=20260420a"></script>
@@ -168,7 +169,10 @@
 
             initUploadHandlers();
             initReferencePicker();
-            
+            if (typeof loadOldBuddyAvatars === 'function') {
+                await loadOldBuddyAvatars(getCurrentChatTarget());
+            }
+
             // ---------- 首次加载最近消息 ----------
             await loadMessages(10); // 首次加载最近 10 条
             // 首次加载后滚到底部（显示最新消息）

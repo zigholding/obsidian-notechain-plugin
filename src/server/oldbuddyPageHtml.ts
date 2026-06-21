@@ -138,8 +138,61 @@ body {
     display: flex;
     flex-direction: column;
     margin-bottom: 10px;
-    max-width: min(88%, 680px);
+    max-width: min(92%, 760px);
     width: fit-content;
+}
+
+.message-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    max-width: 100%;
+}
+
+.message-row-user {
+    flex-direction: row;
+}
+
+.message-avatar {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    overflow: hidden;
+    background: #d8d8d8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    color: #555;
+    user-select: none;
+}
+
+.message-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.message-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-width: calc(100vw - 80px);
+}
+
+.message-nickname {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 4px;
+    line-height: 1.2;
+    padding: 0 2px;
+}
+
+.message.user .message-nickname {
+    text-align: right;
 }
 
 .message.user {
@@ -514,7 +567,10 @@ body {
 
             initUploadHandlers();
             initReferencePicker();
-            
+            if (typeof loadOldBuddyAvatars === 'function') {
+                await loadOldBuddyAvatars(getCurrentChatTarget());
+            }
+
             // ---------- 首次加载最近消息 ----------
             await loadMessages(10); // 首次加载最近 10 条
             // 首次加载后滚到底部（显示最新消息）
@@ -812,6 +868,13 @@ function setCurrentChatTarget(target, options = {}) {
     applyMessageTargetFilter();
     if (typeof refreshQuickCommandMenu === 'function') {
         refreshQuickCommandMenu(target);
+    }
+    if (typeof loadOldBuddyAvatars === 'function') {
+        loadOldBuddyAvatars(target).then(() => {
+            if (typeof refreshAllMessageAvatars === 'function') {
+                refreshAllMessageAvatars();
+            }
+        });
     }
     if (notify) showTargetToast(\`已切换到：\${targetTitle(target)}\`);
 }
@@ -1407,7 +1470,11 @@ function renderMessage(msg) {
         contentDiv.textContent = msg.content || JSON.stringify(msg);
     }
 
-    div.appendChild(contentDiv);
+    if (typeof wrapMessageWithAvatar === 'function') {
+        wrapMessageWithAvatar(div, msg, contentDiv);
+    } else {
+        div.appendChild(contentDiv);
+    }
     return div;
 }
 
@@ -1751,6 +1818,151 @@ async function sendTextMessage() {
         sendBtn.textContent = prevBtnText;
         // 滚动由 appendMessage 负责（此处避免重复计算导致偶发不滚动）
     }
+}
+
+
+// static/js/avatars.js — 头像/昵称（nochain_oldbuddy_avatar）
+
+let OLDBUDDY_AVATAR_MAP = {};
+
+function resolveAvatarUrl(path) {
+    if (!path) return '';
+    const p = String(path).trim();
+    if (!p) return '';
+    if (/^https?:\\/\\//i.test(p)) return p;
+    if (p.startsWith('/')) return p;
+    return \`/oldbuddy/api/vault_asset?path=\${encodeURIComponent(p)}\`;
+}
+
+function resolveSenderProfile(sender) {
+    const id = String(sender ?? '').trim() || 'buddy';
+    const map = OLDBUDDY_AVATAR_MAP || {};
+    if (map[id]) {
+        return { ...map[id], id };
+    }
+    if (typeof isUserSender === 'function' && isUserSender(id) && map.user) {
+        return { ...map.user, id };
+    }
+    if (map.buddy && (typeof isUserSender !== 'function' || !isUserSender(id))) {
+        return { ...map.buddy, id };
+    }
+    if (map['*']) {
+        return { ...map['*'], id };
+    }
+    return { id, name: id, avatar: '' };
+}
+
+function shouldShowNickname(sender, profile) {
+    if (!profile?.name) return false;
+    const s = String(sender ?? '').trim();
+    if (s === 'user') return false;
+    if (typeof isUserSender === 'function' && isUserSender(s)) return true;
+    return true;
+}
+
+function createMessageAvatarEl(profile) {
+    const wrap = document.createElement('div');
+    wrap.className = 'message-avatar';
+    const url = resolveAvatarUrl(profile.avatar);
+    const fallbackChar = (profile.name || profile.id || '?').slice(0, 1);
+
+    const showFallback = () => {
+        wrap.textContent = fallbackChar;
+        wrap.classList.add('message-avatar-fallback');
+        const img = wrap.querySelector('img');
+        if (img) img.remove();
+    };
+
+    if (url) {
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = profile.name || '';
+        img.loading = 'lazy';
+        img.addEventListener('error', showFallback, { once: true });
+        wrap.appendChild(img);
+    } else {
+        showFallback();
+    }
+    return wrap;
+}
+
+function wrapMessageWithAvatar(div, msg, contentDiv) {
+    const profile = resolveSenderProfile(msg.sender);
+    const row = document.createElement('div');
+    row.className = 'message-row';
+
+    const avatar = createMessageAvatarEl(profile);
+    const body = document.createElement('div');
+    body.className = 'message-body';
+
+    if (shouldShowNickname(msg.sender, profile)) {
+        const nick = document.createElement('div');
+        nick.className = 'message-nickname';
+        nick.textContent = profile.name;
+        body.appendChild(nick);
+    }
+
+    body.appendChild(contentDiv);
+
+    if (typeof isUserSender === 'function' && isUserSender(msg.sender)) {
+        row.classList.add('message-row-user');
+        row.appendChild(body);
+        row.appendChild(avatar);
+    } else {
+        row.appendChild(avatar);
+        row.appendChild(body);
+    }
+
+    div.appendChild(row);
+}
+
+async function loadOldBuddyAvatars(target) {
+    const tid =
+        target ||
+        (typeof getCurrentChatTarget === 'function' ? getCurrentChatTarget() : 'local');
+    try {
+        const res = await fetch(
+            \`/oldbuddy/api/avatars?target=\${encodeURIComponent(tid || 'local')}\`,
+        );
+        if (!res.ok) throw new Error('avatars fetch failed');
+        const data = await res.json();
+        OLDBUDDY_AVATAR_MAP = data.avatars && typeof data.avatars === 'object' ? data.avatars : {};
+    } catch (e) {
+        console.warn('[oldbuddy] load avatars failed', e);
+        OLDBUDDY_AVATAR_MAP = {};
+    }
+}
+
+function refreshAllMessageAvatars() {
+    const container = document.getElementById('messages');
+    if (!container) return;
+    container.querySelectorAll('.message').forEach((node) => {
+        const row = node.querySelector('.message-row');
+        if (!row) return;
+        const sender = node.dataset.sender || '';
+        const profile = resolveSenderProfile(sender);
+        const avatarWrap = row.querySelector('.message-avatar');
+        if (avatarWrap) {
+            const fresh = createMessageAvatarEl(profile);
+            avatarWrap.replaceWith(fresh);
+        }
+        const nick = row.querySelector('.message-nickname');
+        if (shouldShowNickname(sender, profile)) {
+            if (nick) {
+                nick.textContent = profile.name;
+            } else {
+                const body = row.querySelector('.message-body');
+                if (body) {
+                    const el = document.createElement('div');
+                    el.className = 'message-nickname';
+                    el.textContent = profile.name;
+                    body.insertBefore(el, body.firstChild);
+                }
+            }
+        } else if (nick) {
+            nick.remove();
+        }
+    });
 }
 
 

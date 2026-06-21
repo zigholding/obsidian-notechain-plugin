@@ -32,6 +32,17 @@ export interface OldBuddyTargetsConfig {
     targets: OldBuddyTarget[];
 }
 
+/** 头像配置：sender id → [昵称, 头像路径或 URL] */
+export type OldBuddyAvatarEntry = [string, string] | { name?: string; label?: string; nickname?: string; avatar?: string; img?: string; text?: string };
+
+export interface OldBuddyAvatarProfile {
+    id: string;
+    name: string;
+    avatar: string;
+}
+
+export type OldBuddyAvatarMap = Record<string, OldBuddyAvatarProfile>;
+
 /** sender 为 user 或 user_* 时视作用户侧消息（右侧气泡、可触发 reply） */
 export function isUserSender(sender?: string | null): boolean {
     const s = String(sender ?? '').trim();

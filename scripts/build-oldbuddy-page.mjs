@@ -27,6 +27,7 @@ const scripts = [
     read('js/websocket.js'),
     read('js/markdown.js'),
     read('js/message.js'),
+    read('js/avatars.js'),
     read('js/quick_commands.js'),
     read('js/reference.js'),
     read('js/upload.js'),

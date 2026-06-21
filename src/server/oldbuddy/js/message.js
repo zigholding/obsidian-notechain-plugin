@@ -82,6 +82,13 @@ function setCurrentChatTarget(target, options = {}) {
     if (typeof refreshQuickCommandMenu === 'function') {
         refreshQuickCommandMenu(target);
     }
+    if (typeof loadOldBuddyAvatars === 'function') {
+        loadOldBuddyAvatars(target).then(() => {
+            if (typeof refreshAllMessageAvatars === 'function') {
+                refreshAllMessageAvatars();
+            }
+        });
+    }
     if (notify) showTargetToast(`已切换到：${targetTitle(target)}`);
 }
 
@@ -676,7 +683,11 @@ function renderMessage(msg) {
         contentDiv.textContent = msg.content || JSON.stringify(msg);
     }
 
-    div.appendChild(contentDiv);
+    if (typeof wrapMessageWithAvatar === 'function') {
+        wrapMessageWithAvatar(div, msg, contentDiv);
+    } else {
+        div.appendChild(contentDiv);
+    }
     return div;
 }
 
