@@ -442,18 +442,8 @@ body {
             });
 
             // textarea 自适应高度（最多 6 行左右）；移动端 WebKit 偶发 scrollHeight=0，须保底高度
-            function autosize() {
-                textInput.style.height = 'auto';
-                const cs = getComputedStyle(textInput);
-                const lineH = parseFloat(cs.lineHeight) || 22;
-                const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-                const minH = Math.max(44, lineH + padY);
-                const maxH = Math.max(minH, 6 * lineH + padY);
-                const sh = textInput.scrollHeight;
-                textInput.style.height = Math.min(Math.max(sh, minH), maxH) + 'px';
-            }
-            textInput.addEventListener('input', autosize);
-            autosize();
+            textInput.addEventListener('input', () => autosizeTextInput(textInput));
+            autosizeTextInput(textInput);
             syncInputBarHeight();
 
             // ---------- 文件菜单 ----------
@@ -702,6 +692,20 @@ const TARGET_TITLE_MAP = {};
 let TARGET_SWITCH_RULES = [];
 let DEFAULT_TARGET = 'local';
 let targetToastTimer = null;
+
+/** textarea 自适应高度（1～6 行）；发送清空后须再调用以缩回单行 */
+function autosizeTextInput(input) {
+    if (!input) input = document.getElementById('text-input');
+    if (!input) return;
+    input.style.height = 'auto';
+    const cs = getComputedStyle(input);
+    const lineH = parseFloat(cs.lineHeight) || 22;
+    const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    const minH = Math.max(44, lineH + padY);
+    const maxH = Math.max(minH, 6 * lineH + padY);
+    const sh = input.scrollHeight;
+    input.style.height = Math.min(Math.max(sh, minH), maxH) + 'px';
+}
 
 function normalizeSwitchText(s) {
     return (s || '').trim().toLowerCase().replace(/\\s+/g, '');
@@ -1640,6 +1644,7 @@ async function sendTextMessage() {
 
     // 清空输入框（先保存内容以防后续需要重试）
     input.value = '';
+    autosizeTextInput(input);
 
     try {
         const res = await fetch('/oldbuddy/api/message/text', {
@@ -1654,6 +1659,7 @@ async function sendTextMessage() {
             alert('发送失败：服务器返回错误');
             // 将内容放回输入框（可选）
             input.value = content;
+            autosizeTextInput(input);
             return;
         }
 
@@ -1665,12 +1671,14 @@ async function sendTextMessage() {
             console.error('send text no message in response', data);
             // 将内容放回输入框（可选）
             input.value = content;
+            autosizeTextInput(input);
         }
     } catch (e) {
         console.error('sendTextMessage error', e);
         alert('发送失败：网络或其他错误');
         // 将内容放回输入框（可选）
         input.value = content;
+        autosizeTextInput(input);
     } finally {
         // 恢复按钮
         sendBtn.disabled = false;

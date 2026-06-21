@@ -14,6 +14,20 @@ let TARGET_SWITCH_RULES = [];
 let DEFAULT_TARGET = 'local';
 let targetToastTimer = null;
 
+/** textarea 自适应高度（1～6 行）；发送清空后须再调用以缩回单行 */
+function autosizeTextInput(input) {
+    if (!input) input = document.getElementById('text-input');
+    if (!input) return;
+    input.style.height = 'auto';
+    const cs = getComputedStyle(input);
+    const lineH = parseFloat(cs.lineHeight) || 22;
+    const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    const minH = Math.max(44, lineH + padY);
+    const maxH = Math.max(minH, 6 * lineH + padY);
+    const sh = input.scrollHeight;
+    input.style.height = Math.min(Math.max(sh, minH), maxH) + 'px';
+}
+
 function normalizeSwitchText(s) {
     return (s || '').trim().toLowerCase().replace(/\s+/g, '');
 }
@@ -902,8 +916,7 @@ async function sendLocationMessage() {
                 if (input) {
                     const prefix = input.value && input.value.trim() ? `${input.value}\n\n` : '';
                     input.value = `${prefix}${content}`;
-                    // 触发 autosize 监听，保持输入框高度与内容同步。
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    autosizeTextInput(input);
                     input.focus();
                 }
                 resolve();
@@ -951,6 +964,7 @@ async function sendTextMessage() {
 
     // 清空输入框（先保存内容以防后续需要重试）
     input.value = '';
+    autosizeTextInput(input);
 
     try {
         const res = await fetch('/oldbuddy/api/message/text', {
@@ -965,6 +979,7 @@ async function sendTextMessage() {
             alert('发送失败：服务器返回错误');
             // 将内容放回输入框（可选）
             input.value = content;
+            autosizeTextInput(input);
             return;
         }
 
@@ -976,12 +991,14 @@ async function sendTextMessage() {
             console.error('send text no message in response', data);
             // 将内容放回输入框（可选）
             input.value = content;
+            autosizeTextInput(input);
         }
     } catch (e) {
         console.error('sendTextMessage error', e);
         alert('发送失败：网络或其他错误');
         // 将内容放回输入框（可选）
         input.value = content;
+        autosizeTextInput(input);
     } finally {
         // 恢复按钮
         sendBtn.disabled = false;

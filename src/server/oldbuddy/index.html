@@ -145,18 +145,8 @@
             });
 
             // textarea 自适应高度（最多 6 行左右）；移动端 WebKit 偶发 scrollHeight=0，须保底高度
-            function autosize() {
-                textInput.style.height = 'auto';
-                const cs = getComputedStyle(textInput);
-                const lineH = parseFloat(cs.lineHeight) || 22;
-                const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-                const minH = Math.max(44, lineH + padY);
-                const maxH = Math.max(minH, 6 * lineH + padY);
-                const sh = textInput.scrollHeight;
-                textInput.style.height = Math.min(Math.max(sh, minH), maxH) + 'px';
-            }
-            textInput.addEventListener('input', autosize);
-            autosize();
+            textInput.addEventListener('input', () => autosizeTextInput(textInput));
+            autosizeTextInput(textInput);
             syncInputBarHeight();
 
             // ---------- 文件菜单 ----------
