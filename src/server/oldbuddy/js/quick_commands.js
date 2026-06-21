@@ -1,4 +1,55 @@
 // static/js/quick_commands.js
+let quickCmdMenu = null;
+
+function getQuickCommandTarget() {
+    return (typeof getCurrentChatTarget === "function")
+        ? getCurrentChatTarget()
+        : "local";
+}
+
+async function loadQuickCommandsForTarget(target) {
+    const url = `/oldbuddy/api/quick_commands?target=${encodeURIComponent(target || "local")}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("获取快捷命令失败");
+    const data = await res.json();
+    return data.commands ?? [];
+}
+
+function renderQuickCommandButtons(menu, cmds) {
+    menu.innerHTML = "";
+    cmds.forEach(cmd => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = cmd.label;
+        btn.dataset.cmdId = cmd.id;
+        btn.dataset.cmdText = cmd.text;
+        btn.style.cssText = `
+            padding:8px; border:none; background:transparent; text-align:left;
+            cursor:pointer; width:100%;
+        `;
+        btn.onmouseover = () => btn.style.background = "#f5f5f5";
+        btn.onmouseout = () => btn.style.background = "transparent";
+        btn.onclick = async (e) => {
+            e.stopPropagation();
+            menu.style.display = "none";
+            await sendQuickCommand(btn.dataset.cmdText, btn.dataset.cmdId);
+        };
+        menu.appendChild(btn);
+    });
+}
+
+async function refreshQuickCommandMenu(target) {
+    if (!quickCmdMenu) return;
+    const tid = target || getQuickCommandTarget();
+    try {
+        const cmds = await loadQuickCommandsForTarget(tid);
+        renderQuickCommandButtons(quickCmdMenu, cmds);
+    } catch (err) {
+        console.error("[quick_commands] 刷新失败：", err);
+        quickCmdMenu.innerHTML = "";
+    }
+}
+
 async function createQuickCommandUI() {
     const statusBar = document.getElementById("status-bar");
     const quickBtn = document.createElement("button");
@@ -21,36 +72,9 @@ async function createQuickCommandUI() {
         box-shadow:0 6px 18px rgba(0,0,0,0.12); padding:6px 6px;
     `;
     document.body.appendChild(menu);
+    quickCmdMenu = menu;
 
-    // 获取快捷命令
-    try {
-        const res = await fetch("/oldbuddy/api/quick_commands");
-        if (!res.ok) throw new Error("获取快捷命令失败");
-        const data = await res.json();
-        const cmds = data.commands ?? [];
-        console.log(cmds)
-        cmds.forEach(cmd => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.textContent = cmd.label;
-            btn.dataset.cmdId = cmd.id;
-            btn.dataset.cmdText = cmd.text;
-            btn.style.cssText = `
-                padding:8px; border:none; background:transparent; text-align:left;
-                cursor:pointer; width:100%;
-            `;
-            btn.onmouseover = () => btn.style.background = "#f5f5f5";
-            btn.onmouseout = () => btn.style.background = "transparent";
-            btn.onclick = async (e) => {
-                e.stopPropagation();
-                menu.style.display = "none";
-                await sendQuickCommand(btn.dataset.cmdText, btn.dataset.cmdId);
-            };
-            menu.appendChild(btn);
-        });
-    } catch (err) {
-        console.error("[quick_commands] 加载失败：", err);
-    }
+    await refreshQuickCommandMenu(getQuickCommandTarget());
 
     quickBtn.onclick = (e) => {
         e.stopPropagation();
@@ -66,9 +90,7 @@ async function createQuickCommandUI() {
 async function sendQuickCommand(text, cmdId = null) {
     if (!text) return;
     try {
-        const target = (typeof getCurrentChatTarget === "function")
-            ? getCurrentChatTarget()
-            : "local";
+        const target = getQuickCommandTarget();
         const res = await fetch('/oldbuddy/api/message/text', {
             method: "POST",
             body: new URLSearchParams({

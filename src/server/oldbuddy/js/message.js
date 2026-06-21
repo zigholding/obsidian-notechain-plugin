@@ -65,6 +65,9 @@ function setCurrentChatTarget(target, options = {}) {
     localStorage.setItem(CHAT_TARGET_STORAGE_KEY, target);
     updateTargetChip(target);
     applyMessageTargetFilter();
+    if (typeof refreshQuickCommandMenu === 'function') {
+        refreshQuickCommandMenu(target);
+    }
     if (notify) showTargetToast(`已切换到：${targetTitle(target)}`);
 }
 

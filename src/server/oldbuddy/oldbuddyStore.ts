@@ -155,14 +155,30 @@ export class OldBuddyStore {
         };
     }
 
-    /** 快捷命令；模板不存在或为空时返回 [{ label: '你是谁', text: '你是谁' }] */
-    async parse_oldbuddy_quick_commands(): Promise<{ id: string; label: string; text: string }[]> {
-        const items = await this.parseLabelTextTemplate(QUICK_COMMANDS_TEMPLATE, DEFAULT_QUICK_COMMANDS);
-        return labelTextItemsToCommands(items);
+    /** 快捷命令按 target 分组；模板返回 { [targetId]: [{ label, text }, ...], '*': [...] } */
+    async parse_oldbuddy_quick_commands_map(): Promise<Record<string, OldBuddyLabelTextItem[]>> {
+        if (!this.templater.ea.file.get_tfile(QUICK_COMMANDS_TEMPLATE)) {
+            return { [DEFAULT_TARGET]: [...DEFAULT_QUICK_COMMANDS] };
+        }
+        try {
+            const result = await this.templater.parse_templater(QUICK_COMMANDS_TEMPLATE, true, null, 0, '');
+            const map = normalizeQuickCommandsByTarget(result);
+            return Object.keys(map).length ? map : { [DEFAULT_TARGET]: [...DEFAULT_QUICK_COMMANDS] };
+        } catch {
+            return { [DEFAULT_TARGET]: [...DEFAULT_QUICK_COMMANDS] };
+        }
     }
 
-    async loadQuickCommands(): Promise<{ id: string; label: string; text: string }[]> {
-        return this.parse_oldbuddy_quick_commands();
+    async loadQuickCommands(target?: string): Promise<{ id: string; label: string; text: string }[]> {
+        const map = await this.parse_oldbuddy_quick_commands_map();
+        const key = (target || DEFAULT_TARGET).trim() || DEFAULT_TARGET;
+        const items =
+            map[key] ??
+            map['*'] ??
+            map['_default'] ??
+            map[DEFAULT_TARGET] ??
+            DEFAULT_QUICK_COMMANDS;
+        return labelTextItemsToCommands(items);
     }
 
     async addTextMessage(params: {
@@ -283,30 +299,56 @@ function labelTextItemsToCommands(items: OldBuddyLabelTextItem[]): { id: string;
     }));
 }
 
-function normalizeLabelTextList(result: unknown): OldBuddyLabelTextItem[] {
+function normalizeQuickCommandsByTarget(result: unknown): Record<string, OldBuddyLabelTextItem[]> {
+    const value = unwrapTemplaterValue(result);
+    if (Array.isArray(value)) {
+        const items = normalizeLabelTextList(value);
+        return items.length ? { '*': items } : {};
+    }
+    if (value && typeof value === 'object') {
+        const map: Record<string, OldBuddyLabelTextItem[]> = {};
+        for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+            const items = normalizeLabelTextList(val);
+            if (items.length) {
+                map[String(key).trim()] = items;
+            }
+        }
+        return map;
+    }
+    return {};
+}
+
+function unwrapTemplaterValue(result: unknown): unknown {
     if (result == null || result === '') {
-        return [];
+        return null;
     }
     let value: unknown = result;
     if (typeof value === 'string') {
         const s = value.trim();
-        if (!s) return [];
+        if (!s) return null;
         try {
             value = JSON.parse(s);
         } catch {
-            return [];
+            return null;
         }
     }
-    if (Array.isArray(value)) {
-        const items = value.length === 1 && Array.isArray(value[0]) ? value[0] : value;
-        return items
-            .map((row: any) => ({
-                label: String(row?.label ?? '').trim(),
-                text: String(row?.text ?? row?.label ?? '').trim(),
-            }))
-            .filter((row) => row.label || row.text);
+    if (Array.isArray(value) && value.length === 1 && Array.isArray(value[0])) {
+        return value[0];
     }
-    return [];
+    return value;
+}
+
+function normalizeLabelTextList(result: unknown): OldBuddyLabelTextItem[] {
+    const value = unwrapTemplaterValue(result);
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    return value
+        .map((row: any) => ({
+            label: String(row?.label ?? '').trim(),
+            text: String(row?.text ?? row?.label ?? '').trim(),
+        }))
+        .filter((row) => row.label || row.text);
 }
 
 function guessExt(mime: string) {
