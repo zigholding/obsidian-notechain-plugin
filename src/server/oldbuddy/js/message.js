@@ -11,7 +11,7 @@ const FILTER_HIDE_OLDER_STORAGE_KEY = 'rochat.filterHideOlder';
 const FILTER_HIDE_OLDER_SINCE_STORAGE_KEY = 'rochat.filterHideOlderSince';
 const TARGET_TITLE_MAP = {};
 let TARGET_SWITCH_RULES = [];
-let DEFAULT_TARGET = 'legacy';
+let DEFAULT_TARGET = 'local';
 let targetToastTimer = null;
 
 function normalizeSwitchText(s) {
@@ -171,8 +171,8 @@ function setHideOlderMessages(enabled, options = {}) {
 function messageTargetOfNode(node) {
     const t = node.dataset.target || '';
     if (t) return t;
-    // 兼容历史消息：无 target 视作 legacy
-    return 'legacy';
+    // 兼容历史消息：无 target 视作 local
+    return 'local';
 }
 
 function applyMessageTargetFilter() {
@@ -231,14 +231,14 @@ async function initTargetConfig() {
         }
     } catch (e) {
         console.warn('[target] use fallback target options:', e);
-        if (!TARGET_TITLE_MAP.legacy) {
-            TARGET_TITLE_MAP.legacy = '本地';
+        if (!TARGET_TITLE_MAP.local) {
+            TARGET_TITLE_MAP.local = 'local';
             const opt = document.createElement('option');
-            opt.value = 'legacy';
-            opt.textContent = '本地';
+            opt.value = 'local';
+            opt.textContent = 'local';
             selectEl.appendChild(opt);
         }
-        DEFAULT_TARGET = 'legacy';
+        DEFAULT_TARGET = 'local';
     }
 }
 /**

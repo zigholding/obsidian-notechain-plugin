@@ -186,4 +186,44 @@ export class Templater {
             return []
         }
     }
+
+    /** oldbuddy 聊天对象列表；模板 nochain_oldbuddy_senders 不存在时返回 ['local'] */
+    async parse_oldbuddy_senders(): Promise<string[]> {
+        const name = 'nochain_oldbuddy_senders';
+        if (!this.ea.file.get_tfile(name)) {
+            return ['local'];
+        }
+        try {
+            const result = await this.parse_templater(name, true, null, 0, '');
+            const senders = Templater.normalizeSenderList(result);
+            return senders.length ? senders : ['local'];
+        } catch {
+            return ['local'];
+        }
+    }
+
+    private static normalizeSenderList(result: unknown): string[] {
+        if (result == null || result === '') {
+            return [];
+        }
+        if (Array.isArray(result)) {
+            const items =
+                result.length === 1 && Array.isArray(result[0]) ? result[0] : result;
+            return items.map((x) => String(x).trim()).filter(Boolean);
+        }
+        if (typeof result === 'string') {
+            const s = result.trim();
+            if (!s) return [];
+            try {
+                const parsed = JSON.parse(s);
+                if (Array.isArray(parsed)) {
+                    return parsed.map((x) => String(x).trim()).filter(Boolean);
+                }
+            } catch {
+                // 非 JSON：按逗号/换行拆分
+            }
+            return s.split(/[,，\n]/).map((x) => x.trim()).filter(Boolean);
+        }
+        return [];
+    }
 }

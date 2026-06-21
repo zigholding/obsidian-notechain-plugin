@@ -68,7 +68,7 @@ async function sendQuickCommand(text, cmdId = null) {
     try {
         const target = (typeof getCurrentChatTarget === "function")
             ? getCurrentChatTarget()
-            : "legacy";
+            : "local";
         const res = await fetch('/oldbuddy/api/message/text', {
             method: "POST",
             body: new URLSearchParams({

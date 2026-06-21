@@ -6,16 +6,7 @@ import { OldBuddyMessage, OldBuddyTargetsConfig } from './types';
 import { OldBuddyWebSocketHub } from './oldbuddyWebSocket';
 import { Templater } from '../../easyapi/templater';
 
-const DEFAULT_TARGETS: OldBuddyTargetsConfig = {
-    default_target: 'legacy',
-    targets: [
-        { id: 'legacy', label: '本地', switch_phrases: ['切换到本地', '本地模式'] },
-        { id: 'nanobot_channel', label: 'nanobot channel', switch_phrases: ['nanobot'] },
-        { id: 'hermes_channel', label: 'hermes channel', switch_phrases: ['hermes'] },
-        { id: 'nanobot_serve', label: 'nanobot serve' },
-        { id: 'openclaw', label: 'openclaw', switch_phrases: ['openclaw'] },
-    ],
-};
+const DEFAULT_SENDER = 'local';
 
 const MAX_MESSAGES = 5000;
 const DEFAULT_REPLY_TEMPLATE = 'oldbuddy/reply.md';
@@ -142,25 +133,13 @@ export class OldBuddyStore {
         return { data: fs.readFileSync(abs), mime: mimeFromExt(abs) };
     }
 
-    loadTargetsConfig(): OldBuddyTargetsConfig {
-        const cfg: OldBuddyTargetsConfig = {
-            default_target: DEFAULT_TARGETS.default_target,
-            targets: [...DEFAULT_TARGETS.targets],
+    async loadTargetsConfig(): Promise<OldBuddyTargetsConfig> {
+        const senders = await this.templater.parse_oldbuddy_senders();
+        const targets = senders.map((id) => ({ id, label: id }));
+        return {
+            default_target: senders[0] || DEFAULT_SENDER,
+            targets,
         };
-        try {
-            const targetsYaml = path.join(this.dataDir, 'targets.yaml');
-            if (fs.existsSync(targetsYaml)) {
-                const yaml = require('js-yaml');
-                const parsed = yaml.load(fs.readFileSync(targetsYaml, 'utf8'));
-                if (parsed?.targets) {
-                    cfg.targets = parsed.targets;
-                    cfg.default_target = parsed.default_target || cfg.default_target;
-                }
-            }
-        } catch {
-            // use defaults
-        }
-        return cfg;
     }
 
     loadQuickCommands(): { id: string; label: string; text: string }[] {
@@ -202,7 +181,7 @@ export class OldBuddyStore {
         const userMsg = this.pushMessage({
             id: this.newId(),
             sender: params.sender || 'user',
-            target: params.target || 'legacy',
+            target: params.target || DEFAULT_SENDER,
             timestamp: new Date().toISOString(),
             type: 'text',
             content: params.content,
@@ -228,7 +207,7 @@ export class OldBuddyStore {
         const userMsg = this.pushMessage({
             id: this.newId(),
             sender: params.sender || 'user',
-            target: params.target || 'legacy',
+            target: params.target || DEFAULT_SENDER,
             timestamp: new Date().toISOString(),
             type: params.type,
             content: params.url,
@@ -243,7 +222,7 @@ export class OldBuddyStore {
     }
 
     private async generateReply(userMsg: OldBuddyMessage, quickCmdId?: string) {
-        const targets = this.loadTargetsConfig();
+        const targets = await this.loadTargetsConfig();
         const targetCfg = targets.targets.find((t) => t.id === userMsg.target);
         const template = targetCfg?.template || this.replyTemplate;
         const recent = this.messages.slice(-30);

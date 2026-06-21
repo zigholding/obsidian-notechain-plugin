@@ -44,7 +44,7 @@ export class OldBuddyHttpHandlers {
         }
 
         if (sub === 'api/targets' && req.method === 'GET') {
-            jsonResponse(res, 200, this.store.loadTargetsConfig());
+            jsonResponse(res, 200, await this.store.loadTargetsConfig());
             return true;
         }
         if (sub === 'api/quick_commands' && req.method === 'GET') {
@@ -98,7 +98,7 @@ export class OldBuddyHttpHandlers {
             const message = await this.store.addTextMessage({
                 content,
                 sender: fields.sender || 'user',
-                target: fields.target || 'legacy',
+                target: fields.target || 'local',
                 extra_text: fields.extra_text,
                 quick_cmd_id: fields.quick_cmd_id,
             });
@@ -127,7 +127,7 @@ export class OldBuddyHttpHandlers {
                 type,
                 url: saved.url,
                 sender: fields.sender || 'user',
-                target: fields.target || 'legacy',
+                target: fields.target || 'local',
                 extra_text: fields.extra_text,
                 file_name: file.filename || undefined,
                 file_size: file.data.length,

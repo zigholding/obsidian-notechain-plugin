@@ -354,11 +354,7 @@ body {
             <span id="status-text">离线</span>
             <span id="current-target-chip">本地</span>
             <select id="chat-target" title="聊天对象">
-                <option value="legacy">本地</option>
-                <option value="nanobot_channel">nanobot channel</option>
-                <option value="hermes_channel">hermes channel</option>
-                <option value="nanobot_serve">nanobot serve</option>
-                <option value="openclaw">openclaw</option>
+                <option value="local">local</option>
             </select>
         </div>
         <div id="messages" role="log" aria-live="polite"></div>
@@ -701,7 +697,7 @@ const FILTER_HIDE_OLDER_STORAGE_KEY = 'rochat.filterHideOlder';
 const FILTER_HIDE_OLDER_SINCE_STORAGE_KEY = 'rochat.filterHideOlderSince';
 const TARGET_TITLE_MAP = {};
 let TARGET_SWITCH_RULES = [];
-let DEFAULT_TARGET = 'legacy';
+let DEFAULT_TARGET = 'local';
 let targetToastTimer = null;
 
 function normalizeSwitchText(s) {
@@ -861,8 +857,8 @@ function setHideOlderMessages(enabled, options = {}) {
 function messageTargetOfNode(node) {
     const t = node.dataset.target || '';
     if (t) return t;
-    // 兼容历史消息：无 target 视作 legacy
-    return 'legacy';
+    // 兼容历史消息：无 target 视作 local
+    return 'local';
 }
 
 function applyMessageTargetFilter() {
@@ -921,14 +917,14 @@ async function initTargetConfig() {
         }
     } catch (e) {
         console.warn('[target] use fallback target options:', e);
-        if (!TARGET_TITLE_MAP.legacy) {
-            TARGET_TITLE_MAP.legacy = '本地';
+        if (!TARGET_TITLE_MAP.local) {
+            TARGET_TITLE_MAP.local = 'local';
             const opt = document.createElement('option');
-            opt.value = 'legacy';
-            opt.textContent = '本地';
+            opt.value = 'local';
+            opt.textContent = 'local';
             selectEl.appendChild(opt);
         }
-        DEFAULT_TARGET = 'legacy';
+        DEFAULT_TARGET = 'local';
     }
 }
 /**
@@ -1748,7 +1744,7 @@ async function sendQuickCommand(text, cmdId = null) {
     try {
         const target = (typeof getCurrentChatTarget === "function")
             ? getCurrentChatTarget()
-            : "legacy";
+            : "local";
         const res = await fetch('/oldbuddy/api/message/text', {
             method: "POST",
             body: new URLSearchParams({
