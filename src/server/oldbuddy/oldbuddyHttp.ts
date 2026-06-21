@@ -52,6 +52,14 @@ export class OldBuddyHttpHandlers {
             jsonResponse(res, 200, { commands: await this.store.loadQuickCommands(target) });
             return true;
         }
+        if (sub === 'api/reference' && req.method === 'GET') {
+            const target = parsedUrl.query?.target as string | undefined;
+            const query = parsedUrl.query?.query as string | undefined;
+            jsonResponse(res, 200, {
+                references: await this.store.loadReferences(target, query),
+            });
+            return true;
+        }
         if (sub === 'api/messages' && req.method === 'GET') {
             const limit = Math.min(100, Math.max(1, parseInt(String(parsedUrl.query?.limit || '10'), 10) || 10));
             const before = parsedUrl.query?.before as string | undefined;

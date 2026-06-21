@@ -28,6 +28,7 @@ const scripts = [
     read('js/markdown.js'),
     read('js/message.js'),
     read('js/quick_commands.js'),
+    read('js/reference.js'),
     read('js/upload.js'),
 ].join('\n\n');
 

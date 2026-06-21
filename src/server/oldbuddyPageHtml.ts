@@ -297,6 +297,48 @@ body {
     transform: translateX(-50%) translateY(0);
 }
 
+#reference-picker {
+    position: fixed;
+    z-index: 2001;
+    max-height: min(40vh, 280px);
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #d8d8d8;
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
+    padding: 4px 0;
+    -webkit-overflow-scrolling: touch;
+}
+
+.reference-picker-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 10px 14px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+}
+
+.reference-picker-item:hover,
+.reference-picker-item.active {
+    background: #f0f0f0;
+}
+
+.reference-picker-label {
+    font-size: 15px;
+    color: #111;
+}
+
+.reference-picker-sub {
+    font-size: 12px;
+    color: #888;
+}
+
 #quick-cmd-menu button:hover {
     background: #f5f5f5;
 }
@@ -433,6 +475,7 @@ body {
             }
 
             textInput.addEventListener('keydown', async (e) => {
+                if (typeof isReferencePickerOpen === 'function' && isReferencePickerOpen()) return;
                 if (e.key !== 'Enter' || e.shiftKey) return;
                 if (!mqFinePointer.matches) return; /* 触摸为主：不拦截，由系统插入换行 */
                 e.preventDefault();
@@ -461,7 +504,8 @@ body {
                 }
             };
 
-            initUploadHandlers()
+            initUploadHandlers();
+            initReferencePicker();
             
             // ---------- 首次加载最近消息 ----------
             await loadMessages(10); // 首次加载最近 10 条
@@ -1595,8 +1639,7 @@ async function sendLocationMessage() {
                 if (input) {
                     const prefix = input.value && input.value.trim() ? \`\${input.value}\\n\\n\` : '';
                     input.value = \`\${prefix}\${content}\`;
-                    // 触发 autosize 监听，保持输入框高度与内容同步。
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    autosizeTextInput(input);
                     input.focus();
                 }
                 resolve();
@@ -1799,6 +1842,239 @@ async function sendQuickCommand(text, cmdId = null) {
         console.error("[quick_commands] 发送失败：", err);
         alert("发送快捷命令失败");
     }
+}
+
+
+// static/js/reference.js — 输入 @ 时浮层选择引用（微信群聊 @ 风格）
+
+let referencePicker = null;
+let referencePickerOpen = false;
+let referenceItems = [];
+let referenceHighlight = 0;
+let referenceFetchTimer = null;
+let referenceMentionRange = null;
+
+function isReferencePickerOpen() {
+    return referencePickerOpen;
+}
+
+function getReferenceTarget() {
+    return typeof getCurrentChatTarget === 'function' ? getCurrentChatTarget() : 'local';
+}
+
+/** 光标前正在输入的 @ 片段；无则 null */
+function getActiveMention(input) {
+    if (!input) return null;
+    const pos = input.selectionStart;
+    if (pos == null) return null;
+    const before = input.value.slice(0, pos);
+    const match = before.match(/(^|[\\s\\u3000\\n])@([^\\s@\\u3000\\n]*)$/);
+    if (!match) return null;
+    const query = match[2] || '';
+    const start = pos - query.length - 1;
+    return { query, start, end: pos };
+}
+
+function ensureReferencePicker() {
+    if (referencePicker) return referencePicker;
+    const el = document.createElement('div');
+    el.id = 'reference-picker';
+    el.setAttribute('role', 'listbox');
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    referencePicker = el;
+    return el;
+}
+
+function positionReferencePicker(input) {
+    const picker = ensureReferencePicker();
+    const inputBar = document.getElementById('input-bar');
+    const rect = input.getBoundingClientRect();
+    const barRect = inputBar ? inputBar.getBoundingClientRect() : rect;
+    picker.style.left = \`\${Math.max(8, rect.left)}px\`;
+    picker.style.width = \`\${Math.min(320, Math.max(200, rect.width))}px\`;
+    picker.style.bottom = \`\${window.innerHeight - barRect.top + 6}px\`;
+}
+
+function hideReferencePicker() {
+    referencePickerOpen = false;
+    referenceMentionRange = null;
+    referenceHighlight = 0;
+    if (referencePicker) {
+        referencePicker.style.display = 'none';
+        referencePicker.innerHTML = '';
+    }
+}
+
+function renderReferencePicker(items) {
+    const picker = ensureReferencePicker();
+    picker.innerHTML = '';
+    referenceItems = items;
+    referenceHighlight = 0;
+
+    if (!items.length) {
+        hideReferencePicker();
+        return;
+    }
+
+    items.forEach((item, idx) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'reference-picker-item';
+        row.setAttribute('role', 'option');
+        row.dataset.index = String(idx);
+        row.innerHTML = \`<span class="reference-picker-label">\${escapeHtml(item.label)}</span>\` +
+            (item.text && item.text !== item.label
+                ? \`<span class="reference-picker-sub">\${escapeHtml(item.text)}</span>\`
+                : '');
+        row.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            applyReferenceItem(item);
+        };
+        picker.appendChild(row);
+    });
+
+    updateReferenceHighlight();
+    picker.style.display = 'block';
+    referencePickerOpen = true;
+}
+
+function updateReferenceHighlight() {
+    if (!referencePicker) return;
+    const rows = referencePicker.querySelectorAll('.reference-picker-item');
+    rows.forEach((row, i) => {
+        row.classList.toggle('active', i === referenceHighlight);
+    });
+    const active = rows[referenceHighlight];
+    if (active && typeof active.scrollIntoView === 'function') {
+        active.scrollIntoView({ block: 'nearest' });
+    }
+}
+
+function escapeHtml(s) {
+    return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function applyReferenceItem(item) {
+    const input = document.getElementById('text-input');
+    if (!input || !referenceMentionRange) return;
+    const insert = \`@\${item.label} \`;
+    const val = input.value;
+    const { start, end } = referenceMentionRange;
+    input.value = val.slice(0, start) + insert + val.slice(end);
+    const newPos = start + insert.length;
+    input.setSelectionRange(newPos, newPos);
+    if (typeof autosizeTextInput === 'function') {
+        autosizeTextInput(input);
+    }
+    hideReferencePicker();
+    input.focus();
+}
+
+async function fetchReferences(query) {
+    const target = getReferenceTarget();
+    const url = \`/oldbuddy/api/reference?target=\${encodeURIComponent(target)}&query=\${encodeURIComponent(query || '')}\`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.references) ? data.references : [];
+}
+
+function scheduleReferenceFetch(input, mention) {
+    if (referenceFetchTimer) clearTimeout(referenceFetchTimer);
+    referenceMentionRange = { start: mention.start, end: mention.end, query: mention.query };
+    referenceFetchTimer = setTimeout(async () => {
+        referenceFetchTimer = null;
+        const inputNow = document.getElementById('text-input');
+        if (!inputNow) return;
+        const active = getActiveMention(inputNow);
+        if (!active) {
+            hideReferencePicker();
+            return;
+        }
+        referenceMentionRange = { start: active.start, end: active.end, query: active.query };
+        positionReferencePicker(inputNow);
+        try {
+            const items = await fetchReferences(active.query);
+            if (!getActiveMention(inputNow)) {
+                hideReferencePicker();
+                return;
+            }
+            renderReferencePicker(items);
+        } catch (e) {
+            console.warn('[reference] fetch failed', e);
+            hideReferencePicker();
+        }
+    }, 120);
+}
+
+function onReferenceInput() {
+    const input = document.getElementById('text-input');
+    if (!input) return;
+    const mention = getActiveMention(input);
+    if (!mention) {
+        hideReferencePicker();
+        return;
+    }
+    positionReferencePicker(input);
+    scheduleReferenceFetch(input, mention);
+}
+
+function onReferenceKeydown(e) {
+    if (!referencePickerOpen || !referenceItems.length) return false;
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        referenceHighlight = (referenceHighlight + 1) % referenceItems.length;
+        updateReferenceHighlight();
+        return true;
+    }
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        referenceHighlight = (referenceHighlight - 1 + referenceItems.length) % referenceItems.length;
+        updateReferenceHighlight();
+        return true;
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        const item = referenceItems[referenceHighlight];
+        if (item) applyReferenceItem(item);
+        return true;
+    }
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        hideReferencePicker();
+        return true;
+    }
+    return false;
+}
+
+function initReferencePicker() {
+    const input = document.getElementById('text-input');
+    if (!input) return;
+
+    input.addEventListener('input', onReferenceInput);
+    input.addEventListener('click', onReferenceInput);
+    input.addEventListener('keyup', onReferenceInput);
+    input.addEventListener('keydown', (e) => {
+        if (onReferenceKeydown(e)) return;
+    }, true);
+
+    document.addEventListener('click', (e) => {
+        if (!referencePickerOpen) return;
+        if (referencePicker && referencePicker.contains(e.target)) return;
+        if (e.target === input) return;
+        hideReferencePicker();
+    });
+
+    window.addEventListener('resize', () => {
+        if (referencePickerOpen && input) positionReferencePicker(input);
+    });
 }
 
 

@@ -85,6 +85,7 @@
     <script src="static/js/markdown.js?v=20260417b"></script>
     <script src="static/js/message.js?v=20260422c"></script>
     <script src="static/js/quick_commands.js?v=20260420a"></script>
+    <script src="static/js/reference.js?v=20260621"></script>
     <script src="static/js/upload.js?v=20260420a"></script>
 
     <script>
@@ -136,6 +137,7 @@
             }
 
             textInput.addEventListener('keydown', async (e) => {
+                if (typeof isReferencePickerOpen === 'function' && isReferencePickerOpen()) return;
                 if (e.key !== 'Enter' || e.shiftKey) return;
                 if (!mqFinePointer.matches) return; /* 触摸为主：不拦截，由系统插入换行 */
                 e.preventDefault();
@@ -164,7 +166,8 @@
                 }
             };
 
-            initUploadHandlers()
+            initUploadHandlers();
+            initReferencePicker();
             
             // ---------- 首次加载最近消息 ----------
             await loadMessages(10); // 首次加载最近 10 条

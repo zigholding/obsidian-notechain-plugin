@@ -12,6 +12,7 @@ const TARGETS_TEMPLATE = 'nochain_oldbuddy_targets';
 const QUICK_COMMANDS_TEMPLATE = 'nochain_oldbuddy_quick_commands';
 const QUERY_TEMPLATE = 'nochain_oldbuddy_query';
 const SAVE_TEMPLATE = 'nochain_oldbuddy_save';
+const REFERENCE_TEMPLATE = 'nochain_oldbuddy_reference';
 const MAX_MESSAGES = 5000;
 const DEFAULT_REPLY_TEMPLATE = 'nochain_oldbuddy_reply';
 const DEFAULT_TARGET = DEFAULT_TARGETS[0].text;
@@ -336,6 +337,39 @@ export class OldBuddyStore {
             map[DEFAULT_TARGET] ??
             DEFAULT_QUICK_COMMANDS;
         return labelTextItemsToCommands(items);
+    }
+
+    /** @ 引用列表；模板 nochain_oldbuddy_reference 返回 [{ label, text }, ...] */
+    async loadReferences(target?: string, query?: string): Promise<{ id: string; label: string; text: string }[]> {
+        if (!this.templater.ea.file.get_tfile(REFERENCE_TEMPLATE)) {
+            return [];
+        }
+        try {
+            const result = await this.templater.parse_templater(REFERENCE_TEMPLATE, true, {
+                oldbuddy: {
+                    action: 'reference',
+                    target: target || null,
+                    query: query || '',
+                },
+            }, 0, '');
+            const items = normalizeLabelTextList(result);
+            if (!items.length) {
+                return [];
+            }
+            let list = labelTextItemsToCommands(items);
+            const q = (query || '').trim().toLowerCase();
+            if (q) {
+                list = list.filter(
+                    (item) =>
+                        item.label.toLowerCase().includes(q) ||
+                        item.text.toLowerCase().includes(q),
+                );
+            }
+            return list;
+        } catch (e) {
+            console.warn('[oldbuddy] reference failed:', e);
+            return [];
+        }
     }
 
     async addTextMessage(params: {
