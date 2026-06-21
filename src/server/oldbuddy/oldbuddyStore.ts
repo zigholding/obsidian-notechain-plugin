@@ -10,6 +10,8 @@ const DEFAULT_TARGETS: OldBuddyLabelTextItem[] = [{ label: 'local', text: 'local
 const DEFAULT_QUICK_COMMANDS: OldBuddyLabelTextItem[] = [{ label: '你是谁', text: '你是谁' }];
 const TARGETS_TEMPLATE = 'nochain_oldbuddy_targets';
 const QUICK_COMMANDS_TEMPLATE = 'nochain_oldbuddy_quick_commands';
+const QUERY_TEMPLATE = 'nochain_oldbuddy_query';
+const SAVE_TEMPLATE = 'nochain_oldbuddy_save';
 const MAX_MESSAGES = 5000;
 const DEFAULT_REPLY_TEMPLATE = 'nochain_oldbuddy_reply';
 const DEFAULT_TARGET = DEFAULT_TARGETS[0].text;
@@ -77,12 +79,35 @@ export class OldBuddyStore {
         }
         this.persist();
         this.ws.broadcast(msg);
+        void this.saveMessageViaScript(msg);
         return msg;
     }
 
-    listMessages(limit: number, before?: string | null) {
+    /** 可选：nochain_oldbuddy_save，extra.oldbuddy = { action, message, messages } */
+    private async saveMessageViaScript(msg: OldBuddyMessage) {
+        await this.invokeTemplaterOptional(SAVE_TEMPLATE, {
+            oldbuddy: {
+                action: 'save',
+                message: msg,
+                messages: this.messages,
+                data_dir: this.dataDir,
+                messages_file: this.messagesFile,
+            },
+        });
+    }
+
+    async listMessages(limit: number, before?: string | null, target?: string | null) {
         this.ensureLoaded();
         let list = [...this.messages];
+        const queried = await this.queryMessagesViaScript({
+            limit,
+            before: before || null,
+            target: target || null,
+            local: list,
+        });
+        if (queried) {
+            list = mergeMessages(list, queried);
+        }
         list.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         if (before) {
             const beforeMs = Date.parse(before);
@@ -90,11 +115,45 @@ export class OldBuddyStore {
                 list = list.filter((m) => new Date(m.timestamp).getTime() < beforeMs);
             }
         }
+        if (target) {
+            list = list.filter((m) => (m.target || DEFAULT_TARGET) === target);
+        }
         const slice = list.slice(-Math.max(1, limit));
-        const hasMore = before
-            ? list.length > slice.length
-            : this.messages.length > slice.length;
+        const hasMore = list.length > slice.length;
         return { messages: slice, has_more: hasMore };
+    }
+
+    /** 可选：nochain_oldbuddy_query，返回 OldBuddyMessage[] 或 { messages: [] }，与本地记录合并 */
+    private async queryMessagesViaScript(params: {
+        limit: number;
+        before: string | null;
+        target: string | null;
+        local: OldBuddyMessage[];
+    }): Promise<OldBuddyMessage[] | null> {
+        const result = await this.invokeTemplaterOptional(QUERY_TEMPLATE, {
+            oldbuddy: {
+                action: 'query',
+                limit: params.limit,
+                before: params.before,
+                target: params.target,
+                messages: params.local,
+                data_dir: this.dataDir,
+                messages_file: this.messagesFile,
+            },
+        });
+        return normalizeMessages(result);
+    }
+
+    private async invokeTemplaterOptional(templateName: string, extra: Record<string, unknown>): Promise<unknown | null> {
+        if (!this.templater.ea.file.get_tfile(templateName)) {
+            return null;
+        }
+        try {
+            return await this.templater.parse_templater(templateName, true, extra, 0, '');
+        } catch (e) {
+            console.warn(`[oldbuddy] ${templateName} failed:`, e);
+            return null;
+        }
     }
 
     getUploadsDir() {
@@ -285,6 +344,52 @@ export class OldBuddyStore {
     close() {
         this.ws.closeAll();
     }
+}
+
+function mergeMessages(...sources: OldBuddyMessage[][]): OldBuddyMessage[] {
+    const map = new Map<string, OldBuddyMessage>();
+    for (const list of sources) {
+        for (const m of list) {
+            if (m?.id) {
+                map.set(m.id, m);
+            }
+        }
+    }
+    return Array.from(map.values()).sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    );
+}
+
+function normalizeMessages(result: unknown): OldBuddyMessage[] | null {
+    const value = unwrapTemplaterValue(result);
+    if (value == null) {
+        return null;
+    }
+    let arr: unknown[] | null = null;
+    if (Array.isArray(value)) {
+        arr = value;
+    } else if (typeof value === 'object' && Array.isArray((value as { messages?: unknown }).messages)) {
+        arr = (value as { messages: unknown[] }).messages;
+    }
+    if (!arr) {
+        return null;
+    }
+    const out = arr.filter(isValidMessage);
+    return out.length ? out : null;
+}
+
+function isValidMessage(m: unknown): m is OldBuddyMessage {
+    if (!m || typeof m !== 'object') {
+        return false;
+    }
+    const row = m as OldBuddyMessage;
+    return (
+        typeof row.id === 'string' &&
+        typeof row.sender === 'string' &&
+        typeof row.timestamp === 'string' &&
+        typeof row.type === 'string' &&
+        typeof row.content === 'string'
+    );
 }
 
 function sanitizeBaseName(name: string) {

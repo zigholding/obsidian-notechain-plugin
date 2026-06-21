@@ -55,7 +55,8 @@ export class OldBuddyHttpHandlers {
         if (sub === 'api/messages' && req.method === 'GET') {
             const limit = Math.min(100, Math.max(1, parseInt(String(parsedUrl.query?.limit || '10'), 10) || 10));
             const before = parsedUrl.query?.before as string | undefined;
-            jsonResponse(res, 200, this.store.listMessages(limit, before || null));
+            const target = parsedUrl.query?.target as string | undefined;
+            jsonResponse(res, 200, await this.store.listMessages(limit, before || null, target || null));
             return true;
         }
         if (sub === 'api/message/text' && req.method === 'POST') {
