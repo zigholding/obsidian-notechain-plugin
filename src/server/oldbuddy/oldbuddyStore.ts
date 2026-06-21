@@ -11,7 +11,7 @@ const DEFAULT_QUICK_COMMANDS: OldBuddyLabelTextItem[] = [{ label: '你是谁', t
 const TARGETS_TEMPLATE = 'nochain_oldbuddy_targets';
 const QUICK_COMMANDS_TEMPLATE = 'nochain_oldbuddy_quick_commands';
 const MAX_MESSAGES = 5000;
-const DEFAULT_REPLY_TEMPLATE = 'oldbuddy/reply.md';
+const DEFAULT_REPLY_TEMPLATE = 'nochain_oldbuddy_reply';
 const DEFAULT_TARGET = DEFAULT_TARGETS[0].text;
 
 export class OldBuddyStore {
