@@ -7,6 +7,7 @@ import { OldBuddyWebSocketHub } from './oldbuddyWebSocket';
 import { Templater } from '../../easyapi/templater';
 
 const DEFAULT_SENDER = 'local';
+const SENDERS_TEMPLATE = 'nochain_oldbuddy_senders';
 
 const MAX_MESSAGES = 5000;
 const DEFAULT_REPLY_TEMPLATE = 'oldbuddy/reply.md';
@@ -133,8 +134,22 @@ export class OldBuddyStore {
         return { data: fs.readFileSync(abs), mime: mimeFromExt(abs) };
     }
 
+    /** 聊天对象列表；模板 nochain_oldbuddy_senders 不存在时返回 ['local'] */
+    async parse_oldbuddy_senders(): Promise<string[]> {
+        if (!this.templater.ea.file.get_tfile(SENDERS_TEMPLATE)) {
+            return [DEFAULT_SENDER];
+        }
+        try {
+            const result = await this.templater.parse_templater(SENDERS_TEMPLATE, true, null, 0, '');
+            const senders = normalizeSenderList(result);
+            return senders.length ? senders : [DEFAULT_SENDER];
+        } catch {
+            return [DEFAULT_SENDER];
+        }
+    }
+
     async loadTargetsConfig(): Promise<OldBuddyTargetsConfig> {
-        const senders = await this.templater.parse_oldbuddy_senders();
+        const senders = await this.parse_oldbuddy_senders();
         const targets = senders.map((id) => ({ id, label: id }));
         return {
             default_target: senders[0] || DEFAULT_SENDER,
@@ -277,6 +292,30 @@ export class OldBuddyStore {
 
 function sanitizeBaseName(name: string) {
     return name.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 80);
+}
+
+function normalizeSenderList(result: unknown): string[] {
+    if (result == null || result === '') {
+        return [];
+    }
+    if (Array.isArray(result)) {
+        const items = result.length === 1 && Array.isArray(result[0]) ? result[0] : result;
+        return items.map((x) => String(x).trim()).filter(Boolean);
+    }
+    if (typeof result === 'string') {
+        const s = result.trim();
+        if (!s) return [];
+        try {
+            const parsed = JSON.parse(s);
+            if (Array.isArray(parsed)) {
+                return parsed.map((x) => String(x).trim()).filter(Boolean);
+            }
+        } catch {
+            // 非 JSON：按逗号/换行拆分
+        }
+        return s.split(/[,，\n]/).map((x) => x.trim()).filter(Boolean);
+    }
+    return [];
 }
 
 function guessExt(mime: string) {
