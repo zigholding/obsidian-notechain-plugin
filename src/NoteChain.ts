@@ -235,7 +235,7 @@ export class NoteChain {
 		return true;
 	}
 
-	async sugguster_note(notes: null | Array<TFile> = null, slice = 0, onlyname = false) {
+	async sugguster_note(notes: null | Array<TFile> = null, slice = 0, onlyname = false,new_value=false) {
 		// 从库中选择一个笔记
 		if (notes == null) {
 			notes = this.sort_tfiles(
@@ -251,7 +251,7 @@ export class NoteChain {
 				items = (notes as any).map((f: TFile) => f.path.slice(slice))
 			}
 			let msg = this.plugin.utils.array_prefix_id(items);
-			let note = await this.plugin.easyapi.dialog_suggest(msg, notes);
+			let note = await this.plugin.easyapi.dialog_suggest(msg, notes,'',new_value);
 			return note;
 		} catch (error) {
 			return null;

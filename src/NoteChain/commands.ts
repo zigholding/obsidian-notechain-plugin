@@ -787,8 +787,10 @@ const cmd_open_note_in_view = (plugin: NoteChainPlugin) => ({
     name: plugin.strings.cmd_open_note_in_view,
 	icon:'Panels Top Left',
     callback: async () => {
-		let note = await plugin.chain.sugguster_note();
-		if(note){
+		let note = await plugin.chain.sugguster_note(null,0,false,true);
+		if(typeof note === 'string'){
+			plugin.chain.open_note_in_view(note);
+		}else{
 			plugin.chain.open_note_in_view(note.path);
 		}
     }
