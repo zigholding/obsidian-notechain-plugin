@@ -48,7 +48,7 @@ export class OldBuddyHttpHandlers {
             return true;
         }
         if (sub === 'api/quick_commands' && req.method === 'GET') {
-            jsonResponse(res, 200, { commands: this.store.loadQuickCommands() });
+            jsonResponse(res, 200, { commands: await this.store.loadQuickCommands() });
             return true;
         }
         if (sub === 'api/messages' && req.method === 'GET') {

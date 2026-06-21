@@ -2,30 +2,17 @@ let fs = require('fs');
 let path = require('path');
 let crypto = require('crypto');
 
-import { OldBuddyMessage, OldBuddyTargetsConfig } from './types';
+import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem } from './types';
 import { OldBuddyWebSocketHub } from './oldbuddyWebSocket';
 import { Templater } from '../../easyapi/templater';
 
-const DEFAULT_SENDER = 'local';
+const DEFAULT_SENDERS: OldBuddyLabelTextItem[] = [{ label: 'local', text: 'local' }];
+const DEFAULT_QUICK_COMMANDS: OldBuddyLabelTextItem[] = [{ label: '你是谁', text: '你是谁' }];
 const SENDERS_TEMPLATE = 'nochain_oldbuddy_senders';
-
+const QUICK_COMMANDS_TEMPLATE = 'nochain_oldbuddy_quick_commands';
 const MAX_MESSAGES = 5000;
 const DEFAULT_REPLY_TEMPLATE = 'oldbuddy/reply.md';
-
-/** 默认快捷命令（原 quick_commands.yaml） */
-const DEFAULT_QUICK_COMMANDS: { id: string; label: string; text: string }[] = [
-    { id: '0', label: '你是谁', text: '你是谁' },
-    { id: '1', label: '站起来', text: '站起来' },
-    { id: '2', label: '打开避障', text: '打开避障' },
-    { id: '3', label: '关闭避障', text: '关闭避障' },
-    { id: '4', label: '往前走2米', text: '往前走2米' },
-    { id: '5', label: '你看到什么了', text: '你看到什么了' },
-    { id: '6', label: '前往消防巡逻', text: '前往消防巡逻' },
-    { id: '7', label: '站起来往前走1米', text: '站起来往前走1米' },
-    { id: '8', label: '连续动作', text: '后退两米然后拍照然后趴下' },
-    { id: '9', label: '在灭火器设定初始位姿', text: '在灭火器设定初始位姿' },
-    { id: '10', label: '在洗手台设定初始位姿', text: '在洗手台设定初始位姿' },
-];
+const DEFAULT_SENDER = DEFAULT_SENDERS[0].text;
 
 export class OldBuddyStore {
     private messages: OldBuddyMessage[] = [];
@@ -134,54 +121,48 @@ export class OldBuddyStore {
         return { data: fs.readFileSync(abs), mime: mimeFromExt(abs) };
     }
 
-    /** 聊天对象列表；模板 nochain_oldbuddy_senders 不存在时返回 ['local'] */
-    async parse_oldbuddy_senders(): Promise<string[]> {
-        if (!this.templater.ea.file.get_tfile(SENDERS_TEMPLATE)) {
-            return [DEFAULT_SENDER];
+    private async parseLabelTextTemplate(
+        templateName: string,
+        fallback: OldBuddyLabelTextItem[],
+    ): Promise<OldBuddyLabelTextItem[]> {
+        if (!this.templater.ea.file.get_tfile(templateName)) {
+            return fallback;
         }
         try {
-            const result = await this.templater.parse_templater(SENDERS_TEMPLATE, true, null, 0, '');
-            const senders = normalizeSenderList(result);
-            return senders.length ? senders : [DEFAULT_SENDER];
+            const result = await this.templater.parse_templater(templateName, true, null, 0, '');
+            const items = normalizeLabelTextList(result);
+            return items.length ? items : fallback;
         } catch {
-            return [DEFAULT_SENDER];
+            return fallback;
         }
     }
 
+    /** 聊天对象；模板不存在或为空时返回 [{ label: 'local', text: 'local' }] */
+    async parse_oldbuddy_senders(): Promise<OldBuddyLabelTextItem[]> {
+        return this.parseLabelTextTemplate(SENDERS_TEMPLATE, DEFAULT_SENDERS);
+    }
+
     async loadTargetsConfig(): Promise<OldBuddyTargetsConfig> {
-        const senders = await this.parse_oldbuddy_senders();
-        const targets = senders.map((id) => ({ id, label: id }));
+        const items = await this.parse_oldbuddy_senders();
+        const targets = items.map((item) => ({
+            id: item.text || item.label,
+            label: item.label || item.text,
+        }));
+        const first = items[0];
         return {
-            default_target: senders[0] || DEFAULT_SENDER,
+            default_target: first ? (first.text || first.label) : DEFAULT_SENDER,
             targets,
         };
     }
 
-    loadQuickCommands(): { id: string; label: string; text: string }[] {
-        try {
-            const yamlFile = path.join(this.dataDir, 'quick_commands.yaml');
-            if (fs.existsSync(yamlFile)) {
-                const yaml = require('js-yaml');
-                const parsed = yaml.load(fs.readFileSync(yamlFile, 'utf8'));
-                if (Array.isArray(parsed)) {
-                    return parsed.map((row: any, i: number) => ({
-                        id: String(row?.id || i),
-                        label: String(row?.label || row?.text || row),
-                        text: String(row?.text || row?.label || row),
-                    }));
-                }
-                if (parsed && typeof parsed === 'object') {
-                    return Object.entries(parsed).map(([label, text], i) => ({
-                        id: String(i),
-                        label: String(label),
-                        text: String(text),
-                    }));
-                }
-            }
-        } catch (e) {
-            console.warn('[oldbuddy] quick_commands.yaml parse failed:', e);
-        }
-        return [...DEFAULT_QUICK_COMMANDS];
+    /** 快捷命令；模板不存在或为空时返回 [{ label: '你是谁', text: '你是谁' }] */
+    async parse_oldbuddy_quick_commands(): Promise<{ id: string; label: string; text: string }[]> {
+        const items = await this.parseLabelTextTemplate(QUICK_COMMANDS_TEMPLATE, DEFAULT_QUICK_COMMANDS);
+        return labelTextItemsToCommands(items);
+    }
+
+    async loadQuickCommands(): Promise<{ id: string; label: string; text: string }[]> {
+        return this.parse_oldbuddy_quick_commands();
     }
 
     async addTextMessage(params: {
@@ -294,26 +275,36 @@ function sanitizeBaseName(name: string) {
     return name.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 80);
 }
 
-function normalizeSenderList(result: unknown): string[] {
+function labelTextItemsToCommands(items: OldBuddyLabelTextItem[]): { id: string; label: string; text: string }[] {
+    return items.map((item, i) => ({
+        id: String(i),
+        label: item.label || item.text,
+        text: item.text || item.label,
+    }));
+}
+
+function normalizeLabelTextList(result: unknown): OldBuddyLabelTextItem[] {
     if (result == null || result === '') {
         return [];
     }
-    if (Array.isArray(result)) {
-        const items = result.length === 1 && Array.isArray(result[0]) ? result[0] : result;
-        return items.map((x) => String(x).trim()).filter(Boolean);
-    }
-    if (typeof result === 'string') {
-        const s = result.trim();
+    let value: unknown = result;
+    if (typeof value === 'string') {
+        const s = value.trim();
         if (!s) return [];
         try {
-            const parsed = JSON.parse(s);
-            if (Array.isArray(parsed)) {
-                return parsed.map((x) => String(x).trim()).filter(Boolean);
-            }
+            value = JSON.parse(s);
         } catch {
-            // 非 JSON：按逗号/换行拆分
+            return [];
         }
-        return s.split(/[,，\n]/).map((x) => x.trim()).filter(Boolean);
+    }
+    if (Array.isArray(value)) {
+        const items = value.length === 1 && Array.isArray(value[0]) ? value[0] : value;
+        return items
+            .map((row: any) => ({
+                label: String(row?.label ?? '').trim(),
+                text: String(row?.text ?? row?.label ?? '').trim(),
+            }))
+            .filter((row) => row.label || row.text);
     }
     return [];
 }
