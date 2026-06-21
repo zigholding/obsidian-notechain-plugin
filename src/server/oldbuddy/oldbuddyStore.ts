@@ -424,6 +424,72 @@ export class OldBuddyStore {
         return userMsg;
     }
 
+    /** 第三方 HTTP 推送；sender 为 user 时默认触发 reply（与页面发消息一致） */
+    async pushExternalMessage(params: {
+        content: string;
+        sender?: string;
+        target?: string;
+        type?: OldBuddyMessage['type'];
+        extra_text?: string;
+        file_name?: string;
+        file_size?: number;
+        card?: boolean | string | number;
+        id?: string;
+        timestamp?: string;
+        skip_reply?: boolean | string;
+        quick_cmd_id?: string;
+    }): Promise<OldBuddyMessage> {
+        this.ensureLoaded();
+        const content = String(params.content ?? '').trim();
+        if (!content) {
+            throw new Error('content required');
+        }
+        const type = params.type || 'text';
+        if (!['text', 'image', 'audio', 'file'].includes(type)) {
+            throw new Error('invalid type');
+        }
+        const id = String(params.id || '').trim() || this.newId();
+        const existing = this.messages.findIndex((m) => m.id === id);
+        const msg: OldBuddyMessage = {
+            id,
+            sender: params.sender || 'buddy',
+            target: params.target || DEFAULT_TARGET,
+            timestamp: params.timestamp || new Date().toISOString(),
+            type,
+            content,
+        };
+        if (params.extra_text != null && String(params.extra_text).trim()) {
+            msg.extra_text = String(params.extra_text);
+        }
+        if (params.file_name != null && String(params.file_name).trim()) {
+            msg.file_name = String(params.file_name);
+        }
+        if (params.file_size != null && Number.isFinite(Number(params.file_size))) {
+            msg.file_size = Number(params.file_size);
+        }
+        if (params.card === true || params.card === 'true' || params.card === 1) {
+            msg.card = true;
+        }
+        let userMsg: OldBuddyMessage;
+        if (existing >= 0) {
+            this.messages[existing] = msg;
+            if (this.messages.length > MAX_MESSAGES) {
+                this.messages = this.messages.slice(-MAX_MESSAGES);
+            }
+            this.persist();
+            this.ws.broadcast(msg);
+            void this.saveMessageViaScript(msg);
+            userMsg = msg;
+        } else {
+            userMsg = this.pushMessage(msg);
+        }
+        const skipReply = params.skip_reply === true || params.skip_reply === 'true';
+        if (!skipReply && (params.sender || 'buddy') === 'user') {
+            await this.generateReply(userMsg, params.quick_cmd_id);
+        }
+        return userMsg;
+    }
+
     private async generateReply(userMsg: OldBuddyMessage, quickCmdId?: string) {
         const targets = await this.loadTargetsConfig();
         const targetCfg = targets.targets.find((t) => t.id === userMsg.target);

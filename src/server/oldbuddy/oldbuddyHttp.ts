@@ -83,6 +83,10 @@ export class OldBuddyHttpHandlers {
             await this.handleUploadMessage(req, res, 'file');
             return true;
         }
+        if (sub === 'push_message' && req.method === 'POST') {
+            await this.handlePushMessage(req, res);
+            return true;
+        }
 
         jsonResponse(res, 404, { error: 'Not Found', path: pathname });
         return true;
@@ -145,6 +149,41 @@ export class OldBuddyHttpHandlers {
             jsonResponse(res, 200, { message });
         } catch (e: any) {
             jsonResponse(res, 500, { error: e.message || 'upload failed' });
+        }
+    }
+
+    private async handlePushMessage(req: any, res: any) {
+        try {
+            const body = await readHttpBody(req);
+            const ct = String(req.headers['content-type'] || '');
+            let fields: Record<string, unknown>;
+            if (ct.includes('application/json')) {
+                fields = JSON.parse(body || '{}');
+                if (fields.message && typeof fields.message === 'object') {
+                    fields = fields.message as Record<string, unknown>;
+                }
+            } else {
+                fields = parseUrlEncoded(body) as Record<string, unknown>;
+            }
+            const message = await this.store.pushExternalMessage({
+                content: String(fields.content || ''),
+                sender: fields.sender != null ? String(fields.sender) : undefined,
+                target: fields.target != null ? String(fields.target) : undefined,
+                type: fields.type != null ? (String(fields.type) as 'text' | 'image' | 'audio' | 'file') : undefined,
+                extra_text: fields.extra_text != null ? String(fields.extra_text) : undefined,
+                file_name: fields.file_name != null ? String(fields.file_name) : undefined,
+                file_size: fields.file_size != null ? Number(fields.file_size) : undefined,
+                card: fields.card as boolean | string | number | undefined,
+                id: fields.id != null ? String(fields.id) : undefined,
+                timestamp: fields.timestamp != null ? String(fields.timestamp) : undefined,
+                skip_reply: fields.skip_reply as boolean | string | undefined,
+                quick_cmd_id: fields.quick_cmd_id != null ? String(fields.quick_cmd_id) : undefined,
+            });
+            jsonResponse(res, 200, { ok: true, message });
+        } catch (e: any) {
+            const msg = e?.message || 'push failed';
+            const status = msg === 'content required' || msg === 'invalid type' ? 400 : 500;
+            jsonResponse(res, status, { ok: false, error: msg });
         }
     }
 

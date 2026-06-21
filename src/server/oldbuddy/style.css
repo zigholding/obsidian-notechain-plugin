@@ -122,13 +122,16 @@ body {
     overflow-y: auto;
     padding: 12px 10px calc(12px + var(--input-bar-height));
     -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
 }
 
 .message {
     display: flex;
     flex-direction: column;
     margin-bottom: 10px;
-    max-width: 88%;
+    max-width: min(88%, 680px);
+    width: fit-content;
 }
 
 .message.user {
@@ -149,7 +152,12 @@ body {
     color: var(--wechat-meta);
     margin-bottom: 4px;
     text-align: center;
-    width: 100%;
+    align-self: stretch;
+    max-width: 100%;
+}
+
+.message.user .message-time {
+    text-align: right;
 }
 
 .message-target {
