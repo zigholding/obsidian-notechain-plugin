@@ -130,7 +130,7 @@ export class OldBuddyStore {
         target: string | null;
         local: OldBuddyMessage[];
     }): Promise<OldBuddyMessage[] | null> {
-        const result = await this.invokeTemplaterOptional(QUERY_TEMPLATE, {
+        const extra = {
             oldbuddy: {
                 action: 'query',
                 limit: params.limit,
@@ -140,8 +140,106 @@ export class OldBuddyStore {
                 data_dir: this.dataDir,
                 messages_file: this.messagesFile,
             },
-        });
-        return normalizeMessages(result);
+        };
+        const result = await this.invokeTemplaterOptional(QUERY_TEMPLATE, extra);
+        let messages = normalizeMessages(result);
+        if (!messages && this.templater.ea.file.get_tfile(QUERY_TEMPLATE)) {
+            messages = await this.queryJournalMessagesFallback(params);
+        }
+        return messages?.length ? messages : null;
+    }
+
+    /** Templater 未返回有效结果时，直接从日志 infield 读取（与 nochain_oldbuddy_query 默认逻辑一致） */
+    private async queryJournalMessagesFallback(params: {
+        limit: number;
+        before: string | null;
+        target: string | null;
+    }): Promise<OldBuddyMessage[] | null> {
+        const ea = this.templater.ea;
+        const app = this.templater.app;
+        const dailyRe = /^\d{4}-\d{2}-\d{2}$/;
+        const maxDays = 120;
+        const limit = Math.max(1, Math.min(500, params.limit || 10));
+        const before = params.before;
+        const targetFilter = params.target;
+
+        const msgTime = (m: OldBuddyMessage) => {
+            const t = Date.parse(String(m.timestamp || ''));
+            return Number.isFinite(t) ? t : 0;
+        };
+
+        const fieldsToMessage = (f: Record<string, string>, dateFallback: string): OldBuddyMessage | null => {
+            if (!f.id) return null;
+            return {
+                id: String(f.id),
+                sender: String(f.sender || 'user'),
+                target: String(f.target || DEFAULT_TARGET),
+                timestamp: f.timestamp ? String(f.timestamp) : `${dateFallback}T00:00:00.000Z`,
+                type: (String(f.type || 'text') as OldBuddyMessage['type']),
+                content: f.content != null ? String(f.content) : '',
+                extra_text: f.extra_text ? String(f.extra_text) : undefined,
+                file_name: f.file_name ? String(f.file_name) : undefined,
+                file_size:
+                    f.file_size != null && Number.isFinite(Number(f.file_size))
+                        ? Number(f.file_size)
+                        : undefined,
+                card: f.card === 'true',
+            };
+        };
+
+        let dailies = app.vault
+            .getMarkdownFiles()
+            .filter((f) => dailyRe.test(f.basename))
+            .sort((a, b) => a.basename.localeCompare(b.basename));
+
+        if (before) {
+            const day = before.slice(0, 10);
+            if (dailyRe.test(day)) {
+                dailies = dailies.filter((f) => f.basename <= day);
+            }
+        }
+        if (dailies.length > maxDays) {
+            dailies = dailies.slice(-maxDays);
+        }
+
+        const messages: OldBuddyMessage[] = [];
+        for (const tfile of dailies) {
+            let content = '';
+            try {
+                content = await app.vault.cachedRead(tfile);
+            } catch {
+                continue;
+            }
+            const meta = app.metadataCache.getFileCache(tfile);
+            if (!meta?.listItems) continue;
+            for (const li of meta.listItems) {
+                const line = ea.editor.slice_by_position(content, li.position);
+                if (!/\bid::/.test(line)) continue;
+                if (!/\(s::ob\)|\[s:: ob\]|\[s::ob\]/.test(line)) continue;
+                const f = ea.editor.parse_list_dataview(line);
+                const m = fieldsToMessage(f, tfile.basename);
+                if (m && typeof m.content === 'string') {
+                    messages.push(m);
+                }
+            }
+        }
+
+        messages.sort((a, b) => msgTime(a) - msgTime(b));
+        let list = messages;
+        if (targetFilter) {
+            list = list.filter((m) => (m.target || DEFAULT_TARGET) === targetFilter);
+        }
+        if (before) {
+            const beforeMs = Date.parse(before);
+            if (Number.isFinite(beforeMs)) {
+                list = list.filter((m) => msgTime(m) < beforeMs);
+            }
+            list = list.slice(-limit);
+        } else {
+            const cap = Math.min(500, Math.max(limit * 5, limit));
+            list = list.slice(-cap);
+        }
+        return list.length ? list : null;
     }
 
     private async invokeTemplaterOptional(templateName: string, extra: Record<string, unknown>): Promise<unknown | null> {
@@ -428,6 +526,18 @@ function unwrapTemplaterValue(result: unknown): unknown {
         return null;
     }
     let value: unknown = result;
+
+    if (Array.isArray(value)) {
+        if (value.length === 1 && Array.isArray(value[0])) {
+            return value[0];
+        }
+        if (value.length === 1 && typeof value[0] === 'string') {
+            value = value[0];
+        } else if (value.length > 0 && value.every((row) => row && typeof row === 'object')) {
+            return value;
+        }
+    }
+
     if (typeof value === 'string') {
         const s = value.trim();
         if (!s) return null;
@@ -437,6 +547,7 @@ function unwrapTemplaterValue(result: unknown): unknown {
             return null;
         }
     }
+
     if (Array.isArray(value) && value.length === 1 && Array.isArray(value[0])) {
         return value[0];
     }
