@@ -3,6 +3,8 @@ import { Templater } from '../easyapi/templater';
 import { readHttpBody } from './httpUtil';
 import { MCPHttpHandlers } from './mcpHttp';
 import { OnlineHttpHandlers } from './onlineHttp';
+import { OldBuddyStore } from './oldbuddy/oldbuddyStore';
+import { OldBuddyHttpHandlers } from './oldbuddy/oldbuddyHttp';
 
 let http = require('http');
 let url = require('url');
@@ -17,13 +19,23 @@ export class HTTPServer {
     private sseConnections: Map<string, any> = new Map();
     private mcp: MCPHttpHandlers;
     private online: OnlineHttpHandlers;
+    private oldbuddyStore: OldBuddyStore;
+    private oldbuddy: OldBuddyHttpHandlers;
 
-    constructor(app: App, templater: Templater, host: string = '0.0.0.0', port: number = 3000) {
+    constructor(
+        app: App,
+        templater: Templater,
+        configDir: string,
+        host: string = '0.0.0.0',
+        port: number = 3000,
+    ) {
         this.templater = templater;
         this.host = host;
         this.port = port;
         this.mcp = new MCPHttpHandlers(app, templater, this.sseConnections, () => this.port);
         this.online = new OnlineHttpHandlers(app);
+        this.oldbuddyStore = new OldBuddyStore(templater, configDir);
+        this.oldbuddy = new OldBuddyHttpHandlers(this.oldbuddyStore);
     }
 
     start(): Promise<void> {
@@ -86,6 +98,8 @@ export class HTTPServer {
                         await this.online.handleOnlineMedia(req, res, parsedUrl);
                     } else if (parsedUrl.pathname === '/online/api/textarea-exec' && req.method === 'POST') {
                         await this.online.handleOnlineTextareaExec(req, res);
+                    } else if (await this.oldbuddy.handle(req, res, parsedUrl)) {
+                        // oldbuddy routes handled
                     } else {
                         console.warn(`Unknown route: ${req.method} ${parsedUrl.pathname}`);
                         res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -113,6 +127,19 @@ export class HTTPServer {
                     console.error('HTTP Server error:', error);
                     reject(error);
                 }
+            });
+
+            this.server.on('upgrade', (req: any, socket: any, head: Buffer) => {
+                try {
+                    const parsed = url.parse(req.url || '', true);
+                    if (this.oldbuddy.isWebSocketPath(parsed.pathname)) {
+                        this.oldbuddy.handleUpgrade(req, socket, head);
+                        return;
+                    }
+                } catch (e) {
+                    console.error('[oldbuddy] websocket upgrade failed:', e);
+                }
+                socket.destroy();
             });
         });
     }
@@ -225,6 +252,7 @@ export class HTTPServer {
                 }
             }
             this.sseConnections.clear();
+            this.oldbuddyStore.close();
 
             if (typeof srv.closeAllConnections === 'function') {
                 srv.closeAllConnections();

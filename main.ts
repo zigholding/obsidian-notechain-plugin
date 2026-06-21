@@ -24,6 +24,8 @@ import { NoteContentView } from 'src/NCView';
 import { HTTPServer } from 'src/server/httpServer';
 import { DailyJob} from 'src/daily_job'
 
+let path = require('path');
+
 import {WebViewerLLMModule} from 'src/WebViewerLLM/WebViewerLLMModule';
 
 export default class NoteChainPlugin extends Plugin {
@@ -98,9 +100,12 @@ export default class NoteChainPlugin extends Plugin {
 		this.webviewerllm = new WebViewerLLMModule(this);
 
 		// 初始化 HTTP 服务器
+		const vaultRoot = (this.app.vault.adapter as any).basePath as string;
+		const configDirAbs = path.join(vaultRoot, this.app.vault.configDir);
 		this.httpServer = new HTTPServer(
 			this.app,
 			this.easyapi.tpl,
+			configDirAbs,
 			this.settings.notechain.httpServerHost,
 			this.settings.notechain.httpServerPort
 		);

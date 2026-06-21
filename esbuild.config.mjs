@@ -1,6 +1,17 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import { spawnSync } from "child_process";
+
+function buildOldbuddyPage() {
+	const r = spawnSync(process.execPath, ["scripts/build-oldbuddy-page.mjs"], {
+		stdio: "inherit",
+		cwd: process.cwd(),
+	});
+	if (r.status !== 0) {
+		throw new Error("build-oldbuddy-page failed");
+	}
+}
 
 const banner =
 `/*
@@ -10,6 +21,8 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === "production");
+
+buildOldbuddyPage();
 
 const context = await esbuild.context({
 	banner: {

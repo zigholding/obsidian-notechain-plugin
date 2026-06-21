@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>OldBuddy 老友聊天</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="stylesheet" href="static/style.css?v=20260420a">
+    <style>
+        /* 文件菜单 */
+        #file-menu {
+            position: fixed;
+            bottom: calc(8px + var(--input-bar-height, 80px));
+            left: 10px;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            display: none;
+            flex-direction: column;
+            z-index: 1001;
+        }
+
+        #file-menu button {
+            padding: 10px;
+            border: none;
+            background: #fff;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        #file-menu button:hover {
+            background: #eee;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="chat-wrapper">
+        <div id="status-bar">
+            <div id="status-settings-wrap">
+                <button id="status-settings-toggle" title="打开状态设置">状态设置</button>
+                <div id="status-settings-menu" aria-label="状态设置">
+                    <label class="status-setting-item">
+                        <input id="target-filter-toggle" type="checkbox">
+                        <span>仅当前对象</span>
+                    </label>
+                    <label class="status-setting-item">
+                        <input id="time-filter-toggle" type="checkbox">
+                        <span>隐藏旧记录</span>
+                    </label>
+                </div>
+            </div>
+            <div id="status-dot"></div>
+            <span id="status-text">离线</span>
+            <span id="current-target-chip">本地</span>
+            <select id="chat-target" title="聊天对象">
+                <option value="legacy">本地</option>
+                <option value="nanobot_channel">nanobot channel</option>
+                <option value="hermes_channel">hermes channel</option>
+                <option value="nanobot_serve">nanobot serve</option>
+                <option value="openclaw">openclaw</option>
+            </select>
+        </div>
+        <div id="messages" role="log" aria-live="polite"></div>
+    </div>
+
+    <!-- 移出 #chat-wrapper 并 fixed，避免移动端 100vh/dvh + overflow:hidden 把整栏裁到屏外 -->
+    <div id="input-bar">
+        <div id="left-buttons">
+            <button id="send-file">📁</button>
+            <button id="send-audio">🎤</button>
+        </div>
+        <textarea id="text-input" placeholder="输入消息..." rows="1"></textarea>
+        <button id="send-text">发送</button>
+    </div>
+
+    <div id="file-menu">
+        <button id="camera-btn">拍照</button>
+        <button id="gallery-btn">选择图片</button>
+        <button id="anyfile-btn">上传文件</button>
+        <button id="location-btn" type="button" title="读取定位并发送经纬度">发送位置</button>
+    </div>
+
+    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
+    <input type="file" id="gallery-input" accept="image/*" style="display:none">
+    <input type="file" id="anyfile-input" style="display:none">
+
+    <script src="static/js/websocket.js?v=20260318"></script>
+    <script src="static/js/markdown.js?v=20260417b"></script>
+    <script src="static/js/message.js?v=20260422c"></script>
+    <script src="static/js/quick_commands.js?v=20260420a"></script>
+    <script src="static/js/upload.js?v=20260420a"></script>
+
+    <script>
+
+        document.addEventListener("DOMContentLoaded", async () => {
+
+            const inputBarEl = document.getElementById('input-bar');
+            function syncInputBarHeight() {
+                if (!inputBarEl) return;
+                document.documentElement.style.setProperty(
+                    '--input-bar-height',
+                    inputBarEl.getBoundingClientRect().height + 'px'
+                );
+            }
+            syncInputBarHeight();
+            if (inputBarEl && typeof ResizeObserver !== 'undefined') {
+                new ResizeObserver(syncInputBarHeight).observe(inputBarEl);
+            }
+            window.addEventListener('resize', syncInputBarHeight);
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', syncInputBarHeight);
+                window.visualViewport.addEventListener('scroll', syncInputBarHeight);
+            }
+
+            const messagesContainer = document.getElementById('messages');
+            let currentSkip = 0, isLoading = false;
+
+            // ------------- WebSocket 连接 -------------
+            connectWS();
+
+            await createQuickCommandUI();
+
+            // 绑定点击事件（发送按钮）
+            document.getElementById('send-text').onclick = async () => {
+                await sendTextMessage();
+            };
+
+            // 桌面：Enter 发送，Shift+Enter 换行。手机无 Shift+Enter：Enter 直接换行，点「发送」发消息。
+            const textInput = document.getElementById('text-input');
+            const mqFinePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
+            function syncEnterKeyHint() {
+                textInput.setAttribute('enterkeyhint', mqFinePointer.matches ? 'send' : 'enter');
+            }
+            syncEnterKeyHint();
+            if (typeof mqFinePointer.addEventListener === 'function') {
+                mqFinePointer.addEventListener('change', syncEnterKeyHint);
+            } else if (typeof mqFinePointer.addListener === 'function') {
+                mqFinePointer.addListener(syncEnterKeyHint);
+            }
+
+            textInput.addEventListener('keydown', async (e) => {
+                if (e.key !== 'Enter' || e.shiftKey) return;
+                if (!mqFinePointer.matches) return; /* 触摸为主：不拦截，由系统插入换行 */
+                e.preventDefault();
+                const sendBtn = document.getElementById('send-text');
+                if (sendBtn.disabled) return;
+                await sendTextMessage();
+            });
+
+            // textarea 自适应高度（最多 6 行左右）；移动端 WebKit 偶发 scrollHeight=0，须保底高度
+            function autosize() {
+                textInput.style.height = 'auto';
+                const cs = getComputedStyle(textInput);
+                const lineH = parseFloat(cs.lineHeight) || 22;
+                const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+                const minH = Math.max(44, lineH + padY);
+                const maxH = Math.max(minH, 6 * lineH + padY);
+                const sh = textInput.scrollHeight;
+                textInput.style.height = Math.min(Math.max(sh, minH), maxH) + 'px';
+            }
+            textInput.addEventListener('input', autosize);
+            autosize();
+            syncInputBarHeight();
+
+            // ---------- 文件菜单 ----------
+            const fileBtn = document.getElementById('send-file');
+            const fileMenu = document.getElementById('file-menu');
+            const closeFileMenu = () => { fileMenu.style.display = 'none'; };
+            fileBtn.onclick = () => { fileMenu.style.display = fileMenu.style.display === 'flex' ? 'none' : 'flex'; }
+            document.getElementById('camera-btn').onclick = () => { closeFileMenu(); document.getElementById('camera-input').click(); };
+            document.getElementById('gallery-btn').onclick = () => { closeFileMenu(); document.getElementById('gallery-input').click(); };
+            document.getElementById('anyfile-btn').onclick = () => { closeFileMenu(); document.getElementById('anyfile-input').click(); };
+            document.getElementById('location-btn').onclick = async () => {
+                closeFileMenu();
+                if (typeof sendLocationMessage === 'function') {
+                    await sendLocationMessage();
+                }
+            };
+
+            initUploadHandlers()
+            
+            // ---------- 首次加载最近消息 ----------
+            await loadMessages(10); // 首次加载最近 10 条
+            // 首次加载后滚到底部（显示最新消息）
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            // 启用上拉加载
+            setupScrollLoader(50);
+        });
+
+    </script>
+</body>
+
+</html>
