@@ -35,8 +35,9 @@ body {
     flex-direction: column;
     height: 100vh;
     height: 100dvh;
-    max-width: 900px;
-    margin: 0 auto;
+    width: 100%;
+    max-width: none;
+    margin: 0;
     background: var(--wechat-bg);
 }
 
@@ -45,6 +46,7 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
+    width: 100%;
     padding: 8px 12px;
     background: #f7f7f7;
     border-bottom: 1px solid #dcdcdc;
@@ -220,8 +222,9 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    max-width: 900px;
-    margin: 0 auto;
+    width: 100%;
+    max-width: none;
+    margin: 0;
     display: flex;
     align-items: flex-end;
     gap: 8px;
