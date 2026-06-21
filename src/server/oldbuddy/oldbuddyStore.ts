@@ -6,13 +6,13 @@ import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem } from '.
 import { OldBuddyWebSocketHub } from './oldbuddyWebSocket';
 import { Templater } from '../../easyapi/templater';
 
-const DEFAULT_SENDERS: OldBuddyLabelTextItem[] = [{ label: 'local', text: 'local' }];
+const DEFAULT_TARGETS: OldBuddyLabelTextItem[] = [{ label: 'local', text: 'local' }];
 const DEFAULT_QUICK_COMMANDS: OldBuddyLabelTextItem[] = [{ label: '你是谁', text: '你是谁' }];
-const SENDERS_TEMPLATE = 'nochain_oldbuddy_senders';
+const TARGETS_TEMPLATE = 'nochain_oldbuddy_targets';
 const QUICK_COMMANDS_TEMPLATE = 'nochain_oldbuddy_quick_commands';
 const MAX_MESSAGES = 5000;
 const DEFAULT_REPLY_TEMPLATE = 'oldbuddy/reply.md';
-const DEFAULT_SENDER = DEFAULT_SENDERS[0].text;
+const DEFAULT_TARGET = DEFAULT_TARGETS[0].text;
 
 export class OldBuddyStore {
     private messages: OldBuddyMessage[] = [];
@@ -137,20 +137,20 @@ export class OldBuddyStore {
         }
     }
 
-    /** 聊天对象；模板不存在或为空时返回 [{ label: 'local', text: 'local' }] */
-    async parse_oldbuddy_senders(): Promise<OldBuddyLabelTextItem[]> {
-        return this.parseLabelTextTemplate(SENDERS_TEMPLATE, DEFAULT_SENDERS);
+    /** 聊天对象 target；模板 nochain_oldbuddy_targets 不存在或为空时返回 [{ label: 'local', text: 'local' }] */
+    async parse_oldbuddy_targets(): Promise<OldBuddyLabelTextItem[]> {
+        return this.parseLabelTextTemplate(TARGETS_TEMPLATE, DEFAULT_TARGETS);
     }
 
     async loadTargetsConfig(): Promise<OldBuddyTargetsConfig> {
-        const items = await this.parse_oldbuddy_senders();
+        const items = await this.parse_oldbuddy_targets();
         const targets = items.map((item) => ({
             id: item.text || item.label,
             label: item.label || item.text,
         }));
         const first = items[0];
         return {
-            default_target: first ? (first.text || first.label) : DEFAULT_SENDER,
+            default_target: first ? (first.text || first.label) : DEFAULT_TARGET,
             targets,
         };
     }
@@ -177,7 +177,7 @@ export class OldBuddyStore {
         const userMsg = this.pushMessage({
             id: this.newId(),
             sender: params.sender || 'user',
-            target: params.target || DEFAULT_SENDER,
+            target: params.target || DEFAULT_TARGET,
             timestamp: new Date().toISOString(),
             type: 'text',
             content: params.content,
@@ -203,7 +203,7 @@ export class OldBuddyStore {
         const userMsg = this.pushMessage({
             id: this.newId(),
             sender: params.sender || 'user',
-            target: params.target || DEFAULT_SENDER,
+            target: params.target || DEFAULT_TARGET,
             timestamp: new Date().toISOString(),
             type: params.type,
             content: params.url,
