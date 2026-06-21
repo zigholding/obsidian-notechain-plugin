@@ -1222,6 +1222,20 @@ function setupScrollLoader(threshold = 50, touchPullThreshold = 60) {
 }
 
 /**
+ * sender 为 user 或 user_* 时视作用户侧（右侧绿色气泡）
+ */
+function isUserSender(sender) {
+    const s = String(sender ?? '').trim();
+    return s === 'user' || s.startsWith('user_');
+}
+
+function messageSenderClass(sender) {
+    if (isUserSender(sender)) return 'user';
+    const s = String(sender || '').trim();
+    return s || 'buddy';
+}
+
+/**
  * 是否使用「卡片」式 Markdown 气泡（更宽、层次更清晰）
  * - 后端可设 msg.card === true
  * - 系统 / 调试侧消息默认按卡片展示
@@ -1238,8 +1252,9 @@ function useMarkdownCard(msg) {
 function renderMessage(msg) {
     const div = document.createElement('div');
     const mid = msg.id ?? (\`local_\${Date.now()}_\${Math.random().toString(36).slice(2, 8)}\`);
-    div.className = \`message \${msg.sender || ''}\`;
+    div.className = \`message \${messageSenderClass(msg.sender)}\`;
     div.dataset.id = mid;
+    div.dataset.sender = msg.sender || '';
     div.dataset.target = msg.target || '';
 
     // ---------- 时间 ----------

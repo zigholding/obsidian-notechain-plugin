@@ -2,7 +2,7 @@ let fs = require('fs');
 let path = require('path');
 let crypto = require('crypto');
 
-import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem } from './types';
+import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem, isUserSender } from './types';
 import { OldBuddyWebSocketHub } from './oldbuddyWebSocket';
 import { Templater } from '../../easyapi/templater';
 
@@ -391,7 +391,7 @@ export class OldBuddyStore {
             extra_text: params.extra_text,
         });
 
-        if (!params.skipReply && (params.sender || 'user') === 'user') {
+        if (!params.skipReply && isUserSender(params.sender || 'user')) {
             await this.generateReply(userMsg, params.quick_cmd_id);
         }
         return userMsg;
@@ -418,7 +418,7 @@ export class OldBuddyStore {
             file_name: params.file_name,
             file_size: params.file_size,
         });
-        if ((params.sender || 'user') === 'user') {
+        if (isUserSender(params.sender || 'user')) {
             await this.generateReply(userMsg);
         }
         return userMsg;
@@ -484,7 +484,7 @@ export class OldBuddyStore {
             userMsg = this.pushMessage(msg);
         }
         const skipReply = params.skip_reply === true || params.skip_reply === 'true';
-        if (!skipReply && (params.sender || 'buddy') === 'user') {
+        if (!skipReply && isUserSender(params.sender || 'buddy')) {
             await this.generateReply(userMsg, params.quick_cmd_id);
         }
         return userMsg;

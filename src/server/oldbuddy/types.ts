@@ -31,3 +31,9 @@ export interface OldBuddyTargetsConfig {
     default_target: string;
     targets: OldBuddyTarget[];
 }
+
+/** sender 为 user 或 user_* 时视作用户侧消息（右侧气泡、可触发 reply） */
+export function isUserSender(sender?: string | null): boolean {
+    const s = String(sender ?? '').trim();
+    return s === 'user' || s.startsWith('user_');
+}
