@@ -83,33 +83,45 @@ export class NoteChain {
 
 			let content = '';
 			let sourcePath = '';
+			let webUrl = '';
 			let noteIcon = 'puzzle';
 			let displayText = 'Note Preview';
-			let file = this.plugin.easyapi.file.get_tfile(notePath);
-			if (file instanceof TFile) {
-				displayText = file.basename; // 使用文件名（不含扩展名）作为显示文本
-				if(file.extension==='base'){
-					noteIcon = 'database';
-				}else if(file.extension==='canvas'){
-					noteIcon = 'paintbrush';
-				}else{
-					content = await this.app.vault.read(file);
-					sourcePath = notePath;
-					// 预先读取frontmatter中的icon
-					const iconFromFrontmatter = this.plugin.editor.get_frontmatter(file, 'icon');
-					if (iconFromFrontmatter && typeof iconFromFrontmatter === 'string') {
-						noteIcon = iconFromFrontmatter;
-					}
 
-					const displayTextFromFrontmatter = this.plugin.editor.get_frontmatter(file, 'display');
-					if (displayTextFromFrontmatter && typeof displayTextFromFrontmatter === 'string') {
-						displayText = displayTextFromFrontmatter;
-					}
+			if (/^https?:\/\//i.test(notePath)) {
+				webUrl = notePath;
+				noteIcon = 'globe';
+				try {
+					displayText = new URL(notePath).hostname;
+				} catch {
+					displayText = notePath;
 				}
 			} else {
-				content = notePath;
-				// 如果不是文件，使用路径的最后一部分作为显示文本
-				displayText = notePath.split('/').pop() || notePath.split('\\').pop() || 'Note Preview';
+				let file = this.plugin.easyapi.file.get_tfile(notePath);
+				if (file instanceof TFile) {
+					displayText = file.basename; // 使用文件名（不含扩展名）作为显示文本
+					if(file.extension==='base'){
+						noteIcon = 'database';
+					}else if(file.extension==='canvas'){
+						noteIcon = 'paintbrush';
+					}else{
+						content = await this.app.vault.read(file);
+						sourcePath = notePath;
+						// 预先读取frontmatter中的icon
+						const iconFromFrontmatter = this.plugin.editor.get_frontmatter(file, 'icon');
+						if (iconFromFrontmatter && typeof iconFromFrontmatter === 'string') {
+							noteIcon = iconFromFrontmatter;
+						}
+
+						const displayTextFromFrontmatter = this.plugin.editor.get_frontmatter(file, 'display');
+						if (displayTextFromFrontmatter && typeof displayTextFromFrontmatter === 'string') {
+							displayText = displayTextFromFrontmatter;
+						}
+					}
+				} else {
+					content = notePath;
+					// 如果不是文件，使用路径的最后一部分作为显示文本
+					displayText = notePath.split('/').pop() || notePath.split('\\').pop() || 'Note Preview';
+				}
 			}
 			let leaf = this.app.workspace.getRightLeaf(false); // 右侧打开
 			if (!leaf) { return }
@@ -119,13 +131,14 @@ export class NoteChain {
 				state: {
 					content: content,
 					sourcePath: sourcePath,
+					webUrl: webUrl,
 					noteIcon: noteIcon,
 					displayText: displayText
 				}
 			});
 			let view = leaf.view as NoteContentView;
 
-			view.setContent(content, sourcePath);
+			view.setContent(content, sourcePath, webUrl);
 		} catch (error) {
 			new Notice(`Error opening note in modal: ${error.message}`);
 		}

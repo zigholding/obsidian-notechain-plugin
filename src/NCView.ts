@@ -9,6 +9,7 @@ export class NoteContentView extends ItemView {
 	private debounceTimer: number | null = null;
 	private noteIcon: string = '';
 	private displayText: string = 'Note Preview';
+	private webUrl: string = '';
 
 	constructor(leaf: WorkspaceLeaf, plugin: NoteChainPlugin) {
 		super(leaf);
@@ -28,6 +29,7 @@ export class NoteContentView extends ItemView {
 		return {
 			content: this.content,
 			sourcePath: this.sourcePath,
+			webUrl: this.webUrl,
 			noteIcon: this.noteIcon,
 			displayText: this.displayText
 		};
@@ -36,10 +38,11 @@ export class NoteContentView extends ItemView {
 	async setState(state: any, result: ViewStateResult): Promise<void> {
 		this.content = state.content;
 		this.sourcePath = state.sourcePath;
+		this.webUrl = state.webUrl || '';
 		this.noteIcon = state.noteIcon || '';
 		this.displayText = state.displayText || 'Note Preview';
 	
-		await this.setContent(this.content, this.sourcePath);
+		await this.setContent(this.content, this.sourcePath, this.webUrl);
 	}
 
 	getIcon() {
@@ -67,7 +70,44 @@ export class NoteContentView extends ItemView {
 		MarkdownRenderer.render(this.app, "", div, '', this);
 	}
 
-	async setContent(content: string, sourcePath: string) {
+	async setContent(content: string, sourcePath: string, webUrl = '') {
+		this.webUrl = webUrl;
+		if (this.webUrl) {
+			this.content = '';
+			this.sourcePath = '';
+			if (!this.noteIcon) {
+				this.noteIcon = 'globe';
+			}
+			if (!this.displayText || this.displayText === 'Note Preview') {
+				try {
+					this.displayText = new URL(this.webUrl).hostname;
+				} catch {
+					this.displayText = this.webUrl;
+				}
+			}
+
+			const container = this.containerEl.children[1] as HTMLElement;
+			container.empty();
+			container.style.display = 'flex';
+			container.style.flexDirection = 'column';
+			container.style.height = '100%';
+			container.style.overflow = 'hidden';
+
+			const iframe = container.createEl('iframe', {
+				cls: 'nc-note-content-webview',
+				attr: {
+					src: this.webUrl,
+					sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox',
+				},
+			});
+			iframe.style.flex = '1';
+			iframe.style.width = '100%';
+			iframe.style.border = 'none';
+
+			this.updateIcon();
+			return;
+		}
+
 		let cssClasses: unknown = null;
 		if (sourcePath) {
 			const cfile = this.plugin.easyapi.file.get_tfile(sourcePath);
