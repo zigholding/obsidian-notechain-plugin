@@ -113,7 +113,7 @@ export class OldBuddyStore {
                 messages_file: this.messagesFile,
             },
         });
-        return isSaveSkipJson(result);
+        return isTemplaterTrue(result);
     }
 
     async listMessages(limit: number, before?: string | null, target?: string | null) {
@@ -565,13 +565,20 @@ export class OldBuddyStore {
                 },
             };
             const result = await this.templater.parse_templater(template, true, extra, 0, '');
+            if (isTemplaterTrue(result)) {
+                return;
+            }
             if (typeof result === 'string' && result.trim()) {
                 replyText = result.trim();
-            } else if (Array.isArray(result) && result[0] && String(result[0]).trim()) {
+            } else if (Array.isArray(result) && result[0] != null && String(result[0]).trim()) {
                 replyText = String(result[0]).trim();
             }
         } catch (e) {
             console.warn('[oldbuddy] templater reply failed:', e);
+        }
+
+        if (isTemplaterTrue(replyText)) {
+            return;
         }
 
         if (!replyText) {
@@ -679,7 +686,7 @@ function normalizeQuickCommandsByTarget(result: unknown): Record<string, OldBudd
     return {};
 }
 
-function isSaveSkipJson(result: unknown): boolean {
+function isTemplaterTrue(result: unknown): boolean {
     const value = unwrapTemplaterValue(result);
     if (value === true || value === 1) {
         return true;
