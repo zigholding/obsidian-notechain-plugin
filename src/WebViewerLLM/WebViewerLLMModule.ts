@@ -458,7 +458,9 @@ export class WebViewerLLMModule {
 			}
 		}
 		let prompts = await ea.tpl.parse_templater(prompt, false, {tfile, cfile, prompt });
-		prompt = prompts.filter(x=>typeof x == "string").join('\n');
+		prompt = (Array.isArray(prompts) ? prompts : [prompts])
+			.filter((x: unknown): x is string => typeof x === 'string')
+			.join('\n');
 		// 选择参考笔记
 		if(tfile instanceof TFile && ea.editor.get_frontmatter(tfile, 'reference','link') != false){
 			let refFiles: (TFile | string)[] = [tfile];
