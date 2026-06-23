@@ -25,6 +25,8 @@ export class OldBuddyStore {
     private messagesFile: string;
     private ws = new OldBuddyWebSocketHub();
     private loaded = false;
+    /** save 模板返回 true 的消息 id 不写入 messages.json（仅 vault/日志） */
+    private vaultOnlyMessageIds = new Set<string>();
 
     constructor(
         private templater: Templater,
@@ -64,7 +66,8 @@ export class OldBuddyStore {
     private persist() {
         try {
             fs.mkdirSync(this.dataDir, { recursive: true });
-            fs.writeFileSync(this.messagesFile, JSON.stringify(this.messages, null, 2), 'utf8');
+            const payload = this.messages.filter((m) => !this.vaultOnlyMessageIds.has(m.id));
+            fs.writeFileSync(this.messagesFile, JSON.stringify(payload, null, 2), 'utf8');
         } catch (e) {
             console.warn('[oldbuddy] persist messages failed:', e);
         }
@@ -79,15 +82,29 @@ export class OldBuddyStore {
         if (this.messages.length > MAX_MESSAGES) {
             this.messages = this.messages.slice(-MAX_MESSAGES);
         }
-        this.persist();
         this.ws.broadcast(msg);
-        void this.saveMessageViaScript(msg);
+        if (!this.templater.ea.file.get_tfile(SAVE_TEMPLATE)) {
+            this.persist();
+        } else {
+            void this.afterPushMessage(msg);
+        }
         return msg;
     }
 
-    /** 可选：nochain_oldbuddy_save，extra.oldbuddy = { action, message, messages } */
-    private async saveMessageViaScript(msg: OldBuddyMessage) {
-        await this.invokeTemplaterOptional(SAVE_TEMPLATE, {
+    /** save 模板返回 true 时标记为仅 vault，不写 messages.json */
+    private async afterPushMessage(msg: OldBuddyMessage) {
+        const skipJson = await this.saveMessageViaScript(msg);
+        if (skipJson) {
+            this.vaultOnlyMessageIds.add(msg.id);
+        } else {
+            this.vaultOnlyMessageIds.delete(msg.id);
+        }
+        this.persist();
+    }
+
+    /** 可选：nochain_oldbuddy_save；返回 true 表示已写入 vault，跳过 messages.json */
+    private async saveMessageViaScript(msg: OldBuddyMessage): Promise<boolean> {
+        const result = await this.invokeTemplaterOptional(SAVE_TEMPLATE, {
             oldbuddy: {
                 action: 'save',
                 message: msg,
@@ -96,6 +113,7 @@ export class OldBuddyStore {
                 messages_file: this.messagesFile,
             },
         });
+        return isSaveSkipJson(result);
     }
 
     async listMessages(limit: number, before?: string | null, target?: string | null) {
@@ -513,9 +531,12 @@ export class OldBuddyStore {
             if (this.messages.length > MAX_MESSAGES) {
                 this.messages = this.messages.slice(-MAX_MESSAGES);
             }
-            this.persist();
             this.ws.broadcast(msg);
-            void this.saveMessageViaScript(msg);
+            if (!this.templater.ea.file.get_tfile(SAVE_TEMPLATE)) {
+                this.persist();
+            } else {
+                void this.afterPushMessage(msg);
+            }
             userMsg = msg;
         } else {
             userMsg = this.pushMessage(msg);
@@ -656,6 +677,18 @@ function normalizeQuickCommandsByTarget(result: unknown): Record<string, OldBudd
         return map;
     }
     return {};
+}
+
+function isSaveSkipJson(result: unknown): boolean {
+    const value = unwrapTemplaterValue(result);
+    if (value === true || value === 1) {
+        return true;
+    }
+    if (typeof value === 'string') {
+        const s = value.trim().toLowerCase();
+        return s === 'true' || s === '1';
+    }
+    return false;
 }
 
 function normalizeAvatarMap(result: unknown): OldBuddyAvatarMap {
