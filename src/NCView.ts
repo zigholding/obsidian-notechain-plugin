@@ -10,6 +10,7 @@ export class NoteContentView extends ItemView {
 	private noteIcon: string = '';
 	private displayText: string = 'Note Preview';
 	private webUrl: string = '';
+	private webviewEl: HTMLElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: NoteChainPlugin) {
 		super(leaf);
@@ -86,24 +87,7 @@ export class NoteContentView extends ItemView {
 				}
 			}
 
-			const container = this.containerEl.children[1] as HTMLElement;
-			container.empty();
-			container.style.display = 'flex';
-			container.style.flexDirection = 'column';
-			container.style.height = '100%';
-			container.style.overflow = 'hidden';
-
-			const iframe = container.createEl('iframe', {
-				cls: 'nc-note-content-webview',
-				attr: {
-					src: this.webUrl,
-					sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox',
-				},
-			});
-			iframe.style.flex = '1';
-			iframe.style.width = '100%';
-			iframe.style.border = 'none';
-
+			this.renderWebUrl(this.containerEl.children[1] as HTMLElement, this.webUrl);
 			this.updateIcon();
 			return;
 		}
@@ -228,6 +212,54 @@ dv.span(\`![[${sourcePath}]]\`);
 		this.updateIcon();
 	}
 
+	/** Obsidian WebViewer 使用的 Electron session partition，共享 Cookie / 登录态。 */
+	private getWebViewerPartition(): string {
+		return `persist:vault-${(this.app as any).appId}`;
+	}
+
+	private isWebViewerPluginEnabled(): boolean {
+		return !!(this.app as any).internalPlugins?.getEnabledPluginById?.('webviewer');
+	}
+
+	private canUseWebViewerWebview(): boolean {
+		return !(this.app as any).isMobile && this.isWebViewerPluginEnabled();
+	}
+
+	private renderWebUrl(container: HTMLElement, url: string) {
+		container.empty();
+		this.webviewEl = null;
+		container.style.display = 'flex';
+		container.style.flexDirection = 'column';
+		container.style.height = '100%';
+		container.style.overflow = 'hidden';
+
+		if (this.canUseWebViewerWebview()) {
+			const webview = document.createElement('webview');
+			webview.className = 'nc-note-content-webview';
+			webview.setAttribute('src', url);
+			webview.setAttribute('partition', this.getWebViewerPartition());
+			webview.setAttribute('allowpopups', 'true');
+			webview.style.flex = '1';
+			webview.style.width = '100%';
+			webview.style.height = '100%';
+			webview.style.border = 'none';
+			container.appendChild(webview);
+			this.webviewEl = webview;
+			return;
+		}
+
+		const iframe = container.createEl('iframe', {
+			cls: 'nc-note-content-webview',
+			attr: {
+				src: url,
+				sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox',
+			},
+		});
+		iframe.style.flex = '1';
+		iframe.style.width = '100%';
+		iframe.style.border = 'none';
+	}
+
 	private setupInternalLinks(div: HTMLElement, isDatacoreContent: boolean) {
 		setTimeout(() => {
 			this.processInternalLinks(div);
@@ -331,6 +363,7 @@ dv.span(\`![[${sourcePath}]]\`);
 	}
 
 	async onClose(): Promise<void> {
+		this.webviewEl = null;
 		// 注销事件监听
 		if (this.fileModifyHandler) {
 			this.app.vault.offref(this.fileModifyHandler);
