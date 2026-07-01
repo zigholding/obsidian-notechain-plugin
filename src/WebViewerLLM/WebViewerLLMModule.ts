@@ -457,7 +457,14 @@ export class WebViewerLLMModule {
 				prompt = prompt.replace(`\${${k}}`, target[k]);
 			}
 		}
-		let prompts = await ea.tpl.parse_templater(prompt, false, {tfile, cfile, prompt });
+		
+		let prompts = [prompt]
+		try{
+			prompts = await ea.tpl.parse_templater(prompt, false, {tfile, cfile, prompt });
+		}catch(e){
+			console.error('parse_templater error',e)
+		}
+		
 		prompt = (Array.isArray(prompts) ? prompts : [prompts])
 			.filter((x: unknown): x is string => typeof x === 'string')
 			.join('\n');
