@@ -92,3 +92,75 @@ export function jsonResponse(res: any, status: number, data: unknown) {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(data));
 }
+
+/** 解析 Range: bytes=… 请求头 */
+export function parseByteRange(
+    rangeHeader: string,
+    size: number,
+): { start: number; end: number } | null {
+    const m = /^bytes=(\d*)-(\d*)$/i.exec(String(rangeHeader || '').trim());
+    if (!m || size <= 0) return null;
+    const [, startStr, endStr] = m;
+    let start: number;
+    let end: number;
+    if (startStr === '' && endStr !== '') {
+        const suffixLen = parseInt(endStr, 10);
+        if (!Number.isFinite(suffixLen) || suffixLen <= 0) return null;
+        start = Math.max(0, size - suffixLen);
+        end = size - 1;
+    } else {
+        start = startStr ? parseInt(startStr, 10) : 0;
+        end = endStr ? parseInt(endStr, 10) : size - 1;
+    }
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= size) {
+        return null;
+    }
+    end = Math.min(end, size - 1);
+    return { start, end };
+}
+
+const fs = require('fs');
+
+/** 以流式响应本地文件，支持 Range（视频/音频分段加载） */
+export function sendLocalFile(
+    req: any,
+    res: any,
+    absPath: string,
+    opts: { mime: string; size: number; mtime?: number; cacheControl?: string },
+) {
+    const { mime, size } = opts;
+    const cacheControl = opts.cacheControl || 'public, max-age=31536000, immutable';
+    const etag =
+        opts.mtime != null ? `"${size.toString(16)}-${Math.floor(opts.mtime).toString(16)}"` : undefined;
+    const baseHeaders: Record<string, string | number> = {
+        'Content-Type': mime,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': cacheControl,
+    };
+    if (etag) baseHeaders['ETag'] = etag;
+
+    const rangeHeader = req?.headers?.range;
+    if (rangeHeader) {
+        const range = parseByteRange(String(rangeHeader), size);
+        if (!range) {
+            res.writeHead(416, { 'Content-Range': `bytes */${size}` });
+            res.end();
+            return;
+        }
+        const { start, end } = range;
+        const chunkSize = end - start + 1;
+        res.writeHead(206, {
+            ...baseHeaders,
+            'Content-Length': chunkSize,
+            'Content-Range': `bytes ${start}-${end}/${size}`,
+        });
+        fs.createReadStream(absPath, { start, end }).pipe(res);
+        return;
+    }
+
+    res.writeHead(200, {
+        ...baseHeaders,
+        'Content-Length': size,
+    });
+    fs.createReadStream(absPath).pipe(res);
+}

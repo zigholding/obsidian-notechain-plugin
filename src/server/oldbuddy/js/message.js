@@ -545,6 +545,8 @@ function createVideoElement(src) {
     video.controls = true;
     video.playsInline = true;
     video.preload = 'metadata';
+    video.setAttribute('webkit-playsinline', 'true');
+    video.setAttribute('x5-playsinline', 'true');
     video.src = src;
     video.className = 'message-video';
     return video;
@@ -814,13 +816,34 @@ function findMessageNode(id) {
     return messagesContainer.querySelector(`[data-id="${id}"]`);
 }
 
+function messageNodeSignature(msg) {
+    return [
+        msg.type || '',
+        msg.content || '',
+        msg.extra_text || '',
+        msg.file_name || '',
+        msg.sender || '',
+        msg.target || '',
+    ].join('\x1e');
+}
+
+function shouldSkipMessageRerender(existingNode, msg) {
+    if (!existingNode) return false;
+    return existingNode.dataset.sig === messageNodeSignature(msg);
+}
+
 /**
  * 向顶部插入消息
  */
 function prependMessage(msg) {
     const id = msg.id ?? null;
     const existingNode = id ? findMessageNode(id) : null;
+    if (shouldSkipMessageRerender(existingNode, msg)) {
+        applyMessageTargetFilter();
+        return;
+    }
     const node = renderMessage(msg);
+    node.dataset.sig = messageNodeSignature(msg);
 
     if (existingNode) {
         messagesContainer.replaceChild(node, existingNode); // 替换旧节点
@@ -838,7 +861,12 @@ function prependMessage(msg) {
 function appendMessage(msg) {
     const id = msg.id ?? null;
     const existingNode = id ? findMessageNode(id) : null;
+    if (shouldSkipMessageRerender(existingNode, msg)) {
+        applyMessageTargetFilter();
+        return;
+    }
     const node = renderMessage(msg);
+    node.dataset.sig = messageNodeSignature(msg);
 
     // 追加前判断用户是否在底部（用旧 scrollHeight 判断才准确）
     const wasAtBottom = (messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight) < 50;

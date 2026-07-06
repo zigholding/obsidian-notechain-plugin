@@ -290,12 +290,24 @@ export class OldBuddyStore {
     }
 
     serveUploadFile(fname: string): { data: Buffer; mime: string } | null {
+        const meta = this.serveUploadMeta(fname);
+        if (!meta) return null;
+        return { data: fs.readFileSync(meta.abs), mime: meta.mime };
+    }
+
+    serveUploadMeta(fname: string): { abs: string; size: number; mime: string; mtime: number } | null {
         this.ensureLoaded();
         const safe = path.basename(fname);
         if (!safe || safe.includes('..')) return null;
         const abs = path.join(this.uploadsDir, safe);
         if (!fs.existsSync(abs)) return null;
-        return { data: fs.readFileSync(abs), mime: mimeFromExt(abs) };
+        const stat = fs.statSync(abs);
+        return {
+            abs,
+            size: stat.size,
+            mime: mimeFromExt(abs),
+            mtime: stat.mtimeMs,
+        };
     }
 
     private async parseLabelTextTemplate(

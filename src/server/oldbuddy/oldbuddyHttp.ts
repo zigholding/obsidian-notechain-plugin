@@ -4,6 +4,7 @@ import {
     parseUrlEncoded,
     readHttpBody,
     readHttpBodyBuffer,
+    sendLocalFile,
 } from '../httpUtil';
 import { OLDBUDDY_PAGE_HTML } from '../oldbuddyPageHtml';
 import { OldBuddyStore, inferOldBuddyMessageType } from './oldbuddyStore';
@@ -39,7 +40,7 @@ export class OldBuddyHttpHandlers {
         }
         if (sub.startsWith('uploads/') && req.method === 'GET') {
             const fname = decodeURIComponent(sub.slice('uploads/'.length));
-            await this.serveUpload(res, fname);
+            await this.serveUpload(req, res, fname);
             return true;
         }
 
@@ -213,14 +214,17 @@ export class OldBuddyHttpHandlers {
         res.end(file.data);
     }
 
-    private async serveUpload(res: any, fname: string) {
-        const file = this.store.serveUploadFile(fname);
-        if (!file) {
+    private serveUpload(req: any, res: any, fname: string) {
+        const meta = this.store.serveUploadMeta(fname);
+        if (!meta) {
             res.writeHead(404);
             res.end('Not Found');
             return;
         }
-        res.writeHead(200, { 'Content-Type': file.mime, 'Cache-Control': 'public, max-age=86400' });
-        res.end(file.data);
+        sendLocalFile(req, res, meta.abs, {
+            mime: meta.mime,
+            size: meta.size,
+            mtime: meta.mtime,
+        });
     }
 }
