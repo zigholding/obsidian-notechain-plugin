@@ -90,11 +90,33 @@ function canInlineAudioRecord() {
         && typeof MediaRecorder !== 'undefined');
 }
 
-/** 触摸设备优先走系统录音/选文件，避免 capture 误开相机或 MediaRecorder 兼容问题 */
-function prefersNativeAudioCapture() {
+/** 触摸设备 / 非 HTTPS：走系统录音，不用页面内 getUserMedia */
+function prefersSystemAudioRecord() {
     if (!window.isSecureContext) return true;
     return window.matchMedia('(pointer: coarse)').matches
         || window.matchMedia('(hover: none)').matches;
+}
+
+function useInlineAudioRecord() {
+    return canInlineAudioRecord() && !prefersSystemAudioRecord();
+}
+
+function isNonAudioPick(file) {
+    const type = String((file && file.type) || '').toLowerCase();
+    const name = String((file && file.name) || '').toLowerCase();
+    if (type.startsWith('video/') || type.startsWith('image/')) return true;
+    if (/\.(mp4|mov|m4v|mkv|3gp|jpg|jpeg|png|gif|webp)(\?|$)/.test(name)) return true;
+    return false;
+}
+
+function openSystemAudioRecorder(audioInput) {
+    if (!audioInput) return;
+    audioInput.value = '';
+    audioInput.removeAttribute('capture');
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isIOS) audioInput.setAttribute('capture', 'user');
+    audioInput.click();
 }
 
 function pickAudioRecorderFormat() {
@@ -110,26 +132,15 @@ function pickAudioRecorderFormat() {
     return { mimeType: '', ext: 'webm' };
 }
 
-function isVideoFile(file, filename) {
-    const type = String((file && file.type) || '').toLowerCase();
-    const name = String(filename || (file && file.name) || '').toLowerCase();
-    if (type.startsWith('video/')) return true;
-    if (type.startsWith('audio/')) return false;
-    if (/\.(mp4|mov|m4v|mkv|3gp)(\?|$)/.test(name)) return true;
-    if (/\.webm(\?|$)/.test(name) && type.startsWith('video/')) return true;
-    return false;
-}
-
-async function uploadMediaBlob(blobOrFile, filename) {
+async function uploadAudioBlob(blobOrFile, filename) {
     const file = blobOrFile instanceof File
         ? blobOrFile
-        : new File([blobOrFile], filename || `record_${Date.now()}.webm`, { type: blobOrFile.type || '' });
-    const kind = isVideoFile(file, filename) ? 'video' : 'audio';
+        : new File([blobOrFile], filename || `record_${Date.now()}.webm`, { type: blobOrFile.type || 'audio/webm' });
     const formData = new FormData();
     formData.append('file', file, file.name || filename);
     formData.append('sender', 'user');
     if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
-    const res = await fetch(`/oldbuddy/api/message/${kind}`, { method: 'POST', body: formData });
+    const res = await fetch('/oldbuddy/api/message/audio', { method: 'POST', body: formData });
     const data = await res.json();
     if (data && data.message) appendMessage(data.message);
 }
@@ -145,17 +156,6 @@ async function uploadVideoFile(file) {
     if (data && data.message) appendMessage(data.message);
 }
 
-function openNativeAudioPicker(audioInput) {
-    if (!audioInput) return;
-    audioInput.value = '';
-    audioInput.removeAttribute('capture');
-    // iOS：capture="user" 才可能调起语音备忘录；裸 capture 或 environment 会开相机
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    if (isIOS) audioInput.setAttribute('capture', 'user');
-    audioInput.click();
-}
-
 async function initUploadHandlers() {
     document.getElementById('camera-input').onchange = (e) => handleImageFile(e.target.files[0]);
     document.getElementById('gallery-input').onchange = (e) => handleImageFile(e.target.files[0]);
@@ -168,23 +168,28 @@ async function initUploadHandlers() {
         await handleAnyFile(file, inputEl);
     };
 
-    // ---------- 语音录音 ----------
+    // ---------- 语音录音：桌面 HTTPS 页面内录音；手机/HTTP 调系统录音 ----------
     const audioInput = document.getElementById('audio-input');
-    const useInlineRecord = canInlineAudioRecord() && !prefersNativeAudioCapture();
     let mediaRecorder, audioChunks = [], isRecording = false, recordStream = null;
     const audioBtn = document.getElementById('send-audio');
 
-    audioInput.onchange = async (e) => {
-        const file = e.target.files[0];
-        e.target.value = '';
-        if (!file) return;
-        try {
-            await uploadMediaBlob(file, file.name || `record_${Date.now()}.m4a`);
-        } catch (err) {
-            console.error(err);
-            alert(isVideoFile(file) ? '视频上传失败' : '录音上传失败');
-        }
-    };
+    if (audioInput) {
+        audioInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            e.target.value = '';
+            if (!file) return;
+            if (isNonAudioPick(file)) {
+                alert('请选择录音，视频/图片请使用 📁 菜单');
+                return;
+            }
+            try {
+                await uploadAudioBlob(file, file.name || `record_${Date.now()}.m4a`);
+            } catch (err) {
+                console.error(err);
+                alert('录音上传失败');
+            }
+        };
+    }
 
     const videoInput = document.getElementById('video-input');
     if (videoInput) {
@@ -209,8 +214,8 @@ async function initUploadHandlers() {
     }
 
     audioBtn.onclick = async () => {
-        if (!useInlineRecord) {
-            openNativeAudioPicker(audioInput);
+        if (!useInlineAudioRecord()) {
+            openSystemAudioRecorder(audioInput);
             return;
         }
 
@@ -228,7 +233,7 @@ async function initUploadHandlers() {
                     const mime = fmt.mimeType || mediaRecorder.mimeType || 'audio/webm';
                     const blob = new Blob(audioChunks, { type: mime });
                     try {
-                        await uploadMediaBlob(blob, `record_${Date.now()}.${fmt.ext}`);
+                        await uploadAudioBlob(blob, `record_${Date.now()}.${fmt.ext}`);
                     } catch (err) {
                         console.error(err);
                         alert('录音上传失败');
@@ -240,8 +245,7 @@ async function initUploadHandlers() {
             } catch (err) {
                 console.error(err);
                 stopRecordStream();
-                // 权限拒绝或仍不可用：改用系统录音
-                openNativeAudioPicker(audioInput);
+                openSystemAudioRecorder(audioInput);
             }
         } else {
             mediaRecorder.stop();
