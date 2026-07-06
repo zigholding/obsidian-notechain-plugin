@@ -1,4 +1,4 @@
-export type OldBuddyMessageType = 'text' | 'image' | 'audio' | 'file';
+export type OldBuddyMessageType = 'text' | 'image' | 'audio' | 'video' | 'file';
 
 /** Templater 脚本统一返回格式：{ label, text } 数组 */
 export interface OldBuddyLabelTextItem {

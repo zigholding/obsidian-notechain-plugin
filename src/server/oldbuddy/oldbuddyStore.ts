@@ -453,7 +453,7 @@ export class OldBuddyStore {
     }
 
     async addFileMessage(params: {
-        type: 'image' | 'audio' | 'file';
+        type: 'image' | 'audio' | 'video' | 'file';
         url: string;
         sender?: string;
         target?: string;
@@ -500,7 +500,7 @@ export class OldBuddyStore {
             throw new Error('content required');
         }
         const type = params.type || 'text';
-        if (!['text', 'image', 'audio', 'file'].includes(type)) {
+        if (!['text', 'image', 'audio', 'video', 'file'].includes(type)) {
             throw new Error('invalid type');
         }
         const id = String(params.id || '').trim() || this.newId();
@@ -588,6 +588,8 @@ export class OldBuddyStore {
                 replyText = '收到你的图片了。';
             } else if (userMsg.type === 'audio') {
                 replyText = '收到你的语音了。';
+            } else if (userMsg.type === 'video') {
+                replyText = '收到你的视频了。';
             } else {
                 replyText = `收到你的${userMsg.file_name || '文件'}了。`;
             }
@@ -776,11 +778,40 @@ function guessExt(mime: string) {
     if (mime.includes('png')) return '.png';
     if (mime.includes('gif')) return '.gif';
     if (mime.includes('webp')) return '.webp';
+    if (mime.includes('quicktime')) return '.mov';
+    if (mime.includes('mp4') || mime.includes('x-m4v')) return '.mp4';
+    if (mime.includes('3gpp')) return '.3gp';
     if (mime.includes('webm')) return '.webm';
     if (mime.includes('ogg')) return '.ogg';
     if (mime.includes('mpeg') || mime.includes('mp3')) return '.mp3';
     if (mime.includes('wav')) return '.wav';
     return '';
+}
+
+/** 根据 MIME / 扩展名纠正消息类型（如相机录像误走 audio 接口） */
+export function inferOldBuddyMessageType(
+    declared: 'image' | 'audio' | 'video' | 'file',
+    mime: string,
+    filename: string,
+): 'image' | 'audio' | 'video' | 'file' {
+    const m = String(mime || '').toLowerCase();
+    const ext = path.extname(String(filename || '')).toLowerCase();
+    const videoExt = new Set(['.mp4', '.mov', '.m4v', '.mkv', '.3gp', '.avi']);
+    const audioExt = new Set(['.m4a', '.mp3', '.wav', '.ogg', '.aac', '.amr', '.caf']);
+
+    if (m.startsWith('video/') || videoExt.has(ext)) {
+        return 'video';
+    }
+    if (m.startsWith('audio/') || audioExt.has(ext)) {
+        return 'audio';
+    }
+    if (m.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
+        return 'image';
+    }
+    if (ext === '.webm') {
+        return m.startsWith('audio/') ? 'audio' : 'video';
+    }
+    return declared;
 }
 
 function mimeFromExt(filePath: string) {
@@ -795,10 +826,19 @@ function mimeFromExt(filePath: string) {
         '.jpeg': 'image/jpeg',
         '.gif': 'image/gif',
         '.webp': 'image/webp',
-        '.webm': 'audio/webm',
+        '.mp4': 'video/mp4',
+        '.mov': 'video/quicktime',
+        '.m4v': 'video/mp4',
+        '.mkv': 'video/x-matroska',
+        '.3gp': 'video/3gpp',
+        '.webm': 'video/webm',
         '.ogg': 'audio/ogg',
         '.mp3': 'audio/mpeg',
+        '.m4a': 'audio/mp4',
         '.wav': 'audio/wav',
+        '.aac': 'audio/aac',
+        '.amr': 'audio/amr',
+        '.caf': 'audio/x-caf',
         '.yaml': 'text/yaml; charset=utf-8',
         '.yml': 'text/yaml; charset=utf-8',
         '.md': 'text/markdown; charset=utf-8',

@@ -522,6 +522,42 @@ function useMarkdownCard(msg) {
     return /^(system|debug)/.test(s);
 }
 
+function isVideoMediaUrl(url) {
+    return /\.(mp4|mov|m4v|mkv|3gp|webm)(\?|#|$)/i.test(String(url || ''));
+}
+
+function appendExtraText(contentDiv, msg) {
+    if (!msg.extra_text) return;
+    const extra = document.createElement('div');
+    extra.className = 'message-extra-text';
+    if (typeof window.renderMarkdown === 'function') {
+        extra.classList.add('markdown');
+        if (useMarkdownCard(msg)) extra.classList.add('markdown-card');
+        extra.innerHTML = window.renderMarkdown(msg.extra_text);
+    } else {
+        extra.textContent = msg.extra_text;
+    }
+    contentDiv.appendChild(extra);
+}
+
+function createVideoElement(src) {
+    const video = document.createElement('video');
+    video.controls = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    video.src = src;
+    video.className = 'message-video';
+    return video;
+}
+
+function createAudioElement(src) {
+    const audio = document.createElement('audio');
+    audio.controls = true;
+    audio.src = src;
+    audio.className = 'message-audio';
+    return audio;
+}
+
 /**
  * 渲染单条消息（支持 prependMessage 从旧到新加载逻辑）
  */
@@ -630,25 +666,12 @@ function renderMessage(msg) {
             }
             contentDiv.appendChild(extra);
         }
+    } else if (msg.type === 'video' || (msg.type === 'audio' && isVideoMediaUrl(msg.content))) {
+        contentDiv.appendChild(createVideoElement(msg.content));
+        appendExtraText(contentDiv, msg);
     } else if (msg.type === 'audio') {
-        const audio = document.createElement('audio');
-        audio.controls = true;
-        audio.src = msg.content;
-        audio.className = 'message-audio';
-        contentDiv.appendChild(audio);
-
-        if (msg.extra_text) {
-            const extra = document.createElement('div');
-            extra.className = 'message-extra-text';
-            if (typeof window.renderMarkdown === 'function') {
-                extra.classList.add('markdown');
-                if (useMarkdownCard(msg)) extra.classList.add('markdown-card');
-                extra.innerHTML = window.renderMarkdown(msg.extra_text);
-            } else {
-                extra.textContent = msg.extra_text;
-            }
-            contentDiv.appendChild(extra);
-        }
+        contentDiv.appendChild(createAudioElement(msg.content));
+        appendExtraText(contentDiv, msg);
     } else if (msg.type === 'file') {
         const link = document.createElement('a');
         link.href = msg.content;

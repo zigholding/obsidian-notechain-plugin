@@ -12,20 +12,46 @@
       .replace(/'/g, "&#39;");
   }
 
+  const VIDEO_URL_RE = /\.(mp4|mov|m4v|mkv|3gp|webm)(\?|#|$)/i;
+
+  function isVideoUrl(url) {
+    return VIDEO_URL_RE.test(String(url || ""));
+  }
+
+  function videoTag(url) {
+    const safe = escapeHtml(url);
+    return `<video class="md-video" controls playsinline preload="metadata" src="${safe}"></video>`;
+  }
+
   function renderInline(s) {
     const linkPlaceholders = [];
     const codePlaceholders = [];
 
-    // Links: [text](url)
+    // Video: ![video](url) or [video](url)
+    s = s.replace(/!\[video\]\(([^\s)]+)\)/gi, (m, url) => videoTag(url));
+    s = s.replace(/\[video\]\(([^\s)]+)\)/gi, (m, url) => videoTag(url));
+
+    // Links: [text](url) — 视频 URL 渲染为播放器
     s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (m, text, url) => {
+      if (isVideoUrl(url)) return videoTag(url);
       const key = `@@MDLINKPLACEHOLDER${linkPlaceholders.length}@@`;
       linkPlaceholders.push(
         `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`
       );
       return key;
     });
-    // Autolink: https://...
+    // 相对路径 /oldbuddy/uploads/…
+    s = s.replace(/\[([^\]]+)\]\((\/oldbuddy\/[^\s)]+)\)/g, (m, text, url) => {
+      if (isVideoUrl(url)) return videoTag(url);
+      const key = `@@MDLINKPLACEHOLDER${linkPlaceholders.length}@@`;
+      linkPlaceholders.push(
+        `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`
+      );
+      return key;
+    });
+    // Autolink: https://... — 视频直链嵌入播放器
     s = s.replace(/(https?:\/\/[^\s<]+)/g, (m, url) => {
+      if (isVideoUrl(url)) return videoTag(url);
       return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
     });
 

@@ -273,6 +273,15 @@ body {
     width: min(72vw, 280px);
 }
 
+.message-video,
+.markdown .md-video {
+    max-width: min(72vw, 320px);
+    width: 100%;
+    border-radius: 6px;
+    display: block;
+    background: #000;
+}
+
 .message-extra-text {
     margin-top: 8px;
     font-size: 14px;
@@ -480,12 +489,16 @@ body {
         <button id="camera-btn">拍照</button>
         <button id="gallery-btn">选择图片</button>
         <button id="anyfile-btn">上传文件</button>
+        <button id="video-btn" type="button">录像</button>
         <button id="location-btn" type="button" title="读取定位并发送经纬度">发送位置</button>
     </div>
 
     <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
     <input type="file" id="gallery-input" accept="image/*" style="display:none">
     <input type="file" id="anyfile-input" style="display:none">
+    <!-- 非 HTTPS / 移动端：系统录音或选音频文件；勿加 capture，否则部分手机会打开相机 -->
+    <input type="file" id="audio-input" accept="audio/*,.m4a,.mp3,.wav,.ogg,.aac,.3gp,.amr" style="display:none">
+    <input type="file" id="video-input" accept="video/*,.mp4,.mov,.m4v,.webm,.mkv,.3gp" capture="environment" style="display:none">
 
     <script>
 
@@ -558,6 +571,7 @@ body {
             document.getElementById('camera-btn').onclick = () => { closeFileMenu(); document.getElementById('camera-input').click(); };
             document.getElementById('gallery-btn').onclick = () => { closeFileMenu(); document.getElementById('gallery-input').click(); };
             document.getElementById('anyfile-btn').onclick = () => { closeFileMenu(); document.getElementById('anyfile-input').click(); };
+            document.getElementById('video-btn').onclick = () => { closeFileMenu(); document.getElementById('video-input').click(); };
             document.getElementById('location-btn').onclick = async () => {
                 closeFileMenu();
                 if (typeof sendLocationMessage === 'function') {
@@ -623,20 +637,46 @@ function connectWS() {
       .replace(/'/g, "&#39;");
   }
 
+  const VIDEO_URL_RE = /\\.(mp4|mov|m4v|mkv|3gp|webm)(\\?|#|$)/i;
+
+  function isVideoUrl(url) {
+    return VIDEO_URL_RE.test(String(url || ""));
+  }
+
+  function videoTag(url) {
+    const safe = escapeHtml(url);
+    return \`<video class="md-video" controls playsinline preload="metadata" src="\${safe}"></video>\`;
+  }
+
   function renderInline(s) {
     const linkPlaceholders = [];
     const codePlaceholders = [];
 
-    // Links: [text](url)
+    // Video: ![video](url) or [video](url)
+    s = s.replace(/!\\[video\\]\\(([^\\s)]+)\\)/gi, (m, url) => videoTag(url));
+    s = s.replace(/\\[video\\]\\(([^\\s)]+)\\)/gi, (m, url) => videoTag(url));
+
+    // Links: [text](url) — 视频 URL 渲染为播放器
     s = s.replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g, (m, text, url) => {
+      if (isVideoUrl(url)) return videoTag(url);
       const key = \`@@MDLINKPLACEHOLDER\${linkPlaceholders.length}@@\`;
       linkPlaceholders.push(
         \`<a href="\${url}" target="_blank" rel="noopener noreferrer">\${text}</a>\`
       );
       return key;
     });
-    // Autolink: https://...
+    // 相对路径 /oldbuddy/uploads/…
+    s = s.replace(/\\[([^\\]]+)\\]\\((\\/oldbuddy\\/[^\\s)]+)\\)/g, (m, text, url) => {
+      if (isVideoUrl(url)) return videoTag(url);
+      const key = \`@@MDLINKPLACEHOLDER\${linkPlaceholders.length}@@\`;
+      linkPlaceholders.push(
+        \`<a href="\${url}" target="_blank" rel="noopener noreferrer">\${text}</a>\`
+      );
+      return key;
+    });
+    // Autolink: https://... — 视频直链嵌入播放器
     s = s.replace(/(https?:\\/\\/[^\\s<]+)/g, (m, url) => {
+      if (isVideoUrl(url)) return videoTag(url);
       return \`<a href="\${url}" target="_blank" rel="noopener noreferrer">\${url}</a>\`;
     });
 
@@ -1309,6 +1349,42 @@ function useMarkdownCard(msg) {
     return /^(system|debug)/.test(s);
 }
 
+function isVideoMediaUrl(url) {
+    return /\\.(mp4|mov|m4v|mkv|3gp|webm)(\\?|#|$)/i.test(String(url || ''));
+}
+
+function appendExtraText(contentDiv, msg) {
+    if (!msg.extra_text) return;
+    const extra = document.createElement('div');
+    extra.className = 'message-extra-text';
+    if (typeof window.renderMarkdown === 'function') {
+        extra.classList.add('markdown');
+        if (useMarkdownCard(msg)) extra.classList.add('markdown-card');
+        extra.innerHTML = window.renderMarkdown(msg.extra_text);
+    } else {
+        extra.textContent = msg.extra_text;
+    }
+    contentDiv.appendChild(extra);
+}
+
+function createVideoElement(src) {
+    const video = document.createElement('video');
+    video.controls = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    video.src = src;
+    video.className = 'message-video';
+    return video;
+}
+
+function createAudioElement(src) {
+    const audio = document.createElement('audio');
+    audio.controls = true;
+    audio.src = src;
+    audio.className = 'message-audio';
+    return audio;
+}
+
 /**
  * 渲染单条消息（支持 prependMessage 从旧到新加载逻辑）
  */
@@ -1417,25 +1493,12 @@ function renderMessage(msg) {
             }
             contentDiv.appendChild(extra);
         }
+    } else if (msg.type === 'video' || (msg.type === 'audio' && isVideoMediaUrl(msg.content))) {
+        contentDiv.appendChild(createVideoElement(msg.content));
+        appendExtraText(contentDiv, msg);
     } else if (msg.type === 'audio') {
-        const audio = document.createElement('audio');
-        audio.controls = true;
-        audio.src = msg.content;
-        audio.className = 'message-audio';
-        contentDiv.appendChild(audio);
-
-        if (msg.extra_text) {
-            const extra = document.createElement('div');
-            extra.className = 'message-extra-text';
-            if (typeof window.renderMarkdown === 'function') {
-                extra.classList.add('markdown');
-                if (useMarkdownCard(msg)) extra.classList.add('markdown-card');
-                extra.innerHTML = window.renderMarkdown(msg.extra_text);
-            } else {
-                extra.textContent = msg.extra_text;
-            }
-            contentDiv.appendChild(extra);
-        }
+        contentDiv.appendChild(createAudioElement(msg.content));
+        appendExtraText(contentDiv, msg);
     } else if (msg.type === 'file') {
         const link = document.createElement('a');
         link.href = msg.content;
@@ -2397,6 +2460,79 @@ async function handleAnyFile(file, inputEl) {
     };
 }
 
+/** 手机经局域网 http://IP:端口 访问时非安全上下文，getUserMedia 会被拒绝 */
+function canInlineAudioRecord() {
+    return !!(window.isSecureContext
+        && navigator.mediaDevices
+        && navigator.mediaDevices.getUserMedia
+        && typeof MediaRecorder !== 'undefined');
+}
+
+/** 触摸设备优先走系统录音/选文件，避免 capture 误开相机或 MediaRecorder 兼容问题 */
+function prefersNativeAudioCapture() {
+    if (!window.isSecureContext) return true;
+    return window.matchMedia('(pointer: coarse)').matches
+        || window.matchMedia('(hover: none)').matches;
+}
+
+function pickAudioRecorderFormat() {
+    const candidates = [
+        { mimeType: 'audio/webm;codecs=opus', ext: 'webm' },
+        { mimeType: 'audio/webm', ext: 'webm' },
+        { mimeType: 'audio/mp4', ext: 'm4a' },
+        { mimeType: 'audio/aac', ext: 'aac' },
+    ];
+    for (const c of candidates) {
+        if (MediaRecorder.isTypeSupported(c.mimeType)) return c;
+    }
+    return { mimeType: '', ext: 'webm' };
+}
+
+function isVideoFile(file, filename) {
+    const type = String((file && file.type) || '').toLowerCase();
+    const name = String(filename || (file && file.name) || '').toLowerCase();
+    if (type.startsWith('video/')) return true;
+    if (type.startsWith('audio/')) return false;
+    if (/\\.(mp4|mov|m4v|mkv|3gp)(\\?|$)/.test(name)) return true;
+    if (/\\.webm(\\?|$)/.test(name) && type.startsWith('video/')) return true;
+    return false;
+}
+
+async function uploadMediaBlob(blobOrFile, filename) {
+    const file = blobOrFile instanceof File
+        ? blobOrFile
+        : new File([blobOrFile], filename || \`record_\${Date.now()}.webm\`, { type: blobOrFile.type || '' });
+    const kind = isVideoFile(file, filename) ? 'video' : 'audio';
+    const formData = new FormData();
+    formData.append('file', file, file.name || filename);
+    formData.append('sender', 'user');
+    if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
+    const res = await fetch(\`/oldbuddy/api/message/\${kind}\`, { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data && data.message) appendMessage(data.message);
+}
+
+async function uploadVideoFile(file) {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('sender', 'user');
+    if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
+    const res = await fetch('/oldbuddy/api/message/video', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data && data.message) appendMessage(data.message);
+}
+
+function openNativeAudioPicker(audioInput) {
+    if (!audioInput) return;
+    audioInput.value = '';
+    audioInput.removeAttribute('capture');
+    // iOS：capture="user" 才可能调起语音备忘录；裸 capture 或 environment 会开相机
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isIOS) audioInput.setAttribute('capture', 'user');
+    audioInput.click();
+}
 
 async function initUploadHandlers() {
     document.getElementById('camera-input').onchange = (e) => handleImageFile(e.target.files[0]);
@@ -2411,27 +2547,87 @@ async function initUploadHandlers() {
     };
 
     // ---------- 语音录音 ----------
-    let mediaRecorder, audioChunks = [], isRecording = false;
+    const audioInput = document.getElementById('audio-input');
+    const useInlineRecord = canInlineAudioRecord() && !prefersNativeAudioCapture();
+    let mediaRecorder, audioChunks = [], isRecording = false, recordStream = null;
     const audioBtn = document.getElementById('send-audio');
+
+    audioInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        e.target.value = '';
+        if (!file) return;
+        try {
+            await uploadMediaBlob(file, file.name || \`record_\${Date.now()}.m4a\`);
+        } catch (err) {
+            console.error(err);
+            alert(isVideoFile(file) ? '视频上传失败' : '录音上传失败');
+        }
+    };
+
+    const videoInput = document.getElementById('video-input');
+    if (videoInput) {
+        videoInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            e.target.value = '';
+            if (!file) return;
+            try {
+                await uploadVideoFile(file);
+            } catch (err) {
+                console.error(err);
+                alert('视频上传失败');
+            }
+        };
+    }
+
+    function stopRecordStream() {
+        if (recordStream) {
+            recordStream.getTracks().forEach((t) => t.stop());
+            recordStream = null;
+        }
+    }
+
     audioBtn.onclick = async () => {
+        if (!useInlineRecord) {
+            openNativeAudioPicker(audioInput);
+            return;
+        }
+
         if (!isRecording) {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream); audioChunks = [];
-                mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+                recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const fmt = pickAudioRecorderFormat();
+                mediaRecorder = fmt.mimeType
+                    ? new MediaRecorder(recordStream, { mimeType: fmt.mimeType })
+                    : new MediaRecorder(recordStream);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = (ev) => { if (ev.data?.size) audioChunks.push(ev.data); };
                 mediaRecorder.onstop = async () => {
-                    const blob = new Blob(audioChunks, { type: 'audio/webm' });
-                    const formData = new FormData(); formData.append('file', blob, \`record_\${Date.now()}.webm\`); formData.append('sender', 'user');
-                    if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
-                    try { const res = await fetch('/oldbuddy/api/message/audio', { method: 'POST', body: formData }); const data = await res.json(); if (data && data.message) appendMessage(data.message); }
-                    catch (e) { console.error(e); alert('录音上传失败'); }
+                    stopRecordStream();
+                    const mime = fmt.mimeType || mediaRecorder.mimeType || 'audio/webm';
+                    const blob = new Blob(audioChunks, { type: mime });
+                    try {
+                        await uploadMediaBlob(blob, \`record_\${Date.now()}.\${fmt.ext}\`);
+                    } catch (err) {
+                        console.error(err);
+                        alert('录音上传失败');
+                    }
                 };
-                mediaRecorder.start(); isRecording = true; audioBtn.textContent = '⏹ 停止';
-            } catch (err) { console.error(err); alert('无法访问麦克风'); }
-        } else { mediaRecorder.stop(); isRecording = false; audioBtn.textContent = '🎤'; }
+                mediaRecorder.start();
+                isRecording = true;
+                audioBtn.textContent = '⏹ 停止';
+            } catch (err) {
+                console.error(err);
+                stopRecordStream();
+                // 权限拒绝或仍不可用：改用系统录音
+                openNativeAudioPicker(audioInput);
+            }
+        } else {
+            mediaRecorder.stop();
+            isRecording = false;
+            audioBtn.textContent = '🎤';
+        }
     };
 }
-
 
 
 </script>

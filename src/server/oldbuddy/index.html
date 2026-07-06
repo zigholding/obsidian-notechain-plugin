@@ -74,12 +74,16 @@
         <button id="camera-btn">拍照</button>
         <button id="gallery-btn">选择图片</button>
         <button id="anyfile-btn">上传文件</button>
+        <button id="video-btn" type="button">录像</button>
         <button id="location-btn" type="button" title="读取定位并发送经纬度">发送位置</button>
     </div>
 
     <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
     <input type="file" id="gallery-input" accept="image/*" style="display:none">
     <input type="file" id="anyfile-input" style="display:none">
+    <!-- 非 HTTPS / 移动端：系统录音或选音频文件；勿加 capture，否则部分手机会打开相机 -->
+    <input type="file" id="audio-input" accept="audio/*,.m4a,.mp3,.wav,.ogg,.aac,.3gp,.amr" style="display:none">
+    <input type="file" id="video-input" accept="video/*,.mp4,.mov,.m4v,.webm,.mkv,.3gp" capture="environment" style="display:none">
 
     <script src="static/js/websocket.js?v=20260318"></script>
     <script src="static/js/markdown.js?v=20260417b"></script>
@@ -160,6 +164,7 @@
             document.getElementById('camera-btn').onclick = () => { closeFileMenu(); document.getElementById('camera-input').click(); };
             document.getElementById('gallery-btn').onclick = () => { closeFileMenu(); document.getElementById('gallery-input').click(); };
             document.getElementById('anyfile-btn').onclick = () => { closeFileMenu(); document.getElementById('anyfile-input').click(); };
+            document.getElementById('video-btn').onclick = () => { closeFileMenu(); document.getElementById('video-input').click(); };
             document.getElementById('location-btn').onclick = async () => {
                 closeFileMenu();
                 if (typeof sendLocationMessage === 'function') {

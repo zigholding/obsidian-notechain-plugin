@@ -6,7 +6,7 @@ import {
     readHttpBodyBuffer,
 } from '../httpUtil';
 import { OLDBUDDY_PAGE_HTML } from '../oldbuddyPageHtml';
-import { OldBuddyStore } from './oldbuddyStore';
+import { OldBuddyStore, inferOldBuddyMessageType } from './oldbuddyStore';
 
 const BASE = '/oldbuddy';
 
@@ -89,6 +89,10 @@ export class OldBuddyHttpHandlers {
             await this.handleUploadMessage(req, res, 'audio');
             return true;
         }
+        if (sub === 'api/message/video' && req.method === 'POST') {
+            await this.handleUploadMessage(req, res, 'video');
+            return true;
+        }
         if (sub === 'api/message/file' && req.method === 'POST') {
             await this.handleUploadMessage(req, res, 'file');
             return true;
@@ -132,7 +136,7 @@ export class OldBuddyHttpHandlers {
         }
     }
 
-    private async handleUploadMessage(req: any, res: any, type: 'image' | 'audio' | 'file') {
+    private async handleUploadMessage(req: any, res: any, type: 'image' | 'audio' | 'video' | 'file') {
         try {
             const ct = String(req.headers['content-type'] || '');
             if (!ct.includes('multipart/form-data')) {
@@ -147,8 +151,9 @@ export class OldBuddyHttpHandlers {
                 return;
             }
             const saved = this.store.saveUpload(file.data, file.filename || 'upload', file.mime || 'application/octet-stream');
+            const messageType = inferOldBuddyMessageType(type, file.mime || '', file.filename || '');
             const message = await this.store.addFileMessage({
-                type,
+                type: messageType,
                 url: saved.url,
                 sender: fields.sender || 'user',
                 target: fields.target || 'local',
@@ -179,7 +184,7 @@ export class OldBuddyHttpHandlers {
                 content: String(fields.content || ''),
                 sender: fields.sender != null ? String(fields.sender) : undefined,
                 target: fields.target != null ? String(fields.target) : undefined,
-                type: fields.type != null ? (String(fields.type) as 'text' | 'image' | 'audio' | 'file') : undefined,
+                type: fields.type != null ? (String(fields.type) as 'text' | 'image' | 'audio' | 'video' | 'file') : undefined,
                 extra_text: fields.extra_text != null ? String(fields.extra_text) : undefined,
                 file_name: fields.file_name != null ? String(fields.file_name) : undefined,
                 file_size: fields.file_size != null ? Number(fields.file_size) : undefined,
