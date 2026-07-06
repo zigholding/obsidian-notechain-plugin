@@ -1,5 +1,130 @@
 // static/js/upload.js
 
+function createUploadOverlay() {
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.background = 'rgba(0,0,0,0.6)';
+    overlay.style.display = 'flex';
+    overlay.style.flexDirection = 'column';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.zIndex = '2000';
+    return overlay;
+}
+
+function appendExtraTextRow(overlay, placeholder) {
+    const textInput = document.createElement('input');
+    textInput.type = 'text';
+    textInput.placeholder = placeholder || '输入附加文字...';
+    textInput.style.marginTop = '10px';
+    textInput.style.padding = '8px 12px';
+    textInput.style.width = '60%';
+    textInput.style.borderRadius = '20px';
+    overlay.appendChild(textInput);
+    return textInput;
+}
+
+function appendSendCancelButtons(overlay, onSend, onCancel, failLabel) {
+    const btnWrapper = document.createElement('div');
+    btnWrapper.style.marginTop = '10px';
+    const sendBtn = document.createElement('button');
+    sendBtn.textContent = '发送';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = '取消';
+    btnWrapper.appendChild(sendBtn);
+    btnWrapper.appendChild(cancelBtn);
+    overlay.appendChild(btnWrapper);
+    cancelBtn.onclick = () => {
+        onCancel();
+        if (overlay.parentNode) document.body.removeChild(overlay);
+    };
+    sendBtn.onclick = async () => {
+        sendBtn.disabled = true;
+        try {
+            await onSend();
+            if (overlay.parentNode) document.body.removeChild(overlay);
+        } catch (e) {
+            console.error(e);
+            if (failLabel) alert(failLabel);
+            sendBtn.disabled = false;
+        }
+    };
+}
+
+/** 录音 / 视频上传前预览并输入 extra_text */
+function handleMediaUpload(fileOrBlob, kind, opts = {}) {
+    const { filename, inputEl, failLabel } = opts;
+    const isVideo = kind === 'video';
+    const file = fileOrBlob instanceof File
+        ? fileOrBlob
+        : new File(
+            [fileOrBlob],
+            filename || `${isVideo ? 'video' : 'record'}_${Date.now()}.${isVideo ? 'mp4' : 'webm'}`,
+            { type: fileOrBlob.type || (isVideo ? 'video/mp4' : 'audio/webm') },
+        );
+
+    const overlay = createUploadOverlay();
+    const label = document.createElement('div');
+    label.textContent = isVideo ? `视频: ${file.name}` : `录音: ${file.name}`;
+    label.style.background = '#fff';
+    label.style.padding = '10px 14px';
+    label.style.borderRadius = '8px';
+    label.style.maxWidth = '80%';
+    label.style.textAlign = 'center';
+    overlay.appendChild(label);
+
+    const objectUrl = URL.createObjectURL(file);
+    if (isVideo) {
+        const video = document.createElement('video');
+        video.controls = true;
+        video.playsInline = true;
+        video.src = objectUrl;
+        video.style.maxWidth = '80%';
+        video.style.maxHeight = '40%';
+        video.style.marginTop = '10px';
+        video.style.borderRadius = '8px';
+        video.style.background = '#000';
+        overlay.appendChild(video);
+    } else {
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        audio.src = objectUrl;
+        audio.style.width = 'min(80%, 320px)';
+        audio.style.marginTop = '10px';
+        overlay.appendChild(audio);
+    }
+
+    const textInput = appendExtraTextRow(overlay, '输入附加文字...');
+    document.body.appendChild(overlay);
+
+    const apiPath = isVideo ? '/oldbuddy/api/message/video' : '/oldbuddy/api/message/audio';
+    const cleanup = () => URL.revokeObjectURL(objectUrl);
+    appendSendCancelButtons(
+        overlay,
+        async () => {
+            const formData = new FormData();
+            formData.append('file', file, file.name);
+            formData.append('sender', 'user');
+            if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
+            const extra_text = textInput.value.trim();
+            if (extra_text) formData.append('extra_text', extra_text);
+            const res = await fetch(apiPath, { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data && data.message) appendMessage(data.message);
+            cleanup();
+        },
+        () => {
+            cleanup();
+            if (inputEl) inputEl.value = '';
+        },
+        failLabel || (isVideo ? '视频上传失败' : '录音上传失败'),
+    );
+}
+
 // ---------- 图片上传（预览 + 文字组合发送） ----------
 async function handleImageFile(file) {
     if (!file) return;
@@ -133,27 +258,11 @@ function pickAudioRecorderFormat() {
 }
 
 async function uploadAudioBlob(blobOrFile, filename) {
-    const file = blobOrFile instanceof File
-        ? blobOrFile
-        : new File([blobOrFile], filename || `record_${Date.now()}.webm`, { type: blobOrFile.type || 'audio/webm' });
-    const formData = new FormData();
-    formData.append('file', file, file.name || filename);
-    formData.append('sender', 'user');
-    if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
-    const res = await fetch('/oldbuddy/api/message/audio', { method: 'POST', body: formData });
-    const data = await res.json();
-    if (data && data.message) appendMessage(data.message);
+    handleMediaUpload(blobOrFile, 'audio', { filename });
 }
 
-async function uploadVideoFile(file) {
-    if (!file) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('sender', 'user');
-    if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
-    const res = await fetch('/oldbuddy/api/message/video', { method: 'POST', body: formData });
-    const data = await res.json();
-    if (data && data.message) appendMessage(data.message);
+async function uploadVideoFile(file, inputEl) {
+    handleMediaUpload(file, 'video', { inputEl });
 }
 
 async function initUploadHandlers() {
@@ -183,7 +292,9 @@ async function initUploadHandlers() {
                 return;
             }
             try {
-                await uploadAudioBlob(file, file.name || `record_${Date.now()}.m4a`);
+                handleMediaUpload(file, 'audio', {
+                    filename: file.name || `record_${Date.now()}.m4a`,
+                });
             } catch (err) {
                 console.error(err);
                 alert('录音上传失败');
@@ -198,7 +309,7 @@ async function initUploadHandlers() {
             e.target.value = '';
             if (!file) return;
             try {
-                await uploadVideoFile(file);
+                handleMediaUpload(file, 'video', { inputEl: e.target });
             } catch (err) {
                 console.error(err);
                 alert('视频上传失败');
@@ -233,7 +344,7 @@ async function initUploadHandlers() {
                     const mime = fmt.mimeType || mediaRecorder.mimeType || 'audio/webm';
                     const blob = new Blob(audioChunks, { type: mime });
                     try {
-                        await uploadAudioBlob(blob, `record_${Date.now()}.${fmt.ext}`);
+                        uploadAudioBlob(blob, `record_${Date.now()}.${fmt.ext}`);
                     } catch (err) {
                         console.error(err);
                         alert('录音上传失败');
