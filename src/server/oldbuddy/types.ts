@@ -1,6 +1,9 @@
 export type OldBuddyMessageType = 'text' | 'image' | 'audio' | 'video' | 'file';
 
-/** Templater 脚本统一返回格式：{ label, text } 数组 */
+/** Templater 脚本统一返回格式：{ label, text }
+ *  - label：列表主显示（短名、说明性文字）
+ *  - text：选中后写入输入框的实际内容（@引用、#标签等）；与 label 相同时不重复显示副标题
+ */
 export interface OldBuddyLabelTextItem {
     label: string;
     text: string;

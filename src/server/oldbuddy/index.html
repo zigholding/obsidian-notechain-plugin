@@ -89,6 +89,7 @@
     <script src="static/js/avatars.js?v=20260621"></script>
     <script src="static/js/quick_commands.js?v=20260420a"></script>
     <script src="static/js/reference.js?v=20260621"></script>
+    <script src="static/js/tags.js?v=20260707"></script>
     <script src="static/js/upload.js?v=20260420a"></script>
 
     <script>
@@ -141,6 +142,7 @@
 
             textInput.addEventListener('keydown', async (e) => {
                 if (typeof isReferencePickerOpen === 'function' && isReferencePickerOpen()) return;
+                if (typeof isTagPickerOpen === 'function' && isTagPickerOpen()) return;
                 if (e.key !== 'Enter' || e.shiftKey) return;
                 if (!mqFinePointer.matches) return; /* 触摸为主：不拦截，由系统插入换行 */
                 e.preventDefault();
@@ -172,6 +174,7 @@
 
             initUploadHandlers();
             initReferencePicker();
+            initTagPicker();
             if (typeof loadOldBuddyAvatars === 'function') {
                 await loadOldBuddyAvatars(getCurrentChatTarget());
             }

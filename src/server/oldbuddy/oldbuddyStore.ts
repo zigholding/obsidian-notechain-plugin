@@ -13,6 +13,7 @@ const QUICK_COMMANDS_TEMPLATE = 'nochain_oldbuddy_quick_commands';
 const QUERY_TEMPLATE = 'nochain_oldbuddy_query';
 const SAVE_TEMPLATE = 'nochain_oldbuddy_save';
 const REFERENCE_TEMPLATE = 'nochain_oldbuddy_reference';
+const TAGS_TEMPLATE = 'nochain_oldbuddy_tags';
 const AVATAR_TEMPLATE = 'nochain_oldbuddy_avatar';
 const MAX_MESSAGES = 5000;
 const DEFAULT_REPLY_TEMPLATE = 'nochain_oldbuddy_reply';
@@ -407,6 +408,39 @@ export class OldBuddyStore {
             return list;
         } catch (e) {
             console.warn('[oldbuddy] reference failed:', e);
+            return [];
+        }
+    }
+
+    /** # 标签列表；模板 nochain_oldbuddy_tags 返回 [{ label, text }, ...] */
+    async loadTags(target?: string, query?: string): Promise<{ id: string; label: string; text: string }[]> {
+        if (!this.templater.ea.file.get_tfile(TAGS_TEMPLATE)) {
+            return [];
+        }
+        try {
+            const result = await this.templater.parse_templater(TAGS_TEMPLATE, true, {
+                oldbuddy: {
+                    action: 'tags',
+                    target: target || null,
+                    query: query || '',
+                },
+            }, 0, '');
+            const items = normalizeLabelTextList(result);
+            if (!items.length) {
+                return [];
+            }
+            let list = labelTextItemsToCommands(items);
+            const q = (query || '').trim().toLowerCase();
+            if (q) {
+                list = list.filter(
+                    (item) =>
+                        item.label.toLowerCase().includes(q) ||
+                        item.text.toLowerCase().includes(q),
+                );
+            }
+            return list;
+        } catch (e) {
+            console.warn('[oldbuddy] tags failed:', e);
             return [];
         }
     }

@@ -30,6 +30,7 @@ const scripts = [
     read('js/avatars.js'),
     read('js/quick_commands.js'),
     read('js/reference.js'),
+    read('js/tags.js'),
     read('js/upload.js'),
 ].join('\n\n');
 

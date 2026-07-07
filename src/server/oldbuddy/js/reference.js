@@ -76,10 +76,7 @@ function renderReferencePicker(items) {
         row.className = 'reference-picker-item';
         row.setAttribute('role', 'option');
         row.dataset.index = String(idx);
-        row.innerHTML = `<span class="reference-picker-label">${escapeHtml(item.label)}</span>` +
-            (item.text && item.text !== item.label
-                ? `<span class="reference-picker-sub">${escapeHtml(item.text)}</span>`
-                : '');
+        row.innerHTML = formatPickerRowHtml(item.label, item.text);
         row.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -113,10 +110,36 @@ function escapeHtml(s) {
         .replace(/"/g, '&quot;');
 }
 
+function normalizePickerText(s, stripHash = false) {
+    let x = String(s || '').trim();
+    if (stripHash) x = x.replace(/^#+/, '');
+    return x;
+}
+
+/** label 与 text 语义相同时视为相同（忽略首尾 #、空白） */
+function pickerTextsEquivalent(a, b, stripHash = false) {
+    return normalizePickerText(a, stripHash) === normalizePickerText(b, stripHash);
+}
+
+function formatPickerRowHtml(primary, secondary, stripHash = false) {
+    const main = escapeHtml(primary);
+    const sub =
+        secondary && !pickerTextsEquivalent(primary, secondary, stripHash)
+            ? `<span class="reference-picker-sub">${escapeHtml(secondary)}</span>`
+            : '';
+    return `<span class="reference-picker-label">${main}</span>${sub}`;
+}
+
+function formatReferenceInsert(item) {
+    const raw = String(item.text || '').trim();
+    if (!raw) return '@';
+    return raw.startsWith('@') ? raw : `@${raw}`;
+}
+
 function applyReferenceItem(item) {
     const input = document.getElementById('text-input');
     if (!input || !referenceMentionRange) return;
-    const insert = `@${item.label} `;
+    const insert = `${formatReferenceInsert(item)} `;
     const val = input.value;
     const { start, end } = referenceMentionRange;
     input.value = val.slice(0, start) + insert + val.slice(end);

@@ -61,6 +61,14 @@ export class OldBuddyHttpHandlers {
             });
             return true;
         }
+        if (sub === 'api/tags' && req.method === 'GET') {
+            const target = parsedUrl.query?.target as string | undefined;
+            const query = parsedUrl.query?.query as string | undefined;
+            jsonResponse(res, 200, {
+                tags: await this.store.loadTags(target, query),
+            });
+            return true;
+        }
         if (sub === 'api/avatars' && req.method === 'GET') {
             const target = parsedUrl.query?.target as string | undefined;
             jsonResponse(res, 200, { avatars: await this.store.loadAvatars(target) });

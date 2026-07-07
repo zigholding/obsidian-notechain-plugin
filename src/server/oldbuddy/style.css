@@ -359,7 +359,8 @@ body {
     transform: translateX(-50%) translateY(0);
 }
 
-#reference-picker {
+#reference-picker,
+#tag-picker {
     position: fixed;
     z-index: 2001;
     max-height: min(40vh, 280px);
