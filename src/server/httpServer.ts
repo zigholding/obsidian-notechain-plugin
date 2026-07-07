@@ -2,6 +2,8 @@ import { App } from 'obsidian';
 import { Templater } from '../easyapi/templater';
 import { readHttpBody } from './httpUtil';
 import { ensureSelfSignedCert } from './httpsCert';
+import { ensureWindowsFirewallPorts } from './firewallWindows';
+import { getTailscaleSelfInfo } from './tailscaleUtil';
 import { MCPHttpHandlers } from './mcpHttp';
 import { OnlineHttpHandlers } from './onlineHttp';
 import { OldBuddyStore } from './oldbuddy/oldbuddyStore';
@@ -182,6 +184,11 @@ export class HTTPServer {
             if (this.httpEnabled) {
                 await this.startLocalHttpServer(handler, this.localHttpPort);
             }
+            const fwPorts: number[] = [];
+            if (this.httpsEnabled) fwPorts.push(this.port);
+            if (this.httpEnabled && this.localHttpPort > 0) fwPorts.push(this.localHttpPort);
+            ensureWindowsFirewallPorts(fwPorts);
+            this.logRemoteAccessHints();
         } catch (e) {
             await this.stop();
             throw e;
@@ -229,6 +236,20 @@ export class HTTPServer {
             console.error('[oldbuddy] websocket upgrade failed:', e);
         }
         socket.destroy();
+    }
+
+    private logRemoteAccessHints() {
+        const ts = getTailscaleSelfInfo();
+        if (!ts) return;
+        if (this.httpsEnabled && ts.dnsName) {
+            console.log(`[note-chain] Tailscale HTTPS: https://${ts.dnsName}:${this.port}/oldbuddy`);
+        }
+        if (this.httpEnabled && this.localHttpPort > 0 && ts.dnsName) {
+            console.log(`[note-chain] Tailscale HTTP: http://${ts.dnsName}:${this.localHttpPort}/oldbuddy`);
+        }
+        if (this.httpsEnabled && ts.ipv4) {
+            console.log(`[note-chain] Tailscale IP HTTPS: https://${ts.ipv4}:${this.port}/oldbuddy`);
+        }
     }
 
     private startLocalHttpServer(handler: (req: any, res: any) => void, localPort: number): Promise<void> {

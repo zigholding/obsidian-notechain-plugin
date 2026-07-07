@@ -3,6 +3,7 @@ let path = require('path');
 let os = require('os');
 let crypto = require('crypto');
 let selfsigned = require('selfsigned');
+import { getTailscaleSelfInfo } from './tailscaleUtil';
 
 function normalizeCertFingerprint(fp: string): string {
     return String(fp || '').replace(/:/g, '').toUpperCase();
@@ -29,45 +30,93 @@ export function certFingerprintsMatch(a: string, b: string): boolean {
     return normalizeCertFingerprint(a) === normalizeCertFingerprint(b);
 }
 
-function buildAltNames(): Array<{ type: number; value?: string; ip?: string }> {
-    const altNames: Array<{ type: number; value?: string; ip?: string }> = [
+function isLoopbackIPv4(ip: string): boolean {
+    return ip === '127.0.0.1' || ip.startsWith('127.');
+}
+
+type SanEntry = { type: number; value?: string; ip?: string };
+
+function certCoversAltNames(certPem: string, altNames: SanEntry[]): boolean {
+    try {
+        const x509 = new crypto.X509Certificate(certPem);
+        const san = String(x509.subjectAltName || '');
+        for (const a of altNames) {
+            if (a.type === 2 && a.value && !san.includes(`DNS:${a.value}`)) {
+                return false;
+            }
+            if (a.type === 7 && a.ip && !san.includes(`IP Address:${a.ip}`)) {
+                return false;
+            }
+        }
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function buildAltNames(): SanEntry[] {
+    const altNames: SanEntry[] = [
         { type: 2, value: 'localhost' },
         { type: 7, ip: '127.0.0.1' },
     ];
+    const seenDns = new Set<string>(['localhost']);
+    const seenIp = new Set<string>(['127.0.0.1']);
+
+    const ts = getTailscaleSelfInfo();
+    if (ts?.dnsName && !seenDns.has(ts.dnsName)) {
+        seenDns.add(ts.dnsName);
+        altNames.push({ type: 2, value: ts.dnsName });
+    }
+    if (ts?.ipv4 && !seenIp.has(ts.ipv4)) {
+        seenIp.add(ts.ipv4);
+        altNames.push({ type: 7, ip: ts.ipv4 });
+    }
+
     for (const list of Object.values(os.networkInterfaces()) as Array<
         Array<{ family?: string; internal?: boolean; address?: string }> | undefined
     >) {
         for (const iface of list || []) {
             const family = String(iface.family || '');
-            if ((family === 'IPv4' || family === '4') && !iface.internal && iface.address) {
-                altNames.push({ type: 7, ip: iface.address });
+            const address = String(iface.address || '').trim();
+            if ((family !== 'IPv4' && family !== '4') || !address || isLoopbackIPv4(address)) {
+                continue;
             }
+            if (seenIp.has(address)) continue;
+            seenIp.add(address);
+            altNames.push({ type: 7, ip: address });
         }
     }
     return altNames;
 }
 
-/** 自签 TLS 证书（localhost + 局域网 IP），供 Note-Chain HTTPS 服务 */
+function sansKeyFromAltNames(altNames: SanEntry[]): string {
+    return altNames
+        .map((a) => (a.type === 2 ? `d:${a.value}` : `i:${a.ip}`))
+        .sort()
+        .join(',');
+}
+
+/** 自签 TLS 证书（localhost + 本机 IPv4 + Tailscale MagicDNS） */
 export async function ensureSelfSignedCert(tlsDir: string): Promise<{ key: string; cert: string }> {
     const keyPath = path.join(tlsDir, 'key.pem');
     const certPath = path.join(tlsDir, 'cert.pem');
     const metaPath = path.join(tlsDir, 'meta.json');
 
     const altNames = buildAltNames();
-    const sansKey = altNames
-        .map((a) => (a.type === 2 ? `d:${a.value}` : `i:${a.ip}`))
-        .sort()
-        .join(',');
+    const sansKey = sansKeyFromAltNames(altNames);
 
     if (fs.existsSync(keyPath) && fs.existsSync(certPath) && fs.existsSync(metaPath)) {
         try {
             const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-            if (meta.sansKey === sansKey) {
-                const key = fs.readFileSync(keyPath, 'utf8');
-                const cert = fs.readFileSync(certPath, 'utf8');
-                if (key.includes('BEGIN PRIVATE KEY') && cert.includes('BEGIN CERTIFICATE')) {
-                    return { key, cert };
-                }
+            const key = fs.readFileSync(keyPath, 'utf8');
+            const cert = fs.readFileSync(certPath, 'utf8');
+            if (
+                meta.sansKey === sansKey &&
+                key.includes('BEGIN PRIVATE KEY') &&
+                cert.includes('BEGIN CERTIFICATE') &&
+                certCoversAltNames(cert, altNames)
+            ) {
+                return { key, cert };
             }
         } catch {
             /* regenerate */
@@ -96,6 +145,10 @@ export async function ensureSelfSignedCert(tlsDir: string): Promise<{ key: strin
         JSON.stringify({ sansKey, generatedAt: new Date().toISOString() }, null, 2),
         'utf8',
     );
+    const dns = altNames.filter((a) => a.type === 2).map((a) => a.value);
+    const ips = altNames.filter((a) => a.type === 7).map((a) => a.ip);
     console.log('[note-chain] generated self-signed TLS cert:', tlsDir);
+    console.log('[note-chain] TLS cert SAN DNS:', dns.join(', '));
+    console.log('[note-chain] TLS cert SAN IPs:', ips.join(', '));
     return { key: pems.private, cert: pems.cert };
 }
