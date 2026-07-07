@@ -852,7 +852,7 @@ const cmd_generate_mcp_skill = (plugin: NoteChainPlugin) => ({
 			new Notice('Save to computer is only available on desktop');
 			return;
 		}
-		const baseUrl = `http://${plugin.settings.notechain.httpServerHost}:${plugin.settings.notechain.httpServerPort}`;
+		const baseUrl = plugin.httpServer.getBaseUrl(plugin.settings.notechain.httpServerHost);
 		const content = await plugin.httpServer.getMCPSkillMarkdownAsync(baseUrl);
 		try {
 			const { dialog } = require('electron').remote;

@@ -109,11 +109,11 @@ export default class NoteChainPlugin extends Plugin {
 			this.settings.notechain.httpServerHost,
 			this.settings.notechain.httpServerPort
 		);
-		// 如果启用，自动启动 HTTP 服务器
+		// 如果启用，自动启动 HTTPS 服务器
 		if (!this.easyapi.isMobile && this.settings.notechain.httpServerEnabled) {
 			this.httpServer.start()
 				.then(() => {
-					console.log(`HTTP Server auto-started on ${this.settings.notechain.httpServerHost}:${this.settings.notechain.httpServerPort}`);
+					console.log(`Note-Chain HTTPS server: ${this.httpServer?.getBaseUrl()}/oldbuddy`);
 				})
 				.catch((error) => {
 					console.error('Failed to start HTTP Server:', error);

@@ -10,7 +10,7 @@ export class MCPSkillAndTestPages {
     /** 提供 MCP call_tool 测试页面，浏览器访问 /mcp/test 即可 */
     async handleMCPTestPage(req: any, res: any) {
         const host = req.headers.host || `127.0.0.1:${this.getPort()}`;
-        const baseUrl = `http://${host}`;
+        const baseUrl = `https://${host}`;
         const html = MCP_TEST_HTML.replace('__BASE_URL__', baseUrl);
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(html);
@@ -18,7 +18,7 @@ export class MCPSkillAndTestPages {
 
     /**
      * 生成供 Agent 使用的 MCP Skill 文档（SKILL.md 内容）。
-     * @param baseUrl 例如 http://127.0.0.1:3000
+     * @param baseUrl 例如 https://127.0.0.1:3000
      * @param tools 可选，当前支持的工具列表；传入时会生成表格并写入「先用表格、不够再 list_tools、找不到则告知无法完成」的流程说明
      */
     getMCPSkillMarkdown(baseUrl: string, tools?: any[]): string {
@@ -62,7 +62,7 @@ description: Call Obsidian MCP tools via Note-Chain HTTP server. Use when the us
 
 # Note-Chain MCP Agent Skill
 
-Call MCP tools exposed by the Note-Chain plugin over HTTP. Base URL must point to a running Note-Chain server (e.g. \`http://127.0.0.1:3000\`).
+Call MCP tools exposed by the Note-Chain plugin over HTTPS. Base URL must point to a running Note-Chain server (e.g. \`https://127.0.0.1:3000\`).
 
 ## Base URL
 
@@ -125,7 +125,7 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
     /** GET /mcp/skill 返回 SKILL.md 内容，便于 Agent 或用户复制 */
     async handleMCPSkill(req: any, res: any) {
         const host = req.headers.host || `127.0.0.1:${this.getPort()}`;
-        const baseUrl = `http://${host}`;
+        const baseUrl = `https://${host}`;
         const markdown = await this.getMCPSkillMarkdownAsync(baseUrl);
         res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8' });
         res.end(markdown);

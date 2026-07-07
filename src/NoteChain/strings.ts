@@ -443,25 +443,33 @@ export class Strings{
 
     get setting_httpServer_enabled(){
         if(this.language=='zh'){
-            return '启用 HTTP 服务器'
+            return '启用 HTTPS 服务器'
         }else{
-            return "Enable HTTP Server";
+            return "Enable HTTPS Server";
         }
     }
 
     get setting_httpServer_host(){
         if(this.language=='zh'){
-            return 'HTTP 服务器IP地址'
+            return '监听地址'
         }else{
-            return "HTTP Server Host";
+            return "Listen Host";
+        }
+    }
+
+    get setting_httpServer_host_desc(){
+        if(this.language=='zh'){
+            return '手机访问请用 0.0.0.0；本机可用 https://127.0.0.1:端口'
+        }else{
+            return "Use 0.0.0.0 for LAN/mobile; local: https://127.0.0.1:port";
         }
     }
 
     get setting_httpServer_port(){
         if(this.language=='zh'){
-            return 'HTTP 服务器端口'
+            return 'HTTPS 端口'
         }else{
-            return "HTTP Server Port";
+            return "HTTPS Port";
         }
     }
     

@@ -496,8 +496,6 @@ body {
     <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
     <input type="file" id="gallery-input" accept="image/*" style="display:none">
     <input type="file" id="anyfile-input" style="display:none">
-    <!-- 系统录音：仅 accept 音频；iOS 点击时动态加 capture=user -->
-    <input type="file" id="audio-input" accept="audio/*,.m4a,.mp3,.wav,.ogg,.aac,.amr,.caf" style="display:none">
     <input type="file" id="video-input" accept="video/*,.mp4,.mov,.m4v,.webm,.mkv,.3gp" capture="environment" style="display:none">
 
     <script>
@@ -2647,7 +2645,7 @@ async function handleAnyFile(file, inputEl) {
     };
 }
 
-/** 手机经局域网 http://IP:端口 访问时非安全上下文，getUserMedia 会被拒绝 */
+/** HTTPS 安全上下文下可用页面内录音（🎤 → ⏹） */
 function canInlineAudioRecord() {
     return !!(window.isSecureContext
         && navigator.mediaDevices
@@ -2655,33 +2653,8 @@ function canInlineAudioRecord() {
         && typeof MediaRecorder !== 'undefined');
 }
 
-/** 触摸设备 / 非 HTTPS：走系统录音，不用页面内 getUserMedia */
-function prefersSystemAudioRecord() {
-    if (!window.isSecureContext) return true;
-    return window.matchMedia('(pointer: coarse)').matches
-        || window.matchMedia('(hover: none)').matches;
-}
-
 function useInlineAudioRecord() {
-    return canInlineAudioRecord() && !prefersSystemAudioRecord();
-}
-
-function isNonAudioPick(file) {
-    const type = String((file && file.type) || '').toLowerCase();
-    const name = String((file && file.name) || '').toLowerCase();
-    if (type.startsWith('video/') || type.startsWith('image/')) return true;
-    if (/\\.(mp4|mov|m4v|mkv|3gp|jpg|jpeg|png|gif|webp)(\\?|$)/.test(name)) return true;
-    return false;
-}
-
-function openSystemAudioRecorder(audioInput) {
-    if (!audioInput) return;
-    audioInput.value = '';
-    audioInput.removeAttribute('capture');
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    if (isIOS) audioInput.setAttribute('capture', 'user');
-    audioInput.click();
+    return canInlineAudioRecord();
 }
 
 function pickAudioRecorderFormat() {
@@ -2717,30 +2690,9 @@ async function initUploadHandlers() {
         await handleAnyFile(file, inputEl);
     };
 
-    // ---------- 语音录音：桌面 HTTPS 页面内录音；手机/HTTP 调系统录音 ----------
-    const audioInput = document.getElementById('audio-input');
+    // ---------- 语音录音（HTTPS 页面内 🎤 → ⏹） ----------
     let mediaRecorder, audioChunks = [], isRecording = false, recordStream = null;
     const audioBtn = document.getElementById('send-audio');
-
-    if (audioInput) {
-        audioInput.onchange = async (e) => {
-            const file = e.target.files[0];
-            e.target.value = '';
-            if (!file) return;
-            if (isNonAudioPick(file)) {
-                alert('请选择录音，视频/图片请使用 📁 菜单');
-                return;
-            }
-            try {
-                handleMediaUpload(file, 'audio', {
-                    filename: file.name || \`record_\${Date.now()}.m4a\`,
-                });
-            } catch (err) {
-                console.error(err);
-                alert('录音上传失败');
-            }
-        };
-    }
 
     const videoInput = document.getElementById('video-input');
     if (videoInput) {
@@ -2766,7 +2718,7 @@ async function initUploadHandlers() {
 
     audioBtn.onclick = async () => {
         if (!useInlineAudioRecord()) {
-            openSystemAudioRecorder(audioInput);
+            alert('当前页面非 HTTPS，无法直接录音。请使用 https:// 访问 OldBuddy。');
             return;
         }
 
@@ -2796,7 +2748,7 @@ async function initUploadHandlers() {
             } catch (err) {
                 console.error(err);
                 stopRecordStream();
-                openSystemAudioRecorder(audioInput);
+                alert('无法访问麦克风，请检查浏览器权限');
             }
         } else {
             mediaRecorder.stop();

@@ -1,13 +1,15 @@
 import { App } from 'obsidian';
 import { Templater } from '../easyapi/templater';
 import { readHttpBody } from './httpUtil';
+import { ensureSelfSignedCert } from './httpsCert';
 import { MCPHttpHandlers } from './mcpHttp';
 import { OnlineHttpHandlers } from './onlineHttp';
 import { OldBuddyStore } from './oldbuddy/oldbuddyStore';
 import { OldBuddyHttpHandlers } from './oldbuddy/oldbuddyHttp';
 
-let http = require('http');
+let https = require('https');
 let url = require('url');
+let path = require('path');
 
 export class HTTPServer {
     private templater: Templater;
@@ -16,6 +18,7 @@ export class HTTPServer {
     private stopPromise: Promise<void> | null = null;
     private port: number;
     private host: string;
+    private tlsDir: string;
     private sseConnections: Map<string, any> = new Map();
     private mcp: MCPHttpHandlers;
     private online: OnlineHttpHandlers;
@@ -32,89 +35,101 @@ export class HTTPServer {
         this.templater = templater;
         this.host = host;
         this.port = port;
+        this.tlsDir = path.join(configDir, 'plugins', 'note-chain', 'tls');
         this.mcp = new MCPHttpHandlers(app, templater, this.sseConnections, () => this.port);
         this.online = new OnlineHttpHandlers(app);
         this.oldbuddyStore = new OldBuddyStore(templater, configDir);
         this.oldbuddy = new OldBuddyHttpHandlers(this.oldbuddyStore);
     }
 
+    getBaseUrl(hostOverride?: string): string {
+        const h = hostOverride || this.host;
+        const displayHost = h === '0.0.0.0' ? '127.0.0.1' : h;
+        return `https://${displayHost}:${this.port}`;
+    }
+
     start(): Promise<void> {
-        return new Promise((resolve, reject) => {
-            if (this.server) {
-                resolve();
+        return this.startInternal();
+    }
+
+    private createRequestHandler() {
+        return async (req: any, res: any) => {
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+            if (req.method === 'OPTIONS') {
+                res.writeHead(200);
+                res.end();
                 return;
             }
 
-            if (this.server && this.server.listening) {
-                this.server.close();
+            try {
+                let parsedUrl = url.parse(req.url || '', true);
+
+                if (parsedUrl.pathname === '/templater' && (req.method === 'GET' || req.method === 'POST')) {
+                    await this.handleTemplaterRequest(req, res, parsedUrl);
+                } else if (parsedUrl.pathname === '/mcp/list_tools' && (req.method === 'GET' || req.method === 'POST')) {
+                    await this.mcp.handleMCPListTools(req, res);
+                } else if (parsedUrl.pathname === '/mcp/call_tool' && req.method === 'POST') {
+                    await this.mcp.handleMCPCallTool(req, res);
+                } else if (parsedUrl.pathname === '/sse' && req.method === 'GET') {
+                    await this.mcp.handleSSEConnection(req, res);
+                } else if (parsedUrl.pathname === '/messages' && req.method === 'POST') {
+                    await this.mcp.handleMCPMessage(req, res);
+                } else if (parsedUrl.pathname === '/mcp/test' && req.method === 'GET') {
+                    await this.mcp.handleMCPTestPage(req, res);
+                } else if (parsedUrl.pathname === '/mcp/skill' && req.method === 'GET') {
+                    await this.mcp.handleMCPSkill(req, res);
+                } else if (
+                    (parsedUrl.pathname === '/online' || parsedUrl.pathname === '/online/') &&
+                    req.method === 'GET'
+                ) {
+                    await this.online.handleOnlinePage(req, res);
+                } else if (parsedUrl.pathname === '/online/api/resolve-note' && req.method === 'GET') {
+                    await this.online.handleOnlineResolveNote(req, res, parsedUrl);
+                } else if (parsedUrl.pathname === '/online/api/search' && req.method === 'GET') {
+                    await this.online.handleOnlineSearch(req, res, parsedUrl);
+                } else if (parsedUrl.pathname === '/online/api/note' && req.method === 'GET') {
+                    await this.online.handleOnlineNoteGet(req, res, parsedUrl);
+                } else if (parsedUrl.pathname === '/online/api/note' && req.method === 'POST') {
+                    await this.online.handleOnlineNoteSave(req, res);
+                } else if (parsedUrl.pathname === '/online/api/render' && req.method === 'POST') {
+                    await this.online.handleOnlineRender(req, res);
+                } else if (parsedUrl.pathname === '/online/api/resolve-link' && req.method === 'GET') {
+                    await this.online.handleOnlineResolveLink(req, res, parsedUrl);
+                } else if (parsedUrl.pathname === '/online/api/media' && req.method === 'GET') {
+                    await this.online.handleOnlineMedia(req, res, parsedUrl);
+                } else if (parsedUrl.pathname === '/online/api/textarea-exec' && req.method === 'POST') {
+                    await this.online.handleOnlineTextareaExec(req, res);
+                } else if (await this.oldbuddy.handle(req, res, parsedUrl)) {
+                    // oldbuddy routes handled
+                } else {
+                    console.warn(`Unknown route: ${req.method} ${parsedUrl.pathname}`);
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Not Found', path: parsedUrl.pathname }));
+                }
+            } catch (error: any) {
+                console.error('Server error:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: error.message || 'Internal Server Error' }));
             }
+        };
+    }
 
-            this.server = http.createServer(async (req: any, res: any) => {
-                res.setHeader('Access-Control-Allow-Origin', '*');
-                res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-                res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    private async startInternal(): Promise<void> {
+        if (this.server) {
+            return;
+        }
 
-                if (req.method === 'OPTIONS') {
-                    res.writeHead(200);
-                    res.end();
-                    return;
-                }
+        const { key, cert } = await ensureSelfSignedCert(this.tlsDir);
+        const handler = this.createRequestHandler();
+        this.server = https.createServer({ key, cert }, handler);
 
-                try {
-                    let parsedUrl = url.parse(req.url || '', true);
+        this.server.keepAliveTimeout = 120000;
+        this.server.headersTimeout = 120000;
 
-                    if (parsedUrl.pathname === '/templater' && (req.method === 'GET' || req.method === 'POST')) {
-                        await this.handleTemplaterRequest(req, res, parsedUrl);
-                    } else if (parsedUrl.pathname === '/mcp/list_tools' && (req.method === 'GET' || req.method === 'POST')) {
-                        await this.mcp.handleMCPListTools(req, res);
-                    } else if (parsedUrl.pathname === '/mcp/call_tool' && req.method === 'POST') {
-                        await this.mcp.handleMCPCallTool(req, res);
-                    } else if (parsedUrl.pathname === '/sse' && req.method === 'GET') {
-                        await this.mcp.handleSSEConnection(req, res);
-                    } else if (parsedUrl.pathname === '/messages' && req.method === 'POST') {
-                        await this.mcp.handleMCPMessage(req, res);
-                    } else if (parsedUrl.pathname === '/mcp/test' && req.method === 'GET') {
-                        await this.mcp.handleMCPTestPage(req, res);
-                    } else if (parsedUrl.pathname === '/mcp/skill' && req.method === 'GET') {
-                        await this.mcp.handleMCPSkill(req, res);
-                    } else if (
-                        (parsedUrl.pathname === '/online' || parsedUrl.pathname === '/online/') &&
-                        req.method === 'GET'
-                    ) {
-                        await this.online.handleOnlinePage(req, res);
-                    } else if (parsedUrl.pathname === '/online/api/resolve-note' && req.method === 'GET') {
-                        await this.online.handleOnlineResolveNote(req, res, parsedUrl);
-                    } else if (parsedUrl.pathname === '/online/api/search' && req.method === 'GET') {
-                        await this.online.handleOnlineSearch(req, res, parsedUrl);
-                    } else if (parsedUrl.pathname === '/online/api/note' && req.method === 'GET') {
-                        await this.online.handleOnlineNoteGet(req, res, parsedUrl);
-                    } else if (parsedUrl.pathname === '/online/api/note' && req.method === 'POST') {
-                        await this.online.handleOnlineNoteSave(req, res);
-                    } else if (parsedUrl.pathname === '/online/api/render' && req.method === 'POST') {
-                        await this.online.handleOnlineRender(req, res);
-                    } else if (parsedUrl.pathname === '/online/api/resolve-link' && req.method === 'GET') {
-                        await this.online.handleOnlineResolveLink(req, res, parsedUrl);
-                    } else if (parsedUrl.pathname === '/online/api/media' && req.method === 'GET') {
-                        await this.online.handleOnlineMedia(req, res, parsedUrl);
-                    } else if (parsedUrl.pathname === '/online/api/textarea-exec' && req.method === 'POST') {
-                        await this.online.handleOnlineTextareaExec(req, res);
-                    } else if (await this.oldbuddy.handle(req, res, parsedUrl)) {
-                        // oldbuddy routes handled
-                    } else {
-                        console.warn(`Unknown route: ${req.method} ${parsedUrl.pathname}`);
-                        res.writeHead(404, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ error: 'Not Found', path: parsedUrl.pathname }));
-                    }
-                } catch (error: any) {
-                    console.error('Server error:', error);
-                    res.writeHead(500, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: error.message || 'Internal Server Error' }));
-                }
-            });
-
-            this.server.keepAliveTimeout = 120000;
-            this.server.headersTimeout = 120000;
-
+        return new Promise((resolve, reject) => {
             this.server.listen(this.port, this.host, () => {
                 resolve();
             });
@@ -124,7 +139,7 @@ export class HTTPServer {
                     console.error(`Port ${this.port} is already in use`);
                     reject(error);
                 } else {
-                    console.error('HTTP Server error:', error);
+                    console.error('HTTPS Server error:', error);
                     reject(error);
                 }
             });

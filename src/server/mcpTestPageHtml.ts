@@ -19,7 +19,7 @@ export const MCP_TEST_HTML = `<!DOCTYPE html>
     <h1>MCP call_tool 测试</h1>
     <p>
         <label>接口地址：<br>
-            <input type="url" id="baseUrl" value="__BASE_URL__" placeholder="http://127.0.0.1:3000">
+            <input type="url" id="baseUrl" value="__BASE_URL__" placeholder="https://127.0.0.1:3000">
         </label>
     </p>
     <p>

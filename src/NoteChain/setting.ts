@@ -54,9 +54,9 @@ export const NCSettings_DEFAULT: NCSettings = {
 	modal_default_height: 600,
 	avata: 'avata',
 	tpl_tags_folder: '脚本笔记\nScriptNote',
-	httpServerHost: "127.0.0.1",
+	httpServerHost: "0.0.0.0",
 	httpServerPort: 3000,
-	httpServerEnabled: true,  // 默认启用 HTTP 服务器
+	httpServerEnabled: true,
 }
 
 
@@ -282,6 +282,7 @@ export function renderNoteChainSettings(plugin: NoteChainPlugin, containerEl: HT
 		
 		new Setting(containerEl)
 			.setName(strings.setting_httpServer_host)
+			.setDesc(strings.setting_httpServer_host_desc)
 			.addText(text => text
 				.setValue(settings.httpServerHost.toString())
 				.onChange(async (value) => {
