@@ -286,6 +286,10 @@ export class OldBuddyStore {
         const fname = `${Date.now()}_${base}${ext}`;
         const abs = path.join(this.uploadsDir, fname);
         fs.writeFileSync(abs, fileBuf);
+        const mimeNorm = String(mime || '').trim();
+        if (mimeNorm && mimeNorm !== 'application/octet-stream') {
+            fs.writeFileSync(`${abs}.mime`, mimeNorm, 'utf8');
+        }
         return { fname, abs, url: `/oldbuddy/uploads/${encodeURIComponent(fname)}` };
     }
 
@@ -302,10 +306,14 @@ export class OldBuddyStore {
         const abs = path.join(this.uploadsDir, safe);
         if (!fs.existsSync(abs)) return null;
         const stat = fs.statSync(abs);
+        const mimeSidecar = `${abs}.mime`;
+        const mime = fs.existsSync(mimeSidecar)
+            ? fs.readFileSync(mimeSidecar, 'utf8').trim()
+            : mimeFromExt(abs);
         return {
             abs,
             size: stat.size,
-            mime: mimeFromExt(abs),
+            mime,
             mtime: stat.mtimeMs,
         };
     }
@@ -821,7 +829,10 @@ export function inferOldBuddyMessageType(
         return 'image';
     }
     if (ext === '.webm') {
-        return m.startsWith('audio/') ? 'audio' : 'video';
+        if (m.startsWith('audio/')) return 'audio';
+        if (m.startsWith('video/')) return 'video';
+        if (declared === 'audio' || declared === 'video') return declared;
+        return 'video';
     }
     return declared;
 }

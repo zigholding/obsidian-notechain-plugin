@@ -523,7 +523,8 @@ function useMarkdownCard(msg) {
 }
 
 function isVideoMediaUrl(url) {
-    return /\.(mp4|mov|m4v|mkv|3gp|webm)(\?|#|$)/i.test(String(url || ''));
+    // .webm 可能是纯音频录音，不能仅凭扩展名当视频
+    return /\.(mp4|mov|m4v|mkv|3gp)(\?|#|$)/i.test(String(url || ''));
 }
 
 function appendExtraText(contentDiv, msg) {
