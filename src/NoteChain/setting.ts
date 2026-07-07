@@ -28,7 +28,7 @@ async function restartHttpServer(plugin: NoteChainPlugin): Promise<void> {
 			console.log(`Note-Chain HTTPS: ${plugin.httpServer.getBaseUrl()}/oldbuddy`);
 		}
 		if (http) {
-			console.log(`Note-Chain HTTP (Obsidian): ${plugin.httpServer.getObsidianOldBuddyUrl()}`);
+			console.log(`Note-Chain HTTP: ${plugin.httpServer.getHttpBaseUrl()}/oldbuddy`);
 		}
 	} catch (error: any) {
 		console.error('Failed to restart HTTP Server:', error);
@@ -359,7 +359,7 @@ export function renderNoteChainSettings(plugin: NoteChainPlugin, containerEl: HT
 			.setDesc(strings.setting_httpServer_host_desc)
 			.addText(text => text
 				.setValue(settings.httpServerHost.toString())
-				.setDisabled(!settings.httpServerEnabled || !settings.httpServerHttpsEnabled)
+				.setDisabled(!settings.httpServerEnabled || (!settings.httpServerHttpsEnabled && !settings.httpServerHttpEnabled))
 				.onChange(async (value) => {
 					settings.httpServerHost = value;
 					await plugin.saveSettings();

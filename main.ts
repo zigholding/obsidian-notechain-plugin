@@ -130,7 +130,7 @@ export default class NoteChainPlugin extends Plugin {
 							console.log(`Note-Chain HTTPS: ${srv.getBaseUrl()}/oldbuddy`);
 						}
 						if (srv?.isHttpRunning()) {
-							console.log(`Note-Chain HTTP (Obsidian): ${srv.getObsidianOldBuddyUrl()}`);
+							console.log(`Note-Chain HTTP: ${srv.getHttpBaseUrl()}/oldbuddy`);
 						}
 					})
 					.catch((error) => {

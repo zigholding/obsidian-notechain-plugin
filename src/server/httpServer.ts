@@ -15,7 +15,7 @@ let path = require('path');
 export class HTTPServer {
     private templater: Templater;
     private server: any = null;
-    /** 127.0.0.1 专用 HTTP，供 Obsidian WebViewer 加载（免自签证书） */
+    /** 本机 HTTP（与 HTTPS 共用 setting 的 host） */
     private localServer: any = null;
     /** 合并并发 stop，且避免对同一 server 调用两次 close() */
     private stopPromise: Promise<void> | null = null;
@@ -49,18 +49,27 @@ export class HTTPServer {
         this.oldbuddy = new OldBuddyHttpHandlers(this.oldbuddyStore);
     }
 
-    getBaseUrl(hostOverride?: string): string {
-        const h = hostOverride || this.host;
-        const displayHost = h === '0.0.0.0' ? '127.0.0.1' : h;
-        return `https://${displayHost}:${this.port}`;
+    private resolveDisplayHost(host?: string): string {
+        const h = host ?? this.host;
+        return h === '0.0.0.0' ? '127.0.0.1' : h;
     }
 
-    getObsidianBaseUrl(): string {
-        return `http://127.0.0.1:${this.getLocalPort()}`;
+    getBaseUrl(hostOverride?: string): string {
+        const h = hostOverride || this.host;
+        return `https://${this.resolveDisplayHost(h)}:${this.port}`;
+    }
+
+    getHttpBaseUrl(hostOverride?: string): string {
+        const h = hostOverride || this.host;
+        return `http://${this.resolveDisplayHost(h)}:${this.getLocalPort()}`;
     }
 
     getObsidianOldBuddyUrl(): string {
-        return `${this.getObsidianBaseUrl()}/oldbuddy`;
+        return `${this.getHttpBaseUrl()}/oldbuddy`;
+    }
+
+    getHost(): string {
+        return this.host;
     }
 
     getLocalPort(): number {
@@ -231,7 +240,7 @@ export class HTTPServer {
 
         return new Promise((resolve, reject) => {
             this.localServer.on('error', (error: any) => {
-                console.error(`[note-chain] local HTTP on 127.0.0.1:${localPort} failed:`, error?.message || error);
+                console.error(`[note-chain] HTTP on ${this.host}:${localPort} failed:`, error?.message || error);
                 this.localServer = null;
                 reject(error);
             });
@@ -240,8 +249,8 @@ export class HTTPServer {
                 this.handleServerUpgrade(req, socket, head);
             });
 
-            this.localServer.listen(localPort, '127.0.0.1', () => {
-                console.log(`[note-chain] Obsidian WebViewer: ${this.getObsidianOldBuddyUrl()}`);
+            this.localServer.listen(localPort, this.host, () => {
+                console.log(`[note-chain] HTTP: ${this.getHttpBaseUrl()}/oldbuddy`);
                 resolve();
             });
         });

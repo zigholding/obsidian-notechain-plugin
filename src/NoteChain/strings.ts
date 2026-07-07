@@ -499,9 +499,9 @@ export class Strings{
 
     get setting_httpServer_http_enabled_desc(){
         if(this.language=='zh'){
-            return '仅 127.0.0.1；HTTPS 开启时用端口+1，仅 HTTP 时用下方端口'
+            return '与 HTTPS 共用监听地址；HTTPS 开启时用端口+1，仅 HTTP 时用下方端口'
         }else{
-            return "127.0.0.1 only; port+1 if HTTPS also on, else port below";
+            return "Shares listen host with HTTPS; port+1 if HTTPS also on, else port below";
         }
     }
 
@@ -531,9 +531,9 @@ export class Strings{
 
     get setting_httpServer_host_desc(){
         if(this.language=='zh'){
-            return 'HTTPS 监听地址；手机访问请用 0.0.0.0'
+            return 'HTTP / HTTPS 共用；0.0.0.0 表示所有网卡，本机访问显示为 127.0.0.1'
         }else{
-            return "HTTPS listen address; use 0.0.0.0 for LAN/mobile";
+            return "Shared by HTTP and HTTPS; 0.0.0.0 = all interfaces, shown as 127.0.0.1 locally";
         }
     }
 
