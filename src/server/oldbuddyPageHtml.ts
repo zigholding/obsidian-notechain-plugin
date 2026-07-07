@@ -2646,16 +2646,17 @@ async function handleAnyFile(file, inputEl) {
     };
 }
 
-/** HTTPS 安全上下文下可用页面内录音（🎤 → ⏹） */
-function canInlineAudioRecord() {
-    return !!(window.isSecureContext
-        && navigator.mediaDevices
-        && navigator.mediaDevices.getUserMedia
-        && typeof MediaRecorder !== 'undefined');
+/** HTTPS 页面内 🎤→⏹；HTTP 走系统录音（file input） */
+function useInlineAudioRecord() {
+    return location.protocol === 'https:'
+        && !!(window.isSecureContext
+            && navigator.mediaDevices
+            && navigator.mediaDevices.getUserMedia
+            && typeof MediaRecorder !== 'undefined');
 }
 
-function useInlineAudioRecord() {
-    return canInlineAudioRecord();
+function canInlineAudioRecord() {
+    return useInlineAudioRecord();
 }
 
 function pickAudioRecorderFormat() {
@@ -2677,6 +2678,28 @@ async function uploadAudioBlob(blobOrFile, filename) {
 
 async function uploadVideoFile(file, inputEl) {
     handleMediaUpload(file, 'video', { inputEl });
+}
+
+function openSystemAudioRecorder() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.style.display = 'none';
+    // 勿含 .webm 等扩展名，Android 会当成视频而弹出拍照/录像
+    input.accept = 'audio/*';
+    // 引导系统录音机（非 environment，避免打开相机）
+    input.setAttribute('capture', 'microphone');
+    input.onchange = (e) => {
+        const file = e.target.files?.[0];
+        if (input.parentNode) input.parentNode.removeChild(input);
+        if (!file) return;
+        handleMediaUpload(file, 'audio', { failLabel: '录音上传失败' });
+    };
+    document.body.appendChild(input);
+    input.value = '';
+    input.click();
+    window.setTimeout(() => {
+        if (input.parentNode) input.parentNode.removeChild(input);
+    }, 120000);
 }
 
 async function initUploadHandlers() {
@@ -2719,7 +2742,7 @@ async function initUploadHandlers() {
 
     audioBtn.onclick = async () => {
         if (!useInlineAudioRecord()) {
-            alert('当前页面非 HTTPS，无法直接录音。请使用 https:// 访问 OldBuddy。');
+            openSystemAudioRecorder();
             return;
         }
 
