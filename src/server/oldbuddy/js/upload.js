@@ -126,6 +126,40 @@ function handleMediaUpload(fileOrBlob, kind, opts = {}) {
 }
 
 // ---------- 图片上传（预览 + 文字组合发送） ----------
+function mimeToImageExt(mime) {
+    const m = String(mime || '').toLowerCase();
+    if (m.includes('png')) return 'png';
+    if (m.includes('jpeg') || m.includes('jpg')) return 'jpg';
+    if (m.includes('webp')) return 'webp';
+    if (m.includes('gif')) return 'gif';
+    return 'png';
+}
+
+function extractPastedImageFile(clipboardData) {
+    if (!clipboardData?.items?.length) return null;
+    for (const item of clipboardData.items) {
+        if (item.kind !== 'file' || !String(item.type || '').startsWith('image/')) continue;
+        const blob = item.getAsFile();
+        if (!blob) continue;
+        if (blob.name) return blob;
+        const ext = mimeToImageExt(item.type || blob.type);
+        return new File([blob], `paste_${Date.now()}.${ext}`, { type: item.type || blob.type || 'image/png' });
+    }
+    return null;
+}
+
+function initPasteImageHandler() {
+    const textInput = document.getElementById('text-input');
+    if (!textInput) return;
+    textInput.addEventListener('paste', (e) => {
+        if (typeof isReferencePickerOpen === 'function' && isReferencePickerOpen()) return;
+        const file = extractPastedImageFile(e.clipboardData);
+        if (!file) return;
+        e.preventDefault();
+        handleImageFile(file);
+    });
+}
+
 async function handleImageFile(file) {
     if (!file) return;
     const previewOverlay = document.createElement('div');
@@ -364,5 +398,7 @@ async function initUploadHandlers() {
             audioBtn.textContent = '🎤';
         }
     };
+
+    initPasteImageHandler();
 }
 
