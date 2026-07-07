@@ -1,5 +1,6 @@
 import { ItemView, WorkspaceLeaf, MarkdownRenderer, TFile,ViewStateResult,EventRef, Menu} from 'obsidian';
 import NoteChainPlugin from "../main";
+import { getWebViewerPartition, installWebviewTlsTrust, isNoteChainServerUrl, toWebViewerUrl } from './server/tlsWebviewTrust';
 
 export class NoteContentView extends ItemView {
 	content: string;
@@ -214,7 +215,7 @@ dv.span(\`![[${sourcePath}]]\`);
 
 	/** Obsidian WebViewer 使用的 Electron session partition，共享 Cookie / 登录态。 */
 	private getWebViewerPartition(): string {
-		return `persist:vault-${(this.app as any).appId}`;
+		return getWebViewerPartition(this.app);
 	}
 
 	private isWebViewerPluginEnabled(): boolean {
@@ -233,10 +234,26 @@ dv.span(\`![[${sourcePath}]]\`);
 		container.style.height = '100%';
 		container.style.overflow = 'hidden';
 
+		const port = this.plugin.settings?.notechain?.httpServerPort ?? 3000;
+		const nc = this.plugin.settings?.notechain;
+		const tlsDir = this.plugin.httpServer?.getTlsDir();
+		const httpsAlsoOn = !!this.plugin.httpServer?.isHttpsRunning();
+		let loadUrl = url;
+		if (
+			this.plugin.httpServer?.isHttpRunning() &&
+			nc?.httpServerHttpEnabled &&
+			isNoteChainServerUrl(url, port, httpsAlsoOn)
+		) {
+			loadUrl = toWebViewerUrl(url, port, httpsAlsoOn);
+		}
+		if (tlsDir && isNoteChainServerUrl(loadUrl, port, httpsAlsoOn)) {
+			installWebviewTlsTrust(this.getWebViewerPartition(), port, tlsDir);
+		}
+
 		if (this.canUseWebViewerWebview()) {
 			const webview = document.createElement('webview');
 			webview.className = 'nc-note-content-webview';
-			webview.setAttribute('src', url);
+			webview.setAttribute('src', loadUrl);
 			webview.setAttribute('partition', this.getWebViewerPartition());
 			webview.setAttribute('allowpopups', 'true');
 			webview.style.flex = '1';
@@ -251,7 +268,7 @@ dv.span(\`![[${sourcePath}]]\`);
 		const iframe = container.createEl('iframe', {
 			cls: 'nc-note-content-webview',
 			attr: {
-				src: url,
+				src: loadUrl,
 				sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox',
 			},
 		});

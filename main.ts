@@ -22,6 +22,7 @@ import { addEvents } from 'src/events';
 import { EasyAPI } from 'src/easyapi/easyapi'
 import { NoteContentView } from 'src/NCView';
 import { HTTPServer } from 'src/server/httpServer';
+import { getWebViewerPartition, installWebviewTlsTrust } from 'src/server/tlsWebviewTrust';
 import { DailyJob} from 'src/daily_job'
 
 let path = require('path');
@@ -109,19 +110,36 @@ export default class NoteChainPlugin extends Plugin {
 			this.settings.notechain.httpServerHost,
 			this.settings.notechain.httpServerPort
 		);
-		// 如果启用，自动启动 HTTPS 服务器
+		// 如果启用，自动启动服务器
 		if (!this.easyapi.isMobile && this.settings.notechain.httpServerEnabled) {
-			this.httpServer.start()
-				.then(() => {
-					console.log(`Note-Chain HTTPS server: ${this.httpServer?.getBaseUrl()}/oldbuddy`);
-				})
-				.catch((error) => {
-					console.error('Failed to start HTTP Server:', error);
-					// 如果启动失败，可以考虑通知用户
-					if (this.debug) {
-						new Notice(`Failed to start HTTP Server: ${error.message}`, 5000);
-					}
-				});
+			const nc = this.settings.notechain;
+			const https = !!nc.httpServerHttpsEnabled;
+			const http = !!nc.httpServerHttpEnabled;
+			if (https || http) {
+				this.httpServer.start({ https, http })
+					.then(() => {
+						const srv = this.httpServer;
+						if (srv && https) {
+							installWebviewTlsTrust(
+								getWebViewerPartition(this.app),
+								srv.getPort(),
+								srv.getTlsDir(),
+							);
+						}
+						if (srv?.isHttpsRunning()) {
+							console.log(`Note-Chain HTTPS: ${srv.getBaseUrl()}/oldbuddy`);
+						}
+						if (srv?.isHttpRunning()) {
+							console.log(`Note-Chain HTTP (Obsidian): ${srv.getObsidianOldBuddyUrl()}`);
+						}
+					})
+					.catch((error) => {
+						console.error('Failed to start HTTP Server:', error);
+						if (this.debug) {
+							new Notice(`Failed to start HTTP Server: ${error.message}`, 5000);
+						}
+					});
+			}
 		}
 
 		addCommands(this);
@@ -199,6 +217,13 @@ export default class NoteChainPlugin extends Plugin {
 			{'webviewllm': WebViewLLMSettings_DEFAULT},
 			await this.loadData()
 		);
+		const nc = this.settings.notechain;
+		if (nc.httpServerHttpsEnabled == null) {
+			nc.httpServerHttpsEnabled = nc.httpServerEnabled !== false;
+		}
+		if (nc.httpServerHttpEnabled == null) {
+			nc.httpServerHttpEnabled = nc.httpServerEnabled !== false;
+		}
 	}
 
 	async saveSettings() {

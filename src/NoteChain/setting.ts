@@ -1,9 +1,40 @@
 import {
-	App, PluginSettingTab, Setting, ButtonComponent
+	App, Notice, PluginSettingTab, Setting, ButtonComponent
 } from 'obsidian';
 
 import NoteChainPlugin from '../../main';
 import { strings } from './strings';
+import { getWebViewerPartition, installWebviewTlsTrust } from '../server/tlsWebviewTrust';
+
+async function restartHttpServer(plugin: NoteChainPlugin): Promise<void> {
+	const settings = plugin.settings.notechain;
+	if (!plugin.httpServer) return;
+	await plugin.httpServer.stop();
+	plugin.httpServer.setHost(settings.httpServerHost);
+	plugin.httpServer.setPort(settings.httpServerPort);
+	const https = !!settings.httpServerHttpsEnabled;
+	const http = !!settings.httpServerHttpEnabled;
+	if (!settings.httpServerEnabled || (!https && !http)) return;
+	try {
+		await plugin.httpServer.start({ https, http });
+		if (https) {
+			installWebviewTlsTrust(
+				getWebViewerPartition(plugin.app),
+				plugin.httpServer.getPort(),
+				plugin.httpServer.getTlsDir(),
+			);
+		}
+		if (https) {
+			console.log(`Note-Chain HTTPS: ${plugin.httpServer.getBaseUrl()}/oldbuddy`);
+		}
+		if (http) {
+			console.log(`Note-Chain HTTP (Obsidian): ${plugin.httpServer.getObsidianOldBuddyUrl()}`);
+		}
+	} catch (error: any) {
+		console.error('Failed to restart HTTP Server:', error);
+		new Notice(`${strings.setting_httpServer_restart_failed}: ${error?.message || error}`, 5000);
+	}
+}
 
 export interface NCSettings {
 	field_of_prevnote: string;
@@ -30,6 +61,8 @@ export interface NCSettings {
 	httpServerHost: string,
 	httpServerPort: number,
 	httpServerEnabled: boolean,
+	httpServerHttpsEnabled: boolean,
+	httpServerHttpEnabled: boolean,
 }
 
 export const NCSettings_DEFAULT: NCSettings = {
@@ -57,6 +90,8 @@ export const NCSettings_DEFAULT: NCSettings = {
 	httpServerHost: "0.0.0.0",
 	httpServerPort: 3000,
 	httpServerEnabled: true,
+	httpServerHttpsEnabled: true,
+	httpServerHttpEnabled: true,
 }
 
 
@@ -267,15 +302,54 @@ export function renderNoteChainSettings(plugin: NoteChainPlugin, containerEl: HT
 
 		new Setting(containerEl)
 			.setName(strings.setting_httpServer_enabled)
+			.setDesc(strings.setting_httpServer_enabled_desc)
 			.addToggle(text => text
 				.setValue(settings.httpServerEnabled)
 				.onChange(async (value) => {
 					settings.httpServerEnabled = value;
 					await plugin.saveSettings();
 					if (value) {
-						await plugin.httpServer?.start();
+						await restartHttpServer(plugin);
 					} else {
 						await plugin.httpServer?.stop();
+					}
+				})
+			);
+
+		new Setting(containerEl)
+			.setName(strings.setting_httpServer_https_enabled)
+			.setDesc(strings.setting_httpServer_https_enabled_desc)
+			.addToggle(text => text
+				.setValue(settings.httpServerHttpsEnabled)
+				.setDisabled(!settings.httpServerEnabled)
+				.onChange(async (value) => {
+					if (!value && !settings.httpServerHttpEnabled) {
+						new Notice(strings.setting_httpServer_need_one_protocol);
+						return;
+					}
+					settings.httpServerHttpsEnabled = value;
+					await plugin.saveSettings();
+					if (settings.httpServerEnabled) {
+						await restartHttpServer(plugin);
+					}
+				})
+			);
+
+		new Setting(containerEl)
+			.setName(strings.setting_httpServer_http_enabled)
+			.setDesc(strings.setting_httpServer_http_enabled_desc)
+			.addToggle(text => text
+				.setValue(settings.httpServerHttpEnabled)
+				.setDisabled(!settings.httpServerEnabled)
+				.onChange(async (value) => {
+					if (!value && !settings.httpServerHttpsEnabled) {
+						new Notice(strings.setting_httpServer_need_one_protocol);
+						return;
+					}
+					settings.httpServerHttpEnabled = value;
+					await plugin.saveSettings();
+					if (settings.httpServerEnabled) {
+						await restartHttpServer(plugin);
 					}
 				})
 			);
@@ -285,28 +359,27 @@ export function renderNoteChainSettings(plugin: NoteChainPlugin, containerEl: HT
 			.setDesc(strings.setting_httpServer_host_desc)
 			.addText(text => text
 				.setValue(settings.httpServerHost.toString())
+				.setDisabled(!settings.httpServerEnabled || !settings.httpServerHttpsEnabled)
 				.onChange(async (value) => {
 					settings.httpServerHost = value;
 					await plugin.saveSettings();
-					if (settings.httpServerEnabled && plugin.httpServer) {
-						await plugin.httpServer.stop();
-						plugin.httpServer.setHost(value);
-						await plugin.httpServer.start();
+					if (settings.httpServerEnabled) {
+						await restartHttpServer(plugin);
 					}
 				}));
 
 		new Setting(containerEl)
 			.setName(strings.setting_httpServer_port)
+			.setDesc(strings.setting_httpServer_port_desc)
 			.addText(text => text
 				.setValue(settings.httpServerPort.toString())
+				.setDisabled(!settings.httpServerEnabled)
 				.onChange(async (value) => {
 					const port = parseInt(value) || 3000;
 					settings.httpServerPort = port;
 					await plugin.saveSettings();
-					if (settings.httpServerEnabled && plugin.httpServer) {
-						await plugin.httpServer.stop();
-						plugin.httpServer.setPort(port);
-						await plugin.httpServer.start();
+					if (settings.httpServerEnabled) {
+						await restartHttpServer(plugin);
 					}
 				}));
 }

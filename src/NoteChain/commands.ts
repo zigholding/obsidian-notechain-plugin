@@ -839,6 +839,25 @@ const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
 
 
 
+const cmd_open_oldbuddy = (plugin: NoteChainPlugin) => ({
+	id: 'open-oldbuddy-webviewer',
+	name: plugin.strings.cmd_open_oldbuddy,
+	icon: 'message-square',
+	callback: async () => {
+		if (!plugin.httpServer?.isHttpRunning()) {
+			new Notice(plugin.strings.cmd_open_oldbuddy_http_off);
+			return;
+		}
+		const url = plugin.httpServer.getObsidianOldBuddyUrl();
+		const wv = (plugin.app as any).internalPlugins?.getEnabledPluginById?.('webviewer');
+		if (wv?.openUrl) {
+			await wv.openUrl(url, true);
+			return;
+		}
+		await plugin.chain.open_note_in_view(url);
+	},
+});
+
 const cmd_generate_mcp_skill = (plugin: NoteChainPlugin) => ({
 	id: 'generate-mcp-skill',
 	name: 'Generate MCP Agent Skill (SKILL.md)',
@@ -915,7 +934,7 @@ const commandBuilders = [
 const commandBuildersDesktop = [
 	cmd_file_open_with_system_app,
 	cmd_file_show_in_system_explorer,
-
+	cmd_open_oldbuddy,
 ]
 
 export function addNoteChainCommands(plugin:NoteChainPlugin) {

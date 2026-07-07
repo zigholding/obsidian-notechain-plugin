@@ -8,17 +8,24 @@ import { OldBuddyStore } from './oldbuddy/oldbuddyStore';
 import { OldBuddyHttpHandlers } from './oldbuddy/oldbuddyHttp';
 
 let https = require('https');
+let http = require('http');
 let url = require('url');
 let path = require('path');
 
 export class HTTPServer {
     private templater: Templater;
     private server: any = null;
+    /** 127.0.0.1 专用 HTTP，供 Obsidian WebViewer 加载（免自签证书） */
+    private localServer: any = null;
     /** 合并并发 stop，且避免对同一 server 调用两次 close() */
     private stopPromise: Promise<void> | null = null;
     private port: number;
     private host: string;
     private tlsDir: string;
+    private httpsEnabled = true;
+    private httpEnabled = true;
+    /** 本机 HTTP 实际监听端口（start 时确定，避免与 HTTPS 并行启动竞态） */
+    private localHttpPort = 0;
     private sseConnections: Map<string, any> = new Map();
     private mcp: MCPHttpHandlers;
     private online: OnlineHttpHandlers;
@@ -48,7 +55,41 @@ export class HTTPServer {
         return `https://${displayHost}:${this.port}`;
     }
 
-    start(): Promise<void> {
+    getObsidianBaseUrl(): string {
+        return `http://127.0.0.1:${this.getLocalPort()}`;
+    }
+
+    getObsidianOldBuddyUrl(): string {
+        return `${this.getObsidianBaseUrl()}/oldbuddy`;
+    }
+
+    getLocalPort(): number {
+        if (this.localHttpPort > 0) return this.localHttpPort;
+        return this.httpsEnabled ? this.port + 1 : this.port;
+    }
+
+    isHttpsRunning(): boolean {
+        return this.server !== null;
+    }
+
+    isHttpRunning(): boolean {
+        return this.localServer !== null;
+    }
+
+    getPort(): number {
+        return this.port;
+    }
+
+    getTlsDir(): string {
+        return this.tlsDir;
+    }
+
+    start(options?: { https?: boolean; http?: boolean }): Promise<void> {
+        this.httpsEnabled = options?.https ?? true;
+        this.httpEnabled = options?.http ?? true;
+        if (!this.httpsEnabled && !this.httpEnabled) {
+            return Promise.resolve();
+        }
         return this.startInternal();
     }
 
@@ -118,43 +159,90 @@ export class HTTPServer {
     }
 
     private async startInternal(): Promise<void> {
-        if (this.server) {
+        if (this.server || this.localServer) {
             return;
         }
 
-        const { key, cert } = await ensureSelfSignedCert(this.tlsDir);
         const handler = this.createRequestHandler();
-        this.server = https.createServer({ key, cert }, handler);
+        this.localHttpPort = this.httpEnabled ? (this.httpsEnabled ? this.port + 1 : this.port) : 0;
 
-        this.server.keepAliveTimeout = 120000;
-        this.server.headersTimeout = 120000;
+        try {
+            if (this.httpsEnabled) {
+                await this.startHttpsServer(handler);
+            }
+            if (this.httpEnabled) {
+                await this.startLocalHttpServer(handler, this.localHttpPort);
+            }
+        } catch (e) {
+            await this.stop();
+            throw e;
+        }
+    }
+
+    private startHttpsServer(handler: (req: any, res: any) => void): Promise<void> {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const { key, cert } = await ensureSelfSignedCert(this.tlsDir);
+                this.server = https.createServer({ key, cert }, handler);
+                this.server.keepAliveTimeout = 120000;
+                this.server.headersTimeout = 120000;
+
+                this.server.on('error', (error: any) => {
+                    this.server = null;
+                    if (error.code === 'EADDRINUSE') {
+                        console.error(`Port ${this.port} is already in use`);
+                        reject(error);
+                    } else {
+                        console.error('HTTPS Server error:', error);
+                        reject(error);
+                    }
+                });
+
+                this.server.on('upgrade', (req: any, socket: any, head: Buffer) => {
+                    this.handleServerUpgrade(req, socket, head);
+                });
+
+                this.server.listen(this.port, this.host, () => resolve());
+            } catch (e) {
+                reject(e);
+            }
+        });
+    }
+
+    private handleServerUpgrade(req: any, socket: any, head: Buffer) {
+        try {
+            const parsed = url.parse(req.url || '', true);
+            if (this.oldbuddy.isWebSocketPath(parsed.pathname)) {
+                this.oldbuddy.handleUpgrade(req, socket, head);
+                return;
+            }
+        } catch (e) {
+            console.error('[oldbuddy] websocket upgrade failed:', e);
+        }
+        socket.destroy();
+    }
+
+    private startLocalHttpServer(handler: (req: any, res: any) => void, localPort: number): Promise<void> {
+        if (this.localServer) return Promise.resolve();
+
+        this.localServer = http.createServer(handler);
+        this.localServer.keepAliveTimeout = 120000;
+        this.localServer.headersTimeout = 120000;
 
         return new Promise((resolve, reject) => {
-            this.server.listen(this.port, this.host, () => {
+            this.localServer.on('error', (error: any) => {
+                console.error(`[note-chain] local HTTP on 127.0.0.1:${localPort} failed:`, error?.message || error);
+                this.localServer = null;
+                reject(error);
+            });
+
+            this.localServer.on('upgrade', (req: any, socket: any, head: Buffer) => {
+                this.handleServerUpgrade(req, socket, head);
+            });
+
+            this.localServer.listen(localPort, '127.0.0.1', () => {
+                console.log(`[note-chain] Obsidian WebViewer: ${this.getObsidianOldBuddyUrl()}`);
                 resolve();
-            });
-
-            this.server.on('error', (error: any) => {
-                if (error.code === 'EADDRINUSE') {
-                    console.error(`Port ${this.port} is already in use`);
-                    reject(error);
-                } else {
-                    console.error('HTTPS Server error:', error);
-                    reject(error);
-                }
-            });
-
-            this.server.on('upgrade', (req: any, socket: any, head: Buffer) => {
-                try {
-                    const parsed = url.parse(req.url || '', true);
-                    if (this.oldbuddy.isWebSocketPath(parsed.pathname)) {
-                        this.oldbuddy.handleUpgrade(req, socket, head);
-                        return;
-                    }
-                } catch (e) {
-                    console.error('[oldbuddy] websocket upgrade failed:', e);
-                }
-                socket.destroy();
             });
         });
     }
@@ -236,22 +324,24 @@ export class HTTPServer {
         if (this.stopPromise) {
             return this.stopPromise;
         }
-        if (!this.server) {
+        if (!this.server && !this.localServer) {
             return Promise.resolve();
         }
 
         const srv = this.server;
+        const localSrv = this.localServer;
 
         this.stopPromise = new Promise((resolve) => {
-            let settled = false;
-            const finish = () => {
-                if (settled) return;
-                settled = true;
-                if (this.server === srv) {
+            let pending = (srv ? 1 : 0) + (localSrv ? 1 : 0);
+            const doneOne = () => {
+                pending -= 1;
+                if (pending <= 0) {
                     this.server = null;
+                    this.localServer = null;
+                    this.localHttpPort = 0;
+                    this.stopPromise = null;
+                    resolve();
                 }
-                this.stopPromise = null;
-                resolve();
             };
 
             for (let [, conn] of this.sseConnections.entries()) {
@@ -269,14 +359,25 @@ export class HTTPServer {
             this.sseConnections.clear();
             this.oldbuddyStore.close();
 
-            if (typeof srv.closeAllConnections === 'function') {
-                srv.closeAllConnections();
-            }
-            if (typeof srv.closeIdleConnections === 'function') {
-                srv.closeIdleConnections();
+            if (srv) {
+                if (typeof srv.closeAllConnections === 'function') {
+                    srv.closeAllConnections();
+                }
+                if (typeof srv.closeIdleConnections === 'function') {
+                    srv.closeIdleConnections();
+                }
+                srv.close(() => doneOne());
             }
 
-            srv.close(() => finish());
+            if (localSrv) {
+                if (typeof localSrv.closeAllConnections === 'function') {
+                    localSrv.closeAllConnections();
+                }
+                if (typeof localSrv.closeIdleConnections === 'function') {
+                    localSrv.closeIdleConnections();
+                }
+                localSrv.close(() => doneOne());
+            }
         });
 
         return this.stopPromise;
@@ -291,6 +392,6 @@ export class HTTPServer {
     }
 
     isRunning(): boolean {
-        return this.server !== null;
+        return this.server !== null || this.localServer !== null;
     }
 }

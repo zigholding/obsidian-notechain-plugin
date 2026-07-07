@@ -237,6 +237,22 @@ export class Strings{
         }
     }
 
+    get cmd_open_oldbuddy(){
+        if(this.language=='zh'){
+            return '在 WebViewer 中打开 OldBuddy'
+        }else{
+            return "Open OldBuddy in Web Viewer";
+        }
+    }
+
+    get cmd_open_oldbuddy_http_off(){
+        if(this.language=='zh'){
+            return '未开启 HTTP 本机服务，请在设置中启用'
+        }else{
+            return "HTTP localhost server is off; enable it in settings";
+        }
+    }
+
     get cmd_insert_command_id(){
         if(this.language=='zh'){
             return '插入命令ID'
@@ -443,9 +459,65 @@ export class Strings{
 
     get setting_httpServer_enabled(){
         if(this.language=='zh'){
-            return '启用 HTTPS 服务器'
+            return '启用服务器'
         }else{
-            return "Enable HTTPS Server";
+            return "Enable server";
+        }
+    }
+
+    get setting_httpServer_enabled_desc(){
+        if(this.language=='zh'){
+            return '总开关；关闭后 HTTP/HTTPS 均不监听'
+        }else{
+            return "Master switch; disables both HTTP and HTTPS when off";
+        }
+    }
+
+    get setting_httpServer_https_enabled(){
+        if(this.language=='zh'){
+            return 'HTTPS（手机 / 局域网）'
+        }else{
+            return "HTTPS (mobile / LAN)";
+        }
+    }
+
+    get setting_httpServer_https_enabled_desc(){
+        if(this.language=='zh'){
+            return '自签证书；地址 https://IP:下方端口/oldbuddy'
+        }else{
+            return "Self-signed TLS; https://IP:port below/oldbuddy";
+        }
+    }
+
+    get setting_httpServer_http_enabled(){
+        if(this.language=='zh'){
+            return 'HTTP 本机（Obsidian WebViewer）'
+        }else{
+            return "HTTP localhost (Obsidian WebViewer)";
+        }
+    }
+
+    get setting_httpServer_http_enabled_desc(){
+        if(this.language=='zh'){
+            return '仅 127.0.0.1；HTTPS 开启时用端口+1，仅 HTTP 时用下方端口'
+        }else{
+            return "127.0.0.1 only; port+1 if HTTPS also on, else port below";
+        }
+    }
+
+    get setting_httpServer_need_one_protocol(){
+        if(this.language=='zh'){
+            return '至少开启 HTTP 或 HTTPS 之一'
+        }else{
+            return "Enable at least HTTP or HTTPS";
+        }
+    }
+
+    get setting_httpServer_restart_failed(){
+        if(this.language=='zh'){
+            return '服务器重启失败'
+        }else{
+            return "Server restart failed";
         }
     }
 
@@ -459,9 +531,9 @@ export class Strings{
 
     get setting_httpServer_host_desc(){
         if(this.language=='zh'){
-            return '手机访问请用 0.0.0.0；本机可用 https://127.0.0.1:端口'
+            return 'HTTPS 监听地址；手机访问请用 0.0.0.0'
         }else{
-            return "Use 0.0.0.0 for LAN/mobile; local: https://127.0.0.1:port";
+            return "HTTPS listen address; use 0.0.0.0 for LAN/mobile";
         }
     }
 
@@ -469,7 +541,15 @@ export class Strings{
         if(this.language=='zh'){
             return 'HTTPS 端口'
         }else{
-            return "HTTPS Port";
+            return "HTTPS port";
+        }
+    }
+
+    get setting_httpServer_port_desc(){
+        if(this.language=='zh'){
+            return '同时开 HTTP 时，本机 HTTP 端口为 HTTPS 端口 + 1'
+        }else{
+            return "When HTTP is also on, local HTTP uses HTTPS port + 1";
         }
     }
     

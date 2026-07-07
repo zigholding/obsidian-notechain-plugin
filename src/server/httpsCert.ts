@@ -1,7 +1,33 @@
 let fs = require('fs');
 let path = require('path');
 let os = require('os');
+let crypto = require('crypto');
 let selfsigned = require('selfsigned');
+
+function normalizeCertFingerprint(fp: string): string {
+    return String(fp || '').replace(/:/g, '').toUpperCase();
+}
+
+/** 读取 Note-Chain 自签证书 SHA-256 指纹（供 WebView 校验） */
+export function readNoteChainCertFingerprint(tlsDir: string): string | null {
+    const certPath = path.join(tlsDir, 'cert.pem');
+    if (!fs.existsSync(certPath)) return null;
+    try {
+        const pem = fs.readFileSync(certPath, 'utf8');
+        const b64 = pem
+            .replace(/-----BEGIN CERTIFICATE-----/g, '')
+            .replace(/-----END CERTIFICATE-----/g, '')
+            .replace(/\s/g, '');
+        const der = Buffer.from(b64, 'base64');
+        return crypto.createHash('sha256').update(der).digest('hex').toUpperCase();
+    } catch {
+        return null;
+    }
+}
+
+export function certFingerprintsMatch(a: string, b: string): boolean {
+    return normalizeCertFingerprint(a) === normalizeCertFingerprint(b);
+}
 
 function buildAltNames(): Array<{ type: number; value?: string; ip?: string }> {
     const altNames: Array<{ type: number; value?: string; ip?: string }> = [
