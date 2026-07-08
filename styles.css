@@ -1264,14 +1264,39 @@
 
 .nc-cal-audio-wrap {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   padding: 3px 6px 4px;
   font-size: 10px;
   color: var(--text-muted);
+  cursor: pointer;
+  border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 50%, transparent);
+}
+
+.nc-cal-audio-label {
+  flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  cursor: pointer;
-  border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 50%, transparent);
+}
+
+.nc-cal-audio-wrap.is-playing {
+  color: var(--text-normal);
+  background: color-mix(in srgb, var(--interactive-accent) 20%, var(--background-secondary));
+  border-top-color: var(--interactive-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--interactive-accent) 45%, transparent);
+}
+
+.nc-cal-audio-wrap.is-playing .nc-cal-audio-label {
+  font-weight: 600;
+  animation: nc-cal-audio-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes nc-cal-audio-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .nc-cal-audio-wrap:hover {
@@ -1282,8 +1307,8 @@
 .nc-cal-audio-nav {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
+  gap: 2px;
+  flex-shrink: 0;
 }
 
 .nc-cal-audio-btn {
@@ -1294,8 +1319,12 @@
   justify-content: center;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 9px;
   color: var(--text-muted);
+}
+
+.nc-cal-audio-btn svg {
+  width: 12px;
+  height: 12px;
 }
 
 .nc-cal-audio-btn:hover {

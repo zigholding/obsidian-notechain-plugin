@@ -159,6 +159,7 @@ interface FlatMediaEntry {
 
 const VIDEO_EXT = /\.(mp4|webm|mov|m4v|mkv|ogv|avi)(\?.*)?$/i;
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif)(\?.*)?$/i;
+const AUDIO_EXT = /\.(mp3|m4a|wav|ogg|flac|aac|wma|opus)(\?.*)?$/i;
 
 function isVideoPath(path: string): boolean {
 	return VIDEO_EXT.test(normalizeMediaPath(path).toLowerCase());
@@ -170,6 +171,20 @@ function getVisualMediaKind(path: string): "image" | "video" {
 
 function isDirectMediaUrl(path: string): boolean {
 	return /^(https?:\/\/|data:|app:\/\/|blob:)/.test(path) || /^[\/\\]/.test(path);
+}
+
+function guessMediaMimeType(path: string): string {
+	const lower = normalizeMediaPath(path).toLowerCase();
+	if (lower.endsWith(".m4a")) return "audio/mp4";
+	if (lower.endsWith(".mp3")) return "audio/mpeg";
+	if (lower.endsWith(".wav")) return "audio/wav";
+	if (lower.endsWith(".ogg")) return "audio/ogg";
+	if (lower.endsWith(".flac")) return "audio/flac";
+	if (lower.endsWith(".aac")) return "audio/aac";
+	if (lower.endsWith(".webm")) return "video/webm";
+	if (lower.endsWith(".mp4")) return "video/mp4";
+	if (lower.endsWith(".mov")) return "video/quicktime";
+	return guessImageMimeType(path);
 }
 
 function guessImageMimeType(path: string): string {
@@ -494,6 +509,10 @@ export class CalendarGalleryModal extends Modal {
 	private slideDir: "left" | "right" | null = null;
 	private mediaLightbox: CalendarMediaLightbox;
 	private cardAudioEl: HTMLAudioElement | null = null;
+	private cardAudioBlobUrl: string | null = null;
+	private playingAudioWrap: HTMLElement | null = null;
+	private playingAudioRestore: (() => void) | null = null;
+	private playingAudioPath: string | null = null;
 
 	constructor(app: App, options: CalendarGalleryOptions) {
 		super(app);
@@ -1059,7 +1078,24 @@ export class CalendarGalleryModal extends Modal {
 			return this.readVaultImageAsDataUrl(path);
 		}
 
+		if (AUDIO_EXT.test(path) || VIDEO_EXT.test(path)) {
+			return this.readVaultMediaAsBlobUrl(path);
+		}
+
 		return null;
+	}
+
+	private async readVaultMediaAsBlobUrl(path: string): Promise<string | null> {
+		const normalized = normalizeMediaPath(path);
+		const tfile = this.resolveMediaTFile(normalized) ?? this.app.vault.getFileByPath(normalized);
+		if (!tfile) return null;
+		try {
+			const buf = await this.app.vault.readBinary(tfile);
+			const blob = new Blob([buf], { type: guessMediaMimeType(tfile.path) });
+			return URL.createObjectURL(blob);
+		} catch {
+			return null;
+		}
 	}
 
 	private resolveMediaTFile(path: string): TFile | null {
@@ -1086,21 +1122,73 @@ export class CalendarGalleryModal extends Modal {
 		return this.app.vault.getFileByPath(stripped);
 	}
 
-	private stopCardAudio(): void {
-		if (this.cardAudioEl) {
-			this.cardAudioEl.pause();
-			this.cardAudioEl.removeAttribute("src");
-			this.cardAudioEl = null;
-		}
+	private clearAudioPlayingVisual(): void {
+		this.playingAudioWrap?.removeClass("is-playing");
+		this.playingAudioWrap = null;
+		this.playingAudioRestore?.();
+		this.playingAudioRestore = null;
+		this.playingAudioPath = null;
 	}
 
-	private async playAudio(audio: AudioItem): Promise<void> {
+	private getCardAudioEl(): HTMLAudioElement {
+		if (!this.cardAudioEl) {
+			this.cardAudioEl = this.modalEl.createEl("audio");
+			this.cardAudioEl.style.display = "none";
+		}
+		return this.cardAudioEl;
+	}
+
+	private stopCardAudio(): void {
+		if (this.cardAudioBlobUrl) {
+			URL.revokeObjectURL(this.cardAudioBlobUrl);
+			this.cardAudioBlobUrl = null;
+		}
+		if (this.cardAudioEl) {
+			this.cardAudioEl.onended = null;
+			this.cardAudioEl.pause();
+			this.cardAudioEl.removeAttribute("src");
+			this.cardAudioEl.load();
+		}
+		this.clearAudioPlayingVisual();
+	}
+
+	private async playAudio(
+		audio: AudioItem,
+		wrap: HTMLElement,
+		restoreLabel: () => void
+	): Promise<void> {
+		const key = normalizeMediaPath(audio.path);
+
+		if (this.cardAudioEl && this.playingAudioPath === key && !this.cardAudioEl.paused) {
+			this.stopCardAudio();
+			return;
+		}
+
+		this.stopCardAudio();
+
 		const url = await this.resolveMediaUrl(audio.path);
 		if (!url) return;
 
-		this.stopCardAudio();
-		this.cardAudioEl = new Audio(url);
-		void this.cardAudioEl.play().catch(() => {});
+		if (url.startsWith("blob:")) this.cardAudioBlobUrl = url;
+
+		const el = this.getCardAudioEl();
+		el.src = url;
+		el.load();
+		try {
+			await el.play();
+		} catch {
+			return;
+		}
+
+		this.playingAudioWrap = wrap;
+		this.playingAudioRestore = restoreLabel;
+		this.playingAudioPath = key;
+		wrap.addClass("is-playing");
+		const label = wrap.querySelector(".nc-cal-audio-label");
+		if (label) label.setText(isZhUi() ? "🔊 播放中…" : "🔊 Playing…");
+
+		el.onended = () => this.stopCardAudio();
+
 		this.options.onPlayAudio?.(audio);
 	}
 
@@ -1136,19 +1224,36 @@ export class CalendarGalleryModal extends Modal {
 
 		update();
 
-		wrap.onclick = (e) => {
+		const playCurrent = (e: MouseEvent) => {
 			e.stopPropagation();
-			void this.playAudio(audios[current]);
+			void this.playAudio(audios[current], wrap, update);
 		};
 
+		label.onclick = playCurrent;
+
 		if (audios.length > 1) {
-			const prev = nav.createDiv({ cls: "nc-cal-audio-btn", text: "◀", attr: { "aria-label": "上一段录音" } });
-			nav.createSpan({ cls: "nc-cal-audio-title" });
-			const next = nav.createDiv({ cls: "nc-cal-audio-btn", text: "▶", attr: { "aria-label": "下一段录音" } });
-			prev.onclick = (e) => { e.stopPropagation(); current = (current - 1 + audios.length) % audios.length; update(); };
-			next.onclick = (e) => { e.stopPropagation(); current = (current + 1) % audios.length; update(); };
-			label.hide();
+			const prev = nav.createDiv({ cls: "nc-cal-audio-btn", attr: { "aria-label": "Previous audio" } });
+			setIcon(prev, "chevron-left");
+			const next = nav.createDiv({ cls: "nc-cal-audio-btn", attr: { "aria-label": "Next audio" } });
+			setIcon(next, "chevron-right");
+			prev.onclick = (e) => {
+				e.stopPropagation();
+				if (this.playingAudioWrap === wrap) this.stopCardAudio();
+				current = (current - 1 + audios.length) % audios.length;
+				update();
+			};
+			next.onclick = (e) => {
+				e.stopPropagation();
+				if (this.playingAudioWrap === wrap) this.stopCardAudio();
+				current = (current + 1) % audios.length;
+				update();
+			};
 		}
+
+		wrap.onclick = (e) => {
+			if ((e.target as HTMLElement).closest(".nc-cal-audio-btn")) return;
+			playCurrent(e);
+		};
 	}
 
 	// ── Tooltip ───────────────────────────────────────────────────────────────
