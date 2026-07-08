@@ -156,6 +156,10 @@ function isDirectImageUrl(path: string): boolean {
 	return /^(https?:\/\/|data:|app:\/\/|blob:)/.test(path) || /^[\/\\]/.test(path);
 }
 
+function emptyDayData(date: string): DayData {
+	return { date, images: [], audios: [] };
+}
+
 function buildCalendarGrid(year: number, month: number, weekStart: "Sunday" | "Monday"): CalendarCell[] {
 	const firstDow = new Date(year, month - 1, 1).getDay();
 	const offset = weekStart === "Monday" ? (firstDow + 6) % 7 : firstDow;
@@ -728,7 +732,7 @@ export class CalendarGalleryModal extends Modal {
 			this.selectedKey = cell.key;
 			this.gridEl.querySelectorAll(".is-selected").forEach((el) => el.removeClass("is-selected"));
 			card.addClass("is-selected");
-			if (dayData) this.options.onOpenDay?.(dayData);
+			this.options.onOpenDay?.(dayData ?? emptyDayData(cell.key));
 		};
 
 		if (this.options.showTooltip && dayData?.text) {
@@ -998,7 +1002,7 @@ export class CalendarGalleryModal extends Modal {
 		const { year, month, day } = parseDateKey(this.selectedKey);
 		const data = await this.fetchMonth(year, month);
 		const dayData = this.buildDayMap(data).get(this.selectedKey);
-		if (dayData) this.options.onOpenDay?.(dayData);
+		this.options.onOpenDay?.(dayData ?? emptyDayData(this.selectedKey));
 	}
 
 	// ── Resizer ───────────────────────────────────────────────────────────────
