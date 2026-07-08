@@ -4,7 +4,50 @@ let lastLoadedMessageId = null;
 let loadingMessages = false;
 let isLoading = false;
 let hasMore = true;
-const messagesContainer = document.getElementById('messages');
+const HISTORY_SENTINEL_ID = 'history-load-sentinel';
+let _messagesContainer = null;
+
+function getMessagesContainer() {
+    if (!_messagesContainer) {
+        _messagesContainer = document.getElementById('messages');
+    }
+    return _messagesContainer;
+}
+
+function resetMessagePagination() {
+    hasMore = true;
+    isLoading = false;
+}
+
+function ensureHistoryLoadSentinel() {
+    const root = getMessagesContainer();
+    if (!root) return null;
+    let el = document.getElementById(HISTORY_SENTINEL_ID);
+    if (!el) {
+        el = document.createElement('div');
+        el.id = HISTORY_SENTINEL_ID;
+        el.setAttribute('aria-hidden', 'true');
+        el.style.cssText = 'height:1px;width:100%;flex-shrink:0;pointer-events:none;';
+        root.insertBefore(el, root.firstChild);
+    } else if (root.firstChild !== el) {
+        root.insertBefore(el, root.firstChild);
+    }
+    return el;
+}
+
+function getOldestLoadedBefore() {
+    const root = getMessagesContainer();
+    if (!root) return null;
+    const sentinel = document.getElementById(HISTORY_SENTINEL_ID);
+    let node = sentinel ? sentinel.nextElementSibling : root.firstElementChild;
+    while (node && node.id === HISTORY_SENTINEL_ID) {
+        node = node.nextElementSibling;
+    }
+    if (node && node.dataset && node.dataset.timestamp) {
+        return node.dataset.timestamp;
+    }
+    return null;
+}
 const CHAT_TARGET_STORAGE_KEY = 'rochat.chatTarget';
 const FILTER_CURRENT_TARGET_STORAGE_KEY = 'rochat.filterCurrentTargetOnly';
 const FILTER_HIDE_OLDER_STORAGE_KEY = 'rochat.filterHideOlder';
@@ -204,7 +247,7 @@ function applyMessageTargetFilter() {
     const cur = getCurrentChatTarget();
     const hideOlder = isHideOlderMessagesEnabled();
     const sinceMs = getHideOlderSinceMs();
-    const nodes = Array.from(messagesContainer.children);
+    const nodes = Array.from(getMessagesContainer().children);
     for (const node of nodes) {
         const mt = messageTargetOfNode(node);
         let visible = !onlyCurrent || mt === cur;
@@ -276,74 +319,80 @@ async function initTargetConfig() {
  * - 使用 isLoading / hasMore 锁来避免重复请求
  */
 async function loadMessages(limit = 10) {
-    // 如果正在加载或已经没有更多，则直接返回
+    const root = getMessagesContainer();
+    if (!root) return;
     if (isLoading || !hasMore) return;
     isLoading = true;
 
     try {
-        // 记录当前第一个可见节点，用于恢复滚动位置
-        const firstVisible = messagesContainer.firstElementChild;
-        const firstVisibleOffset = firstVisible ? firstVisible.getBoundingClientRect().top : null;
+        ensureHistoryLoadSentinel();
+        const childCountBefore = root.querySelectorAll('.message').length;
 
-        // 记录旧的滚动高度（用于简单恢复）
-        const oldScrollHeight = messagesContainer.scrollHeight;
-        const oldScrollTop = messagesContainer.scrollTop;
+        const oldScrollHeight = root.scrollHeight;
+        const oldScrollTop = root.scrollTop;
 
-        // 取出当前容器最顶部消息的 timestamp 作为 `before` 参数（如果存在）
-        let before = null;
-        const firstMsg = messagesContainer.firstElementChild;
-        if (firstMsg && firstMsg.dataset && firstMsg.dataset.timestamp) {
-            before = firstMsg.dataset.timestamp;
-        }
-        const url = before ? `/oldbuddy/api/messages?before=${encodeURIComponent(before)}&limit=${limit}` : `/oldbuddy/api/messages?limit=${limit}`;
+        const before = getOldestLoadedBefore();
+        const url = before
+            ? `/oldbuddy/api/messages?before=${encodeURIComponent(before)}&limit=${limit}`
+            : `/oldbuddy/api/messages?limit=${limit}`;
         const res = await fetch(url);
         if (!res.ok) throw new Error('加载失败: ' + res.status);
 
         const data = await res.json();
-        // 期待 data.messages 为数组，data.has_more 为 bool（根据你的后端）
         const msgs = Array.isArray(data.messages) ? data.messages : [];
 
         if (!msgs.length) {
-            hasMore = false;
+            if (typeof data.has_more !== 'undefined') {
+                hasMore = !!data.has_more;
+            } else {
+                hasMore = false;
+            }
             return;
         }
 
-        // 规范化并按时间降（新 -> 旧）排序，确保插入顺序正确
         msgs.sort((a, b) => {
             const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
             const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
             return tb - ta;
         });
 
-        // 逐条在顶部插入（旧 -> 新 顺序）
-        // 注意：使用 prependMessage 保证去重逻辑与 render 一致
         for (let i = 0; i < msgs.length; i++) {
             prependMessage(msgs[i]);
         }
 
-        // 更新 hasMore（兼容后端返回字段名不同的情况）
+        const childCountAfter = root.querySelectorAll('.message').length;
+        const inserted = childCountAfter - childCountBefore;
+
         if (typeof data.has_more !== 'undefined') {
             hasMore = !!data.has_more;
         } else if (msgs.length < limit) {
-            // 如果后端没有返回 has_more，且本次返回少于请求数量，则认为没有更多
             hasMore = false;
         } else {
             hasMore = true;
         }
 
-        // 恢复滚动位置：方法一（简单且通常有效）
-        // 让视图保持原先看到的消息在同一位置：
-        // 新的 scrollHeight 增量 = messagesContainer.scrollHeight - oldScrollHeight
-        // 将 scrollTop 增加这个增量（即保持可视区域相对不动）
-        const newScrollHeight = messagesContainer.scrollHeight;
+        // 返回了消息但全是重复（已展示），且后端认为还有更多时，推进游标以便下次请求更早记录
+        if (inserted === 0 && hasMore && msgs.length > 0) {
+            const oldest = msgs[msgs.length - 1];
+            const ms = Date.parse(oldest?.timestamp || '');
+            if (Number.isFinite(ms)) {
+                const firstMsg = root.querySelector('.message');
+                if (firstMsg) {
+                    const prevMs = before ? Date.parse(before) : NaN;
+                    firstMsg.dataset.timestamp = Number.isFinite(prevMs) && prevMs === ms
+                        ? new Date(ms - 1).toISOString()
+                        : String(oldest.timestamp);
+                }
+            }
+        }
+
+        const newScrollHeight = root.scrollHeight;
         const heightDiff = newScrollHeight - oldScrollHeight;
-        // 仅在用户不在底部时恢复位置；如果用户本来在底部，保持底部
-        const atBottom = (oldScrollHeight - oldScrollTop - messagesContainer.clientHeight) < 50;
+        const atBottom = (oldScrollHeight - oldScrollTop - root.clientHeight) < 50;
         if (!atBottom) {
-            messagesContainer.scrollTop = oldScrollTop + heightDiff;
+            root.scrollTop = oldScrollTop + heightDiff;
         } else {
-            // 如果用户在底部，保持在底部（避免加载历史时被拉走）
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            root.scrollTop = root.scrollHeight;
         }
 
     } catch (err) {
@@ -366,7 +415,7 @@ async function loadMessages(limit = 10) {
  * - 使用 IntersectionObserver 作为补充（当第一个消息元素进入视口顶部时触发）
  *
  * 依赖外部变量/函数（保持不变）：
- * - messagesContainer (DOM 元素)
+ * - getMessagesContainer() (DOM 元素)
  * - isLoading (bool)
  * - hasMore (bool)
  * - loadMessages(limit)
@@ -376,30 +425,31 @@ async function loadMessages(limit = 10) {
  * - touchPullThreshold: 手指下拉多少 px 时触发（触摸检测）
  */
 function setupScrollLoader(threshold = 50, touchPullThreshold = 60) {
-    if (!messagesContainer) return;
+    const root = getMessagesContainer();
+    if (!root) return;
 
-    // --- 桌面 / 常规滚动监听（保留） ---
-    function onScroll() {
-        // 当滚动到接近顶部时触发加载（threshold px）
-        if (messagesContainer.scrollTop <= threshold) {
-            if (!isLoading && hasMore) {
-                // 请求更多历史消息
-                loadMessages(20);
-            }
+    ensureHistoryLoadSentinel();
+
+    function tryLoadHistory() {
+        if (!isLoading && hasMore) {
+            loadMessages(20);
         }
     }
 
-    messagesContainer.addEventListener('scroll', onScroll, { passive: true });
+    function onScroll() {
+        if (root.scrollTop <= threshold) {
+            tryLoadHistory();
+        }
+    }
 
-    // --- 触摸设备支持：检测“下拉”动作 ---
+    root.addEventListener('scroll', onScroll, { passive: true });
+
     let touchStartY = null;
-    let touchStartScrollTop = null;
     let touchTriggered = false;
 
     function onTouchStart(e) {
         if (!e.touches || e.touches.length === 0) return;
         touchStartY = e.touches[0].clientY;
-        touchStartScrollTop = messagesContainer.scrollTop;
         touchTriggered = false;
     }
 
@@ -408,89 +458,49 @@ function setupScrollLoader(threshold = 50, touchPullThreshold = 60) {
         const curY = (e.touches && e.touches[0]) ? e.touches[0].clientY : null;
         if (curY === null) return;
 
-        const deltaY = curY - touchStartY; // 向下为正
-
-        // 仅在容器已经滚动到顶部（或非常接近顶部）时，才把下拉视为加载历史的动作
-        // 使用小的容忍值确保跨浏览器适配（一些浏览器会有小数/弹性）
-        const atTop = messagesContainer.scrollTop <= 2;
+        const deltaY = curY - touchStartY;
+        const atTop = root.scrollTop <= 2;
 
         if (atTop && deltaY > touchPullThreshold && !touchTriggered) {
-            // 标记，避免同一次下拉触发多次
             touchTriggered = true;
-            if (!isLoading && hasMore) {
-                loadMessages(20);
-            }
+            tryLoadHistory();
         }
-        // 不阻止默认滚动行为（避免影响浏览器的原生回弹），因此不调用 e.preventDefault()
     }
 
-    function onTouchEnd(/*e*/) {
+    function onTouchEnd() {
         touchStartY = null;
-        touchStartScrollTop = null;
         touchTriggered = false;
     }
 
-    // 注意：不把 touch 监听设为 passive:true，因为我们并不调用 preventDefault，但保留默认即可
-    messagesContainer.addEventListener('touchstart', onTouchStart, { passive: true });
-    messagesContainer.addEventListener('touchmove', onTouchMove, { passive: true });
-    messagesContainer.addEventListener('touchend', onTouchEnd, { passive: true });
-    messagesContainer.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    root.addEventListener('touchstart', onTouchStart, { passive: true });
+    root.addEventListener('touchmove', onTouchMove, { passive: true });
+    root.addEventListener('touchend', onTouchEnd, { passive: true });
+    root.addEventListener('touchcancel', onTouchEnd, { passive: true });
 
-    // --- IntersectionObserver 备选方案（当第一个消息元素进入视口顶部时触发） ---
-    // 这对于某些移动浏览器 scroll/触摸事件行为奇怪的情况非常有用
     let io = null;
     try {
+        const sentinel = ensureHistoryLoadSentinel();
         io = new IntersectionObserver((entries) => {
             for (const entry of entries) {
-                // 当第一个消息元素与容器的顶部（或接近顶部）相交时触发加载
                 if (entry.isIntersecting) {
-                    // 进一步验证：确保容器的 scrollTop 接近顶部
-                    if ((messagesContainer.scrollTop <= threshold + 2) && !isLoading && hasMore) {
-                        loadMessages(20);
-                    }
+                    tryLoadHistory();
                 }
             }
         }, {
-            root: messagesContainer,
-            rootMargin: '0px 0px -90% 0px', // 元素进入顶部 10% 可视区域时触发（可调）
-            threshold: 0
+            root,
+            threshold: 0,
         });
-
-        // 观察当前第一个元素（若存在）
-        const observeFirst = () => {
-            // 取消之前的观察
-            io.disconnect();
-            const first = messagesContainer.firstElementChild;
-            if (first) io.observe(first);
-        };
-
-        // 每次插入/移除消息时可能需要重新观察（这里做个简单的周期检测）
-        // 如果你在 prependMessage/appendMessage 中有 hook，也可以直接在那些地方调用 observeFirst()
-        observeFirst();
-        // 监听子节点变化以重新绑定 observer（节省资源，只有当 children 变化时才重置）
-        const mo = new MutationObserver((mutations) => {
-            // 只在 children 发生变化的时候重新观察第一个元素
-            for (const m of mutations) {
-                if (m.type === 'childList') {
-                    observeFirst();
-                    break;
-                }
-            }
-        });
-        mo.observe(messagesContainer, { childList: true });
+        if (sentinel) io.observe(sentinel);
     } catch (e) {
-        // 若环境不支持 IntersectionObserver（极少见），忽略即可
         console.warn('IntersectionObserver not available or failed to init', e);
     }
 
-    // --- 可选：返回一个函数用于解绑所有监听（如果你需要单元测试或销毁） ---
-    // 例如： const teardown = setupScrollLoader(...); teardown();
     return function teardown() {
-        messagesContainer.removeEventListener('scroll', onScroll);
-        messagesContainer.removeEventListener('touchstart', onTouchStart);
-        messagesContainer.removeEventListener('touchmove', onTouchMove);
-        messagesContainer.removeEventListener('touchend', onTouchEnd);
-        messagesContainer.removeEventListener('touchcancel', onTouchEnd);
+        root.removeEventListener('scroll', onScroll);
+        root.removeEventListener('touchstart', onTouchStart);
+        root.removeEventListener('touchmove', onTouchMove);
+        root.removeEventListener('touchend', onTouchEnd);
+        root.removeEventListener('touchcancel', onTouchEnd);
         if (io) {
             try { io.disconnect(); } catch (e) {}
         }
@@ -579,7 +589,7 @@ function renderMessage(msg) {
     } catch (e) {
         t = new Date();
     }
-    div.dataset.timestamp = t.toISOString();
+    div.dataset.timestamp = String(msg.timestamp || t.toISOString());
 
     // 默认时间节点
     const timeDiv = document.createElement('div');
@@ -612,8 +622,8 @@ function renderMessage(msg) {
     }
 
     // ---------- 时间显示逻辑 ----------
-    const first = Array.from(messagesContainer.children).find(el => el.dataset.id !== msg.id);
-    const last = Array.from([...messagesContainer.children].reverse()).find(el => el.dataset.id !== msg.id);
+    const first = Array.from(getMessagesContainer().children).find(el => el.dataset.id !== msg.id);
+    const last = Array.from([...getMessagesContainer().children].reverse()).find(el => el.dataset.id !== msg.id);
 
     const FIVE_MIN = 5 * 60 * 1000;
     const tMs = t.getTime();
@@ -723,7 +733,7 @@ function renderMessage(msg) {
  */
 function refreshTargetBadges() {
     let prevTarget = null;
-    const nodes = Array.from(messagesContainer.children);
+    const nodes = Array.from(getMessagesContainer().children);
     for (const node of nodes) {
         if (node.style.display === 'none') continue;
         const badge = node.querySelector('.message-target');
@@ -814,7 +824,7 @@ function showImagePreview(src) {
 // 查找已存在的消息节点
 function findMessageNode(id) {
     if (!id) return null;
-    return messagesContainer.querySelector(`[data-id="${id}"]`);
+    return getMessagesContainer().querySelector(`[data-id="${id}"]`);
 }
 
 function messageNodeSignature(msg) {
@@ -837,6 +847,8 @@ function shouldSkipMessageRerender(existingNode, msg) {
  * 向顶部插入消息
  */
 function prependMessage(msg) {
+    const root = getMessagesContainer();
+    if (!root) return;
     const id = msg.id ?? null;
     const existingNode = id ? findMessageNode(id) : null;
     if (shouldSkipMessageRerender(existingNode, msg)) {
@@ -847,9 +859,10 @@ function prependMessage(msg) {
     node.dataset.sig = messageNodeSignature(msg);
 
     if (existingNode) {
-        messagesContainer.replaceChild(node, existingNode); // 替换旧节点
+        root.replaceChild(node, existingNode);
     } else {
-        messagesContainer.insertBefore(node, messagesContainer.firstChild);
+        const sentinel = ensureHistoryLoadSentinel();
+        root.insertBefore(node, sentinel ? sentinel.nextSibling : root.firstChild);
     }
     applyMessageTargetFilter();
 }
@@ -870,17 +883,17 @@ function appendMessage(msg) {
     node.dataset.sig = messageNodeSignature(msg);
 
     // 追加前判断用户是否在底部（用旧 scrollHeight 判断才准确）
-    const wasAtBottom = (messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight) < 50;
+    const wasAtBottom = (getMessagesContainer().scrollHeight - getMessagesContainer().scrollTop - getMessagesContainer().clientHeight) < 50;
 
     if (existingNode) {
-        messagesContainer.replaceChild(node, existingNode); // 替换旧节点
+        getMessagesContainer().replaceChild(node, existingNode); // 替换旧节点
     } else {
-        messagesContainer.appendChild(node);
+        getMessagesContainer().appendChild(node);
     }
     applyMessageTargetFilter();
 
     // 自动滚到底部（仅当用户原本在底部时才滚动，避免打断）
-    if (wasAtBottom) messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    if (wasAtBottom) getMessagesContainer().scrollTop = getMessagesContainer().scrollHeight;
 }
 
 /** 浏览器 WGS84 → 国内地图常用坐标（高德 GCJ-02、百度 BD-09） */

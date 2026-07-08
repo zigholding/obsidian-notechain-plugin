@@ -119,9 +119,11 @@ export class OldBuddyStore {
 
     async listMessages(limit: number, before?: string | null, target?: string | null) {
         this.ensureLoaded();
+        const pageSize = Math.max(1, limit);
+        const fetchSize = pageSize + 1;
         let list = [...this.messages];
         const queried = await this.queryMessagesViaScript({
-            limit,
+            limit: fetchSize,
             before: before || null,
             target: target || null,
             local: list,
@@ -139,9 +141,9 @@ export class OldBuddyStore {
         if (target) {
             list = list.filter((m) => (m.target || DEFAULT_TARGET) === target);
         }
-        const slice = list.slice(-Math.max(1, limit));
-        const hasMore = list.length > slice.length;
-        return { messages: slice, has_more: hasMore };
+        const hasMore = list.length > pageSize;
+        const messages = list.slice(-pageSize);
+        return { messages, has_more: hasMore };
     }
 
     /** 可选：nochain_oldbuddy_query，返回 OldBuddyMessage[] 或 { messages: [] }，与本地记录合并 */
@@ -255,7 +257,7 @@ export class OldBuddyStore {
             if (Number.isFinite(beforeMs)) {
                 list = list.filter((m) => msgTime(m) < beforeMs);
             }
-            list = list.slice(-limit);
+            list = list.slice(-(limit + 1));
         } else {
             const cap = Math.min(500, Math.max(limit * 5, limit));
             list = list.slice(-cap);

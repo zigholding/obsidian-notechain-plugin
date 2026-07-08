@@ -639,7 +639,9 @@ export class CalendarGalleryModal extends Modal {
 			},
 		});
 		this.queryInputEl.value = this.currentQuery;
-		this.queryInputEl.addEventListener("input", () => this.scheduleApplyQuery());
+		this.queryInputEl.addEventListener("input", (e) => {
+			if (this.shouldApplyQueryOnInput(e)) this.scheduleApplyQuery();
+		});
 
 		const toolbar = right.createDiv({ cls: "nc-cal-toolbar" });
 
@@ -695,6 +697,15 @@ export class CalendarGalleryModal extends Modal {
 			},
 			{ passive: false }
 		);
+	}
+
+	private shouldApplyQueryOnInput(e: Event): boolean {
+		const value = this.queryInputEl?.value ?? "";
+		if (value === "") return true;
+		const ie = e as InputEvent;
+		if (ie.data === " ") return true;
+		if (ie.inputType === "insertFromPaste" && value.includes(" ")) return true;
+		return false;
 	}
 
 	private scheduleApplyQuery(): void {

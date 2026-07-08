@@ -114,10 +114,6 @@
                 window.visualViewport.addEventListener('scroll', syncInputBarHeight);
             }
 
-            const messagesContainer = document.getElementById('messages');
-            let currentSkip = 0, isLoading = false;
-
-            // ------------- WebSocket 连接 -------------
             connectWS();
 
             await createQuickCommandUI();
@@ -180,9 +176,11 @@
             }
 
             // ---------- 首次加载最近消息 ----------
+            resetMessagePagination();
             await loadMessages(10); // 首次加载最近 10 条
             // 首次加载后滚到底部（显示最新消息）
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            const msgRoot = getMessagesContainer();
+            if (msgRoot) msgRoot.scrollTop = msgRoot.scrollHeight;
             // 启用上拉加载
             setupScrollLoader(50);
         });
