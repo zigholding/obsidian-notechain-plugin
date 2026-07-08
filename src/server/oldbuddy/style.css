@@ -31,6 +31,8 @@ body {
     max-width: none;
     margin: 0;
     background: var(--wechat-bg);
+    overflow: hidden;
+    min-height: 0;
 }
 
 #status-bar {
@@ -119,11 +121,37 @@ body {
 
 #messages {
     flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 12px 10px calc(12px + var(--input-bar-height));
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
     display: flex;
     flex-direction: column;
+}
+
+#history-load-trigger {
+    flex-shrink: 0;
+    align-self: center;
+    margin: 4px 0 10px;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 999px;
+    background: #fff;
+    color: #576b95;
+    font-size: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+}
+
+#history-load-trigger:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+#history-load-trigger.hidden {
+    display: none;
 }
 
 .message {

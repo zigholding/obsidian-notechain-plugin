@@ -39,6 +39,8 @@ body {
     max-width: none;
     margin: 0;
     background: var(--wechat-bg);
+    overflow: hidden;
+    min-height: 0;
 }
 
 #status-bar {
@@ -127,11 +129,37 @@ body {
 
 #messages {
     flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 12px 10px calc(12px + var(--input-bar-height));
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
     display: flex;
     flex-direction: column;
+}
+
+#history-load-trigger {
+    flex-shrink: 0;
+    align-self: center;
+    margin: 4px 0 10px;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 999px;
+    background: #fff;
+    color: #576b95;
+    font-size: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+}
+
+#history-load-trigger:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+#history-load-trigger.hidden {
+    display: none;
 }
 
 .message {
@@ -588,8 +616,9 @@ body {
             // 首次加载后滚到底部（显示最新消息）
             const msgRoot = getMessagesContainer();
             if (msgRoot) msgRoot.scrollTop = msgRoot.scrollHeight;
+            updateHistoryLoadTrigger();
             // 启用上拉加载
-            setupScrollLoader(50);
+            setupScrollLoader();
         });
 
     </script>
@@ -861,12 +890,43 @@ function ensureHistoryLoadSentinel() {
     return el;
 }
 
+function ensureHistoryLoadTrigger() {
+    const root = getMessagesContainer();
+    if (!root) return null;
+    let btn = document.getElementById('history-load-trigger');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'history-load-trigger';
+        btn.type = 'button';
+        btn.textContent = '↑ 加载更早消息';
+        btn.addEventListener('click', () => {
+            loadMessages(20);
+        });
+        const sentinel = ensureHistoryLoadSentinel();
+        root.insertBefore(btn, sentinel ? sentinel.nextSibling : root.firstChild);
+    }
+    return btn;
+}
+
+function updateHistoryLoadTrigger() {
+    const btn = document.getElementById('history-load-trigger');
+    if (!btn) return;
+    if (!hasMore) {
+        btn.classList.add('hidden');
+        btn.disabled = true;
+        return;
+    }
+    btn.classList.remove('hidden');
+    btn.disabled = !!isLoading;
+    btn.textContent = isLoading ? '加载中…' : '↑ 加载更早消息';
+}
+
 function getOldestLoadedBefore() {
     const root = getMessagesContainer();
     if (!root) return null;
     const sentinel = document.getElementById(HISTORY_SENTINEL_ID);
     let node = sentinel ? sentinel.nextElementSibling : root.firstElementChild;
-    while (node && node.id === HISTORY_SENTINEL_ID) {
+    while (node && (node.id === HISTORY_SENTINEL_ID || node.id === 'history-load-trigger')) {
         node = node.nextElementSibling;
     }
     if (node && node.dataset && node.dataset.timestamp) {
@@ -1147,15 +1207,24 @@ async function initTargetConfig() {
 async function loadMessages(limit = 10) {
     const root = getMessagesContainer();
     if (!root) return;
-    if (isLoading || !hasMore) return;
+    if (isLoading) return;
+    if (!hasMore) {
+        updateHistoryLoadTrigger();
+        return;
+    }
     isLoading = true;
+    updateHistoryLoadTrigger();
+
+    const scrollThreshold = 80;
 
     try {
         ensureHistoryLoadSentinel();
+        ensureHistoryLoadTrigger();
         const childCountBefore = root.querySelectorAll('.message').length;
 
         const oldScrollHeight = root.scrollHeight;
         const oldScrollTop = root.scrollTop;
+        const wasAtTop = oldScrollTop <= scrollThreshold;
 
         const before = getOldestLoadedBefore();
         const url = before
@@ -1168,11 +1237,7 @@ async function loadMessages(limit = 10) {
         const msgs = Array.isArray(data.messages) ? data.messages : [];
 
         if (!msgs.length) {
-            if (typeof data.has_more !== 'undefined') {
-                hasMore = !!data.has_more;
-            } else {
-                hasMore = false;
-            }
+            hasMore = typeof data.has_more === 'undefined' ? false : !!data.has_more;
             return;
         }
 
@@ -1191,13 +1256,10 @@ async function loadMessages(limit = 10) {
 
         if (typeof data.has_more !== 'undefined') {
             hasMore = !!data.has_more;
-        } else if (msgs.length < limit) {
-            hasMore = false;
         } else {
-            hasMore = true;
+            hasMore = msgs.length >= limit;
         }
 
-        // 返回了消息但全是重复（已展示），且后端认为还有更多时，推进游标以便下次请求更早记录
         if (inserted === 0 && hasMore && msgs.length > 0) {
             const oldest = msgs[msgs.length - 1];
             const ms = Date.parse(oldest?.timestamp || '');
@@ -1215,7 +1277,9 @@ async function loadMessages(limit = 10) {
         const newScrollHeight = root.scrollHeight;
         const heightDiff = newScrollHeight - oldScrollHeight;
         const atBottom = (oldScrollHeight - oldScrollTop - root.clientHeight) < 50;
-        if (!atBottom) {
+        if (wasAtTop) {
+            root.scrollTop = 0;
+        } else if (!atBottom) {
             root.scrollTop = oldScrollTop + heightDiff;
         } else {
             root.scrollTop = root.scrollHeight;
@@ -1225,6 +1289,7 @@ async function loadMessages(limit = 10) {
         console.error('loadMessages error', err);
     } finally {
         isLoading = false;
+        updateHistoryLoadTrigger();
     }
 }
 
@@ -1250,25 +1315,40 @@ async function loadMessages(limit = 10) {
  * - threshold: scrollTop 小于等于多少 px 时触发（桌面/滚动检测）
  * - touchPullThreshold: 手指下拉多少 px 时触发（触摸检测）
  */
-function setupScrollLoader(threshold = 50, touchPullThreshold = 60) {
+function setupScrollLoader(threshold = 80, touchPullThreshold = 48) {
     const root = getMessagesContainer();
     if (!root) return;
 
     ensureHistoryLoadSentinel();
+    ensureHistoryLoadTrigger();
+    updateHistoryLoadTrigger();
 
     function tryLoadHistory() {
-        if (!isLoading && hasMore) {
-            loadMessages(20);
-        }
+        if (isLoading) return;
+        if (!hasMore) return;
+        loadMessages(20);
+    }
+
+    function nearTop() {
+        return root.scrollTop <= threshold;
     }
 
     function onScroll() {
-        if (root.scrollTop <= threshold) {
+        if (nearTop()) {
             tryLoadHistory();
         }
     }
 
-    root.addEventListener('scroll', onScroll, { passive: true });
+    let scrollRaf = null;
+    function onScrollRaf() {
+        if (scrollRaf) return;
+        scrollRaf = requestAnimationFrame(() => {
+            scrollRaf = null;
+            onScroll();
+        });
+    }
+
+    root.addEventListener('scroll', onScrollRaf, { passive: true });
 
     let touchStartY = null;
     let touchTriggered = false;
@@ -1285,9 +1365,7 @@ function setupScrollLoader(threshold = 50, touchPullThreshold = 60) {
         if (curY === null) return;
 
         const deltaY = curY - touchStartY;
-        const atTop = root.scrollTop <= 2;
-
-        if (atTop && deltaY > touchPullThreshold && !touchTriggered) {
+        if (nearTop() && deltaY > touchPullThreshold && !touchTriggered) {
             touchTriggered = true;
             tryLoadHistory();
         }
@@ -1296,6 +1374,9 @@ function setupScrollLoader(threshold = 50, touchPullThreshold = 60) {
     function onTouchEnd() {
         touchStartY = null;
         touchTriggered = false;
+        if (nearTop()) {
+            tryLoadHistory();
+        }
     }
 
     root.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -1308,12 +1389,13 @@ function setupScrollLoader(threshold = 50, touchPullThreshold = 60) {
         const sentinel = ensureHistoryLoadSentinel();
         io = new IntersectionObserver((entries) => {
             for (const entry of entries) {
-                if (entry.isIntersecting) {
+                if (entry.isIntersecting && nearTop()) {
                     tryLoadHistory();
                 }
             }
         }, {
             root,
+            rootMargin: '120px 0px 0px 0px',
             threshold: 0,
         });
         if (sentinel) io.observe(sentinel);
@@ -1322,7 +1404,7 @@ function setupScrollLoader(threshold = 50, touchPullThreshold = 60) {
     }
 
     return function teardown() {
-        root.removeEventListener('scroll', onScroll);
+        root.removeEventListener('scroll', onScrollRaf);
         root.removeEventListener('touchstart', onTouchStart);
         root.removeEventListener('touchmove', onTouchMove);
         root.removeEventListener('touchend', onTouchEnd);
@@ -1684,13 +1766,15 @@ function prependMessage(msg) {
     const node = renderMessage(msg);
     node.dataset.sig = messageNodeSignature(msg);
 
+    const anchor = document.getElementById('history-load-trigger') || ensureHistoryLoadSentinel();
+
     if (existingNode) {
         root.replaceChild(node, existingNode);
     } else {
-        const sentinel = ensureHistoryLoadSentinel();
-        root.insertBefore(node, sentinel ? sentinel.nextSibling : root.firstChild);
+        root.insertBefore(node, anchor ? anchor.nextSibling : root.firstChild);
     }
     applyMessageTargetFilter();
+    updateHistoryLoadTrigger();
 }
 
 /**

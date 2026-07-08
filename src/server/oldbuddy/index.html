@@ -181,8 +181,9 @@
             // 首次加载后滚到底部（显示最新消息）
             const msgRoot = getMessagesContainer();
             if (msgRoot) msgRoot.scrollTop = msgRoot.scrollHeight;
+            updateHistoryLoadTrigger();
             // 启用上拉加载
-            setupScrollLoader(50);
+            setupScrollLoader();
         });
 
     </script>

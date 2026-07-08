@@ -695,8 +695,24 @@ function normalizeMessages(result: unknown): OldBuddyMessage[] | null {
     if (!arr) {
         return null;
     }
-    const out = arr.filter(isValidMessage);
+    const out = arr
+        .map((row) => normalizeMessageRow(row))
+        .filter((m): m is OldBuddyMessage => !!m && isValidMessage(m));
     return out.length ? out : null;
+}
+
+function normalizeMessageRow(m: unknown): OldBuddyMessage | null {
+    if (!m || typeof m !== 'object') return null;
+    const row = m as OldBuddyMessage;
+    if (typeof row.id !== 'string' || typeof row.sender !== 'string' || typeof row.timestamp !== 'string') {
+        return null;
+    }
+    const type = String(row.type || 'text') as OldBuddyMessage['type'];
+    return {
+        ...row,
+        type: ['text', 'image', 'audio', 'video', 'file'].includes(type) ? type : 'text',
+        content: row.content != null ? String(row.content) : '',
+    };
 }
 
 function isValidMessage(m: unknown): m is OldBuddyMessage {
@@ -708,7 +724,6 @@ function isValidMessage(m: unknown): m is OldBuddyMessage {
         typeof row.id === 'string' &&
         typeof row.sender === 'string' &&
         typeof row.timestamp === 'string' &&
-        typeof row.type === 'string' &&
         typeof row.content === 'string'
     );
 }
