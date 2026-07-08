@@ -990,11 +990,11 @@
 }
 
 .nc-cal-year-select {
-  min-width: 96px;
+  min-width: 72px;
 }
 
 .nc-cal-month-select {
-  min-width: 72px;
+  min-width: 56px;
 }
 
 .nc-cal-today-btn {

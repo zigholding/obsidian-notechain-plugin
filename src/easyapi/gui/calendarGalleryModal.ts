@@ -65,9 +65,28 @@ const CARD_HEIGHTS: Record<ResolvedOptions["cardSize"], number> = {
 	large: 132,
 };
 
-const WEEK_LABELS_SUN = ["日", "一", "二", "三", "四", "五", "六"];
-const WEEK_LABELS_MON = ["一", "二", "三", "四", "五", "六", "日"];
-const MONTH_LABELS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
+function isZhUi(): boolean {
+	return window.localStorage.getItem("language") === "zh";
+}
+
+function getUiLocale(): string {
+	const lang = window.localStorage.getItem("language");
+	if (lang === "zh" || lang === "zh-cn" || lang === "zh-tw") return "zh-CN";
+	if (lang) return lang;
+	return navigator.language || "en-US";
+}
+
+function getWeekLabels(weekStart: "Sunday" | "Monday"): string[] {
+	const formatter = new Intl.DateTimeFormat(getUiLocale(), { weekday: "narrow" });
+	const startDow = weekStart === "Monday" ? 1 : 0;
+	const labels: string[] = [];
+	for (let i = 0; i < 7; i++) {
+		const dow = (startDow + i) % 7;
+		// 2024-01-07 为周日
+		labels.push(formatter.format(new Date(2024, 0, 7 + dow)));
+	}
+	return labels;
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -487,6 +506,7 @@ export class CalendarGalleryModal extends Modal {
 
 	private renderHeader(): void {
 		this.headerEl.empty();
+		const zh = isZhUi();
 
 		const row = this.headerEl.createDiv({ cls: "nc-cal-header-row" });
 		this.monthSubtitleEl = row.createDiv({ cls: "nc-cal-month-subtitle" });
@@ -494,18 +514,19 @@ export class CalendarGalleryModal extends Modal {
 
 		const toolbar = row.createDiv({ cls: "nc-cal-toolbar" });
 
-		const prevBtn = toolbar.createDiv({ cls: "nc-cal-nav-btn", attr: { title: "上一月", "aria-label": "上一月" } });
+		const prevLabel = zh ? "上一月" : "Previous month";
+		const prevBtn = toolbar.createDiv({ cls: "nc-cal-nav-btn", attr: { title: prevLabel, "aria-label": prevLabel } });
 		setIcon(prevBtn, "chevron-left");
 		prevBtn.onclick = () => void this.changeMonth(-1);
 
 		const picker = toolbar.createDiv({ cls: "nc-cal-picker" });
 
 		this.yearSelectEl = picker.createEl("select", { cls: "nc-cal-select nc-cal-year-select" });
-		this.yearSelectEl.setAttr("aria-label", "选择年份");
+		this.yearSelectEl.setAttr("aria-label", zh ? "选择年份" : "Select year");
 		const yearMin = new Date().getFullYear() - 50;
 		const yearMax = new Date().getFullYear() + 2;
 		for (let y = yearMax; y >= yearMin; y--) {
-			this.yearSelectEl.createEl("option", { text: `${y} 年`, value: String(y) });
+			this.yearSelectEl.createEl("option", { text: String(y), value: String(y) });
 		}
 		this.yearSelectEl.onchange = () => {
 			this.currentYear = Number(this.yearSelectEl.value);
@@ -513,20 +534,25 @@ export class CalendarGalleryModal extends Modal {
 		};
 
 		this.monthSelectEl = picker.createEl("select", { cls: "nc-cal-select nc-cal-month-select" });
-		this.monthSelectEl.setAttr("aria-label", "选择月份");
-		MONTH_LABELS.forEach((label, i) => {
-			this.monthSelectEl.createEl("option", { text: label, value: String(i + 1) });
-		});
+		this.monthSelectEl.setAttr("aria-label", zh ? "选择月份" : "Select month");
+		for (let m = 1; m <= 12; m++) {
+			this.monthSelectEl.createEl("option", { text: pad2(m), value: String(m) });
+		}
 		this.monthSelectEl.onchange = () => {
 			this.currentMonth = Number(this.monthSelectEl.value);
 			void this.jumpToMonth(this.currentYear, this.currentMonth);
 		};
 
-		const nextBtn = toolbar.createDiv({ cls: "nc-cal-nav-btn", attr: { title: "下一月", "aria-label": "下一月" } });
+		const nextLabel = zh ? "下一月" : "Next month";
+		const nextBtn = toolbar.createDiv({ cls: "nc-cal-nav-btn", attr: { title: nextLabel, "aria-label": nextLabel } });
 		setIcon(nextBtn, "chevron-right");
 		nextBtn.onclick = () => void this.changeMonth(1);
 
-		const todayBtn = toolbar.createDiv({ cls: "nc-cal-today-btn", text: "今天", attr: { title: "回到今天" } });
+		const todayBtn = toolbar.createDiv({
+			cls: "nc-cal-today-btn",
+			text: zh ? "今天" : "Today",
+			attr: { title: zh ? "回到今天" : "Go to today" },
+		});
 		todayBtn.onclick = () => void this.goToToday();
 
 		this.syncHeaderNav();
@@ -606,7 +632,7 @@ export class CalendarGalleryModal extends Modal {
 		const weekHeader = this.contentEl.querySelector(".nc-cal-week-header") as HTMLElement;
 		if (!weekHeader) return;
 		weekHeader.empty();
-		const labels = this.options.weekStart === "Monday" ? WEEK_LABELS_MON : WEEK_LABELS_SUN;
+		const labels = getWeekLabels(this.options.weekStart);
 		labels.forEach((label) => {
 			weekHeader.createDiv({ cls: "nc-cal-week-cell", text: label });
 		});
