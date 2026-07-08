@@ -1,4 +1,4 @@
-import { App, Modal, setIcon } from "obsidian";
+import { App, Modal, setIcon, TFile } from "obsidian";
 
 // ── Data types ──────────────────────────────────────────────────────────────
 
@@ -127,6 +127,35 @@ interface CalendarCell {
 	key: string;
 }
 
+interface FlatImageEntry {
+	image: ImageItem;
+	dateKey: string;
+	dayData?: DayData;
+}
+
+function normalizeMediaPath(raw: string): string {
+	let path = raw.trim();
+	path = path.replace(/^!\[\[/, "").replace(/^\[\[/, "").replace(/\]\]$/, "");
+	if (path.includes("|")) path = path.split("|")[0];
+	if (path.includes("#")) path = path.split("#")[0];
+	return path.trim();
+}
+
+function guessImageMimeType(path: string): string {
+	const lower = path.toLowerCase();
+	if (lower.endsWith(".png")) return "image/png";
+	if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+	if (lower.endsWith(".gif")) return "image/gif";
+	if (lower.endsWith(".webp")) return "image/webp";
+	if (lower.endsWith(".svg")) return "image/svg+xml";
+	if (lower.endsWith(".bmp")) return "image/bmp";
+	return "image/png";
+}
+
+function isDirectImageUrl(path: string): boolean {
+	return /^(https?:\/\/|data:|app:\/\/|blob:)/.test(path) || /^[\/\\]/.test(path);
+}
+
 function buildCalendarGrid(year: number, month: number, weekStart: "Sunday" | "Monday"): CalendarCell[] {
 	const firstDow = new Date(year, month - 1, 1).getDay();
 	const offset = weekStart === "Monday" ? (firstDow + 6) % 7 : firstDow;
@@ -162,6 +191,128 @@ function buildCalendarGrid(year: number, month: number, weekStart: "Sunday" | "M
 	return cells;
 }
 
+// ── Image lightbox (cross-day navigation) ───────────────────────────────────
+
+class CalendarImageLightbox {
+	private overlay!: HTMLElement;
+	private imgEl!: HTMLImageElement;
+	private captionEl!: HTMLElement;
+	private counterEl!: HTMLElement;
+	private entries: FlatImageEntry[] = [];
+	private index = 0;
+	private session = 0;
+	private onKeyDown = (e: KeyboardEvent) => {
+		if (e.key === "Escape") {
+			e.stopPropagation();
+			this.close();
+		} else if (e.key === "ArrowLeft") {
+			e.preventDefault();
+			this.go(-1);
+		} else if (e.key === "ArrowRight") {
+			e.preventDefault();
+			this.go(1);
+		}
+	};
+
+	constructor(
+		private app: App,
+		private resolveUrl: (src: string) => Promise<string | null>
+	) {
+		this.buildUI();
+	}
+
+	private buildUI(): void {
+		this.overlay = document.body.createDiv({ cls: "nc-cal-lightbox" });
+		this.overlay.hide();
+
+		const backdrop = this.overlay.createDiv({ cls: "nc-cal-lightbox-backdrop" });
+		backdrop.onclick = () => this.close();
+
+		const frame = this.overlay.createDiv({ cls: "nc-cal-lightbox-frame" });
+
+		const closeBtn = frame.createDiv({ cls: "nc-cal-lightbox-close nc-icon-btn", attr: { "aria-label": "关闭" } });
+		setIcon(closeBtn, "x");
+		closeBtn.onclick = () => this.close();
+
+		const prevBtn = frame.createDiv({ cls: "nc-cal-lightbox-nav nc-cal-lightbox-prev", attr: { "aria-label": "上一张" } });
+		setIcon(prevBtn, "chevron-left");
+		prevBtn.onclick = (e) => { e.stopPropagation(); this.go(-1); };
+
+		const stage = frame.createDiv({ cls: "nc-cal-lightbox-stage" });
+		this.imgEl = stage.createEl("img", { cls: "nc-cal-lightbox-img" });
+		this.imgEl.setAttr("draggable", "false");
+		this.imgEl.onclick = (e) => e.stopPropagation();
+		this.imgEl.onerror = () => {
+			this.imgEl.hide();
+			const ph = stage.createDiv({ cls: "nc-cal-lightbox-error" });
+			setIcon(ph, "image-off");
+		};
+
+		const nextBtn = frame.createDiv({ cls: "nc-cal-lightbox-nav nc-cal-lightbox-next", attr: { "aria-label": "下一张" } });
+		setIcon(nextBtn, "chevron-right");
+		nextBtn.onclick = (e) => { e.stopPropagation(); this.go(1); };
+
+		const meta = frame.createDiv({ cls: "nc-cal-lightbox-meta" });
+		this.captionEl = meta.createDiv({ cls: "nc-cal-lightbox-caption" });
+		this.counterEl = meta.createDiv({ cls: "nc-cal-lightbox-counter" });
+
+		frame.addEventListener("wheel", (e) => {
+			e.preventDefault();
+			this.go(e.deltaY > 0 ? 1 : -1);
+		}, { passive: false });
+	}
+
+	open(entries: FlatImageEntry[], startIndex: number): void {
+		if (!entries.length) return;
+		this.entries = entries;
+		this.index = Math.max(0, Math.min(startIndex, entries.length - 1));
+		this.overlay.show();
+		document.addEventListener("keydown", this.onKeyDown, true);
+		void this.showCurrent();
+	}
+
+	close(): void {
+		this.session++;
+		this.overlay.hide();
+		document.removeEventListener("keydown", this.onKeyDown, true);
+	}
+
+	destroy(): void {
+		this.close();
+		this.overlay.remove();
+	}
+
+	private go(delta: number): void {
+		if (this.entries.length <= 1) return;
+		this.index = (this.index + delta + this.entries.length) % this.entries.length;
+		void this.showCurrent();
+	}
+
+	private async showCurrent(): Promise<void> {
+		const session = ++this.session;
+		const entry = this.entries[this.index];
+		if (!entry) return;
+
+		const src = entry.image.path;
+		this.imgEl.show();
+		this.imgEl.removeAttribute("src");
+		this.captionEl.empty();
+		this.captionEl.setText(entry.image.caption ?? normalizeMediaPath(src));
+		this.counterEl.setText(`${entry.dateKey}  ·  ${this.index + 1} / ${this.entries.length}`);
+
+		const existingErr = this.imgEl.parentElement?.querySelector(".nc-cal-lightbox-error");
+		existingErr?.remove();
+
+		const url = await this.resolveUrl(src);
+		if (session !== this.session) return;
+		if (url) {
+			this.imgEl.src = url;
+		} else {
+			this.imgEl.dispatchEvent(new Event("error"));
+		}
+	}
+}
+
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
 export class CalendarGalleryModal extends Modal {
@@ -177,6 +328,7 @@ export class CalendarGalleryModal extends Modal {
 	private gridEl!: HTMLElement;
 	private tooltipEl!: HTMLElement;
 	private slideDir: "left" | "right" | null = null;
+	private imageLightbox: CalendarImageLightbox;
 
 	constructor(app: App, options: CalendarGalleryOptions) {
 		super(app);
@@ -185,6 +337,7 @@ export class CalendarGalleryModal extends Modal {
 		this.currentYear = now.getFullYear();
 		this.currentMonth = now.getMonth() + 1;
 		this.selectedKey = dateKey(this.currentYear, this.currentMonth, now.getDate());
+		this.imageLightbox = new CalendarImageLightbox(this.app, (src) => this.resolveImageUrl(src));
 	}
 
 	onOpen(): void {
@@ -208,6 +361,7 @@ export class CalendarGalleryModal extends Modal {
 	onClose(): void {
 		this.renderSession++;
 		this.modalEl.removeEventListener("keydown", this.onKeyDown);
+		this.imageLightbox?.destroy();
 		this.tooltipEl?.remove();
 		this.contentEl.empty();
 	}
@@ -277,6 +431,19 @@ export class CalendarGalleryModal extends Modal {
 		nextBtn.onclick = () => void this.changeMonth(1);
 
 		const rightSide = this.headerEl.createDiv({ cls: "nc-cal-header-side" });
+
+		const weekStartBtn = rightSide.createDiv({
+			cls: "nc-cal-weekstart-btn",
+			attr: { title: "切换星期起始日" },
+		});
+		this.updateWeekStartBtn(weekStartBtn);
+		weekStartBtn.onclick = () => {
+			this.options.weekStart = this.options.weekStart === "Monday" ? "Sunday" : "Monday";
+			this.updateWeekStartBtn(weekStartBtn);
+			this.renderWeekHeader();
+			this.renderGrid();
+		};
+
 		const todayBtn = rightSide.createDiv({ cls: "nc-cal-today-btn", text: "今天", attr: { title: "回到今天" } });
 		todayBtn.onclick = () => void this.goToToday();
 
@@ -296,6 +463,47 @@ export class CalendarGalleryModal extends Modal {
 	private updateHeaderTitle(titleEl?: HTMLElement): void {
 		const el = titleEl ?? this.headerEl?.querySelector(".nc-cal-title");
 		if (el) el.setText(`${this.currentYear} 年 ${this.currentMonth} 月`);
+	}
+
+	private updateWeekStartBtn(btn: HTMLElement): void {
+		btn.setText(this.options.weekStart === "Monday" ? "周一开始" : "周日开始");
+	}
+
+	private getDayDataForCell(cell: CalendarCell): DayData | undefined {
+		const mainData = this.monthCache.get(monthCacheKey(this.currentYear, this.currentMonth));
+		const mainMap = mainData ? this.buildDayMap(mainData) : new Map<string, DayData>();
+		let dayData = mainMap.get(cell.key);
+		if (!dayData && !cell.inCurrentMonth) {
+			const adj = this.monthCache.get(monthCacheKey(cell.year, cell.month));
+			if (adj) dayData = this.buildDayMap(adj).get(cell.key);
+		}
+		return dayData;
+	}
+
+	private buildVisibleImageList(): FlatImageEntry[] {
+		const cells = buildCalendarGrid(this.currentYear, this.currentMonth, this.options.weekStart);
+		const entries: FlatImageEntry[] = [];
+		for (const cell of cells) {
+			const dayData = this.getDayDataForCell(cell);
+			if (!dayData?.images?.length) continue;
+			for (const image of dayData.images) {
+				entries.push({ image, dateKey: cell.key, dayData });
+			}
+		}
+		return entries;
+	}
+
+	private openImageLightbox(dateKey: string, image: ImageItem): void {
+		const list = this.buildVisibleImageList();
+		if (!list.length) return;
+		let idx = list.findIndex((e) => e.dateKey === dateKey && e.image === image);
+		if (idx < 0) {
+			idx = list.findIndex(
+				(e) => e.dateKey === dateKey && normalizeMediaPath(e.image.path) === normalizeMediaPath(image.path)
+			);
+		}
+		this.imageLightbox.open(list, idx >= 0 ? idx : 0);
+		this.options.onOpenImage?.(image);
 	}
 
 	private renderWeekHeader(): void {
@@ -465,7 +673,7 @@ export class CalendarGalleryModal extends Modal {
 		const audios = dayData?.audios ?? [];
 
 		if (images.length > 0) {
-			this.renderImageArea(body, images, card);
+			this.renderImageArea(body, images, cell.key, dayData);
 		}
 		if (audios.length > 0 && this.options.showAudio) {
 			this.renderAudioArea(body, audios);
@@ -513,7 +721,12 @@ export class CalendarGalleryModal extends Modal {
 
 	// ── Image area ────────────────────────────────────────────────────────────
 
-	private renderImageArea(container: HTMLElement, images: ImageItem[], card: HTMLElement): void {
+	private renderImageArea(
+		container: HTMLElement,
+		images: ImageItem[],
+		dateKey: string,
+		_dayData: DayData | undefined
+	): void {
 		const wrap = container.createDiv({ cls: "nc-cal-img-wrap" });
 		const imgEl = wrap.createEl("img", { cls: "nc-cal-img" });
 		imgEl.setAttr("loading", "lazy");
@@ -536,7 +749,7 @@ export class CalendarGalleryModal extends Modal {
 
 		imgEl.onclick = (e) => {
 			e.stopPropagation();
-			this.options.onOpenImage?.(images[current]);
+			this.openImageLightbox(dateKey, images[current]);
 		};
 
 		imgEl.onerror = () => {
@@ -571,24 +784,73 @@ export class CalendarGalleryModal extends Modal {
 	}
 
 	private resolveImageSrc(src: string, imgEl: HTMLImageElement, session: number): void {
-		if (/^(https?:\/\/|data:|app:\/\/|\/|\\)/.test(src)) {
-			imgEl.src = src;
-			imgEl.show();
-			return;
+		void this.resolveImageUrl(src).then((url) => {
+			if (session !== this.renderSession) return;
+			if (url) {
+				imgEl.src = url;
+				imgEl.show();
+			} else {
+				imgEl.dispatchEvent(new Event("error"));
+			}
+		});
+	}
+
+	private async resolveImageUrl(src: string): Promise<string | null> {
+		const raw = (src ?? "").trim();
+		if (!raw) return null;
+
+		const path = normalizeMediaPath(raw);
+		if (isDirectImageUrl(path)) return path;
+
+		const tfile = this.resolveImageTFile(path);
+		if (tfile) {
+			return this.app.vault.getResourcePath(tfile);
 		}
-		if (/\.(png|jpe?g|gif|webp|svg)/i.test(src)) {
-			(async () => {
-				try {
-					if (session !== this.renderSession) return;
-					const nc = (this.app as any).plugins?.plugins?.["note-chain"];
-					const dataUrl = await nc?.easyapi?.file?.read_binary_to_base64(src);
-					if (session !== this.renderSession || !dataUrl) return;
-					imgEl.src = dataUrl;
-					imgEl.show();
-				} catch {
-					imgEl.dispatchEvent(new Event("error"));
-				}
-			})();
+
+		if (/\.(png|jpe?g|gif|webp|svg|bmp|avif)/i.test(path)) {
+			return this.readVaultImageAsDataUrl(path);
+		}
+
+		return null;
+	}
+
+	private resolveImageTFile(path: string): TFile | null {
+		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const fileApi = nc?.easyapi?.file;
+		if (!fileApi) return null;
+
+		let tfile = fileApi.get_tfile(path) as TFile | null;
+		if (tfile) return tfile;
+
+		// 兼容纯双链文本：[[photo.jpg]]、[[assets/photo]]
+		const stripped = normalizeMediaPath(path);
+		if (stripped !== path) {
+			tfile = fileApi.get_tfile(stripped) as TFile | null;
+			if (tfile) return tfile;
+		}
+
+		const withExt = /\.[a-z0-9]+$/i.test(stripped) ? stripped : null;
+		if (!withExt) {
+			for (const ext of [".png", ".jpg", ".jpeg", ".webp", ".gif"]) {
+				tfile = fileApi.get_tfile(stripped + ext) as TFile | null;
+				if (tfile) return tfile;
+			}
+		}
+
+		return this.app.vault.getFileByPath(stripped);
+	}
+
+	private async readVaultImageAsDataUrl(path: string): Promise<string | null> {
+		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const fileApi = nc?.easyapi?.file;
+		if (!fileApi) return null;
+		try {
+			const dataUrl = await fileApi.read_binary_to_base64(path);
+			if (!dataUrl) return null;
+			if (dataUrl.startsWith("data:image/")) return dataUrl;
+			return `data:${guessImageMimeType(path)};base64,${dataUrl.replace(/^data:[^;]+;base64,/, "")}`;
+		} catch {
+			return null;
 		}
 	}
 

@@ -929,8 +929,22 @@
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
+  margin-left: 8px;
 }
 
+.nc-cal-weekstart-btn {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.nc-cal-weekstart-btn:hover,
 .nc-cal-today-btn:hover {
   color: var(--text-normal);
   border-color: var(--interactive-accent);
@@ -1223,4 +1237,139 @@
   white-space: pre-wrap;
   word-break: break-word;
   pointer-events: none;
+}
+
+/* ── Image lightbox ─────────────────────────────────────────────────────── */
+
+.nc-cal-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nc-cal-lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.nc-cal-lightbox-frame {
+  position: relative;
+  z-index: 1;
+  width: min(92vw, 1200px);
+  height: min(88vh, 900px);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  pointer-events: none;
+}
+
+.nc-cal-lightbox-frame > * {
+  pointer-events: auto;
+}
+
+.nc-cal-lightbox-close {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 5;
+  background: var(--background-primary) !important;
+}
+
+.nc-cal-lightbox-stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  position: relative;
+}
+
+.nc-cal-lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  user-select: none;
+}
+
+.nc-cal-lightbox-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 120px;
+  border-radius: 12px;
+  background: var(--background-secondary);
+  color: var(--text-faint);
+}
+
+.nc-cal-lightbox-error svg {
+  width: 48px;
+  height: 48px;
+}
+
+.nc-cal-lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--background-primary) 88%, transparent);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  cursor: pointer;
+  z-index: 4;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.nc-cal-lightbox-nav:hover {
+  background: var(--background-primary);
+  transform: translateY(-50%) scale(1.06);
+}
+
+.nc-cal-lightbox-nav svg {
+  width: 22px;
+  height: 22px;
+}
+
+.nc-cal-lightbox-prev { left: -56px; }
+.nc-cal-lightbox-next { right: -56px; }
+
+.nc-cal-lightbox-meta {
+  flex-shrink: 0;
+  margin-top: 12px;
+  text-align: center;
+  color: var(--text-on-accent, #fff);
+}
+
+.nc-cal-lightbox-caption {
+  font-size: 14px;
+  font-weight: 500;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.nc-cal-lightbox-counter {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.85;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+@media (max-width: 900px) {
+  .nc-cal-lightbox-prev { left: 8px; }
+  .nc-cal-lightbox-next { right: 8px; }
+  .nc-cal-lightbox-nav {
+    background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+  }
 }
