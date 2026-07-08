@@ -888,38 +888,30 @@
 .nc-cal-header-row {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   min-height: 40px;
 }
 
-.nc-cal-header.has-month-title .nc-cal-header-row {
-  justify-content: space-between;
-}
-
-.nc-cal-header:not(.has-month-title) .nc-cal-header-row {
-  justify-content: center;
-}
-
-.nc-cal-query-bar {
+.nc-cal-header-right {
   display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  margin-top: 10px;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .nc-cal-query-input {
-  flex: 1;
-  min-width: 0;
-  min-height: 52px;
-  max-height: 120px;
-  padding: 8px 10px;
+  width: 168px;
+  max-width: 22vw;
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 10px;
   border-radius: 8px;
   border: 1px solid var(--background-modifier-border);
   background: var(--background-primary);
   color: var(--text-normal);
   font-size: 13px;
-  line-height: 1.45;
-  resize: vertical;
+  line-height: 32px;
   font-family: inherit;
 }
 
@@ -927,26 +919,6 @@
   outline: none;
   border-color: var(--interactive-accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 20%, transparent);
-}
-
-.nc-cal-query-apply {
-  flex-shrink: 0;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--background-modifier-border);
-  background: var(--background-primary);
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  user-select: none;
-}
-
-.nc-cal-query-apply:hover {
-  color: var(--text-normal);
-  border-color: var(--interactive-accent);
-  background: color-mix(in srgb, var(--interactive-accent) 10%, var(--background-primary));
 }
 
 .nc-cal-month-subtitle {

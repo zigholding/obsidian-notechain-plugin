@@ -520,7 +520,10 @@ export class CalendarGalleryModal extends Modal {
 	private playingAudioRestore: (() => void) | null = null;
 	private playingAudioPath: string | null = null;
 	private currentQuery: string;
-	private queryTextareaEl!: HTMLTextAreaElement;
+	private queryInputEl!: HTMLInputElement;
+	private queryDebounceTimer: number | null = null;
+
+	private static readonly QUERY_DEBOUNCE_MS = 400;
 
 	constructor(app: App, options: CalendarGalleryOptions) {
 		super(app);
@@ -553,6 +556,10 @@ export class CalendarGalleryModal extends Modal {
 
 	onClose(): void {
 		this.renderSession++;
+		if (this.queryDebounceTimer != null) {
+			window.clearTimeout(this.queryDebounceTimer);
+			this.queryDebounceTimer = null;
+		}
 		this.modalEl.removeEventListener("keydown", this.onKeyDown);
 		this.stopCardAudio();
 		this.mediaLightbox?.destroy();
@@ -618,9 +625,23 @@ export class CalendarGalleryModal extends Modal {
 
 		const row = this.headerEl.createDiv({ cls: "nc-cal-header-row" });
 		this.monthSubtitleEl = row.createDiv({ cls: "nc-cal-month-subtitle" });
-		this.monthSubtitleEl.hide();
 
-		const toolbar = row.createDiv({ cls: "nc-cal-toolbar" });
+		const right = row.createDiv({ cls: "nc-cal-header-right" });
+
+		this.queryInputEl = right.createEl("input", {
+			type: "text",
+			cls: "nc-cal-query-input",
+			attr: {
+				placeholder:
+					this.options.queryPlaceholder ||
+					(zh ? "筛选、标签、关键词…" : "Filter, tags, keywords…"),
+				"aria-label": zh ? "查询条件" : "Query",
+			},
+		});
+		this.queryInputEl.value = this.currentQuery;
+		this.queryInputEl.addEventListener("input", () => this.scheduleApplyQuery());
+
+		const toolbar = right.createDiv({ cls: "nc-cal-toolbar" });
 
 		const prevLabel = zh ? "上一月" : "Previous month";
 		const prevBtn = toolbar.createDiv({ cls: "nc-cal-nav-btn", attr: { title: prevLabel, "aria-label": prevLabel } });
@@ -665,33 +686,6 @@ export class CalendarGalleryModal extends Modal {
 
 		this.syncHeaderNav();
 
-		const queryBar = this.headerEl.createDiv({ cls: "nc-cal-query-bar" });
-		this.queryTextareaEl = queryBar.createEl("textarea", {
-			cls: "nc-cal-query-input",
-			attr: {
-				rows: "2",
-				placeholder:
-					this.options.queryPlaceholder ||
-					(zh ? "输入筛选条件、标签、关键词…（Ctrl+Enter 应用）" : "Filter, tags, keywords… (Ctrl+Enter to apply)"),
-				"aria-label": zh ? "查询条件" : "Query",
-			},
-		});
-		this.queryTextareaEl.value = this.currentQuery;
-
-		const applyBtn = queryBar.createDiv({
-			cls: "nc-cal-query-apply",
-			text: zh ? "应用" : "Apply",
-			attr: { title: zh ? "应用查询（Ctrl+Enter）" : "Apply query (Ctrl+Enter)" },
-		});
-		applyBtn.onclick = () => void this.applyQuery();
-
-		this.queryTextareaEl.addEventListener("keydown", (e) => {
-			if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-				e.preventDefault();
-				void this.applyQuery();
-			}
-		});
-
 		row.addEventListener(
 			"wheel",
 			(e) => {
@@ -703,8 +697,18 @@ export class CalendarGalleryModal extends Modal {
 		);
 	}
 
+	private scheduleApplyQuery(): void {
+		if (this.queryDebounceTimer != null) {
+			window.clearTimeout(this.queryDebounceTimer);
+		}
+		this.queryDebounceTimer = window.setTimeout(() => {
+			this.queryDebounceTimer = null;
+			void this.applyQuery();
+		}, CalendarGalleryModal.QUERY_DEBOUNCE_MS);
+	}
+
 	private async applyQuery(): Promise<void> {
-		const next = this.queryTextareaEl?.value ?? "";
+		const next = this.queryInputEl?.value ?? "";
 		if (next === this.currentQuery) return;
 
 		this.currentQuery = next;
@@ -718,15 +722,9 @@ export class CalendarGalleryModal extends Modal {
 		if (this.monthSelectEl) this.monthSelectEl.value = String(this.currentMonth);
 
 		const data = this.monthCache.get(this.cacheKey(this.currentYear, this.currentMonth));
-		const title = data?.title?.trim();
-		if (title && this.monthSubtitleEl) {
+		const title = data?.title?.trim() ?? "";
+		if (this.monthSubtitleEl) {
 			this.monthSubtitleEl.setText(title);
-			this.monthSubtitleEl.show();
-			this.headerEl.addClass("has-month-title");
-		} else if (this.monthSubtitleEl) {
-			this.monthSubtitleEl.empty();
-			this.monthSubtitleEl.hide();
-			this.headerEl.removeClass("has-month-title");
 		}
 	}
 
