@@ -24,6 +24,8 @@ export interface DayData {
 export interface MonthlyData {
 	year: number;
 	month: number;
+	/** 月份总标题，显示在顶栏 */
+	title?: string;
 	days: DayData[];
 }
 
@@ -65,6 +67,7 @@ const CARD_HEIGHTS: Record<ResolvedOptions["cardSize"], number> = {
 
 const WEEK_LABELS_SUN = ["日", "一", "二", "三", "四", "五", "六"];
 const WEEK_LABELS_MON = ["一", "二", "三", "四", "五", "六", "日"];
+const MONTH_LABELS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -390,6 +393,9 @@ export class CalendarGalleryModal extends Modal {
 	private renderSession = 0;
 
 	private headerEl!: HTMLElement;
+	private monthSubtitleEl!: HTMLElement;
+	private yearSelectEl!: HTMLSelectElement;
+	private monthSelectEl!: HTMLSelectElement;
 	private gridEl!: HTMLElement;
 	private tooltipEl!: HTMLElement;
 	private slideDir: "left" | "right" | null = null;
@@ -482,24 +488,48 @@ export class CalendarGalleryModal extends Modal {
 	private renderHeader(): void {
 		this.headerEl.empty();
 
-		const leftSpacer = this.headerEl.createDiv({ cls: "nc-cal-header-side" });
+		const row = this.headerEl.createDiv({ cls: "nc-cal-header-row" });
+		this.monthSubtitleEl = row.createDiv({ cls: "nc-cal-month-subtitle" });
+		this.monthSubtitleEl.hide();
 
-		const center = this.headerEl.createDiv({ cls: "nc-cal-header-center" });
-		const prevBtn = center.createDiv({ cls: "nc-icon-btn", attr: { title: "上一月", "aria-label": "上一月" } });
+		const toolbar = row.createDiv({ cls: "nc-cal-toolbar" });
+
+		const prevBtn = toolbar.createDiv({ cls: "nc-cal-nav-btn", attr: { title: "上一月", "aria-label": "上一月" } });
 		setIcon(prevBtn, "chevron-left");
 		prevBtn.onclick = () => void this.changeMonth(-1);
 
-		const titleEl = center.createDiv({ cls: "nc-cal-title" });
+		const picker = toolbar.createDiv({ cls: "nc-cal-picker" });
 
-		const nextBtn = center.createDiv({ cls: "nc-icon-btn", attr: { title: "下一月", "aria-label": "下一月" } });
+		this.yearSelectEl = picker.createEl("select", { cls: "nc-cal-select nc-cal-year-select" });
+		this.yearSelectEl.setAttr("aria-label", "选择年份");
+		const yearMin = new Date().getFullYear() - 50;
+		const yearMax = new Date().getFullYear() + 2;
+		for (let y = yearMax; y >= yearMin; y--) {
+			this.yearSelectEl.createEl("option", { text: `${y} 年`, value: String(y) });
+		}
+		this.yearSelectEl.onchange = () => {
+			this.currentYear = Number(this.yearSelectEl.value);
+			void this.jumpToMonth(this.currentYear, this.currentMonth);
+		};
+
+		this.monthSelectEl = picker.createEl("select", { cls: "nc-cal-select nc-cal-month-select" });
+		this.monthSelectEl.setAttr("aria-label", "选择月份");
+		MONTH_LABELS.forEach((label, i) => {
+			this.monthSelectEl.createEl("option", { text: label, value: String(i + 1) });
+		});
+		this.monthSelectEl.onchange = () => {
+			this.currentMonth = Number(this.monthSelectEl.value);
+			void this.jumpToMonth(this.currentYear, this.currentMonth);
+		};
+
+		const nextBtn = toolbar.createDiv({ cls: "nc-cal-nav-btn", attr: { title: "下一月", "aria-label": "下一月" } });
 		setIcon(nextBtn, "chevron-right");
 		nextBtn.onclick = () => void this.changeMonth(1);
 
-		const rightSide = this.headerEl.createDiv({ cls: "nc-cal-header-side" });
-		const todayBtn = rightSide.createDiv({ cls: "nc-cal-today-btn", text: "今天", attr: { title: "回到今天" } });
+		const todayBtn = toolbar.createDiv({ cls: "nc-cal-today-btn", text: "今天", attr: { title: "回到今天" } });
 		todayBtn.onclick = () => void this.goToToday();
 
-		this.updateHeaderTitle(titleEl);
+		this.syncHeaderNav();
 
 		this.headerEl.addEventListener(
 			"wheel",
@@ -512,9 +542,28 @@ export class CalendarGalleryModal extends Modal {
 		);
 	}
 
-	private updateHeaderTitle(titleEl?: HTMLElement): void {
-		const el = titleEl ?? this.headerEl?.querySelector(".nc-cal-title");
-		if (el) el.setText(`${this.currentYear} 年 ${this.currentMonth} 月`);
+	private syncHeaderNav(): void {
+		if (this.yearSelectEl) this.yearSelectEl.value = String(this.currentYear);
+		if (this.monthSelectEl) this.monthSelectEl.value = String(this.currentMonth);
+
+		const data = this.monthCache.get(monthCacheKey(this.currentYear, this.currentMonth));
+		const title = data?.title?.trim();
+		if (title && this.monthSubtitleEl) {
+			this.monthSubtitleEl.setText(title);
+			this.monthSubtitleEl.show();
+			this.headerEl.addClass("has-month-title");
+		} else if (this.monthSubtitleEl) {
+			this.monthSubtitleEl.empty();
+			this.monthSubtitleEl.hide();
+			this.headerEl.removeClass("has-month-title");
+		}
+	}
+
+	private async jumpToMonth(year: number, month: number): Promise<void> {
+		this.currentYear = year;
+		this.currentMonth = month;
+		this.syncHeaderNav();
+		await this.loadAndRenderMonth(year, month, true);
 	}
 
 	private getDayDataForCell(cell: CalendarCell): DayData | undefined {
@@ -620,6 +669,7 @@ export class CalendarGalleryModal extends Modal {
 		await this.fetchMonth(year, month);
 		if (session !== this.renderSession) return;
 
+		this.syncHeaderNav();
 		this.renderGrid();
 		this.preloadAdjacentMonths(year, month);
 	}
@@ -629,7 +679,7 @@ export class CalendarGalleryModal extends Modal {
 		const next = shiftMonth(this.currentYear, this.currentMonth, delta);
 		this.currentYear = next.year;
 		this.currentMonth = next.month;
-		this.updateHeaderTitle();
+		this.syncHeaderNav();
 		await this.loadAndRenderMonth(this.currentYear, this.currentMonth, true);
 	}
 
@@ -638,7 +688,7 @@ export class CalendarGalleryModal extends Modal {
 		this.currentYear = now.getFullYear();
 		this.currentMonth = now.getMonth() + 1;
 		this.selectedKey = dateKey(this.currentYear, this.currentMonth, now.getDate());
-		this.updateHeaderTitle();
+		this.syncHeaderNav();
 		await this.loadAndRenderMonth(this.currentYear, this.currentMonth, true);
 	}
 
