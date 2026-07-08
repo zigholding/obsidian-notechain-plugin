@@ -30,7 +30,11 @@ export interface MonthlyData {
 }
 
 export interface CalendarGalleryOptions {
-	getMonthlyData: (date: Date) => Promise<MonthlyData>;
+	getMonthlyData: (date: Date, query: string) => Promise<MonthlyData>;
+	/** 初始 query，打开时传入 getMonthlyData */
+	initialQuery?: string;
+	/** query 输入框占位文本 */
+	queryPlaceholder?: string;
 	onOpenDay?: (day: DayData) => void;
 	onOpenImage?: (image: ImageItem) => void;
 	onPlayAudio?: (audio: AudioItem) => void;
@@ -50,6 +54,8 @@ type ResolvedOptions = Required<
 
 const DEFAULT_OPTIONS: ResolvedOptions = {
 	getMonthlyData: async () => ({ year: 0, month: 0, days: [] }),
+	initialQuery: "",
+	queryPlaceholder: "",
 	weekStart: "Monday",
 	cardSize: "medium",
 	showTooltip: true,
@@ -112,8 +118,8 @@ function shiftMonth(year: number, month: number, delta: number): { year: number;
 	return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
 
-function monthCacheKey(year: number, month: number): string {
-	return `${year}-${month}`;
+function monthCacheKey(year: number, month: number, query: string): string {
+	return `${year}-${month}::${query}`;
 }
 
 function stripMarkdown(text: string): string {
@@ -513,10 +519,13 @@ export class CalendarGalleryModal extends Modal {
 	private playingAudioWrap: HTMLElement | null = null;
 	private playingAudioRestore: (() => void) | null = null;
 	private playingAudioPath: string | null = null;
+	private currentQuery: string;
+	private queryTextareaEl!: HTMLTextAreaElement;
 
 	constructor(app: App, options: CalendarGalleryOptions) {
 		super(app);
 		this.options = { ...DEFAULT_OPTIONS, ...options };
+		this.currentQuery = this.options.initialQuery ?? "";
 		const now = new Date();
 		this.currentYear = now.getFullYear();
 		this.currentMonth = now.getMonth() + 1;
@@ -552,14 +561,14 @@ export class CalendarGalleryModal extends Modal {
 	}
 
 	refresh(): void {
-		this.monthCache.delete(monthCacheKey(this.currentYear, this.currentMonth));
+		this.monthCache.delete(this.cacheKey(this.currentYear, this.currentMonth));
 		void this.loadAndRenderMonth(this.currentYear, this.currentMonth, true);
 	}
 
 	refreshMonth(date: Date): void {
 		const y = date.getFullYear();
 		const m = date.getMonth() + 1;
-		this.monthCache.delete(monthCacheKey(y, m));
+		this.monthCache.delete(this.cacheKey(y, m));
 		if (y === this.currentYear && m === this.currentMonth) {
 			void this.loadAndRenderMonth(y, m, true);
 		}
@@ -569,7 +578,7 @@ export class CalendarGalleryModal extends Modal {
 		const y = date.getFullYear();
 		const m = date.getMonth() + 1;
 		const key = dateKey(y, m, date.getDate());
-		const cached = this.monthCache.get(monthCacheKey(y, m));
+		const cached = this.monthCache.get(this.cacheKey(y, m));
 		if (!cached) {
 			this.refreshMonth(date);
 			return;
@@ -582,6 +591,10 @@ export class CalendarGalleryModal extends Modal {
 	}
 
 	// ── Shell ─────────────────────────────────────────────────────────────────
+
+	private cacheKey(year: number, month: number): string {
+		return monthCacheKey(year, month, this.currentQuery);
+	}
 
 	private renderShell(): void {
 		const session = ++this.renderSession;
@@ -652,7 +665,34 @@ export class CalendarGalleryModal extends Modal {
 
 		this.syncHeaderNav();
 
-		this.headerEl.addEventListener(
+		const queryBar = this.headerEl.createDiv({ cls: "nc-cal-query-bar" });
+		this.queryTextareaEl = queryBar.createEl("textarea", {
+			cls: "nc-cal-query-input",
+			attr: {
+				rows: "2",
+				placeholder:
+					this.options.queryPlaceholder ||
+					(zh ? "输入筛选条件、标签、关键词…（Ctrl+Enter 应用）" : "Filter, tags, keywords… (Ctrl+Enter to apply)"),
+				"aria-label": zh ? "查询条件" : "Query",
+			},
+		});
+		this.queryTextareaEl.value = this.currentQuery;
+
+		const applyBtn = queryBar.createDiv({
+			cls: "nc-cal-query-apply",
+			text: zh ? "应用" : "Apply",
+			attr: { title: zh ? "应用查询（Ctrl+Enter）" : "Apply query (Ctrl+Enter)" },
+		});
+		applyBtn.onclick = () => void this.applyQuery();
+
+		this.queryTextareaEl.addEventListener("keydown", (e) => {
+			if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+				e.preventDefault();
+				void this.applyQuery();
+			}
+		});
+
+		row.addEventListener(
 			"wheel",
 			(e) => {
 				if (Math.abs(e.deltaY) < 8) return;
@@ -663,11 +703,21 @@ export class CalendarGalleryModal extends Modal {
 		);
 	}
 
+	private async applyQuery(): Promise<void> {
+		const next = this.queryTextareaEl?.value ?? "";
+		if (next === this.currentQuery) return;
+
+		this.currentQuery = next;
+		this.monthCache.clear();
+		this.loadingMonths.clear();
+		await this.loadAndRenderMonth(this.currentYear, this.currentMonth, true);
+	}
+
 	private syncHeaderNav(): void {
 		if (this.yearSelectEl) this.yearSelectEl.value = String(this.currentYear);
 		if (this.monthSelectEl) this.monthSelectEl.value = String(this.currentMonth);
 
-		const data = this.monthCache.get(monthCacheKey(this.currentYear, this.currentMonth));
+		const data = this.monthCache.get(this.cacheKey(this.currentYear, this.currentMonth));
 		const title = data?.title?.trim();
 		if (title && this.monthSubtitleEl) {
 			this.monthSubtitleEl.setText(title);
@@ -688,11 +738,11 @@ export class CalendarGalleryModal extends Modal {
 	}
 
 	private getDayDataForCell(cell: CalendarCell): DayData | undefined {
-		const mainData = this.monthCache.get(monthCacheKey(this.currentYear, this.currentMonth));
+		const mainData = this.monthCache.get(this.cacheKey(this.currentYear, this.currentMonth));
 		const mainMap = mainData ? this.buildDayMap(mainData) : new Map<string, DayData>();
 		let dayData = mainMap.get(cell.key);
 		if (!dayData && !cell.inCurrentMonth) {
-			const adj = this.monthCache.get(monthCacheKey(cell.year, cell.month));
+			const adj = this.monthCache.get(this.cacheKey(cell.year, cell.month));
 			if (adj) dayData = this.buildDayMap(adj).get(cell.key);
 		}
 		return dayData;
@@ -757,7 +807,7 @@ export class CalendarGalleryModal extends Modal {
 	// ── Data loading ──────────────────────────────────────────────────────────
 
 	private async fetchMonth(year: number, month: number): Promise<MonthlyData> {
-		const key = monthCacheKey(year, month);
+		const key = this.cacheKey(year, month);
 		const cached = this.monthCache.get(key);
 		if (cached) return cached;
 
@@ -768,7 +818,10 @@ export class CalendarGalleryModal extends Modal {
 
 		this.loadingMonths.add(key);
 		try {
-			const data = await this.options.getMonthlyData(new Date(year, month - 1, 1));
+			const data = await this.options.getMonthlyData(
+				new Date(year, month - 1, 1),
+				this.currentQuery
+			);
 			this.monthCache.set(key, data);
 			return data;
 		} finally {
@@ -839,7 +892,7 @@ export class CalendarGalleryModal extends Modal {
 	private renderGrid(): void {
 		const session = this.renderSession;
 		const cells = buildCalendarGrid(this.currentYear, this.currentMonth, this.options.weekStart);
-		const mainData = this.monthCache.get(monthCacheKey(this.currentYear, this.currentMonth));
+		const mainData = this.monthCache.get(this.cacheKey(this.currentYear, this.currentMonth));
 		const mainMap = mainData ? this.buildDayMap(mainData) : new Map<string, DayData>();
 
 		this.gridEl.empty();
@@ -860,7 +913,7 @@ export class CalendarGalleryModal extends Modal {
 		cells.forEach((cell, index) => {
 			let dayData = mainMap.get(cell.key);
 			if (!dayData && !cell.inCurrentMonth) {
-				const adj = this.monthCache.get(monthCacheKey(cell.year, cell.month));
+				const adj = this.monthCache.get(this.cacheKey(cell.year, cell.month));
 				if (adj) dayData = this.buildDayMap(adj).get(cell.key);
 			}
 
