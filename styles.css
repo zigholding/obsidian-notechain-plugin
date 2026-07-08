@@ -929,22 +929,8 @@
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
-  margin-left: 8px;
 }
 
-.nc-cal-weekstart-btn {
-  padding: 4px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--background-modifier-border);
-  background: color-mix(in srgb, var(--background-primary) 92%, transparent);
-  color: var(--text-muted);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.nc-cal-weekstart-btn:hover,
 .nc-cal-today-btn:hover {
   color: var(--text-normal);
   border-color: var(--interactive-accent);
@@ -1351,11 +1337,34 @@
   margin-top: 12px;
   text-align: center;
   color: var(--text-on-accent, #fff);
+  max-width: min(92vw, 720px);
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .nc-cal-lightbox-caption {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.nc-cal-lightbox-text {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.92;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.nc-cal-lightbox-date {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.95;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 

@@ -191,12 +191,32 @@ function buildCalendarGrid(year: number, month: number, weekStart: "Sunday" | "M
 	return cells;
 }
 
+function stripMarkdownForDisplay(text: string): string {
+	return text
+		.replace(/```[\s\S]*?```/g, "\n")
+		.replace(/`[^`]+`/g, " ")
+		.replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+		.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+		.replace(/^#{1,6}\s+/gm, "")
+		.replace(/(\*\*|__)(.*?)\1/g, "$2")
+		.replace(/(\*|_)(.*?)\1/g, "$2")
+		.replace(/~~(.*?)~~/g, "$1")
+		.replace(/^>\s?/gm, "")
+		.replace(/^[-*+]\s+/gm, "")
+		.replace(/^\d+\.\s+/gm, "")
+		.replace(/[ \t]+\n/g, "\n")
+		.replace(/\n{3,}/g, "\n\n")
+		.trim();
+}
+
 // ── Image lightbox (cross-day navigation) ───────────────────────────────────
 
 class CalendarImageLightbox {
 	private overlay!: HTMLElement;
 	private imgEl!: HTMLImageElement;
+	private dateEl!: HTMLElement;
 	private captionEl!: HTMLElement;
+	private textEl!: HTMLElement;
 	private counterEl!: HTMLElement;
 	private entries: FlatImageEntry[] = [];
 	private index = 0;
@@ -242,11 +262,6 @@ class CalendarImageLightbox {
 		this.imgEl = stage.createEl("img", { cls: "nc-cal-lightbox-img" });
 		this.imgEl.setAttr("draggable", "false");
 		this.imgEl.onclick = (e) => e.stopPropagation();
-		this.imgEl.onerror = () => {
-			this.imgEl.hide();
-			const ph = stage.createDiv({ cls: "nc-cal-lightbox-error" });
-			setIcon(ph, "image-off");
-		};
 
 		const nextBtn = frame.createDiv({ cls: "nc-cal-lightbox-nav nc-cal-lightbox-next", attr: { "aria-label": "下一张" } });
 		setIcon(nextBtn, "chevron-right");
@@ -254,6 +269,8 @@ class CalendarImageLightbox {
 
 		const meta = frame.createDiv({ cls: "nc-cal-lightbox-meta" });
 		this.captionEl = meta.createDiv({ cls: "nc-cal-lightbox-caption" });
+		this.textEl = meta.createDiv({ cls: "nc-cal-lightbox-text" });
+		this.dateEl = meta.createDiv({ cls: "nc-cal-lightbox-date" });
 		this.counterEl = meta.createDiv({ cls: "nc-cal-lightbox-counter" });
 
 		frame.addEventListener("wheel", (e) => {
@@ -294,22 +311,66 @@ class CalendarImageLightbox {
 		if (!entry) return;
 
 		const src = entry.image.path;
-		this.imgEl.show();
+		const normalized = normalizeMediaPath(src);
+		const stage = this.imgEl.parentElement!;
+
+		this.updateMeta(entry);
+
+		stage.querySelector(".nc-cal-lightbox-error")?.remove();
+		this.imgEl.hide();
 		this.imgEl.removeAttribute("src");
-		this.captionEl.empty();
-		this.captionEl.setText(entry.image.caption ?? normalizeMediaPath(src));
-		this.counterEl.setText(`${entry.dateKey}  ·  ${this.index + 1} / ${this.entries.length}`);
 
-		const existingErr = this.imgEl.parentElement?.querySelector(".nc-cal-lightbox-error");
-		existingErr?.remove();
-
-		const url = await this.resolveUrl(src);
+		let url: string | null = isDirectImageUrl(normalized) ? normalized : await this.resolveUrl(src);
 		if (session !== this.session) return;
-		if (url) {
-			this.imgEl.src = url;
-		} else {
-			this.imgEl.dispatchEvent(new Event("error"));
+
+		if (!url) {
+			this.showLoadError(stage);
+			return;
 		}
+
+		this.imgEl.onload = () => {
+			if (session !== this.session) return;
+			this.imgEl.show();
+		};
+		this.imgEl.onerror = () => {
+			if (session !== this.session) return;
+			this.imgEl.hide();
+			this.showLoadError(stage);
+		};
+		this.imgEl.src = url;
+		if (this.imgEl.complete) {
+			this.imgEl.show();
+		}
+	}
+
+	private updateMeta(entry: FlatImageEntry): void {
+		this.dateEl.setText(entry.dateKey);
+
+		const caption = entry.image.caption?.trim();
+		if (caption) {
+			this.captionEl.setText(caption);
+			this.captionEl.show();
+		} else {
+			this.captionEl.empty();
+			this.captionEl.hide();
+		}
+
+		const dayText = entry.dayData?.text ? stripMarkdownForDisplay(entry.dayData.text) : "";
+		if (dayText) {
+			this.textEl.setText(dayText);
+			this.textEl.show();
+		} else {
+			this.textEl.empty();
+			this.textEl.hide();
+		}
+
+		this.counterEl.setText(`${this.index + 1} / ${this.entries.length}`);
+	}
+
+	private showLoadError(stage: HTMLElement): void {
+		if (stage.querySelector(".nc-cal-lightbox-error")) return;
+		const ph = stage.createDiv({ cls: "nc-cal-lightbox-error" });
+		setIcon(ph, "image-off");
 	}
 }
 
@@ -431,19 +492,6 @@ export class CalendarGalleryModal extends Modal {
 		nextBtn.onclick = () => void this.changeMonth(1);
 
 		const rightSide = this.headerEl.createDiv({ cls: "nc-cal-header-side" });
-
-		const weekStartBtn = rightSide.createDiv({
-			cls: "nc-cal-weekstart-btn",
-			attr: { title: "切换星期起始日" },
-		});
-		this.updateWeekStartBtn(weekStartBtn);
-		weekStartBtn.onclick = () => {
-			this.options.weekStart = this.options.weekStart === "Monday" ? "Sunday" : "Monday";
-			this.updateWeekStartBtn(weekStartBtn);
-			this.renderWeekHeader();
-			this.renderGrid();
-		};
-
 		const todayBtn = rightSide.createDiv({ cls: "nc-cal-today-btn", text: "今天", attr: { title: "回到今天" } });
 		todayBtn.onclick = () => void this.goToToday();
 
@@ -463,10 +511,6 @@ export class CalendarGalleryModal extends Modal {
 	private updateHeaderTitle(titleEl?: HTMLElement): void {
 		const el = titleEl ?? this.headerEl?.querySelector(".nc-cal-title");
 		if (el) el.setText(`${this.currentYear} 年 ${this.currentMonth} 月`);
-	}
-
-	private updateWeekStartBtn(btn: HTMLElement): void {
-		btn.setText(this.options.weekStart === "Monday" ? "周一开始" : "周日开始");
 	}
 
 	private getDayDataForCell(cell: CalendarCell): DayData | undefined {
@@ -503,7 +547,6 @@ export class CalendarGalleryModal extends Modal {
 			);
 		}
 		this.imageLightbox.open(list, idx >= 0 ? idx : 0);
-		this.options.onOpenImage?.(image);
 	}
 
 	private renderWeekHeader(): void {
