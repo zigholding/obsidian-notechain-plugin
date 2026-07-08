@@ -8,6 +8,7 @@ import { dialog_prompt } from './gui/inputPrompt'
 import { dialog_markdown_prompt } from './gui/markdownPrompt'
 import {selectColor} from './gui/selectColor'
 import { openCardNavigator, type CardItem } from './gui/inputCardSuggester'
+import { openCalendarGallery } from './gui/calendarGalleryModal'
 import {EasyEditor } from './editor';
 import {File } from './file';
 import {Random } from './random';
@@ -24,6 +25,7 @@ export class EasyAPI {
 	dialog_prompt: Function
 	dialog_markdown_prompt: Function
     dialog_cards: Function
+    dialog_calendar: Function
     dialog_color: Function
     editor: EasyEditor
     file: File
@@ -41,6 +43,7 @@ export class EasyAPI {
 		this.dialog_prompt = dialog_prompt;
 		this.dialog_markdown_prompt = dialog_markdown_prompt;
 		this.dialog_cards = openCardNavigator;
+		this.dialog_calendar = openCalendarGallery;
         this.dialog_color = selectColor;
         this.editor = new EasyEditor(app,this);
         this.file = new File(app,this);
