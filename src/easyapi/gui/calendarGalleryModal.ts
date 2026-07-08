@@ -149,18 +149,27 @@ interface CalendarCell {
 	key: string;
 }
 
-interface FlatImageEntry {
-	image: ImageItem;
+interface FlatMediaEntry {
+	kind: "image" | "video" | "audio";
 	dateKey: string;
 	dayData?: DayData;
+	image?: ImageItem;
+	audio?: AudioItem;
 }
 
-function normalizeMediaPath(raw: string): string {
-	let path = raw.trim();
-	path = path.replace(/^!\[\[/, "").replace(/^\[\[/, "").replace(/\]\]$/, "");
-	if (path.includes("|")) path = path.split("|")[0];
-	if (path.includes("#")) path = path.split("#")[0];
-	return path.trim();
+const VIDEO_EXT = /\.(mp4|webm|mov|m4v|mkv|ogv|avi)(\?.*)?$/i;
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif)(\?.*)?$/i;
+
+function isVideoPath(path: string): boolean {
+	return VIDEO_EXT.test(normalizeMediaPath(path).toLowerCase());
+}
+
+function getVisualMediaKind(path: string): "image" | "video" {
+	return isVideoPath(path) ? "video" : "image";
+}
+
+function isDirectMediaUrl(path: string): boolean {
+	return /^(https?:\/\/|data:|app:\/\/|blob:)/.test(path) || /^[\/\\]/.test(path);
 }
 
 function guessImageMimeType(path: string): string {
@@ -174,8 +183,12 @@ function guessImageMimeType(path: string): string {
 	return "image/png";
 }
 
-function isDirectImageUrl(path: string): boolean {
-	return /^(https?:\/\/|data:|app:\/\/|blob:)/.test(path) || /^[\/\\]/.test(path);
+function normalizeMediaPath(raw: string): string {
+	let path = raw.trim();
+	path = path.replace(/^!\[\[/, "").replace(/^\[\[/, "").replace(/\]\]$/, "");
+	if (path.includes("|")) path = path.split("|")[0];
+	if (path.includes("#")) path = path.split("#")[0];
+	return path.trim();
 }
 
 function emptyDayData(date: string): DayData {
@@ -235,16 +248,19 @@ function stripMarkdownForDisplay(text: string): string {
 		.trim();
 }
 
-// ── Image lightbox (cross-day navigation) ───────────────────────────────────
+// ── Media lightbox (cross-day navigation) ───────────────────────────────────
 
-class CalendarImageLightbox {
+class CalendarMediaLightbox {
 	private overlay!: HTMLElement;
+	private stageEl!: HTMLElement;
 	private imgEl!: HTMLImageElement;
-	private dateEl!: HTMLElement;
+	private videoEl!: HTMLVideoElement;
+	private audioPanelEl!: HTMLElement;
+	private audioEl!: HTMLAudioElement;
 	private captionEl!: HTMLElement;
 	private textEl!: HTMLElement;
 	private counterEl!: HTMLElement;
-	private entries: FlatImageEntry[] = [];
+	private entries: FlatMediaEntry[] = [];
 	private index = 0;
 	private session = 0;
 	private onKeyDown = (e: KeyboardEvent) => {
@@ -260,10 +276,7 @@ class CalendarImageLightbox {
 		}
 	};
 
-	constructor(
-		private app: App,
-		private resolveUrl: (src: string) => Promise<string | null>
-	) {
+	constructor(private resolveUrl: (src: string) => Promise<string | null>) {
 		this.buildUI();
 	}
 
@@ -276,27 +289,39 @@ class CalendarImageLightbox {
 
 		const frame = this.overlay.createDiv({ cls: "nc-cal-lightbox-frame" });
 
-		const closeBtn = frame.createDiv({ cls: "nc-cal-lightbox-close nc-icon-btn", attr: { "aria-label": "关闭" } });
+		const closeBtn = frame.createDiv({ cls: "nc-cal-lightbox-close nc-icon-btn", attr: { "aria-label": "Close" } });
 		setIcon(closeBtn, "x");
 		closeBtn.onclick = () => this.close();
 
-		const prevBtn = frame.createDiv({ cls: "nc-cal-lightbox-nav nc-cal-lightbox-prev", attr: { "aria-label": "上一张" } });
+		const prevBtn = frame.createDiv({ cls: "nc-cal-lightbox-nav nc-cal-lightbox-prev", attr: { "aria-label": "Previous" } });
 		setIcon(prevBtn, "chevron-left");
 		prevBtn.onclick = (e) => { e.stopPropagation(); this.go(-1); };
 
-		const stage = frame.createDiv({ cls: "nc-cal-lightbox-stage" });
-		this.imgEl = stage.createEl("img", { cls: "nc-cal-lightbox-img" });
+		this.stageEl = frame.createDiv({ cls: "nc-cal-lightbox-stage" });
+		this.imgEl = this.stageEl.createEl("img", { cls: "nc-cal-lightbox-img" });
 		this.imgEl.setAttr("draggable", "false");
 		this.imgEl.onclick = (e) => e.stopPropagation();
 
-		const nextBtn = frame.createDiv({ cls: "nc-cal-lightbox-nav nc-cal-lightbox-next", attr: { "aria-label": "下一张" } });
+		this.videoEl = this.stageEl.createEl("video", { cls: "nc-cal-lightbox-video" });
+		this.videoEl.setAttr("controls", "true");
+		this.videoEl.setAttr("playsinline", "true");
+		this.videoEl.setAttr("preload", "metadata");
+		this.videoEl.hide();
+		this.videoEl.onclick = (e) => e.stopPropagation();
+
+		this.audioPanelEl = this.stageEl.createDiv({ cls: "nc-cal-lightbox-audio-panel" });
+		this.audioEl = this.audioPanelEl.createEl("audio", { cls: "nc-cal-lightbox-audio" });
+		this.audioEl.setAttr("controls", "true");
+		this.audioEl.setAttr("preload", "metadata");
+		this.audioPanelEl.hide();
+
+		const nextBtn = frame.createDiv({ cls: "nc-cal-lightbox-nav nc-cal-lightbox-next", attr: { "aria-label": "Next" } });
 		setIcon(nextBtn, "chevron-right");
 		nextBtn.onclick = (e) => { e.stopPropagation(); this.go(1); };
 
 		const meta = frame.createDiv({ cls: "nc-cal-lightbox-meta" });
 		this.captionEl = meta.createDiv({ cls: "nc-cal-lightbox-caption" });
 		this.textEl = meta.createDiv({ cls: "nc-cal-lightbox-text" });
-		this.dateEl = meta.createDiv({ cls: "nc-cal-lightbox-date" });
 		this.counterEl = meta.createDiv({ cls: "nc-cal-lightbox-counter" });
 
 		frame.addEventListener("wheel", (e) => {
@@ -305,7 +330,7 @@ class CalendarImageLightbox {
 		}, { passive: false });
 	}
 
-	open(entries: FlatImageEntry[], startIndex: number): void {
+	open(entries: FlatMediaEntry[], startIndex: number): void {
 		if (!entries.length) return;
 		this.entries = entries;
 		this.index = Math.max(0, Math.min(startIndex, entries.length - 1));
@@ -316,6 +341,7 @@ class CalendarImageLightbox {
 
 	close(): void {
 		this.session++;
+		this.stopPlayback();
 		this.overlay.hide();
 		document.removeEventListener("keydown", this.onKeyDown, true);
 	}
@@ -331,26 +357,73 @@ class CalendarImageLightbox {
 		void this.showCurrent();
 	}
 
+	private stopPlayback(): void {
+		this.videoEl.pause();
+		this.videoEl.removeAttribute("src");
+		this.videoEl.load();
+		this.audioEl.pause();
+		this.audioEl.removeAttribute("src");
+		this.audioEl.load();
+	}
+
+	private hideAllMedia(): void {
+		this.imgEl.hide();
+		this.videoEl.hide();
+		this.audioPanelEl.hide();
+		this.stageEl.querySelector(".nc-cal-lightbox-error")?.remove();
+	}
+
 	private async showCurrent(): Promise<void> {
 		const session = ++this.session;
 		const entry = this.entries[this.index];
 		if (!entry) return;
 
-		const src = entry.image.path;
-		const normalized = normalizeMediaPath(src);
-		const stage = this.imgEl.parentElement!;
-
+		this.stopPlayback();
+		this.hideAllMedia();
 		this.updateMeta(entry);
 
-		stage.querySelector(".nc-cal-lightbox-error")?.remove();
-		this.imgEl.hide();
-		this.imgEl.removeAttribute("src");
+		if (entry.kind === "audio") {
+			const src = entry.audio?.path;
+			if (!src) {
+				this.showLoadError("file-x");
+				return;
+			}
+			const url = await this.resolveUrl(src);
+			if (session !== this.session) return;
+			if (!url) {
+				this.showLoadError("file-x");
+				return;
+			}
+			this.audioPanelEl.show();
+			this.audioEl.src = url;
+			return;
+		}
 
-		let url: string | null = isDirectImageUrl(normalized) ? normalized : await this.resolveUrl(src);
+		const src = entry.image?.path;
+		if (!src) {
+			this.showLoadError("image-off");
+			return;
+		}
+		const normalized = normalizeMediaPath(src);
+		const url = isDirectMediaUrl(normalized) ? normalized : await this.resolveUrl(src);
 		if (session !== this.session) return;
-
 		if (!url) {
-			this.showLoadError(stage);
+			this.showLoadError(entry.kind === "video" ? "video" : "image-off");
+			return;
+		}
+
+		if (entry.kind === "video") {
+			this.videoEl.onloadeddata = () => {
+				if (session !== this.session) return;
+				this.videoEl.show();
+			};
+			this.videoEl.onerror = () => {
+				if (session !== this.session) return;
+				this.videoEl.hide();
+				this.showLoadError("video");
+			};
+			this.videoEl.src = url;
+			if (this.videoEl.readyState >= 2) this.videoEl.show();
 			return;
 		}
 
@@ -361,18 +434,19 @@ class CalendarImageLightbox {
 		this.imgEl.onerror = () => {
 			if (session !== this.session) return;
 			this.imgEl.hide();
-			this.showLoadError(stage);
+			this.showLoadError("image-off");
 		};
 		this.imgEl.src = url;
-		if (this.imgEl.complete) {
-			this.imgEl.show();
-		}
+		if (this.imgEl.complete) this.imgEl.show();
 	}
 
-	private updateMeta(entry: FlatImageEntry): void {
-		this.dateEl.setText(entry.dateKey);
-
-		const caption = entry.image.caption?.trim();
+	private updateMeta(entry: FlatMediaEntry): void {
+		let caption = "";
+		if (entry.kind === "audio") {
+			caption = entry.audio?.title?.trim() ?? "";
+		} else {
+			caption = entry.image?.caption?.trim() ?? "";
+		}
 		if (caption) {
 			this.captionEl.setText(caption);
 			this.captionEl.show();
@@ -393,10 +467,10 @@ class CalendarImageLightbox {
 		this.counterEl.setText(`${this.index + 1} / ${this.entries.length}`);
 	}
 
-	private showLoadError(stage: HTMLElement): void {
-		if (stage.querySelector(".nc-cal-lightbox-error")) return;
-		const ph = stage.createDiv({ cls: "nc-cal-lightbox-error" });
-		setIcon(ph, "image-off");
+	private showLoadError(icon: string): void {
+		if (this.stageEl.querySelector(".nc-cal-lightbox-error")) return;
+		const ph = this.stageEl.createDiv({ cls: "nc-cal-lightbox-error" });
+		setIcon(ph, icon);
 	}
 }
 
@@ -418,7 +492,8 @@ export class CalendarGalleryModal extends Modal {
 	private gridEl!: HTMLElement;
 	private tooltipEl!: HTMLElement;
 	private slideDir: "left" | "right" | null = null;
-	private imageLightbox: CalendarImageLightbox;
+	private mediaLightbox: CalendarMediaLightbox;
+	private cardAudioEl: HTMLAudioElement | null = null;
 
 	constructor(app: App, options: CalendarGalleryOptions) {
 		super(app);
@@ -427,7 +502,7 @@ export class CalendarGalleryModal extends Modal {
 		this.currentYear = now.getFullYear();
 		this.currentMonth = now.getMonth() + 1;
 		this.selectedKey = dateKey(this.currentYear, this.currentMonth, now.getDate());
-		this.imageLightbox = new CalendarImageLightbox(this.app, (src) => this.resolveImageUrl(src));
+		this.mediaLightbox = new CalendarMediaLightbox((src) => this.resolveMediaUrl(src));
 	}
 
 	onOpen(): void {
@@ -451,7 +526,8 @@ export class CalendarGalleryModal extends Modal {
 	onClose(): void {
 		this.renderSession++;
 		this.modalEl.removeEventListener("keydown", this.onKeyDown);
-		this.imageLightbox?.destroy();
+		this.stopCardAudio();
+		this.mediaLightbox?.destroy();
 		this.tooltipEl?.remove();
 		this.contentEl.empty();
 	}
@@ -603,29 +679,42 @@ export class CalendarGalleryModal extends Modal {
 		return dayData;
 	}
 
-	private buildVisibleImageList(): FlatImageEntry[] {
+	private buildVisibleMediaList(): FlatMediaEntry[] {
 		const cells = buildCalendarGrid(this.currentYear, this.currentMonth, this.options.weekStart);
-		const entries: FlatImageEntry[] = [];
+		const entries: FlatMediaEntry[] = [];
 		for (const cell of cells) {
 			const dayData = this.getDayDataForCell(cell);
-			if (!dayData?.images?.length) continue;
-			for (const image of dayData.images) {
-				entries.push({ image, dateKey: cell.key, dayData });
+			if (!dayData) continue;
+			for (const image of dayData.images ?? []) {
+				entries.push({
+					kind: getVisualMediaKind(image.path),
+					image,
+					dateKey: cell.key,
+					dayData,
+				});
+			}
+			if (this.options.showAudio) {
+				for (const audio of dayData.audios ?? []) {
+					entries.push({ kind: "audio", audio, dateKey: cell.key, dayData });
+				}
 			}
 		}
 		return entries;
 	}
 
-	private openImageLightbox(dateKey: string, image: ImageItem): void {
-		const list = this.buildVisibleImageList();
+	private openMediaLightbox(dateKey: string, image: ImageItem): void {
+		const list = this.buildVisibleMediaList();
 		if (!list.length) return;
-		let idx = list.findIndex((e) => e.dateKey === dateKey && e.image === image);
+		let idx = list.findIndex((e) => e.image === image && e.dateKey === dateKey);
 		if (idx < 0) {
 			idx = list.findIndex(
-				(e) => e.dateKey === dateKey && normalizeMediaPath(e.image.path) === normalizeMediaPath(image.path)
+				(e) =>
+					e.image &&
+					e.dateKey === dateKey &&
+					normalizeMediaPath(e.image.path) === normalizeMediaPath(image.path)
 			);
 		}
-		this.imageLightbox.open(list, idx >= 0 ? idx : 0);
+		this.mediaLightbox.open(list, idx >= 0 ? idx : 0);
 	}
 
 	private renderWeekHeader(): void {
@@ -851,43 +940,79 @@ export class CalendarGalleryModal extends Modal {
 		_dayData: DayData | undefined
 	): void {
 		const wrap = container.createDiv({ cls: "nc-cal-img-wrap" });
-		const imgEl = wrap.createEl("img", { cls: "nc-cal-img" });
-		imgEl.setAttr("loading", "lazy");
-		imgEl.setAttr("draggable", "false");
-		imgEl.setAttr("alt", images[0].caption ?? images[0].path);
+		const mediaContainer = wrap.createDiv({ cls: "nc-cal-media-container" });
+		let imgEl: HTMLImageElement | null = null;
+		let videoEl: HTMLVideoElement | null = null;
 
 		let current = 0;
 		const session = this.renderSession;
 		let dots: HTMLElement | null = null;
 
-		const setImage = (idx: number) => {
+		const showError = () => {
+			imgEl?.hide();
+			videoEl?.hide();
+			if (!mediaContainer.querySelector(".nc-cal-img-placeholder")) {
+				const ph = mediaContainer.createDiv({ cls: "nc-cal-img-placeholder" });
+				setIcon(ph, "image-off");
+			}
+		};
+
+		const setMedia = (idx: number) => {
 			current = ((idx % images.length) + images.length) % images.length;
 			const item = images[current];
-			const src = item.thumbnail ?? item.path;
-			this.resolveImageSrc(src, imgEl, session);
+			const thumb = item.thumbnail ?? item.path;
+			const kind = getVisualMediaKind(item.path);
+			mediaContainer.querySelector(".nc-cal-img-placeholder")?.remove();
+
+			if (kind === "video" && !item.thumbnail) {
+				imgEl?.hide();
+				if (!videoEl) {
+					videoEl = mediaContainer.createEl("video", { cls: "nc-cal-video" });
+					videoEl.setAttr("muted", "true");
+					videoEl.setAttr("playsinline", "true");
+					videoEl.setAttr("preload", "metadata");
+					videoEl.setAttr("draggable", "false");
+				}
+				videoEl.onerror = showError;
+				void this.resolveMediaUrl(item.path).then((url) => {
+					if (session !== this.renderSession || !url || !videoEl) return;
+					videoEl.src = url;
+					videoEl.show();
+				});
+			} else {
+				videoEl?.hide();
+				if (!imgEl) {
+					imgEl = mediaContainer.createEl("img", { cls: "nc-cal-img" });
+					imgEl.setAttr("loading", "lazy");
+					imgEl.setAttr("draggable", "false");
+					imgEl.setAttr("alt", item.caption ?? item.path);
+					imgEl.onerror = showError;
+				}
+				this.resolveMediaSrc(thumb, imgEl, session);
+			}
+
 			dots?.querySelectorAll(".nc-cal-dot").forEach((d, i) => {
 				d.toggleClass("is-active", i === current);
 			});
 		};
 
-		imgEl.onclick = (e) => {
+		const openLightbox = (e: MouseEvent) => {
 			e.stopPropagation();
-			this.openImageLightbox(dateKey, images[current]);
+			this.openMediaLightbox(dateKey, images[current]);
 		};
 
-		imgEl.onerror = () => {
-			imgEl.hide();
-			const ph = wrap.createDiv({ cls: "nc-cal-img-placeholder" });
-			setIcon(ph, "image-off");
+		wrap.onclick = (e) => {
+			if ((e.target as HTMLElement).closest(".nc-cal-carousel-btn")) return;
+			openLightbox(e);
 		};
 
 		if (images.length > 1) {
-			const prev = wrap.createDiv({ cls: "nc-cal-carousel-btn nc-cal-carousel-prev", attr: { "aria-label": "上一张" } });
+			const prev = wrap.createDiv({ cls: "nc-cal-carousel-btn nc-cal-carousel-prev", attr: { "aria-label": "Previous" } });
 			setIcon(prev, "chevron-left");
-			const next = wrap.createDiv({ cls: "nc-cal-carousel-btn nc-cal-carousel-next", attr: { "aria-label": "下一张" } });
+			const next = wrap.createDiv({ cls: "nc-cal-carousel-btn nc-cal-carousel-next", attr: { "aria-label": "Next" } });
 			setIcon(next, "chevron-right");
-			prev.onclick = (e) => { e.stopPropagation(); setImage(current - 1); };
-			next.onclick = (e) => { e.stopPropagation(); setImage(current + 1); };
+			prev.onclick = (e) => { e.stopPropagation(); setMedia(current - 1); };
+			next.onclick = (e) => { e.stopPropagation(); setMedia(current + 1); };
 
 			dots = wrap.createDiv({ cls: "nc-cal-dots" });
 			images.forEach((_, i) => {
@@ -897,17 +1022,17 @@ export class CalendarGalleryModal extends Modal {
 			wrap.addEventListener("wheel", (e) => {
 				e.preventDefault();
 				e.stopPropagation();
-				setImage(current + (e.deltaY > 0 ? 1 : -1));
+				setMedia(current + (e.deltaY > 0 ? 1 : -1));
 			}, { passive: false });
 		}
 
-		setImage(0);
+		setMedia(0);
 
 		if (this.options.animation) wrap.addClass("nc-cal-fade");
 	}
 
-	private resolveImageSrc(src: string, imgEl: HTMLImageElement, session: number): void {
-		void this.resolveImageUrl(src).then((url) => {
+	private resolveMediaSrc(src: string, imgEl: HTMLImageElement, session: number): void {
+		void this.resolveMediaUrl(src).then((url) => {
 			if (session !== this.renderSession) return;
 			if (url) {
 				imgEl.src = url;
@@ -918,26 +1043,26 @@ export class CalendarGalleryModal extends Modal {
 		});
 	}
 
-	private async resolveImageUrl(src: string): Promise<string | null> {
+	private async resolveMediaUrl(src: string): Promise<string | null> {
 		const raw = (src ?? "").trim();
 		if (!raw) return null;
 
 		const path = normalizeMediaPath(raw);
-		if (isDirectImageUrl(path)) return path;
+		if (isDirectMediaUrl(path)) return path;
 
-		const tfile = this.resolveImageTFile(path);
+		const tfile = this.resolveMediaTFile(path);
 		if (tfile) {
 			return this.app.vault.getResourcePath(tfile);
 		}
 
-		if (/\.(png|jpe?g|gif|webp|svg|bmp|avif)/i.test(path)) {
+		if (IMAGE_EXT.test(path)) {
 			return this.readVaultImageAsDataUrl(path);
 		}
 
 		return null;
 	}
 
-	private resolveImageTFile(path: string): TFile | null {
+	private resolveMediaTFile(path: string): TFile | null {
 		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
 		const fileApi = nc?.easyapi?.file;
 		if (!fileApi) return null;
@@ -945,22 +1070,38 @@ export class CalendarGalleryModal extends Modal {
 		let tfile = fileApi.get_tfile(path) as TFile | null;
 		if (tfile) return tfile;
 
-		// 兼容纯双链文本：[[photo.jpg]]、[[assets/photo]]
 		const stripped = normalizeMediaPath(path);
 		if (stripped !== path) {
 			tfile = fileApi.get_tfile(stripped) as TFile | null;
 			if (tfile) return tfile;
 		}
 
-		const withExt = /\.[a-z0-9]+$/i.test(stripped) ? stripped : null;
-		if (!withExt) {
-			for (const ext of [".png", ".jpg", ".jpeg", ".webp", ".gif"]) {
+		if (!/\.[a-z0-9]+$/i.test(stripped)) {
+			for (const ext of [".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm", ".mov", ".m4a", ".mp3", ".wav"]) {
 				tfile = fileApi.get_tfile(stripped + ext) as TFile | null;
 				if (tfile) return tfile;
 			}
 		}
 
 		return this.app.vault.getFileByPath(stripped);
+	}
+
+	private stopCardAudio(): void {
+		if (this.cardAudioEl) {
+			this.cardAudioEl.pause();
+			this.cardAudioEl.removeAttribute("src");
+			this.cardAudioEl = null;
+		}
+	}
+
+	private async playAudio(audio: AudioItem): Promise<void> {
+		const url = await this.resolveMediaUrl(audio.path);
+		if (!url) return;
+
+		this.stopCardAudio();
+		this.cardAudioEl = new Audio(url);
+		void this.cardAudioEl.play().catch(() => {});
+		this.options.onPlayAudio?.(audio);
 	}
 
 	private async readVaultImageAsDataUrl(path: string): Promise<string | null> {
@@ -997,7 +1138,7 @@ export class CalendarGalleryModal extends Modal {
 
 		wrap.onclick = (e) => {
 			e.stopPropagation();
-			this.options.onPlayAudio?.(audios[current]);
+			void this.playAudio(audios[current]);
 		};
 
 		if (audios.length > 1) {
