@@ -9,15 +9,15 @@ import { chownSync } from 'fs';
 
 export class File {
 	app: App;
-	api: EasyAPI;
+	ea: EasyAPI;
 
-	constructor(app: App, api: EasyAPI) {
+	constructor(app: App, ea: EasyAPI) {
 		this.app = app;
-		this.api = api;
+		this.ea = ea;
 	}
 
 	get_last_activate_file(only_md = true, skip_conote = true) {
-		return this.api.nc?.chain?.get_last_activate_file(only_md, skip_conote);
+		return this.ea.nc?.chain?.get_last_activate_file(only_md, skip_conote);
 	}
 
 	get_tfile(path: string | TFile | null, only_first = true) {
@@ -124,7 +124,7 @@ export class File {
 			return path;
 		}
 		if (heading) {
-			let res = await this.api.editor.get_heading_section(tfile, heading);
+			let res = await this.ea.editor.get_heading_section(tfile, heading);
 			if (res) {
 				return res;
 			}
@@ -137,7 +137,7 @@ export class File {
 	/** `cachedRead` 后展开 `![[…]]`，嵌入内容由 {@link EasyAPI.file.read_tfile} 负责（含 `#` / `^`），再统一去 YAML。 */
     async read_tfile_with_embeds(tfile: TFile|string, maxDepth = 10): Promise<string> {
         const raw = await this.read_tfile(tfile);
-        return this.api.editor.expand_wiki_embeds_in_string(raw, maxDepth, new Set());
+        return this.ea.editor.expand_wiki_embeds_in_string(raw, maxDepth, new Set());
     }
 
 	get_tfiles(path:string|TFile|null):Array<TFile>{
@@ -174,7 +174,7 @@ export class File {
 	}
 	
 	get_daily_edited_tfiles(day: string | TFile | null = null) {
-		return this.api.nc?.wordcount?.get_daily_edited_tfiles(day);
+		return this.ea.nc?.wordcount?.get_daily_edited_tfiles(day);
 	}
 
 	get_tfiles_of_folder(tfolder: TFolder | null, n = 0): any {
@@ -193,7 +193,7 @@ export class File {
 		return notes;
 	}
 
-	get_brothers(tfile = this.api.cfile) {
+	get_brothers(tfile = this.ea.cfile) {
 		if (tfile && tfile.parent) {
 			return this.get_tfiles_of_folder(tfile.parent, 0);
 		} else {
@@ -314,7 +314,7 @@ export class File {
 		return tags
 	}
 
-	get_inlinks(tfile = this.api.cfile, only_md = true): Array<TFile> {
+	get_inlinks(tfile = this.ea.cfile, only_md = true): Array<TFile> {
 		if (tfile == null) { return []; }
 		let res: Array<TFile> = []
 
@@ -328,7 +328,7 @@ export class File {
 		return res;
 	}
 
-	get_outlinks(tfile = this.api.cfile, only_md = true): Array<TFile> {
+	get_outlinks(tfile = this.ea.cfile, only_md = true): Array<TFile> {
 		if (tfile == null) { return []; }
 
 		let mcache = this.app.metadataCache.getFileCache(tfile);
@@ -363,7 +363,7 @@ export class File {
 		return res;
 	}
 
-	get_links(tfile = this.api.cfile, only_md = true) {
+	get_links(tfile = this.ea.cfile, only_md = true) {
 		let inlinks = this.get_inlinks(tfile, only_md);
 		let outlinks = this.get_outlinks(tfile, only_md);
 		for (let link of inlinks) {
@@ -551,7 +551,7 @@ export class File {
 		let data = tfiles.map(file => ({
 			name: file.basename,
 			detail: file.path,
-			image: this.api.editor.get_frontmatter(file, 'cover') || "file",
+			image: this.ea.editor.get_frontmatter(file, 'cover') || "file",
 			file: file, // 👈 自定义挂载，方便后面用
 			async action(item: CardItem) {
 				// 这里直接返回，不做打开动作
@@ -560,7 +560,7 @@ export class File {
 		}))
 
 		// 4️⃣ 打开卡片选择器
-		let result = await this.api.dialog_cards(data, options);
+		let result = await this.ea.dialog_cards(data, options);
 
 		// 5️⃣ 返回选中的 TFile
 		return result?.file || null;
@@ -585,11 +585,11 @@ export class File {
 			return {
 				name: folder.split('/').pop(), // 只显示最后一级目录名
 				detail: `${files.length} 个笔记`,
-				image: this.api.editor.get_frontmatter(folder, 'cover') || "folder",
+				image: this.ea.editor.get_frontmatter(folder, 'cover') || "folder",
 				action: files.map(file => ({
 					name: file.basename,
 					detail: file.path,
-					image: this.api.editor.get_frontmatter(file, 'cover') || "file",
+					image: this.ea.editor.get_frontmatter(file, 'cover') || "file",
 					file: file, // 👈 自定义挂载，方便后面用
 					async action(item: CardItem) {
 						// 这里直接返回，不做打开动作
@@ -600,7 +600,7 @@ export class File {
 		});
 
 		// 4️⃣ 打开卡片选择器
-		const result = await this.api.dialog_cards(data, options);
+		const result = await this.ea.dialog_cards(data, options);
 
 		// 5️⃣ 返回选中的 TFile
 		return result?.file || null;
