@@ -55,7 +55,9 @@ export class FsEditor{
 			return "";
 		}
 	}
-
+    // strict: 是否严格检查文件是否存在，true: 严格检查，false: 不严格检查
+    // tfile: 文件或文件夹路径
+    // return: 文件或文件夹的绝对路径，如果文件或文件夹不存在，返回null
     abspath(tfile:TFile|TFolder|string,strict=true): string | null {
 		if(tfile instanceof TFile){
 			return (this.root+'/'+tfile.path).replace(/\\/g,'/');
@@ -70,7 +72,6 @@ export class FsEditor{
             tfile = tfile.replace(/\$\{VAULT\}/g,this.app.vault.getName());
             tfile = this.expandPropertyAtLinkPath(tfile);
 
-
             let xfile = this.easyapi.file.get_tfile(tfile);
             if(xfile){
                 return this.abspath(xfile);
@@ -81,18 +82,39 @@ export class FsEditor{
                 return this.abspath(xfolder);
             }
             
+            
+
+            if(this.isPath(tfile)){
+                return tfile;
+            }
+
+            for(let prefix of [
+                this.easyapi.file.ROOT,
+                this.easyapi.file.CONFIG,
+                this.easyapi.file.PLUGINS,
+                this.easyapi.file.SNIPPETS,
+                this.easyapi.file.THEMES,
+                this.easyapi.file.NOTE_CHAIN,
+                this.easyapi.file.OLDBUDDY
+            ]){
+                let xpath = prefix+'/'+tfile;
+                if(this.isPath(xpath)){
+                    return xpath;
+                }
+            }
+            
+            if(tfile.startsWith('/oldbuddy')){
+                let xpath = this.easyapi.file.OLDBUDDY+'/'+tfile.slice(9);
+                if(this.isPath(xpath)){
+                    return xpath;
+                }
+            }
+
             if(!strict){
                 return tfile;
+            }else{
+                return null;
             }
-
-            if(this.isfile(tfile)){
-                return tfile;
-            }
-
-            if(this.isdir(tfile)){
-                return tfile;
-            }
-            return null;
 		}
         
         return null;

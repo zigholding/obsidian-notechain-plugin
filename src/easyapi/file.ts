@@ -16,6 +16,43 @@ export class File {
 		this.ea = ea;
 	}
 
+	get ROOT(){
+        let a = this.app.vault.adapter as any;
+        return a.basePath.replace(/\\/g,'/');
+    }
+
+	get CONFIG(){
+		return this.ROOT+'/'+this.app.vault.configDir;
+    }
+
+	get PLUGINS(){
+		return this.CONFIG+'/plugins';
+	}
+
+	get SNIPPETS(){
+		return this.PLUGINS+'/snippets';
+	}
+
+	get THEMES(){
+		return this.PLUGINS+'/themes';
+	}
+
+	get NOTE_CHAIN(){
+		return this.plugin_dir('note-chain');
+	}
+
+	get OLDBUDDY(){
+		return this.NOTE_CHAIN+'/oldbuddy-data';
+	}
+
+	plugin_dir(id:string){
+		let pid = (this.app as any).plugins?.plugins[id];
+		if(pid){
+			return this.ROOT+'/'+pid.manifest.dir;
+		}
+		return null;
+	}
+
 	get_last_activate_file(only_md = true, skip_conote = true) {
 		return this.ea.nc?.chain?.get_last_activate_file(only_md, skip_conote);
 	}
