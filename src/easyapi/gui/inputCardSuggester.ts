@@ -49,6 +49,7 @@ class CardMediaLightbox {
 	private imgEl!: HTMLImageElement;
 	private videoEl!: HTMLVideoElement;
 	private captionEl!: HTMLElement;
+	private detailEl!: HTMLElement;
 	private counterEl!: HTMLElement;
 	private items: CardItem[] = [];
 	private index = 0;
@@ -71,6 +72,7 @@ class CardMediaLightbox {
 		private resolveUrl: (src: string) => Promise<string | null>,
 		private getLabel: (item: CardItem) => string,
 		private getMediaPath: (item: CardItem) => string | null,
+		private getDetail: (item: CardItem) => string,
 		private onClosed?: (item: CardItem) => void,
 	) {
 		this.buildUI();
@@ -111,6 +113,7 @@ class CardMediaLightbox {
 
 		const meta = frame.createDiv({ cls: "nc-cal-lightbox-meta" });
 		this.captionEl = meta.createDiv({ cls: "nc-cal-lightbox-caption" });
+		this.detailEl = meta.createDiv({ cls: "nc-cal-lightbox-text" });
 		this.counterEl = meta.createDiv({ cls: "nc-cal-lightbox-counter" });
 
 		frame.addEventListener("wheel", (e) => {
@@ -173,6 +176,21 @@ class CardMediaLightbox {
 
 		const label = this.getLabel(item);
 		this.captionEl.setText(label || "");
+
+		const detail = this.getDetail(item).replace(/\\n/g, "\n").trim();
+		if (detail) {
+			this.detailEl.empty();
+			const lines = detail.split("\n");
+			lines.forEach((line, i) => {
+				this.detailEl.appendText(line);
+				if (i < lines.length - 1) this.detailEl.appendChild(document.createElement("br"));
+			});
+			this.detailEl.show();
+		} else {
+			this.detailEl.empty();
+			this.detailEl.hide();
+		}
+
 		this.counterEl.setText(`${this.index + 1} / ${this.items.length}`);
 
 		const path = this.getMediaPath(item);
@@ -265,6 +283,7 @@ export class CardNavigatorModal extends Modal {
             (src) => this.resolveCardMediaSrc(src),
             (item) => this.getRawText(item.name),
             (item) => this.getCardMediaPath(item),
+            (item) => this.getRawText(item.detail),
             (item) => this.revealCardInList(item),
         );
 
@@ -462,15 +481,22 @@ export class CardNavigatorModal extends Modal {
 		// 初始渲染
 		drawCards(items);
 	
-		// 搜索逻辑
+		// 搜索逻辑（支持正则，如 /2025\d{4}/ 或直接 2025\d{4}）
 		searchInput.oninput = (e) => {
 			if (session !== this.renderSession) return;
-			const val = ((e.target as HTMLInputElement)?.value ?? "").toLowerCase();
+			const val = ((e.target as HTMLInputElement)?.value ?? "").trim();
+			searchInput.removeClass("nc-search-invalid");
 			if (!val) {
 				drawCards(items);
 				return;
 			}
-			const filtered = this.searchRecursive(this.rootData, val);
+			const matcher = this.buildMatcher(val);
+			if (!matcher) {
+				// 正则语法暂不完整（用户仍在输入），标红提示但不刷新结果
+				searchInput.addClass("nc-search-invalid");
+				return;
+			}
+			const filtered = this.searchRecursive(this.rootData, matcher);
 			drawCards(filtered);
 		};
 	
@@ -507,30 +533,64 @@ export class CardNavigatorModal extends Modal {
         });
     }
 
-    private searchRecursive(list: CardItem[], query: string): CardItem[] {
+    /**
+     * 根据查询串构建匹配函数：
+     * - `/pattern/flags`：显式正则（默认追加 `i` 忽略大小写）。
+     * - 含正则元字符且能编译：按正则匹配（忽略大小写）。
+     * - 其它：空格分词的 AND 子串匹配（忽略大小写）。
+     * 返回 `null` 表示正则语法暂不合法（例如用户仍在输入中）。
+     */
+    private buildMatcher(query: string): ((text: string) => boolean) | null {
+        // 1. 显式 /pattern/flags 写法
+        const explicit = query.match(/^\/(.+)\/([a-z]*)$/i);
+        if (explicit) {
+            try {
+                const flags = explicit[2].includes("i") ? explicit[2] : explicit[2] + "i";
+                const re = new RegExp(explicit[1], flags);
+                return (text) => re.test(text);
+            } catch {
+                return null;
+            }
+        }
+
+        // 2. 含正则元字符时，尝试当作正则
+        if (/[\\^$.*+?()[\]{}|]/.test(query)) {
+            try {
+                const re = new RegExp(query, "i");
+                return (text) => re.test(text);
+            } catch {
+                return null;
+            }
+        }
+
+        // 3. 普通空格分词 AND 子串匹配
         const tokens = query
+            .toLowerCase()
             .split(/\s+/)
             .map((t) => t.trim())
             .filter((t) => t.length > 0);
+        if (tokens.length === 0) return () => true;
+        return (text) => {
+            const lower = text.toLowerCase();
+            return tokens.every((token) => lower.includes(token));
+        };
+    }
 
-        if (tokens.length === 0) return list;
-
+    private searchRecursive(list: CardItem[], matcher: (text: string) => boolean): CardItem[] {
         let results: CardItem[] = [];
 
         for (const item of list) {
-            const name = this.getRawText(item?.name).toLowerCase();
-            const detail = this.getRawText(item?.detail).toLowerCase();
+            const name = this.getRawText(item?.name);
+            const detail = this.getRawText(item?.detail);
 
             const text = `${name} ${detail}`;
 
-            const matched = tokens.every((token) => text.includes(token));
-
-            if (matched) {
+            if (matcher(text)) {
                 results.push(item);
             }
 
             if (Array.isArray(item.action)) {
-                results.push(...this.searchRecursive(item.action, query));
+                results.push(...this.searchRecursive(item.action, matcher));
             }
         }
 

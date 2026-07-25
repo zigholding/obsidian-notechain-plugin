@@ -141,6 +141,12 @@
   color: var(--text-faint);
 }
 
+/* 正则语法暂不合法时的提示 */
+.nc-card-search-input.nc-search-invalid {
+  border-color: var(--text-error) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-error) 25%, transparent) !important;
+}
+
 /* 顶部卡片数量徽标（与搜索框同一行） */
 .nc-card-count {
   padding: 2px 10px;

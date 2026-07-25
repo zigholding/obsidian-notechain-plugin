@@ -354,6 +354,43 @@ export class FsEditor{
         return false;
     }
 
+    /**
+	* 将库外文件 src 复制进库的附件文件夹（ea.file.ATTACHMENTS）
+	* 同名冲突时追加序号：`xxx 01.ext`、`xxx 02.ext` ……
+	* @returns 库内相对路径（已在库内时直接返回该路径）；失败返回 null
+	*/
+    insert_file(src:string): string | null {
+        let abs = this.abspath(src,true);
+        if(!abs || !this.isfile(abs)){
+            return null;
+        }
+
+        let existed = this.vaultRelFromAbs(abs);
+        if(existed!==null){
+            return existed;
+        }
+
+        let dir = this.easyapi.file.ATTACHMENTS;
+        this.mkdir_recursive(dir);
+        if(!this.isdir(dir)){
+            return null;
+        }
+
+        let name = this.path.basename(abs);
+        let ext = this.path.extname(name);
+        let stem = ext ? name.slice(0,-ext.length) : name;
+
+        let dst = dir+'/'+name;
+        for(let i=1; this.isPath(dst); i++){
+            dst = dir+'/'+stem+' '+String(i).padStart(2,'0')+ext;
+        }
+
+        if(!this.copy_file(abs,dst,'pass')){
+            return null;
+        }
+        return this.vaultRelFromAbs(dst);
+    }
+
     copy_tfile(tfile:TFile, dst:string,mode='mtime') {
 		if(tfile){
 			let src = this.abspath(tfile);

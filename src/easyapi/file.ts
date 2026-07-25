@@ -66,6 +66,10 @@ export class File {
 		return this.ea.nc?.chain?.get_last_activate_file(only_md, skip_conote);
 	}
 
+	get_last_daily_note(){
+		return this.ea.nc?.chain?.get_last_daily_note();
+	}
+
 	get_tfile(path: string | TFile | null, only_first = true) {
 		try {
 			if (!path) {
