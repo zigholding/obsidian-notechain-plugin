@@ -21,6 +21,15 @@ export class File {
         return a.basePath.replace(/\\/g,'/');
     }
 
+	get ATTACHMENTS(){
+		let apath = (this.app.vault as any).config?.attachmentFolderPath || '/';
+		if(apath=='/'){
+			return this.ROOT;
+		}else{
+			return this.ROOT+'/'+apath;
+		}
+	}
+
 	get CONFIG(){
 		return this.ROOT+'/'+this.app.vault.configDir;
     }

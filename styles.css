@@ -259,10 +259,32 @@
   position: relative;
 }
 
-.nc-card-cover img {
+.nc-card-cover img,
+.nc-card-cover video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* 懒加载封面占位骨架（滚动进入视口前显示） */
+.nc-card-cover-loading {
+  background-image: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--background-tertiary) 92%, transparent) 30%,
+    color-mix(in srgb, var(--background-modifier-hover) 60%, transparent) 50%,
+    color-mix(in srgb, var(--background-tertiary) 92%, transparent) 70%
+  );
+  background-size: 200% 100%;
+  animation: nc-card-cover-shimmer 1.1s ease-in-out infinite;
+}
+
+@keyframes nc-card-cover-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
 }
 
 .nc-card-cover svg {

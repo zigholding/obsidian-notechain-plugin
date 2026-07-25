@@ -32,6 +32,9 @@ const DEFAULT_OPTIONS: ResolvedCardNavigatorOptions = {
     searchPlaceholder: "🔍 输入关键词搜索...",
 };
 
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif)(\?.*)?$/i;
+const VIDEO_EXT = /\.(mp4|webm|mov|m4v|mkv|ogv)(\?.*)?$/i;
+
 export class CardNavigatorModal extends Modal {
     private options: ResolvedCardNavigatorOptions;
     private navigationStack: CardItem[][] = [];
@@ -39,6 +42,12 @@ export class CardNavigatorModal extends Modal {
     private resolved = false;
 	/** 用于取消过期渲染/异步任务（如图片读取） */
 	private renderSession = 0;
+	/** 系统文件转 blob 后需在关闭时释放 */
+	private mediaObjectUrls: string[] = [];
+	/** 图片懒加载：仅在封面滚动进入视口时才真正读取 */
+	private mediaObserver: IntersectionObserver | null = null;
+	/** 每个待加载封面元素对应的加载回调 */
+	private mediaLoaders = new WeakMap<Element, () => void>();
 
     constructor(app: App, private rootData: CardItem[], options: CardNavigatorOptions = {}) {
         super(app);
@@ -92,6 +101,7 @@ export class CardNavigatorModal extends Modal {
 
     private renderUI(items: CardItem[], canGoBack: boolean, revealTarget?: CardItem) {
 		const session = ++this.renderSession;
+		this.revokeMediaObjectUrls();
 		this.contentEl.empty();
 		
         // 1. 顶部导航栏
@@ -149,6 +159,9 @@ export class CardNavigatorModal extends Modal {
 		container.style.setProperty("--nc-card-min-width", `${this.options.cardWidth}px`);
 		container.style.setProperty("--nc-card-height", `${this.options.cardHeight}px`);
 
+		// 图片懒加载观察者：仅当封面进入（或临近）视口时才读取，避免上万卡片时一次性读图卡顿
+		this.setupMediaObserver(scrollArea);
+
 		const pageSize = 20;
 		let currentList: CardItem[] = items;
 		let renderedCount = 0;
@@ -181,6 +194,9 @@ export class CardNavigatorModal extends Modal {
 		// 渲染函数：重置并只加载首批
 		const drawCards = (displayItems: CardItem[]) => {
 			if (session !== this.renderSession) return;
+			this.revokeMediaObjectUrls();
+			// 重建观察者，丢弃上一批卡片尚未触发的加载任务
+			this.setupMediaObserver(scrollArea);
 			currentList = displayItems;
 			container.empty();
 			renderedCount = 0;
@@ -298,35 +314,43 @@ export class CardNavigatorModal extends Modal {
 
         if (style) Object.assign(el.style, style);
 
-        const imageStr = rawImage == null ? "" : String(rawImage);
+        const imageStr = rawImage == null ? "" : String(rawImage).trim();
 
         if (!imageStr) {
             setIcon(el, isFolder ? "folder" : "file-text");
             return;
         }
 
-        // 1. 已经是可用 URL / data-url / app 路径：直接作为 <img> src
-        if (/^(https?:\/\/|data:|app:\/\/|\/|\\)/.test(imageStr)) {
-            const img = el.createEl("img", { attr: { src: imageStr } });
-            if (style) Object.assign(img.style, style);
+        // 1. 远程 / data / app / blob URL：直接挂载
+        if (/^(https?:\/\/|data:|app:\/\/|blob:)/i.test(imageStr)) {
+            this.mountCardMedia(el, imageStr, style, imageStr);
             return;
         }
 
-        // 2. 仅是文件名或相对路径：尝试从当前库读取为 base64 并转成 data-url
-        if (/\.(png|jpe?g|gif|webp|svg)/i.test(imageStr)) {
-            (async () => {
+        // 2. 库内相对路径、绝对系统路径（含 Windows 盘符 / file://）、视频：
+        //    先放占位骨架，交给 IntersectionObserver 在滚动进入视口时才真正读取
+        if (IMAGE_EXT.test(imageStr) || VIDEO_EXT.test(imageStr) || this.isFilesystemPath(imageStr)) {
+            el.addClass("nc-card-cover-loading");
+            const load = async () => {
                 try {
-					if (session !== this.renderSession) return;
-					let nc = (this.app as any).plugins.plugins['note-chain'];
-					let src = await nc.easyapi.file.read_binary_to_base64(imageStr);
-					if (session !== this.renderSession) return;
-                    const img = el.createEl("img", { attr: { src } });
-                    if (style) Object.assign(img.style, style);
-                } catch (e) {
+                    if (session !== this.renderSession || !el.isConnected) return;
+                    const src = await this.resolveCardMediaSrc(imageStr);
+                    if (session !== this.renderSession || !el.isConnected) return;
+                    el.removeClass("nc-card-cover-loading");
+                    if (!src) {
+                        setIcon(el, isFolder ? "folder" : "file-text");
+                        return;
+                    }
+                    this.mountCardMedia(el, src, style, imageStr);
+                } catch {
                     // 读取失败时退回到默认图标，而不是抛错
-                    setIcon(el, isFolder ? "folder" : "file-text");
+                    if (el.isConnected) {
+                        el.removeClass("nc-card-cover-loading");
+                        setIcon(el, isFolder ? "folder" : "file-text");
+                    }
                 }
-            })();
+            };
+            this.observeMedia(el, () => { void load(); });
             return;
         }
 
@@ -340,25 +364,148 @@ export class CardNavigatorModal extends Modal {
         }
     }
 
-    private arrayBufferToBase64(buffer: ArrayBuffer): string {
-        let binary = "";
-        const bytes = new Uint8Array(buffer);
-        const len = bytes.byteLength;
-        for (let i = 0; i < len; i++) {
-            binary += String.fromCharCode(bytes[i]);
-        }
-        return window.btoa(binary);
-    }
+	/** Windows 盘符、UNC、Unix 绝对路径、file:// */
+	private isFilesystemPath(path: string): boolean {
+		const p = path.trim();
+		if (/^file:\/\//i.test(p)) return true;
+		if (/^[a-zA-Z]:[\\/]/.test(p)) return true;
+		if (/^\\\\/.test(p)) return true;
+		if (/^[\/\\]/.test(p)) return true;
+		return false;
+	}
 
-    private guessImageMimeType(path: string): string {
-        const lower = path.toLowerCase();
+	private stripFileUrl(path: string): string {
+		let p = path.trim();
+		if (/^file:\/\/\//i.test(p)) {
+			p = decodeURIComponent(p.slice("file:///".length));
+			// file:///C:/foo → C:/foo；file:///home/foo 保持 /home/foo
+			if (/^[a-zA-Z]:/.test(p)) return p;
+			return "/" + p.replace(/^\/+/, "");
+		}
+		if (/^file:\/\//i.test(p)) {
+			return decodeURIComponent(p.slice("file://".length));
+		}
+		return p;
+	}
+
+	private async resolveCardMediaSrc(raw: string): Promise<string | null> {
+		const path = this.stripFileUrl(raw);
+		if (!path) return null;
+
+		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const fileApi = nc?.easyapi?.file;
+		const fsApi = nc?.easyapi?.fs;
+
+		// ① 库内 TFile：直接用 app:// 资源路径，浏览器原生按需解码，无需读入内存
+		if (fileApi) {
+			try {
+				const tfile = fileApi.get_tfile(path);
+				if (tfile) {
+					return this.app.vault.getResourcePath(tfile);
+				}
+			} catch {
+				/* fall through to filesystem */
+			}
+		}
+
+		// ② 系统绝对路径 / 库外文件：异步读取为 blob URL（避免同步读图卡住主线程）
+		if (fsApi) {
+			try {
+				const abs = fsApi.abspath(path, true) || (fsApi.isfile(path) ? path : null);
+				if (abs && fsApi.isfile(abs)) {
+					const mime = this.guessMediaMimeType(abs);
+					const buf = fsApi.fs.promises?.readFile
+						? await fsApi.fs.promises.readFile(abs)
+						: fsApi.fs.readFileSync(abs);
+					const url = URL.createObjectURL(new Blob([buf as BlobPart], { type: mime }));
+					this.mediaObjectUrls.push(url);
+					return url;
+				}
+			} catch {
+				return null;
+			}
+		}
+
+		return null;
+	}
+
+	/** (重新)创建懒加载观察者，绑定到指定滚动容器 */
+	private setupMediaObserver(scrollArea: HTMLElement) {
+		this.mediaObserver?.disconnect();
+		this.mediaLoaders = new WeakMap();
+		this.mediaObserver = new IntersectionObserver(
+			(entries, observer) => {
+				for (const entry of entries) {
+					if (!entry.isIntersecting) continue;
+					const target = entry.target;
+					const loader = this.mediaLoaders.get(target);
+					observer.unobserve(target);
+					this.mediaLoaders.delete(target);
+					loader?.();
+				}
+			},
+			// 提前 300px 预加载，让滚动时封面已就绪，观感更顺滑
+			{ root: scrollArea, rootMargin: "300px 0px" },
+		);
+	}
+
+	/** 登记一个封面元素，进入视口时触发其加载回调 */
+	private observeMedia(el: HTMLElement, loader: () => void) {
+		if (!this.mediaObserver) {
+			loader();
+			return;
+		}
+		this.mediaLoaders.set(el, loader);
+		this.mediaObserver.observe(el);
+	}
+
+	private mountCardMedia(
+		el: HTMLElement,
+		src: string,
+		style: Record<string, string>,
+		pathHint: string,
+	) {
+		el.empty();
+		const hint = this.stripFileUrl(pathHint);
+		if (VIDEO_EXT.test(hint) || VIDEO_EXT.test(src)) {
+			const video = el.createEl("video", {
+				attr: {
+					src,
+					muted: "true",
+					playsinline: "true",
+					preload: "metadata",
+				},
+			});
+			if (style) Object.assign(video.style, style);
+			return;
+		}
+		const img = el.createEl("img", { attr: { src, loading: "lazy", decoding: "async" } });
+		if (style) Object.assign(img.style, style);
+	}
+
+    private guessMediaMimeType(path: string): string {
+        const lower = path.toLowerCase().split("?")[0];
         if (lower.endsWith(".png")) return "image/png";
         if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
         if (lower.endsWith(".gif")) return "image/gif";
         if (lower.endsWith(".webp")) return "image/webp";
         if (lower.endsWith(".svg")) return "image/svg+xml";
+        if (lower.endsWith(".bmp")) return "image/bmp";
+        if (lower.endsWith(".avif")) return "image/avif";
+        if (lower.endsWith(".webm")) return "video/webm";
+        if (lower.endsWith(".mp4") || lower.endsWith(".m4v")) return "video/mp4";
+        if (lower.endsWith(".mov")) return "video/quicktime";
+        if (lower.endsWith(".mkv")) return "video/x-matroska";
+        if (lower.endsWith(".ogv")) return "video/ogg";
         return "image/png";
     }
+
+	private revokeMediaObjectUrls() {
+		for (const url of this.mediaObjectUrls) {
+			try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+		}
+		this.mediaObjectUrls = [];
+	}
 
     private renderStyledElement(el: HTMLElement, value: StyledValue | undefined, cls: string) {
         if (!value) return;
@@ -430,6 +577,9 @@ export class CardNavigatorModal extends Modal {
     onClose() {
 		// 取消所有过期的异步任务（如图片读取）
 		this.renderSession++;
+		this.mediaObserver?.disconnect();
+		this.mediaObserver = null;
+		this.revokeMediaObjectUrls();
         if (!this.resolved && this.resolveResult) this.resolveResult(null);
         this.contentEl.empty();
     }
