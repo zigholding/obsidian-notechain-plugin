@@ -266,6 +266,16 @@
   object-fit: cover;
 }
 
+/* contain：完整显示图片（可能留边）；cover：填满裁切 */
+.nc-card-container[data-image-fit="contain"] .nc-card-cover img,
+.nc-card-container[data-image-fit="contain"] .nc-card-cover video {
+  object-fit: contain;
+}
+
+.nc-card-cover-previewable {
+  cursor: zoom-in;
+}
+
 /* 懒加载封面占位骨架（滚动进入视口前显示） */
 .nc-card-cover-loading {
   background-image: linear-gradient(

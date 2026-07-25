@@ -18,6 +18,12 @@ export interface CardNavigatorOptions {
     searchPlaceholder?: string;
     /** 初始时希望自动滚动到的卡片 */
     reveal?: CardItem;
+    /**
+     * 卡片封面图片显示方式：
+     * - `cover`：填满裁切（放大看局部，默认）
+     * - `contain`：完整显示（可能留边）
+     */
+    imageFit?: "cover" | "contain";
 }
 
 type ResolvedCardNavigatorOptions = Omit<Required<CardNavigatorOptions>, "reveal"> & {
@@ -30,10 +36,193 @@ const DEFAULT_OPTIONS: ResolvedCardNavigatorOptions = {
     cardWidth: 200,
     cardHeight: 240,
     searchPlaceholder: "🔍 输入关键词搜索...",
+    imageFit: "cover",
 };
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif)(\?.*)?$/i;
 const VIDEO_EXT = /\.(mp4|webm|mov|m4v|mkv|ogv)(\?.*)?$/i;
+
+/** 卡片媒体放大预览（复用日历画廊 lightbox 样式） */
+class CardMediaLightbox {
+	private overlay!: HTMLElement;
+	private stageEl!: HTMLElement;
+	private imgEl!: HTMLImageElement;
+	private videoEl!: HTMLVideoElement;
+	private captionEl!: HTMLElement;
+	private counterEl!: HTMLElement;
+	private items: CardItem[] = [];
+	private index = 0;
+	private session = 0;
+	private isOpen = false;
+	private onKeyDown = (e: KeyboardEvent) => {
+		if (e.key === "Escape") {
+			e.stopPropagation();
+			this.close();
+		} else if (e.key === "ArrowLeft") {
+			e.preventDefault();
+			this.go(-1);
+		} else if (e.key === "ArrowRight") {
+			e.preventDefault();
+			this.go(1);
+		}
+	};
+
+	constructor(
+		private resolveUrl: (src: string) => Promise<string | null>,
+		private getLabel: (item: CardItem) => string,
+		private getMediaPath: (item: CardItem) => string | null,
+		private onClosed?: (item: CardItem) => void,
+	) {
+		this.buildUI();
+	}
+
+	private buildUI(): void {
+		this.overlay = document.body.createDiv({ cls: "nc-cal-lightbox" });
+		this.overlay.hide();
+
+		const backdrop = this.overlay.createDiv({ cls: "nc-cal-lightbox-backdrop" });
+		backdrop.onclick = () => this.close();
+
+		const frame = this.overlay.createDiv({ cls: "nc-cal-lightbox-frame" });
+
+		const closeBtn = frame.createDiv({ cls: "nc-cal-lightbox-close nc-icon-btn", attr: { "aria-label": "Close" } });
+		setIcon(closeBtn, "x");
+		closeBtn.onclick = () => this.close();
+
+		const prevBtn = frame.createDiv({ cls: "nc-cal-lightbox-nav nc-cal-lightbox-prev", attr: { "aria-label": "Previous" } });
+		setIcon(prevBtn, "chevron-left");
+		prevBtn.onclick = (e) => { e.stopPropagation(); this.go(-1); };
+
+		this.stageEl = frame.createDiv({ cls: "nc-cal-lightbox-stage" });
+		this.imgEl = this.stageEl.createEl("img", { cls: "nc-cal-lightbox-img" });
+		this.imgEl.setAttr("draggable", "false");
+		this.imgEl.onclick = (e) => e.stopPropagation();
+
+		this.videoEl = this.stageEl.createEl("video", { cls: "nc-cal-lightbox-video" });
+		this.videoEl.setAttr("controls", "true");
+		this.videoEl.setAttr("playsinline", "true");
+		this.videoEl.setAttr("preload", "metadata");
+		this.videoEl.hide();
+		this.videoEl.onclick = (e) => e.stopPropagation();
+
+		const nextBtn = frame.createDiv({ cls: "nc-cal-lightbox-nav nc-cal-lightbox-next", attr: { "aria-label": "Next" } });
+		setIcon(nextBtn, "chevron-right");
+		nextBtn.onclick = (e) => { e.stopPropagation(); this.go(1); };
+
+		const meta = frame.createDiv({ cls: "nc-cal-lightbox-meta" });
+		this.captionEl = meta.createDiv({ cls: "nc-cal-lightbox-caption" });
+		this.counterEl = meta.createDiv({ cls: "nc-cal-lightbox-counter" });
+
+		frame.addEventListener("wheel", (e) => {
+			e.preventDefault();
+			this.go(e.deltaY > 0 ? 1 : -1);
+		}, { passive: false });
+	}
+
+	open(items: CardItem[], startIndex: number): void {
+		if (!items.length) return;
+		this.items = items;
+		this.index = Math.max(0, Math.min(startIndex, items.length - 1));
+		this.isOpen = true;
+		this.overlay.show();
+		document.addEventListener("keydown", this.onKeyDown, true);
+		void this.showCurrent();
+	}
+
+	/** @param silent 重绘/销毁时静默关闭，不触发定位回调 */
+	close(silent = false): void {
+		const current = this.isOpen ? (this.items[this.index] ?? null) : null;
+		this.isOpen = false;
+		this.session++;
+		this.stopPlayback();
+		this.overlay.hide();
+		document.removeEventListener("keydown", this.onKeyDown, true);
+		if (!silent && current) this.onClosed?.(current);
+	}
+
+	destroy(): void {
+		this.close(true);
+		this.overlay.remove();
+	}
+
+	private go(delta: number): void {
+		if (this.items.length <= 1) return;
+		this.index = (this.index + delta + this.items.length) % this.items.length;
+		void this.showCurrent();
+	}
+
+	private stopPlayback(): void {
+		this.videoEl.pause();
+		this.videoEl.removeAttribute("src");
+		this.videoEl.load();
+	}
+
+	private hideAllMedia(): void {
+		this.imgEl.hide();
+		this.videoEl.hide();
+		this.stageEl.querySelector(".nc-cal-lightbox-error")?.remove();
+	}
+
+	private async showCurrent(): Promise<void> {
+		const session = ++this.session;
+		const item = this.items[this.index];
+		if (!item) return;
+
+		this.stopPlayback();
+		this.hideAllMedia();
+
+		const label = this.getLabel(item);
+		this.captionEl.setText(label || "");
+		this.counterEl.setText(`${this.index + 1} / ${this.items.length}`);
+
+		const path = this.getMediaPath(item);
+		if (!path) {
+			this.showLoadError("image-off");
+			return;
+		}
+
+		const isVideo = VIDEO_EXT.test(path);
+		const url = await this.resolveUrl(path);
+		if (session !== this.session) return;
+		if (!url) {
+			this.showLoadError(isVideo ? "video" : "image-off");
+			return;
+		}
+
+		if (isVideo) {
+			this.videoEl.onloadeddata = () => {
+				if (session !== this.session) return;
+				this.videoEl.show();
+			};
+			this.videoEl.onerror = () => {
+				if (session !== this.session) return;
+				this.videoEl.hide();
+				this.showLoadError("video");
+			};
+			this.videoEl.src = url;
+			if (this.videoEl.readyState >= 2) this.videoEl.show();
+			return;
+		}
+
+		this.imgEl.onload = () => {
+			if (session !== this.session) return;
+			this.imgEl.show();
+		};
+		this.imgEl.onerror = () => {
+			if (session !== this.session) return;
+			this.imgEl.hide();
+			this.showLoadError("image-off");
+		};
+		this.imgEl.src = url;
+		if (this.imgEl.complete && this.imgEl.naturalWidth > 0) this.imgEl.show();
+	}
+
+	private showLoadError(icon: string): void {
+		if (this.stageEl.querySelector(".nc-cal-lightbox-error")) return;
+		const ph = this.stageEl.createDiv({ cls: "nc-cal-lightbox-error" });
+		setIcon(ph, icon);
+	}
+}
 
 export class CardNavigatorModal extends Modal {
     private options: ResolvedCardNavigatorOptions;
@@ -48,6 +237,14 @@ export class CardNavigatorModal extends Modal {
 	private mediaObserver: IntersectionObserver | null = null;
 	/** 每个待加载封面元素对应的加载回调 */
 	private mediaLoaders = new WeakMap<Element, () => void>();
+	private mediaLightbox: CardMediaLightbox | null = null;
+	/** 当前卡片列表视图，用于关闭预览后定位到最后查看的卡片 */
+	private listView: {
+		scrollArea: HTMLElement;
+		container: HTMLElement;
+		getCurrentList: () => CardItem[];
+		ensureRenderedTo: (index: number) => void;
+	} | null = null;
 
     constructor(app: App, private rootData: CardItem[], options: CardNavigatorOptions = {}) {
         super(app);
@@ -63,6 +260,13 @@ export class CardNavigatorModal extends Modal {
         this.modalEl.addClass("nc-card-navigator-modal");
         this.modalEl.style.width = `${this.options.width}px`;
         this.modalEl.style.height = `${this.options.height}px`;
+
+        this.mediaLightbox = new CardMediaLightbox(
+            (src) => this.resolveCardMediaSrc(src),
+            (item) => this.getRawText(item.name),
+            (item) => this.getCardMediaPath(item),
+            (item) => this.revealCardInList(item),
+        );
 
         const resizer = this.modalEl.createDiv({ cls: "nc-modal-resizer" });
         this.initResizer(resizer);
@@ -101,8 +305,10 @@ export class CardNavigatorModal extends Modal {
 
     private renderUI(items: CardItem[], canGoBack: boolean, revealTarget?: CardItem) {
 		const session = ++this.renderSession;
+		this.mediaLightbox?.close(true);
 		this.revokeMediaObjectUrls();
 		this.contentEl.empty();
+		this.listView = null;
 		
         // 1. 顶部导航栏
 		const navBar = this.contentEl.createDiv({ cls: "nc-card-navbar" });
@@ -158,6 +364,7 @@ export class CardNavigatorModal extends Modal {
 		const container = scrollArea.createDiv({ cls: "nc-card-container" });
 		container.style.setProperty("--nc-card-min-width", `${this.options.cardWidth}px`);
 		container.style.setProperty("--nc-card-height", `${this.options.cardHeight}px`);
+		container.setAttr("data-image-fit", this.options.imageFit);
 
 		// 图片懒加载观察者：仅当封面进入（或临近）视口时才读取，避免上万卡片时一次性读图卡顿
 		this.setupMediaObserver(scrollArea);
@@ -181,6 +388,15 @@ export class CardNavigatorModal extends Modal {
 				const card = container.createDiv({ cls: classes.join(" ") });
 				if (hasImage) {
 					const cover = card.createDiv({ cls: "nc-card-cover" });
+					const canPreview = !!this.getCardMediaPath(item);
+					if (canPreview) {
+						cover.addClass("nc-card-cover-previewable");
+						cover.setAttr("title", "点击放大预览");
+						cover.onclick = (e) => {
+							e.stopPropagation();
+							this.openCardLightbox(currentList, item);
+						};
+					}
 					this.renderIconOrImage(cover, item.image, isFolder, session);
 				}
 				const info = card.createDiv({ cls: "nc-card-info" });
@@ -191,9 +407,21 @@ export class CardNavigatorModal extends Modal {
 			renderedCount += slice.length;
 		};
 
+		this.listView = {
+			scrollArea,
+			container,
+			getCurrentList: () => currentList,
+			ensureRenderedTo: (index: number) => {
+				while (renderedCount <= index && renderedCount < currentList.length) {
+					appendPage();
+				}
+			},
+		};
+
 		// 渲染函数：重置并只加载首批
 		const drawCards = (displayItems: CardItem[]) => {
 			if (session !== this.renderSession) return;
+			this.mediaLightbox?.close(true);
 			this.revokeMediaObjectUrls();
 			// 重建观察者，丢弃上一批卡片尚未触发的加载任务
 			this.setupMediaObserver(scrollArea);
@@ -261,6 +489,15 @@ export class CardNavigatorModal extends Modal {
             });
             if (hasImage) {
                 const cover = card.createDiv({ cls: "nc-card-cover" });
+                const canPreview = !!this.getCardMediaPath(item);
+                if (canPreview) {
+                    cover.addClass("nc-card-cover-previewable");
+                    cover.setAttr("title", "点击放大预览");
+                    cover.onclick = (e) => {
+                        e.stopPropagation();
+                        this.openCardLightbox(originalItems, item);
+                    };
+                }
                 this.renderIconOrImage(cover, item.image, isFolder, session);
             }
             const info = card.createDiv({ cls: "nc-card-info" });
@@ -483,6 +720,54 @@ export class CardNavigatorModal extends Modal {
 		if (style) Object.assign(img.style, style);
 	}
 
+	/** 从 CardItem.image 提取可预览的媒体路径；图标名等非媒体返回 null */
+	private getCardMediaPath(item: CardItem): string | null {
+		const raw = Array.isArray(item.image) ? item.image[0] : item.image;
+		const imageStr = raw == null ? "" : String(raw).trim();
+		if (!imageStr) return null;
+		if (/^(https?:\/\/|data:|app:\/\/|blob:)/i.test(imageStr)) return imageStr;
+		if (IMAGE_EXT.test(imageStr) || VIDEO_EXT.test(imageStr) || this.isFilesystemPath(imageStr)) {
+			return this.stripFileUrl(imageStr);
+		}
+		return null;
+	}
+
+	/** 打开当前列表中可预览媒体的放大层；左右键/滚轮可切换 */
+	private openCardLightbox(list: CardItem[], target: CardItem): void {
+		const mediaItems = list.filter((it) => !!this.getCardMediaPath(it));
+		if (!mediaItems.length) return;
+		let idx = mediaItems.indexOf(target);
+		if (idx < 0) {
+			const targetPath = this.getCardMediaPath(target);
+			idx = targetPath
+				? mediaItems.findIndex((it) => this.getCardMediaPath(it) === targetPath)
+				: 0;
+		}
+		this.mediaLightbox?.open(mediaItems, idx >= 0 ? idx : 0);
+	}
+
+	/** 关闭放大预览后，滚动并高亮到最后查看的媒体所在卡片 */
+	private revealCardInList(item: CardItem): void {
+		const view = this.listView;
+		if (!view) return;
+		const list = view.getCurrentList();
+		const index = list.indexOf(item);
+		if (index < 0) return;
+
+		view.ensureRenderedTo(index);
+		requestAnimationFrame(() => {
+			const cards = view.container.getElementsByClassName("nc-card-btn");
+			const targetEl = cards.item(index) as HTMLElement | null;
+			if (!targetEl) return;
+
+			view.container.querySelectorAll(".nc-card-reveal").forEach((el) => {
+				el.removeClass("nc-card-reveal");
+			});
+			targetEl.addClass("nc-card-reveal");
+			view.scrollArea.scrollTop = Math.max(targetEl.offsetTop - 40, 0);
+		});
+	}
+
     private guessMediaMimeType(path: string): string {
         const lower = path.toLowerCase().split("?")[0];
         if (lower.endsWith(".png")) return "image/png";
@@ -577,8 +862,11 @@ export class CardNavigatorModal extends Modal {
     onClose() {
 		// 取消所有过期的异步任务（如图片读取）
 		this.renderSession++;
+		this.mediaLightbox?.destroy();
+		this.mediaLightbox = null;
 		this.mediaObserver?.disconnect();
 		this.mediaObserver = null;
+		this.listView = null;
 		this.revokeMediaObjectUrls();
         if (!this.resolved && this.resolveResult) this.resolveResult(null);
         this.contentEl.empty();
