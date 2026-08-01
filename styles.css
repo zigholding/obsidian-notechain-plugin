@@ -1254,6 +1254,12 @@
   pointer-events: none;
 }
 
+/* contain：完整显示；cover：填满裁切（默认） */
+.nc-cal-grid[data-image-fit="contain"] .nc-cal-img,
+.nc-cal-grid[data-image-fit="contain"] .nc-cal-video {
+  object-fit: contain;
+}
+
 .nc-cal-img-placeholder {
   width: 100%;
   height: 100%;

@@ -40,6 +40,12 @@ export interface CalendarGalleryOptions {
 	onPlayAudio?: (audio: AudioItem) => void;
 	weekStart?: "Sunday" | "Monday";
 	cardSize?: "small" | "medium" | "large";
+	/**
+	 * 日卡片内图片/视频显示方式：
+	 * - `cover`：填满裁切（默认）
+	 * - `contain`：完整显示（可能留边）
+	 */
+	imageFit?: "cover" | "contain";
 	showTooltip?: boolean;
 	showAudio?: boolean;
 	animation?: boolean;
@@ -58,6 +64,7 @@ const DEFAULT_OPTIONS: ResolvedOptions = {
 	queryPlaceholder: "",
 	weekStart: "Monday",
 	cardSize: "medium",
+	imageFit: "cover",
 	showTooltip: true,
 	showAudio: true,
 	animation: true,
@@ -176,7 +183,30 @@ function getVisualMediaKind(path: string): "image" | "video" {
 }
 
 function isDirectMediaUrl(path: string): boolean {
-	return /^(https?:\/\/|data:|app:\/\/|blob:)/.test(path) || /^[\/\\]/.test(path);
+	return /^(https?:\/\/|data:|app:\/\/|blob:)/i.test(path);
+}
+
+/** Windows 盘符、UNC、Unix 绝对路径、file:// */
+function isFilesystemPath(path: string): boolean {
+	const p = path.trim();
+	if (/^file:\/\//i.test(p)) return true;
+	if (/^[a-zA-Z]:[\\/]/.test(p)) return true;
+	if (/^\\\\/.test(p)) return true;
+	if (/^[\/\\]/.test(p)) return true;
+	return false;
+}
+
+function stripFileUrl(path: string): string {
+	let p = path.trim();
+	if (/^file:\/\/\//i.test(p)) {
+		p = decodeURIComponent(p.slice("file:///".length));
+		if (/^[a-zA-Z]:/.test(p)) return p;
+		return "/" + p.replace(/^\/+/, "");
+	}
+	if (/^file:\/\//i.test(p)) {
+		return decodeURIComponent(p.slice("file://".length));
+	}
+	return p;
 }
 
 function guessMediaMimeType(path: string): string {
@@ -516,6 +546,8 @@ export class CalendarGalleryModal extends Modal {
 	private mediaLightbox: CalendarMediaLightbox;
 	private cardAudioEl: HTMLAudioElement | null = null;
 	private cardAudioBlobUrl: string | null = null;
+	/** 系统路径媒体转 blob 后需释放 */
+	private mediaObjectUrls: string[] = [];
 	private playingAudioWrap: HTMLElement | null = null;
 	private playingAudioRestore: (() => void) | null = null;
 	private playingAudioPath: string | null = null;
@@ -562,6 +594,7 @@ export class CalendarGalleryModal extends Modal {
 		}
 		this.modalEl.removeEventListener("keydown", this.onKeyDown);
 		this.stopCardAudio();
+		this.revokeMediaObjectUrls();
 		this.mediaLightbox?.destroy();
 		this.tooltipEl?.remove();
 		this.contentEl.empty();
@@ -612,6 +645,7 @@ export class CalendarGalleryModal extends Modal {
 		const body = this.contentEl.createDiv({ cls: "nc-cal-body" });
 		this.gridEl = body.createDiv({ cls: "nc-cal-grid" });
 		this.gridEl.style.setProperty("--nc-cal-card-height", `${CARD_HEIGHTS[this.options.cardSize]}px`);
+		this.gridEl.setAttr("data-image-fit", this.options.imageFit);
 
 		this.renderHeader();
 		this.renderWeekHeader();
@@ -904,6 +938,8 @@ export class CalendarGalleryModal extends Modal {
 		const mainData = this.monthCache.get(this.cacheKey(this.currentYear, this.currentMonth));
 		const mainMap = mainData ? this.buildDayMap(mainData) : new Map<string, DayData>();
 
+		this.stopCardAudio();
+		this.revokeMediaObjectUrls();
 		this.gridEl.empty();
 		this.gridEl.removeClass("is-loading");
 
@@ -1128,23 +1164,60 @@ export class CalendarGalleryModal extends Modal {
 		const raw = (src ?? "").trim();
 		if (!raw) return null;
 
-		const path = normalizeMediaPath(raw);
+		const path = stripFileUrl(normalizeMediaPath(raw));
+		if (!path) return null;
+
+		// 远程 / data / app / blob：直接可用
 		if (isDirectMediaUrl(path)) return path;
 
+		// ① 库内 TFile：用 app:// 资源路径，浏览器原生按需解码
 		const tfile = this.resolveMediaTFile(path);
 		if (tfile) {
 			return this.app.vault.getResourcePath(tfile);
 		}
 
+		// ② 系统绝对路径 / 库外文件：经 Node fs 读为 blob URL
+		if (isFilesystemPath(path) || IMAGE_EXT.test(path) || AUDIO_EXT.test(path) || VIDEO_EXT.test(path)) {
+			const fsUrl = await this.readFsMediaAsBlobUrl(path);
+			if (fsUrl) return fsUrl;
+		}
+
+		// ③ 兜底：仍尝试库内相对路径的旧逻辑
 		if (IMAGE_EXT.test(path)) {
 			return this.readVaultImageAsDataUrl(path);
 		}
-
 		if (AUDIO_EXT.test(path) || VIDEO_EXT.test(path)) {
 			return this.readVaultMediaAsBlobUrl(path);
 		}
 
 		return null;
+	}
+
+	/** 系统路径 / 库外文件 → blob URL */
+	private async readFsMediaAsBlobUrl(path: string): Promise<string | null> {
+		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const fsApi = nc?.easyapi?.fs;
+		if (!fsApi) return null;
+		try {
+			const abs = fsApi.abspath(path, true) || (fsApi.isfile(path) ? path : null);
+			if (!abs || !fsApi.isfile(abs)) return null;
+			const mime = guessMediaMimeType(abs);
+			const buf = fsApi.fs.promises?.readFile
+				? await fsApi.fs.promises.readFile(abs)
+				: fsApi.fs.readFileSync(abs);
+			const url = URL.createObjectURL(new Blob([buf as BlobPart], { type: mime }));
+			this.mediaObjectUrls.push(url);
+			return url;
+		} catch {
+			return null;
+		}
+	}
+
+	private revokeMediaObjectUrls(): void {
+		for (const url of this.mediaObjectUrls) {
+			try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+		}
+		this.mediaObjectUrls = [];
 	}
 
 	private async readVaultMediaAsBlobUrl(path: string): Promise<string | null> {
@@ -1154,7 +1227,9 @@ export class CalendarGalleryModal extends Modal {
 		try {
 			const buf = await this.app.vault.readBinary(tfile);
 			const blob = new Blob([buf], { type: guessMediaMimeType(tfile.path) });
-			return URL.createObjectURL(blob);
+			const url = URL.createObjectURL(blob);
+			this.mediaObjectUrls.push(url);
+			return url;
 		} catch {
 			return null;
 		}
