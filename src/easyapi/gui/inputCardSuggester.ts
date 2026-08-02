@@ -103,6 +103,7 @@ export class CardNavigatorModal extends Modal {
         this.modalEl.style.height = `${this.options.height}px`;
 
         this.mediaLightbox = new MediaLightbox<CardItem>({
+            app: this.app,
             resolveUrl: (src) => this.resolveCardMediaSrc(src),
             getItemInfo: (item) => {
                 const path = this.getCardMediaPath(item);

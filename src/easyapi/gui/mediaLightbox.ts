@@ -1,4 +1,4 @@
-import { Menu, setIcon } from "obsidian";
+import { App, Menu, Scope, setIcon } from "obsidian";
 
 export type MediaKind = "image" | "video" | "audio";
 
@@ -19,6 +19,7 @@ export interface MediaLightboxItemInfo {
 }
 
 export interface MediaLightboxOptions<T> {
+	app: App;
 	resolveUrl: (src: string) => Promise<string | null>;
 	getItemInfo: (item: T) => MediaLightboxItemInfo;
 	getMeta: (item: T, index: number, items: T[]) => MediaLightboxMeta;
@@ -26,7 +27,10 @@ export interface MediaLightboxOptions<T> {
 	onClosed?: (item: T) => void;
 	/** 左右切换是否循环；默认 false */
 	wrapNavigation?: boolean;
-	/** Esc 是否关闭 lightbox；默认 true */
+	/**
+	 * Esc 是否关闭 lightbox 并回到下层视图（默认 true）。
+	 * 开启时会 push Keymap Scope，避免 Esc 直接关掉整个 Modal。
+	 */
 	closeOnEscape?: boolean;
 	/** 滚轮切换防抖（ms）；默认 140 */
 	wheelDebounceMs?: number;
@@ -55,25 +59,10 @@ export class MediaLightbox<T> {
 	private session = 0;
 	private isOpen = false;
 	private wheelLock = false;
+	private keyScope: Scope | null = null;
 	private readonly wrapNavigation: boolean;
 	private readonly closeOnEscape: boolean;
 	private readonly wheelDebounceMs: number;
-
-	private onKeyDown = (e: KeyboardEvent) => {
-		if (e.key === "Escape") {
-			if (!this.closeOnEscape) return;
-			e.stopPropagation();
-			this.close();
-		} else if (e.key === "ArrowLeft") {
-			e.preventDefault();
-			e.stopPropagation();
-			this.go(-1);
-		} else if (e.key === "ArrowRight") {
-			e.preventDefault();
-			e.stopPropagation();
-			this.go(1);
-		}
-	};
 
 	constructor(private options: MediaLightboxOptions<T>) {
 		this.wrapNavigation = options.wrapNavigation ?? false;
@@ -212,7 +201,7 @@ export class MediaLightbox<T> {
 		this.isOpen = true;
 		this.overlay.addClass("is-open");
 		this.overlay.show();
-		document.addEventListener("keydown", this.onKeyDown, true);
+		this.attachKeyScope();
 		void this.showCurrent();
 	}
 
@@ -224,13 +213,41 @@ export class MediaLightbox<T> {
 		this.session++;
 		this.stopPlayback();
 		this.overlay.hide();
-		document.removeEventListener("keydown", this.onKeyDown, true);
+		this.detachKeyScope();
 		if (!silent && current) this.options.onClosed?.(current);
 	}
 
 	destroy(): void {
 		this.close(true);
 		this.overlay.remove();
+	}
+
+	/**
+	 * 用 Keymap Scope 拦截 Esc/方向键，避免 Esc 落到 Modal 默认关闭。
+	 * 返回 false 阻止继续向下传递。
+	 */
+	private attachKeyScope(): void {
+		this.detachKeyScope();
+		this.keyScope = new Scope();
+		this.keyScope.register([], "Escape", () => {
+			if (this.closeOnEscape) this.close();
+			return false;
+		});
+		this.keyScope.register([], "ArrowLeft", () => {
+			this.go(-1);
+			return false;
+		});
+		this.keyScope.register([], "ArrowRight", () => {
+			this.go(1);
+			return false;
+		});
+		this.options.app.keymap.pushScope(this.keyScope);
+	}
+
+	private detachKeyScope(): void {
+		if (!this.keyScope) return;
+		this.options.app.keymap.popScope(this.keyScope);
+		this.keyScope = null;
 	}
 
 	private go(delta: number): void {

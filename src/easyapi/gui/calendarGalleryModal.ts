@@ -363,6 +363,7 @@ export class CalendarGalleryModal extends Modal {
 		this.currentMonth = now.getMonth() + 1;
 		this.selectedKey = dateKey(this.currentYear, this.currentMonth, now.getDate());
 		this.mediaLightbox = new MediaLightbox<FlatMediaEntry>({
+			app: this.app,
 			resolveUrl: (src) => this.resolveMediaUrl(src),
 			getItemInfo: (entry) => ({
 				path: this.getEntryMediaPath(entry),
@@ -388,7 +389,7 @@ export class CalendarGalleryModal extends Modal {
 			},
 			onContextAction: (action, entry) => this.handleLightboxContextAction(action, entry),
 			wrapNavigation: false,
-			closeOnEscape: false,
+			closeOnEscape: true,
 		});
 	}
 
