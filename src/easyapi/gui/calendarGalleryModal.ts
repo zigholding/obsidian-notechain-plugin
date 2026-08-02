@@ -1,4 +1,4 @@
-import { App, Modal, setIcon, TFile } from "obsidian";
+import { App, Menu, Modal, Notice, setIcon, TFile } from "obsidian";
 
 // ── Data types ──────────────────────────────────────────────────────────────
 
@@ -38,6 +38,18 @@ export interface CalendarGalleryOptions {
 	onOpenDay?: (day: DayData) => void;
 	onOpenImage?: (image: ImageItem) => void;
 	onPlayAudio?: (audio: AudioItem) => void;
+	/**
+	 * 放大预览中删除媒体后回调（文件已尝试删除、日历缓存已更新）。
+	 * 用于同步外部数据源。
+	 */
+	onDeleteMedia?: (info: {
+		kind: "image" | "video" | "audio";
+		dateKey: string;
+		path: string;
+		image?: ImageItem;
+		audio?: AudioItem;
+		dayData?: DayData;
+	}) => void | Promise<void>;
 	weekStart?: "Sunday" | "Monday";
 	cardSize?: "small" | "medium" | "large";
 	/**
@@ -54,9 +66,12 @@ export interface CalendarGalleryOptions {
 }
 
 type ResolvedOptions = Required<
-	Omit<CalendarGalleryOptions, "onOpenDay" | "onOpenImage" | "onPlayAudio">
+	Omit<
+		CalendarGalleryOptions,
+		"onOpenDay" | "onOpenImage" | "onPlayAudio" | "onDeleteMedia"
+	>
 > &
-	Pick<CalendarGalleryOptions, "onOpenDay" | "onOpenImage" | "onPlayAudio">;
+	Pick<CalendarGalleryOptions, "onOpenDay" | "onOpenImage" | "onPlayAudio" | "onDeleteMedia">;
 
 const DEFAULT_OPTIONS: ResolvedOptions = {
 	getMonthlyData: async () => ({ year: 0, month: 0, days: [] }),
@@ -299,6 +314,13 @@ function stripMarkdownForDisplay(text: string): string {
 		.trim();
 }
 
+function formatLightboxDate(key: string): string {
+	const { year, month, day } = parseDateKey(key);
+	if (!year || !month || !day) return key;
+	if (isZhUi()) return `${year}年${month}月${day}日`;
+	return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+
 // ── Media lightbox (cross-day navigation) ───────────────────────────────────
 
 class CalendarMediaLightbox {
@@ -308,26 +330,34 @@ class CalendarMediaLightbox {
 	private videoEl!: HTMLVideoElement;
 	private audioPanelEl!: HTMLElement;
 	private audioEl!: HTMLAudioElement;
+	private dateEl!: HTMLElement;
 	private captionEl!: HTMLElement;
 	private textEl!: HTMLElement;
 	private counterEl!: HTMLElement;
 	private entries: FlatMediaEntry[] = [];
 	private index = 0;
 	private session = 0;
+	private open_ = false;
+	private wheelLock = false;
 	private onKeyDown = (e: KeyboardEvent) => {
-		if (e.key === "Escape") {
-			e.stopPropagation();
-			this.close();
-		} else if (e.key === "ArrowLeft") {
+		if (e.key === "ArrowLeft") {
 			e.preventDefault();
+			e.stopPropagation();
 			this.go(-1);
 		} else if (e.key === "ArrowRight") {
 			e.preventDefault();
+			e.stopPropagation();
 			this.go(1);
 		}
 	};
 
-	constructor(private resolveUrl: (src: string) => Promise<string | null>) {
+	constructor(
+		private resolveUrl: (src: string) => Promise<string | null>,
+		private onContextAction?: (
+			action: "delete" | "reveal",
+			entry: FlatMediaEntry,
+		) => void | Promise<void>,
+	) {
 		this.buildUI();
 	}
 
@@ -371,28 +401,111 @@ class CalendarMediaLightbox {
 		nextBtn.onclick = (e) => { e.stopPropagation(); this.go(1); };
 
 		const meta = frame.createDiv({ cls: "nc-cal-lightbox-meta" });
+		this.dateEl = meta.createDiv({ cls: "nc-cal-lightbox-date" });
 		this.captionEl = meta.createDiv({ cls: "nc-cal-lightbox-caption" });
 		this.textEl = meta.createDiv({ cls: "nc-cal-lightbox-text" });
 		this.counterEl = meta.createDiv({ cls: "nc-cal-lightbox-counter" });
 
+		// 触控板惯性易连发，加短锁避免一次滚轮跳过多张或误感循环
 		frame.addEventListener("wheel", (e) => {
 			e.preventDefault();
+			if (this.wheelLock) return;
+			this.wheelLock = true;
 			this.go(e.deltaY > 0 ? 1 : -1);
+			window.setTimeout(() => { this.wheelLock = false; }, 140);
 		}, { passive: false });
+
+		// 右键菜单：删除 / 在文件浏览器中显示
+		const onCtx = (e: MouseEvent) => {
+			e.preventDefault();
+			e.stopPropagation();
+			this.showContextMenu(e);
+		};
+		this.overlay.addEventListener("contextmenu", onCtx);
+		this.stageEl.addEventListener("contextmenu", onCtx);
+		this.imgEl.addEventListener("contextmenu", onCtx);
+		this.videoEl.addEventListener("contextmenu", onCtx);
+		this.audioPanelEl.addEventListener("contextmenu", onCtx);
+		meta.addEventListener("contextmenu", onCtx);
+	}
+
+	private showContextMenu(e: MouseEvent): void {
+		const entry = this.entries[this.index];
+		if (!entry || !this.onContextAction) return;
+
+		const isAudio = entry.kind === "audio";
+		const deleteLabel = isZhUi()
+			? (isAudio ? "删除音频" : entry.kind === "video" ? "删除视频" : "删除图片")
+			: (isAudio ? "Delete audio" : entry.kind === "video" ? "Delete video" : "Delete image");
+		const revealLabel = isZhUi()
+			? (isAudio ? "在文件浏览器中打开音频位置" : entry.kind === "video" ? "在文件浏览器中打开视频位置" : "在文件浏览器中打开图片位置")
+			: "Show in system explorer";
+
+		const menu = new Menu();
+		menu.addItem((item) => {
+			item.setTitle(deleteLabel)
+				.setIcon("trash")
+				.onClick(() => { void this.onContextAction?.("delete", entry); });
+		});
+		menu.addItem((item) => {
+			item.setTitle(revealLabel)
+				.setIcon("folder-open")
+				.onClick(() => { void this.onContextAction?.("reveal", entry); });
+		});
+		menu.showAtPosition({ x: e.clientX, y: e.clientY });
+		// 确保菜单叠在 lightbox 之上（部分环境下 :has 可能无效）
+		window.setTimeout(() => {
+			document.querySelectorAll("body > .menu, .menu").forEach((el) => {
+				(el as HTMLElement).style.setProperty("z-index", "100001", "important");
+			});
+		}, 0);
+	}
+
+	/** 删除当前条目后刷新列表；若已空则关闭 */
+	removeCurrentEntry(): void {
+		if (!this.entries.length) {
+			this.close();
+			return;
+		}
+		this.entries.splice(this.index, 1);
+		if (!this.entries.length) {
+			this.close();
+			return;
+		}
+		if (this.index >= this.entries.length) {
+			this.index = this.entries.length - 1;
+		}
+		void this.showCurrent();
+	}
+
+	getCurrentEntry(): FlatMediaEntry | null {
+		return this.entries[this.index] ?? null;
 	}
 
 	open(entries: FlatMediaEntry[], startIndex: number): void {
 		if (!entries.length) return;
 		this.entries = entries;
 		this.index = Math.max(0, Math.min(startIndex, entries.length - 1));
+		this.open_ = true;
+		this.overlay.addClass("is-open");
 		this.overlay.show();
 		document.addEventListener("keydown", this.onKeyDown, true);
 		void this.showCurrent();
 	}
 
 	close(): void {
+		if (!this.open_) {
+			this.session++;
+			this.stopPlayback();
+			this.overlay.removeClass("is-open");
+			this.overlay.hide();
+			document.removeEventListener("keydown", this.onKeyDown, true);
+			return;
+		}
+		this.open_ = false;
 		this.session++;
 		this.stopPlayback();
+		this.overlay.removeClass("is-open");
 		this.overlay.hide();
 		document.removeEventListener("keydown", this.onKeyDown, true);
 	}
@@ -402,9 +515,12 @@ class CalendarMediaLightbox {
 		this.overlay.remove();
 	}
 
+	/** 不循环：到头/尾停止，避免滚完又跳回该日第一张 */
 	private go(delta: number): void {
 		if (this.entries.length <= 1) return;
-		this.index = (this.index + delta + this.entries.length) % this.entries.length;
+		const next = this.index + delta;
+		if (next < 0 || next >= this.entries.length) return;
+		this.index = next;
 		void this.showCurrent();
 	}
 
@@ -492,6 +608,15 @@ class CalendarMediaLightbox {
 	}
 
 	private updateMeta(entry: FlatMediaEntry): void {
+		const dateLabel = formatLightboxDate(entry.dateKey);
+		if (dateLabel) {
+			this.dateEl.setText(dateLabel);
+			this.dateEl.show();
+		} else {
+			this.dateEl.empty();
+			this.dateEl.hide();
+		}
+
 		let caption = "";
 		if (entry.kind === "audio") {
 			caption = entry.audio?.title?.trim() ?? "";
@@ -515,7 +640,12 @@ class CalendarMediaLightbox {
 			this.textEl.hide();
 		}
 
-		this.counterEl.setText(`${this.index + 1} / ${this.entries.length}`);
+		// 当日序号 + 全局序号，避免跨日滚动时混淆
+		const dayEntries = this.entries.filter((e) => e.dateKey === entry.dateKey);
+		const dayIdx = dayEntries.indexOf(entry);
+		const dayPart = dayIdx >= 0 ? `${dayIdx + 1}/${dayEntries.length}` : "";
+		const globalPart = `${this.index + 1} / ${this.entries.length}`;
+		this.counterEl.setText(dayPart ? `${dayPart} · 总 ${globalPart}` : globalPart);
 	}
 
 	private showLoadError(icon: string): void {
@@ -565,7 +695,10 @@ export class CalendarGalleryModal extends Modal {
 		this.currentYear = now.getFullYear();
 		this.currentMonth = now.getMonth() + 1;
 		this.selectedKey = dateKey(this.currentYear, this.currentMonth, now.getDate());
-		this.mediaLightbox = new CalendarMediaLightbox((src) => this.resolveMediaUrl(src));
+		this.mediaLightbox = new CalendarMediaLightbox(
+			(src) => this.resolveMediaUrl(src),
+			(action, entry) => this.handleLightboxContextAction(action, entry),
+		);
 	}
 
 	onOpen(): void {
@@ -829,6 +962,201 @@ export class CalendarGalleryModal extends Modal {
 		this.mediaLightbox.open(list, idx >= 0 ? idx : 0);
 	}
 
+	private async handleLightboxContextAction(
+		action: "delete" | "reveal",
+		entry: FlatMediaEntry,
+	): Promise<void> {
+		if (action === "reveal") {
+			await this.revealMediaInExplorer(entry);
+			return;
+		}
+		await this.deleteLightboxMedia(entry);
+	}
+
+	private getEntryMediaPath(entry: FlatMediaEntry): string | null {
+		if (entry.kind === "audio") {
+			const p = entry.audio?.path?.trim();
+			return p ? stripFileUrl(normalizeMediaPath(p)) : null;
+		}
+		const p = entry.image?.path?.trim();
+		return p ? stripFileUrl(normalizeMediaPath(p)) : null;
+	}
+
+	/** 解析为本地绝对路径（库内或系统路径）；网络 URL 返回 null */
+	private resolveLocalAbsPath(rawPath: string): string | null {
+		const path = stripFileUrl(normalizeMediaPath(rawPath));
+		if (!path || isDirectMediaUrl(path)) return null;
+
+		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const fsApi = nc?.easyapi?.fs;
+		const fileApi = nc?.easyapi?.file;
+
+		const tfile = fileApi?.get_tfile?.(path) as TFile | null;
+		if (tfile && fsApi?.abspath) {
+			const abs = fsApi.abspath(tfile, true);
+			if (abs) return abs;
+		}
+
+		if (fsApi) {
+			const abs = fsApi.abspath(path, true) || (fsApi.isfile(path) ? path : null);
+			if (abs && fsApi.isfile(abs)) return abs;
+		}
+
+		if (isFilesystemPath(path)) return path;
+		return null;
+	}
+
+	private async revealMediaInExplorer(entry: FlatMediaEntry): Promise<void> {
+		if ((this.app as any).isMobile) {
+			new Notice(isZhUi() ? "移动端不支持在文件浏览器中打开" : "Not supported on mobile");
+			return;
+		}
+		const mediaPath = this.getEntryMediaPath(entry);
+		if (!mediaPath) {
+			new Notice(isZhUi() ? "无法定位文件路径" : "Cannot resolve file path");
+			return;
+		}
+		if (isDirectMediaUrl(mediaPath) && !/^file:/i.test(mediaPath)) {
+			new Notice(isZhUi() ? "网络资源无法在文件浏览器中打开" : "Remote URL cannot be revealed in explorer");
+			return;
+		}
+
+		const abs = this.resolveLocalAbsPath(mediaPath);
+		if (!abs) {
+			new Notice(isZhUi() ? "未找到本地文件" : "Local file not found");
+			return;
+		}
+
+		try {
+			const electron = require("electron");
+			const shell = electron?.remote?.shell ?? electron?.shell;
+			if (!shell?.showItemInFolder) {
+				new Notice(isZhUi() ? "当前环境不支持打开文件位置" : "Cannot open system explorer");
+				return;
+			}
+			shell.showItemInFolder(abs);
+		} catch (err) {
+			console.error("[note-chain] revealMediaInExplorer", err);
+			new Notice(isZhUi() ? "打开文件位置失败" : "Failed to show in explorer");
+		}
+	}
+
+	private async deleteLightboxMedia(entry: FlatMediaEntry): Promise<void> {
+		const mediaPath = this.getEntryMediaPath(entry);
+		if (!mediaPath) {
+			new Notice(isZhUi() ? "无法定位文件路径" : "Cannot resolve file path");
+			return;
+		}
+
+		const kindLabel = entry.kind === "audio"
+			? (isZhUi() ? "音频" : "audio")
+			: entry.kind === "video"
+				? (isZhUi() ? "视频" : "video")
+				: (isZhUi() ? "图片" : "image");
+		const ok = window.confirm(
+			isZhUi()
+				? `确定删除此${kindLabel}？\n${mediaPath}`
+				: `Delete this ${kindLabel}?\n${mediaPath}`,
+		);
+		if (!ok) return;
+
+		// 1) 删除本地文件（库内进回收站，系统路径直接删除）
+		const deleted = await this.deleteLocalMediaFile(mediaPath);
+		if (!deleted && isDirectMediaUrl(mediaPath) && !/^file:/i.test(mediaPath)) {
+			new Notice(isZhUi() ? "网络资源无法删除本地文件，仅从日历中移除" : "Remote URL: removed from calendar only");
+		}
+
+		// 2) 更新月份缓存中的 dayData
+		this.removeMediaFromCache(entry);
+
+		// 3) 外部回调
+		try {
+			await this.options.onDeleteMedia?.({
+				kind: entry.kind,
+				dateKey: entry.dateKey,
+				path: mediaPath,
+				image: entry.image,
+				audio: entry.audio,
+				dayData: entry.dayData,
+			});
+		} catch (err) {
+			console.error("[note-chain] onDeleteMedia", err);
+		}
+
+		// 4) 刷新日历日卡片 + 预览列表
+		const { year, month, day } = parseDateKey(entry.dateKey);
+		this.refreshDay(new Date(year, month - 1, day));
+		this.mediaLightbox.removeCurrentEntry();
+
+		new Notice(isZhUi() ? `已删除${kindLabel}` : `${kindLabel} deleted`);
+	}
+
+	private async deleteLocalMediaFile(mediaPath: string): Promise<boolean> {
+		if (isDirectMediaUrl(mediaPath) && !/^file:/i.test(mediaPath)) return false;
+
+		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const fileApi = nc?.easyapi?.file;
+		const fsApi = nc?.easyapi?.fs;
+
+		try {
+			const tfile = fileApi?.get_tfile?.(mediaPath) as TFile | null;
+			if (tfile) {
+				await this.app.vault.trash(tfile, true);
+				return true;
+			}
+
+			const abs = this.resolveLocalAbsPath(mediaPath);
+			if (abs && fsApi?.isfile?.(abs)) {
+				fsApi.delete_file_or_dir(abs);
+				return true;
+			}
+		} catch (err) {
+			console.error("[note-chain] deleteLocalMediaFile", err);
+			new Notice(isZhUi() ? "删除文件失败" : "Failed to delete file");
+			return false;
+		}
+		return false;
+	}
+
+	/** 从所有相关月份缓存中移除该媒体引用 */
+	private removeMediaFromCache(entry: FlatMediaEntry): void {
+		const targetPath = this.getEntryMediaPath(entry);
+		if (!targetPath) return;
+		const norm = normalizeMediaPath(targetPath).replace(/\\/g, "/").toLowerCase();
+
+		for (const data of this.monthCache.values()) {
+			for (const day of data.days ?? []) {
+				if (day.date !== entry.dateKey) continue;
+				if (entry.kind === "audio") {
+					day.audios = (day.audios ?? []).filter((a) => {
+						const p = normalizeMediaPath(a.path).replace(/\\/g, "/").toLowerCase();
+						return p !== norm;
+					});
+				} else {
+					day.images = (day.images ?? []).filter((img) => {
+						const p = normalizeMediaPath(img.path).replace(/\\/g, "/").toLowerCase();
+						return p !== norm;
+					});
+				}
+			}
+		}
+
+		// 同步 entry.dayData 引用（若仍指向缓存对象）
+		if (entry.dayData) {
+			if (entry.kind === "audio") {
+				entry.dayData.audios = (entry.dayData.audios ?? []).filter((a) => {
+					const p = normalizeMediaPath(a.path).replace(/\\/g, "/").toLowerCase();
+					return p !== norm;
+				});
+			} else {
+				entry.dayData.images = (entry.dayData.images ?? []).filter((img) => {
+					const p = normalizeMediaPath(img.path).replace(/\\/g, "/").toLowerCase();
+					return p !== norm;
+				});
+			}
+		}
+	}
+
 	private renderWeekHeader(): void {
 		const weekHeader = this.contentEl.querySelector(".nc-cal-week-header") as HTMLElement;
 		if (!weekHeader) return;
@@ -1075,7 +1403,9 @@ export class CalendarGalleryModal extends Modal {
 		};
 
 		const setMedia = (idx: number) => {
-			current = ((idx % images.length) + images.length) % images.length;
+			// 不循环：到头/尾停止，避免滚完又回到该日第一张
+			if (idx < 0 || idx >= images.length) return;
+			current = idx;
 			const item = images[current];
 			const thumb = item.thumbnail ?? item.path;
 			const kind = getVisualMediaKind(item.path);
@@ -1136,10 +1466,14 @@ export class CalendarGalleryModal extends Modal {
 				dots!.createDiv({ cls: `nc-cal-dot${i === 0 ? " is-active" : ""}` });
 			});
 
+			let wheelLock = false;
 			wrap.addEventListener("wheel", (e) => {
 				e.preventDefault();
 				e.stopPropagation();
+				if (wheelLock) return;
+				wheelLock = true;
 				setMedia(current + (e.deltaY > 0 ? 1 : -1));
+				window.setTimeout(() => { wheelLock = false; }, 140);
 			}, { passive: false });
 		}
 

@@ -1425,6 +1425,12 @@
   justify-content: center;
 }
 
+/* 放大预览打开时，右键菜单必须高于 lightbox，否则看起来像“没反应” */
+body:has(.nc-cal-lightbox.is-open) > .menu,
+body:has(.nc-cal-lightbox.is-open) .menu {
+  z-index: 100001 !important;
+}
+
 .nc-cal-lightbox-backdrop {
   position: absolute;
   inset: 0;

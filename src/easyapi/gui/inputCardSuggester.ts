@@ -1,4 +1,4 @@
-import { App, Modal, setIcon } from "obsidian";
+import { App, Menu, Modal, Notice, setIcon, TFile } from "obsidian";
 
 export type StyledValue = string | [string, Record<string, string>];
 
@@ -24,10 +24,20 @@ export interface CardNavigatorOptions {
      * - `contain`：完整显示（可能留边）
      */
     imageFit?: "cover" | "contain";
+    /**
+     * 放大预览中删除媒体后回调（文件已尝试删除、卡片数据已移除）。
+     * 用于同步外部数据源。
+     */
+    onDeleteMedia?: (info: {
+        item: CardItem;
+        path: string;
+        kind: "image" | "video" | "audio";
+    }) => void | Promise<void>;
 }
 
-type ResolvedCardNavigatorOptions = Omit<Required<CardNavigatorOptions>, "reveal"> & {
+type ResolvedCardNavigatorOptions = Omit<Required<CardNavigatorOptions>, "reveal" | "onDeleteMedia"> & {
     reveal?: CardItem;
+    onDeleteMedia?: CardNavigatorOptions["onDeleteMedia"];
 };
 
 const DEFAULT_OPTIONS: ResolvedCardNavigatorOptions = {
@@ -41,6 +51,17 @@ const DEFAULT_OPTIONS: ResolvedCardNavigatorOptions = {
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif)(\?.*)?$/i;
 const VIDEO_EXT = /\.(mp4|webm|mov|m4v|mkv|ogv)(\?.*)?$/i;
+const AUDIO_EXT = /\.(mp3|m4a|wav|ogg|flac|aac|wma|opus)(\?.*)?$/i;
+
+function isDirectMediaUrl(path: string): boolean {
+	return /^(https?:\/\/|data:|app:\/\/|blob:)/i.test(path);
+}
+
+function guessMediaKind(path: string): "image" | "video" | "audio" {
+	if (AUDIO_EXT.test(path)) return "audio";
+	if (VIDEO_EXT.test(path)) return "video";
+	return "image";
+}
 
 /** 卡片媒体放大预览（复用日历画廊 lightbox 样式） */
 class CardMediaLightbox {
@@ -74,6 +95,10 @@ class CardMediaLightbox {
 		private getMediaPath: (item: CardItem) => string | null,
 		private getDetail: (item: CardItem) => string,
 		private onClosed?: (item: CardItem) => void,
+		private onContextAction?: (
+			action: "delete" | "reveal",
+			item: CardItem,
+		) => void | Promise<void>,
 	) {
 		this.buildUI();
 	}
@@ -120,6 +145,68 @@ class CardMediaLightbox {
 			e.preventDefault();
 			this.go(e.deltaY > 0 ? 1 : -1);
 		}, { passive: false });
+
+		const onCtx = (e: MouseEvent) => {
+			e.preventDefault();
+			e.stopPropagation();
+			this.showContextMenu(e);
+		};
+		this.overlay.addEventListener("contextmenu", onCtx);
+		this.stageEl.addEventListener("contextmenu", onCtx);
+		this.imgEl.addEventListener("contextmenu", onCtx);
+		this.videoEl.addEventListener("contextmenu", onCtx);
+		meta.addEventListener("contextmenu", onCtx);
+	}
+
+	private showContextMenu(e: MouseEvent): void {
+		const item = this.items[this.index];
+		if (!item || !this.onContextAction) return;
+
+		const path = this.getMediaPath(item) ?? "";
+		const kind = guessMediaKind(path);
+		const zh = window.localStorage.getItem("language") === "zh";
+		const deleteLabel = zh
+			? (kind === "audio" ? "删除音频" : kind === "video" ? "删除视频" : "删除图片")
+			: (kind === "audio" ? "Delete audio" : kind === "video" ? "Delete video" : "Delete image");
+		const revealLabel = zh
+			? (kind === "audio" ? "在文件浏览器中打开音频位置" : kind === "video" ? "在文件浏览器中打开视频位置" : "在文件浏览器中打开图片位置")
+			: "Show in system explorer";
+
+		const menu = new Menu();
+		menu.addItem((menuItem) => {
+			menuItem.setTitle(deleteLabel)
+				.setIcon("trash")
+				.onClick(() => { void this.onContextAction?.("delete", item); });
+		});
+		menu.addItem((menuItem) => {
+			menuItem.setTitle(revealLabel)
+				.setIcon("folder-open")
+				.onClick(() => { void this.onContextAction?.("reveal", item); });
+		});
+		menu.showAtPosition({ x: e.clientX, y: e.clientY });
+		// 确保菜单叠在 lightbox 之上（部分环境下 :has 可能无效）
+		window.setTimeout(() => {
+			document.querySelectorAll("body > .menu").forEach((el) => {
+				(el as HTMLElement).style.setProperty("z-index", "100001", "important");
+			});
+		}, 0);
+	}
+
+	/** 删除当前条目后刷新列表；若已空则关闭 */
+	removeCurrentItem(): void {
+		if (!this.items.length) {
+			this.close(true);
+			return;
+		}
+		this.items.splice(this.index, 1);
+		if (!this.items.length) {
+			this.close(true);
+			return;
+		}
+		if (this.index >= this.items.length) {
+			this.index = this.items.length - 1;
+		}
+		void this.showCurrent();
 	}
 
 	open(items: CardItem[], startIndex: number): void {
@@ -127,6 +214,7 @@ class CardMediaLightbox {
 		this.items = items;
 		this.index = Math.max(0, Math.min(startIndex, items.length - 1));
 		this.isOpen = true;
+		this.overlay.addClass("is-open");
 		this.overlay.show();
 		document.addEventListener("keydown", this.onKeyDown, true);
 		void this.showCurrent();
@@ -136,6 +224,7 @@ class CardMediaLightbox {
 	close(silent = false): void {
 		const current = this.isOpen ? (this.items[this.index] ?? null) : null;
 		this.isOpen = false;
+		this.overlay.removeClass("is-open");
 		this.session++;
 		this.stopPlayback();
 		this.overlay.hide();
@@ -262,6 +351,7 @@ export class CardNavigatorModal extends Modal {
 		container: HTMLElement;
 		getCurrentList: () => CardItem[];
 		ensureRenderedTo: (index: number) => void;
+		removeAndRedraw: (item: CardItem) => void;
 	} | null = null;
 
     constructor(app: App, private rootData: CardItem[], options: CardNavigatorOptions = {}) {
@@ -285,6 +375,7 @@ export class CardNavigatorModal extends Modal {
             (item) => this.getCardMediaPath(item),
             (item) => this.getRawText(item.detail),
             (item) => this.revealCardInList(item),
+            (action, item) => this.handleLightboxContextAction(action, item),
         );
 
         const resizer = this.modalEl.createDiv({ cls: "nc-modal-resizer" });
@@ -435,13 +526,25 @@ export class CardNavigatorModal extends Modal {
 					appendPage();
 				}
 			},
+			removeAndRedraw: (item: CardItem) => {
+				const idx = currentList.indexOf(item);
+				if (idx >= 0) currentList.splice(idx, 1);
+				// 当前层级原始列表（非搜索结果）也同步移除
+				if (items !== currentList) {
+					const i = items.indexOf(item);
+					if (i >= 0) items.splice(i, 1);
+				}
+				drawCards(currentList, true);
+			},
 		};
 
 		// 渲染函数：重置并只加载首批
-		const drawCards = (displayItems: CardItem[]) => {
+		const drawCards = (displayItems: CardItem[], keepLightbox = false) => {
 			if (session !== this.renderSession) return;
-			this.mediaLightbox?.close(true);
-			this.revokeMediaObjectUrls();
+			if (!keepLightbox) {
+				this.mediaLightbox?.close(true);
+				this.revokeMediaObjectUrls();
+			}
 			// 重建观察者，丢弃上一批卡片尚未触发的加载任务
 			this.setupMediaObserver(scrollArea);
 			currentList = displayItems;
@@ -626,7 +729,7 @@ export class CardNavigatorModal extends Modal {
 
         // 2. 库内相对路径、绝对系统路径（含 Windows 盘符 / file://）、视频：
         //    先放占位骨架，交给 IntersectionObserver 在滚动进入视口时才真正读取
-        if (IMAGE_EXT.test(imageStr) || VIDEO_EXT.test(imageStr) || this.isFilesystemPath(imageStr)) {
+        if (IMAGE_EXT.test(imageStr) || VIDEO_EXT.test(imageStr) || AUDIO_EXT.test(imageStr) || this.isFilesystemPath(imageStr)) {
             el.addClass("nc-card-cover-loading");
             const load = async () => {
                 try {
@@ -786,7 +889,12 @@ export class CardNavigatorModal extends Modal {
 		const imageStr = raw == null ? "" : String(raw).trim();
 		if (!imageStr) return null;
 		if (/^(https?:\/\/|data:|app:\/\/|blob:)/i.test(imageStr)) return imageStr;
-		if (IMAGE_EXT.test(imageStr) || VIDEO_EXT.test(imageStr) || this.isFilesystemPath(imageStr)) {
+		if (
+			IMAGE_EXT.test(imageStr) ||
+			VIDEO_EXT.test(imageStr) ||
+			AUDIO_EXT.test(imageStr) ||
+			this.isFilesystemPath(imageStr)
+		) {
 			return this.stripFileUrl(imageStr);
 		}
 		return null;
@@ -804,6 +912,139 @@ export class CardNavigatorModal extends Modal {
 				: 0;
 		}
 		this.mediaLightbox?.open(mediaItems, idx >= 0 ? idx : 0);
+	}
+
+	private async handleLightboxContextAction(
+		action: "delete" | "reveal",
+		item: CardItem,
+	): Promise<void> {
+		if (action === "reveal") {
+			await this.revealCardMediaInExplorer(item);
+			return;
+		}
+		await this.deleteCardMedia(item);
+	}
+
+	private resolveLocalAbsPath(rawPath: string): string | null {
+		const path = this.stripFileUrl(rawPath.trim());
+		if (!path || isDirectMediaUrl(path)) return null;
+
+		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const fsApi = nc?.easyapi?.fs;
+		const fileApi = nc?.easyapi?.file;
+
+		const tfile = fileApi?.get_tfile?.(path) as TFile | null;
+		if (tfile && fsApi?.abspath) {
+			const abs = fsApi.abspath(tfile, true);
+			if (abs) return abs;
+		}
+		if (fsApi) {
+			const abs = fsApi.abspath(path, true) || (fsApi.isfile(path) ? path : null);
+			if (abs && fsApi.isfile(abs)) return abs;
+		}
+		if (this.isFilesystemPath(path)) return path;
+		return null;
+	}
+
+	private async revealCardMediaInExplorer(item: CardItem): Promise<void> {
+		if ((this.app as any).isMobile) {
+			new Notice("移动端不支持在文件浏览器中打开");
+			return;
+		}
+		const mediaPath = this.getCardMediaPath(item);
+		if (!mediaPath) {
+			new Notice("无法定位文件路径");
+			return;
+		}
+		if (isDirectMediaUrl(mediaPath) && !/^file:/i.test(mediaPath)) {
+			new Notice("网络资源无法在文件浏览器中打开");
+			return;
+		}
+		const abs = this.resolveLocalAbsPath(mediaPath);
+		if (!abs) {
+			new Notice("未找到本地文件");
+			return;
+		}
+		try {
+			const electron = require("electron");
+			const shell = electron?.remote?.shell ?? electron?.shell;
+			if (!shell?.showItemInFolder) {
+				new Notice("当前环境不支持打开文件位置");
+				return;
+			}
+			shell.showItemInFolder(abs);
+		} catch (err) {
+			console.error("[note-chain] revealCardMediaInExplorer", err);
+			new Notice("打开文件位置失败");
+		}
+	}
+
+	private async deleteCardMedia(item: CardItem): Promise<void> {
+		const mediaPath = this.getCardMediaPath(item);
+		if (!mediaPath) {
+			new Notice("无法定位文件路径");
+			return;
+		}
+		const kind = guessMediaKind(mediaPath);
+		const kindLabel = kind === "audio" ? "音频" : kind === "video" ? "视频" : "图片";
+		const ok = window.confirm(`确定删除此${kindLabel}？\n${mediaPath}`);
+		if (!ok) return;
+
+		const deleted = await this.deleteLocalMediaFile(mediaPath);
+		if (!deleted && isDirectMediaUrl(mediaPath) && !/^file:/i.test(mediaPath)) {
+			new Notice("网络资源无法删除本地文件，仅从列表中移除");
+		}
+
+		this.removeCardFromData(item);
+		try {
+			await this.options.onDeleteMedia?.({ item, path: mediaPath, kind });
+		} catch (err) {
+			console.error("[note-chain] onDeleteMedia", err);
+		}
+
+		this.mediaLightbox?.removeCurrentItem();
+		this.listView?.removeAndRedraw(item);
+		new Notice(`已删除${kindLabel}`);
+	}
+
+	private async deleteLocalMediaFile(mediaPath: string): Promise<boolean> {
+		if (isDirectMediaUrl(mediaPath) && !/^file:/i.test(mediaPath)) return false;
+		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const fileApi = nc?.easyapi?.file;
+		const fsApi = nc?.easyapi?.fs;
+		try {
+			const tfile = fileApi?.get_tfile?.(mediaPath) as TFile | null;
+			if (tfile) {
+				await this.app.vault.trash(tfile, true);
+				return true;
+			}
+			const abs = this.resolveLocalAbsPath(mediaPath);
+			if (abs && fsApi?.isfile?.(abs)) {
+				fsApi.delete_file_or_dir(abs);
+				return true;
+			}
+		} catch (err) {
+			console.error("[note-chain] deleteLocalMediaFile", err);
+			new Notice("删除文件失败");
+			return false;
+		}
+		return false;
+	}
+
+	/** 从整棵卡片树中移除该卡片（按引用） */
+	private removeCardFromData(item: CardItem): boolean {
+		const removeFrom = (list: CardItem[]): boolean => {
+			const idx = list.indexOf(item);
+			if (idx >= 0) {
+				list.splice(idx, 1);
+				return true;
+			}
+			for (const it of list) {
+				if (Array.isArray(it.action) && removeFrom(it.action)) return true;
+			}
+			return false;
+		};
+		return removeFrom(this.rootData);
 	}
 
 	/** 关闭放大预览后，滚动并高亮到最后查看的媒体所在卡片 */
