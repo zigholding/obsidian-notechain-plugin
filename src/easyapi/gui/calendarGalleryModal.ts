@@ -1,4 +1,5 @@
-import { App, Menu, Modal, Notice, setIcon, TFile } from "obsidian";
+import { App, Modal, Notice, setIcon, TFile } from "obsidian";
+import { MediaLightbox } from "./mediaLightbox";
 
 // ── Data types ──────────────────────────────────────────────────────────────
 
@@ -321,340 +322,6 @@ function formatLightboxDate(key: string): string {
 	return `${year}-${pad2(month)}-${pad2(day)}`;
 }
 
-// ── Media lightbox (cross-day navigation) ───────────────────────────────────
-
-class CalendarMediaLightbox {
-	private overlay!: HTMLElement;
-	private stageEl!: HTMLElement;
-	private imgEl!: HTMLImageElement;
-	private videoEl!: HTMLVideoElement;
-	private audioPanelEl!: HTMLElement;
-	private audioEl!: HTMLAudioElement;
-	private dateEl!: HTMLElement;
-	private captionEl!: HTMLElement;
-	private textEl!: HTMLElement;
-	private counterEl!: HTMLElement;
-	private entries: FlatMediaEntry[] = [];
-	private index = 0;
-	private session = 0;
-	private open_ = false;
-	private wheelLock = false;
-	private onKeyDown = (e: KeyboardEvent) => {
-		if (e.key === "ArrowLeft") {
-			e.preventDefault();
-			e.stopPropagation();
-			this.go(-1);
-		} else if (e.key === "ArrowRight") {
-			e.preventDefault();
-			e.stopPropagation();
-			this.go(1);
-		}
-	};
-
-	constructor(
-		private resolveUrl: (src: string) => Promise<string | null>,
-		private onContextAction?: (
-			action: "delete" | "reveal",
-			entry: FlatMediaEntry,
-		) => void | Promise<void>,
-	) {
-		this.buildUI();
-	}
-
-	private buildUI(): void {
-		this.overlay = document.body.createDiv({ cls: "nc-cal-lightbox" });
-		this.overlay.hide();
-
-		const backdrop = this.overlay.createDiv({ cls: "nc-cal-lightbox-backdrop" });
-		backdrop.onclick = () => this.close();
-
-		const frame = this.overlay.createDiv({ cls: "nc-cal-lightbox-frame" });
-
-		const closeBtn = frame.createDiv({ cls: "nc-cal-lightbox-close nc-icon-btn", attr: { "aria-label": "Close" } });
-		setIcon(closeBtn, "x");
-		closeBtn.onclick = () => this.close();
-
-		const prevBtn = frame.createDiv({ cls: "nc-cal-lightbox-nav nc-cal-lightbox-prev", attr: { "aria-label": "Previous" } });
-		setIcon(prevBtn, "chevron-left");
-		prevBtn.onclick = (e) => { e.stopPropagation(); this.go(-1); };
-
-		this.stageEl = frame.createDiv({ cls: "nc-cal-lightbox-stage" });
-		this.imgEl = this.stageEl.createEl("img", { cls: "nc-cal-lightbox-img" });
-		this.imgEl.setAttr("draggable", "false");
-		this.imgEl.onclick = (e) => e.stopPropagation();
-
-		this.videoEl = this.stageEl.createEl("video", { cls: "nc-cal-lightbox-video" });
-		this.videoEl.setAttr("controls", "true");
-		this.videoEl.setAttr("playsinline", "true");
-		this.videoEl.setAttr("preload", "metadata");
-		this.videoEl.hide();
-		this.videoEl.onclick = (e) => e.stopPropagation();
-
-		this.audioPanelEl = this.stageEl.createDiv({ cls: "nc-cal-lightbox-audio-panel" });
-		this.audioEl = this.audioPanelEl.createEl("audio", { cls: "nc-cal-lightbox-audio" });
-		this.audioEl.setAttr("controls", "true");
-		this.audioEl.setAttr("preload", "metadata");
-		this.audioPanelEl.hide();
-
-		const nextBtn = frame.createDiv({ cls: "nc-cal-lightbox-nav nc-cal-lightbox-next", attr: { "aria-label": "Next" } });
-		setIcon(nextBtn, "chevron-right");
-		nextBtn.onclick = (e) => { e.stopPropagation(); this.go(1); };
-
-		const meta = frame.createDiv({ cls: "nc-cal-lightbox-meta" });
-		this.dateEl = meta.createDiv({ cls: "nc-cal-lightbox-date" });
-		this.captionEl = meta.createDiv({ cls: "nc-cal-lightbox-caption" });
-		this.textEl = meta.createDiv({ cls: "nc-cal-lightbox-text" });
-		this.counterEl = meta.createDiv({ cls: "nc-cal-lightbox-counter" });
-
-		// 触控板惯性易连发，加短锁避免一次滚轮跳过多张或误感循环
-		frame.addEventListener("wheel", (e) => {
-			e.preventDefault();
-			if (this.wheelLock) return;
-			this.wheelLock = true;
-			this.go(e.deltaY > 0 ? 1 : -1);
-			window.setTimeout(() => { this.wheelLock = false; }, 140);
-		}, { passive: false });
-
-		// 右键菜单：删除 / 在文件浏览器中显示
-		const onCtx = (e: MouseEvent) => {
-			e.preventDefault();
-			e.stopPropagation();
-			this.showContextMenu(e);
-		};
-		this.overlay.addEventListener("contextmenu", onCtx);
-		this.stageEl.addEventListener("contextmenu", onCtx);
-		this.imgEl.addEventListener("contextmenu", onCtx);
-		this.videoEl.addEventListener("contextmenu", onCtx);
-		this.audioPanelEl.addEventListener("contextmenu", onCtx);
-		meta.addEventListener("contextmenu", onCtx);
-	}
-
-	private showContextMenu(e: MouseEvent): void {
-		const entry = this.entries[this.index];
-		if (!entry || !this.onContextAction) return;
-
-		const isAudio = entry.kind === "audio";
-		const deleteLabel = isZhUi()
-			? (isAudio ? "删除音频" : entry.kind === "video" ? "删除视频" : "删除图片")
-			: (isAudio ? "Delete audio" : entry.kind === "video" ? "Delete video" : "Delete image");
-		const revealLabel = isZhUi()
-			? (isAudio ? "在文件浏览器中打开音频位置" : entry.kind === "video" ? "在文件浏览器中打开视频位置" : "在文件浏览器中打开图片位置")
-			: "Show in system explorer";
-
-		const menu = new Menu();
-		menu.addItem((item) => {
-			item.setTitle(deleteLabel)
-				.setIcon("trash")
-				.onClick(() => { void this.onContextAction?.("delete", entry); });
-		});
-		menu.addItem((item) => {
-			item.setTitle(revealLabel)
-				.setIcon("folder-open")
-				.onClick(() => { void this.onContextAction?.("reveal", entry); });
-		});
-		menu.showAtPosition({ x: e.clientX, y: e.clientY });
-		// 确保菜单叠在 lightbox 之上（部分环境下 :has 可能无效）
-		window.setTimeout(() => {
-			document.querySelectorAll("body > .menu, .menu").forEach((el) => {
-				(el as HTMLElement).style.setProperty("z-index", "100001", "important");
-			});
-		}, 0);
-	}
-
-	/** 删除当前条目后刷新列表；若已空则关闭 */
-	removeCurrentEntry(): void {
-		if (!this.entries.length) {
-			this.close();
-			return;
-		}
-		this.entries.splice(this.index, 1);
-		if (!this.entries.length) {
-			this.close();
-			return;
-		}
-		if (this.index >= this.entries.length) {
-			this.index = this.entries.length - 1;
-		}
-		void this.showCurrent();
-	}
-
-	getCurrentEntry(): FlatMediaEntry | null {
-		return this.entries[this.index] ?? null;
-	}
-
-	open(entries: FlatMediaEntry[], startIndex: number): void {
-		if (!entries.length) return;
-		this.entries = entries;
-		this.index = Math.max(0, Math.min(startIndex, entries.length - 1));
-		this.open_ = true;
-		this.overlay.addClass("is-open");
-		this.overlay.show();
-		document.addEventListener("keydown", this.onKeyDown, true);
-		void this.showCurrent();
-	}
-
-	close(): void {
-		if (!this.open_) {
-			this.session++;
-			this.stopPlayback();
-			this.overlay.removeClass("is-open");
-			this.overlay.hide();
-			document.removeEventListener("keydown", this.onKeyDown, true);
-			return;
-		}
-		this.open_ = false;
-		this.session++;
-		this.stopPlayback();
-		this.overlay.removeClass("is-open");
-		this.overlay.hide();
-		document.removeEventListener("keydown", this.onKeyDown, true);
-	}
-
-	destroy(): void {
-		this.close();
-		this.overlay.remove();
-	}
-
-	/** 不循环：到头/尾停止，避免滚完又跳回该日第一张 */
-	private go(delta: number): void {
-		if (this.entries.length <= 1) return;
-		const next = this.index + delta;
-		if (next < 0 || next >= this.entries.length) return;
-		this.index = next;
-		void this.showCurrent();
-	}
-
-	private stopPlayback(): void {
-		this.videoEl.pause();
-		this.videoEl.removeAttribute("src");
-		this.videoEl.load();
-		this.audioEl.pause();
-		this.audioEl.removeAttribute("src");
-		this.audioEl.load();
-	}
-
-	private hideAllMedia(): void {
-		this.imgEl.hide();
-		this.videoEl.hide();
-		this.audioPanelEl.hide();
-		this.stageEl.querySelector(".nc-cal-lightbox-error")?.remove();
-	}
-
-	private async showCurrent(): Promise<void> {
-		const session = ++this.session;
-		const entry = this.entries[this.index];
-		if (!entry) return;
-
-		this.stopPlayback();
-		this.hideAllMedia();
-		this.updateMeta(entry);
-
-		if (entry.kind === "audio") {
-			const src = entry.audio?.path;
-			if (!src) {
-				this.showLoadError("file-x");
-				return;
-			}
-			const url = await this.resolveUrl(src);
-			if (session !== this.session) return;
-			if (!url) {
-				this.showLoadError("file-x");
-				return;
-			}
-			this.audioPanelEl.show();
-			this.audioEl.src = url;
-			return;
-		}
-
-		const src = entry.image?.path;
-		if (!src) {
-			this.showLoadError("image-off");
-			return;
-		}
-		const normalized = normalizeMediaPath(src);
-		const url = isDirectMediaUrl(normalized) ? normalized : await this.resolveUrl(src);
-		if (session !== this.session) return;
-		if (!url) {
-			this.showLoadError(entry.kind === "video" ? "video" : "image-off");
-			return;
-		}
-
-		if (entry.kind === "video") {
-			this.videoEl.onloadeddata = () => {
-				if (session !== this.session) return;
-				this.videoEl.show();
-			};
-			this.videoEl.onerror = () => {
-				if (session !== this.session) return;
-				this.videoEl.hide();
-				this.showLoadError("video");
-			};
-			this.videoEl.src = url;
-			if (this.videoEl.readyState >= 2) this.videoEl.show();
-			return;
-		}
-
-		this.imgEl.onload = () => {
-			if (session !== this.session) return;
-			this.imgEl.show();
-		};
-		this.imgEl.onerror = () => {
-			if (session !== this.session) return;
-			this.imgEl.hide();
-			this.showLoadError("image-off");
-		};
-		this.imgEl.src = url;
-		if (this.imgEl.complete) this.imgEl.show();
-	}
-
-	private updateMeta(entry: FlatMediaEntry): void {
-		const dateLabel = formatLightboxDate(entry.dateKey);
-		if (dateLabel) {
-			this.dateEl.setText(dateLabel);
-			this.dateEl.show();
-		} else {
-			this.dateEl.empty();
-			this.dateEl.hide();
-		}
-
-		let caption = "";
-		if (entry.kind === "audio") {
-			caption = entry.audio?.title?.trim() ?? "";
-		} else {
-			caption = entry.image?.caption?.trim() ?? "";
-		}
-		if (caption) {
-			this.captionEl.setText(caption);
-			this.captionEl.show();
-		} else {
-			this.captionEl.empty();
-			this.captionEl.hide();
-		}
-
-		const dayText = entry.dayData?.text ? stripMarkdownForDisplay(entry.dayData.text) : "";
-		if (dayText) {
-			this.textEl.setText(dayText);
-			this.textEl.show();
-		} else {
-			this.textEl.empty();
-			this.textEl.hide();
-		}
-
-		// 当日序号 + 全局序号，避免跨日滚动时混淆
-		const dayEntries = this.entries.filter((e) => e.dateKey === entry.dateKey);
-		const dayIdx = dayEntries.indexOf(entry);
-		const dayPart = dayIdx >= 0 ? `${dayIdx + 1}/${dayEntries.length}` : "";
-		const globalPart = `${this.index + 1} / ${this.entries.length}`;
-		this.counterEl.setText(dayPart ? `${dayPart} · 总 ${globalPart}` : globalPart);
-	}
-
-	private showLoadError(icon: string): void {
-		if (this.stageEl.querySelector(".nc-cal-lightbox-error")) return;
-		const ph = this.stageEl.createDiv({ cls: "nc-cal-lightbox-error" });
-		setIcon(ph, icon);
-	}
-}
-
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
 export class CalendarGalleryModal extends Modal {
@@ -673,7 +340,7 @@ export class CalendarGalleryModal extends Modal {
 	private gridEl!: HTMLElement;
 	private tooltipEl!: HTMLElement;
 	private slideDir: "left" | "right" | null = null;
-	private mediaLightbox: CalendarMediaLightbox;
+	private mediaLightbox: MediaLightbox<FlatMediaEntry>;
 	private cardAudioEl: HTMLAudioElement | null = null;
 	private cardAudioBlobUrl: string | null = null;
 	/** 系统路径媒体转 blob 后需释放 */
@@ -695,10 +362,34 @@ export class CalendarGalleryModal extends Modal {
 		this.currentYear = now.getFullYear();
 		this.currentMonth = now.getMonth() + 1;
 		this.selectedKey = dateKey(this.currentYear, this.currentMonth, now.getDate());
-		this.mediaLightbox = new CalendarMediaLightbox(
-			(src) => this.resolveMediaUrl(src),
-			(action, entry) => this.handleLightboxContextAction(action, entry),
-		);
+		this.mediaLightbox = new MediaLightbox<FlatMediaEntry>({
+			resolveUrl: (src) => this.resolveMediaUrl(src),
+			getItemInfo: (entry) => ({
+				path: this.getEntryMediaPath(entry),
+				kind: entry.kind,
+			}),
+			getMeta: (entry, index, items) => {
+				const caption = entry.kind === "audio"
+					? (entry.audio?.title?.trim() ?? "")
+					: (entry.image?.caption?.trim() ?? "");
+				const dayText = entry.dayData?.text
+					? stripMarkdownForDisplay(entry.dayData.text)
+					: "";
+				const dayEntries = items.filter((e) => e.dateKey === entry.dateKey);
+				const dayIdx = dayEntries.indexOf(entry);
+				const dayPart = dayIdx >= 0 ? `${dayIdx + 1}/${dayEntries.length}` : "";
+				const globalPart = `${index + 1} / ${items.length}`;
+				return {
+					subtitle: formatLightboxDate(entry.dateKey),
+					title: caption,
+					detail: dayText,
+					counter: dayPart ? `${dayPart} · 总 ${globalPart}` : globalPart,
+				};
+			},
+			onContextAction: (action, entry) => this.handleLightboxContextAction(action, entry),
+			wrapNavigation: false,
+			closeOnEscape: false,
+		});
 	}
 
 	onOpen(): void {
@@ -1096,7 +787,7 @@ export class CalendarGalleryModal extends Modal {
 		// 4) 刷新日历日卡片 + 预览列表
 		const { year, month, day } = parseDateKey(entry.dateKey);
 		this.refreshDay(new Date(year, month - 1, day));
-		this.mediaLightbox.removeCurrentEntry();
+		this.mediaLightbox.removeCurrent();
 
 		new Notice(isZhUi() ? `已删除${kindLabel}` : `${kindLabel} deleted`);
 	}

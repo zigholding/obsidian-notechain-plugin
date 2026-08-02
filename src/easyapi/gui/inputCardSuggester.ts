@@ -1,4 +1,5 @@
-import { App, Menu, Modal, Notice, setIcon, TFile } from "obsidian";
+import { App, Modal, Notice, setIcon, TFile } from "obsidian";
+import { MediaLightbox } from "./mediaLightbox";
 
 export type StyledValue = string | [string, Record<string, string>];
 
@@ -63,274 +64,6 @@ function guessMediaKind(path: string): "image" | "video" | "audio" {
 	return "image";
 }
 
-/** 卡片媒体放大预览（复用日历画廊 lightbox 样式） */
-class CardMediaLightbox {
-	private overlay!: HTMLElement;
-	private stageEl!: HTMLElement;
-	private imgEl!: HTMLImageElement;
-	private videoEl!: HTMLVideoElement;
-	private captionEl!: HTMLElement;
-	private detailEl!: HTMLElement;
-	private counterEl!: HTMLElement;
-	private items: CardItem[] = [];
-	private index = 0;
-	private session = 0;
-	private isOpen = false;
-	private onKeyDown = (e: KeyboardEvent) => {
-		if (e.key === "Escape") {
-			e.stopPropagation();
-			this.close();
-		} else if (e.key === "ArrowLeft") {
-			e.preventDefault();
-			this.go(-1);
-		} else if (e.key === "ArrowRight") {
-			e.preventDefault();
-			this.go(1);
-		}
-	};
-
-	constructor(
-		private resolveUrl: (src: string) => Promise<string | null>,
-		private getLabel: (item: CardItem) => string,
-		private getMediaPath: (item: CardItem) => string | null,
-		private getDetail: (item: CardItem) => string,
-		private onClosed?: (item: CardItem) => void,
-		private onContextAction?: (
-			action: "delete" | "reveal",
-			item: CardItem,
-		) => void | Promise<void>,
-	) {
-		this.buildUI();
-	}
-
-	private buildUI(): void {
-		this.overlay = document.body.createDiv({ cls: "nc-cal-lightbox" });
-		this.overlay.hide();
-
-		const backdrop = this.overlay.createDiv({ cls: "nc-cal-lightbox-backdrop" });
-		backdrop.onclick = () => this.close();
-
-		const frame = this.overlay.createDiv({ cls: "nc-cal-lightbox-frame" });
-
-		const closeBtn = frame.createDiv({ cls: "nc-cal-lightbox-close nc-icon-btn", attr: { "aria-label": "Close" } });
-		setIcon(closeBtn, "x");
-		closeBtn.onclick = () => this.close();
-
-		const prevBtn = frame.createDiv({ cls: "nc-cal-lightbox-nav nc-cal-lightbox-prev", attr: { "aria-label": "Previous" } });
-		setIcon(prevBtn, "chevron-left");
-		prevBtn.onclick = (e) => { e.stopPropagation(); this.go(-1); };
-
-		this.stageEl = frame.createDiv({ cls: "nc-cal-lightbox-stage" });
-		this.imgEl = this.stageEl.createEl("img", { cls: "nc-cal-lightbox-img" });
-		this.imgEl.setAttr("draggable", "false");
-		this.imgEl.onclick = (e) => e.stopPropagation();
-
-		this.videoEl = this.stageEl.createEl("video", { cls: "nc-cal-lightbox-video" });
-		this.videoEl.setAttr("controls", "true");
-		this.videoEl.setAttr("playsinline", "true");
-		this.videoEl.setAttr("preload", "metadata");
-		this.videoEl.hide();
-		this.videoEl.onclick = (e) => e.stopPropagation();
-
-		const nextBtn = frame.createDiv({ cls: "nc-cal-lightbox-nav nc-cal-lightbox-next", attr: { "aria-label": "Next" } });
-		setIcon(nextBtn, "chevron-right");
-		nextBtn.onclick = (e) => { e.stopPropagation(); this.go(1); };
-
-		const meta = frame.createDiv({ cls: "nc-cal-lightbox-meta" });
-		this.captionEl = meta.createDiv({ cls: "nc-cal-lightbox-caption" });
-		this.detailEl = meta.createDiv({ cls: "nc-cal-lightbox-text" });
-		this.counterEl = meta.createDiv({ cls: "nc-cal-lightbox-counter" });
-
-		frame.addEventListener("wheel", (e) => {
-			e.preventDefault();
-			this.go(e.deltaY > 0 ? 1 : -1);
-		}, { passive: false });
-
-		const onCtx = (e: MouseEvent) => {
-			e.preventDefault();
-			e.stopPropagation();
-			this.showContextMenu(e);
-		};
-		this.overlay.addEventListener("contextmenu", onCtx);
-		this.stageEl.addEventListener("contextmenu", onCtx);
-		this.imgEl.addEventListener("contextmenu", onCtx);
-		this.videoEl.addEventListener("contextmenu", onCtx);
-		meta.addEventListener("contextmenu", onCtx);
-	}
-
-	private showContextMenu(e: MouseEvent): void {
-		const item = this.items[this.index];
-		if (!item || !this.onContextAction) return;
-
-		const path = this.getMediaPath(item) ?? "";
-		const kind = guessMediaKind(path);
-		const zh = window.localStorage.getItem("language") === "zh";
-		const deleteLabel = zh
-			? (kind === "audio" ? "删除音频" : kind === "video" ? "删除视频" : "删除图片")
-			: (kind === "audio" ? "Delete audio" : kind === "video" ? "Delete video" : "Delete image");
-		const revealLabel = zh
-			? (kind === "audio" ? "在文件浏览器中打开音频位置" : kind === "video" ? "在文件浏览器中打开视频位置" : "在文件浏览器中打开图片位置")
-			: "Show in system explorer";
-
-		const menu = new Menu();
-		menu.addItem((menuItem) => {
-			menuItem.setTitle(deleteLabel)
-				.setIcon("trash")
-				.onClick(() => { void this.onContextAction?.("delete", item); });
-		});
-		menu.addItem((menuItem) => {
-			menuItem.setTitle(revealLabel)
-				.setIcon("folder-open")
-				.onClick(() => { void this.onContextAction?.("reveal", item); });
-		});
-		menu.showAtPosition({ x: e.clientX, y: e.clientY });
-		// 确保菜单叠在 lightbox 之上（部分环境下 :has 可能无效）
-		window.setTimeout(() => {
-			document.querySelectorAll("body > .menu").forEach((el) => {
-				(el as HTMLElement).style.setProperty("z-index", "100001", "important");
-			});
-		}, 0);
-	}
-
-	/** 删除当前条目后刷新列表；若已空则关闭 */
-	removeCurrentItem(): void {
-		if (!this.items.length) {
-			this.close(true);
-			return;
-		}
-		this.items.splice(this.index, 1);
-		if (!this.items.length) {
-			this.close(true);
-			return;
-		}
-		if (this.index >= this.items.length) {
-			this.index = this.items.length - 1;
-		}
-		void this.showCurrent();
-	}
-
-	open(items: CardItem[], startIndex: number): void {
-		if (!items.length) return;
-		this.items = items;
-		this.index = Math.max(0, Math.min(startIndex, items.length - 1));
-		this.isOpen = true;
-		this.overlay.addClass("is-open");
-		this.overlay.show();
-		document.addEventListener("keydown", this.onKeyDown, true);
-		void this.showCurrent();
-	}
-
-	/** @param silent 重绘/销毁时静默关闭，不触发定位回调 */
-	close(silent = false): void {
-		const current = this.isOpen ? (this.items[this.index] ?? null) : null;
-		this.isOpen = false;
-		this.overlay.removeClass("is-open");
-		this.session++;
-		this.stopPlayback();
-		this.overlay.hide();
-		document.removeEventListener("keydown", this.onKeyDown, true);
-		if (!silent && current) this.onClosed?.(current);
-	}
-
-	destroy(): void {
-		this.close(true);
-		this.overlay.remove();
-	}
-
-	private go(delta: number): void {
-		if (this.items.length <= 1) return;
-		this.index = (this.index + delta + this.items.length) % this.items.length;
-		void this.showCurrent();
-	}
-
-	private stopPlayback(): void {
-		this.videoEl.pause();
-		this.videoEl.removeAttribute("src");
-		this.videoEl.load();
-	}
-
-	private hideAllMedia(): void {
-		this.imgEl.hide();
-		this.videoEl.hide();
-		this.stageEl.querySelector(".nc-cal-lightbox-error")?.remove();
-	}
-
-	private async showCurrent(): Promise<void> {
-		const session = ++this.session;
-		const item = this.items[this.index];
-		if (!item) return;
-
-		this.stopPlayback();
-		this.hideAllMedia();
-
-		const label = this.getLabel(item);
-		this.captionEl.setText(label || "");
-
-		const detail = this.getDetail(item).replace(/\\n/g, "\n").trim();
-		if (detail) {
-			this.detailEl.empty();
-			const lines = detail.split("\n");
-			lines.forEach((line, i) => {
-				this.detailEl.appendText(line);
-				if (i < lines.length - 1) this.detailEl.appendChild(document.createElement("br"));
-			});
-			this.detailEl.show();
-		} else {
-			this.detailEl.empty();
-			this.detailEl.hide();
-		}
-
-		this.counterEl.setText(`${this.index + 1} / ${this.items.length}`);
-
-		const path = this.getMediaPath(item);
-		if (!path) {
-			this.showLoadError("image-off");
-			return;
-		}
-
-		const isVideo = VIDEO_EXT.test(path);
-		const url = await this.resolveUrl(path);
-		if (session !== this.session) return;
-		if (!url) {
-			this.showLoadError(isVideo ? "video" : "image-off");
-			return;
-		}
-
-		if (isVideo) {
-			this.videoEl.onloadeddata = () => {
-				if (session !== this.session) return;
-				this.videoEl.show();
-			};
-			this.videoEl.onerror = () => {
-				if (session !== this.session) return;
-				this.videoEl.hide();
-				this.showLoadError("video");
-			};
-			this.videoEl.src = url;
-			if (this.videoEl.readyState >= 2) this.videoEl.show();
-			return;
-		}
-
-		this.imgEl.onload = () => {
-			if (session !== this.session) return;
-			this.imgEl.show();
-		};
-		this.imgEl.onerror = () => {
-			if (session !== this.session) return;
-			this.imgEl.hide();
-			this.showLoadError("image-off");
-		};
-		this.imgEl.src = url;
-		if (this.imgEl.complete && this.imgEl.naturalWidth > 0) this.imgEl.show();
-	}
-
-	private showLoadError(icon: string): void {
-		if (this.stageEl.querySelector(".nc-cal-lightbox-error")) return;
-		const ph = this.stageEl.createDiv({ cls: "nc-cal-lightbox-error" });
-		setIcon(ph, icon);
-	}
-}
-
 export class CardNavigatorModal extends Modal {
     private options: ResolvedCardNavigatorOptions;
     private navigationStack: CardItem[][] = [];
@@ -344,7 +77,7 @@ export class CardNavigatorModal extends Modal {
 	private mediaObserver: IntersectionObserver | null = null;
 	/** 每个待加载封面元素对应的加载回调 */
 	private mediaLoaders = new WeakMap<Element, () => void>();
-	private mediaLightbox: CardMediaLightbox | null = null;
+	private mediaLightbox: MediaLightbox<CardItem> | null = null;
 	/** 当前卡片列表视图，用于关闭预览后定位到最后查看的卡片 */
 	private listView: {
 		scrollArea: HTMLElement;
@@ -369,14 +102,21 @@ export class CardNavigatorModal extends Modal {
         this.modalEl.style.width = `${this.options.width}px`;
         this.modalEl.style.height = `${this.options.height}px`;
 
-        this.mediaLightbox = new CardMediaLightbox(
-            (src) => this.resolveCardMediaSrc(src),
-            (item) => this.getRawText(item.name),
-            (item) => this.getCardMediaPath(item),
-            (item) => this.getRawText(item.detail),
-            (item) => this.revealCardInList(item),
-            (action, item) => this.handleLightboxContextAction(action, item),
-        );
+        this.mediaLightbox = new MediaLightbox<CardItem>({
+            resolveUrl: (src) => this.resolveCardMediaSrc(src),
+            getItemInfo: (item) => {
+                const path = this.getCardMediaPath(item);
+                return { path, kind: path ? guessMediaKind(path) : "image" };
+            },
+            getMeta: (item) => ({
+                title: this.getRawText(item.name),
+                detail: this.getRawText(item.detail),
+            }),
+            onClosed: (item) => this.revealCardInList(item),
+            onContextAction: (action, item) => this.handleLightboxContextAction(action, item),
+            wrapNavigation: true,
+            closeOnEscape: true,
+        });
 
         const resizer = this.modalEl.createDiv({ cls: "nc-modal-resizer" });
         this.initResizer(resizer);
@@ -1009,7 +749,7 @@ export class CardNavigatorModal extends Modal {
 			console.error("[note-chain] onDeleteMedia", err);
 		}
 
-		this.mediaLightbox?.removeCurrentItem();
+		this.mediaLightbox?.removeCurrent();
 		this.listView?.removeAndRedraw(item);
 		new Notice(`已删除${kindLabel}`);
 	}
