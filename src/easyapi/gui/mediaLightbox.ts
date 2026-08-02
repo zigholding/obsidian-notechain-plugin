@@ -1,4 +1,4 @@
-import { App, Menu, Scope, setIcon } from "obsidian";
+import { App, Menu, Notice, Scope, setIcon } from "obsidian";
 
 export type MediaKind = "image" | "video" | "audio";
 
@@ -143,10 +143,15 @@ export class MediaLightbox<T> {
 
 	private showContextMenu(e: MouseEvent): void {
 		const item = this.items[this.index];
-		if (!item || !this.options.onContextAction) return;
+		if (!item) return;
 
-		const { kind } = this.options.getItemInfo(item);
+		const info = this.options.getItemInfo(item);
+		const { kind, path } = info;
 		const zh = isZhUi();
+		const pathLabel = zh
+			? (kind === "audio" ? "复制音频路径" : kind === "video" ? "复制视频路径" : "复制图片路径")
+			: (kind === "audio" ? "Copy audio path" : kind === "video" ? "Copy video path" : "Copy image path");
+		const copyImageLabel = zh ? "复制图片到剪贴板" : "Copy image to clipboard";
 		const deleteLabel = zh
 			? (kind === "audio" ? "删除音频" : kind === "video" ? "删除视频" : "删除图片")
 			: (kind === "audio" ? "Delete audio" : kind === "video" ? "Delete video" : "Delete image");
@@ -155,22 +160,157 @@ export class MediaLightbox<T> {
 			: "Show in system explorer";
 
 		const menu = new Menu();
-		menu.addItem((menuItem) => {
-			menuItem.setTitle(deleteLabel)
-				.setIcon("trash")
-				.onClick(() => { void this.options.onContextAction?.("delete", item); });
-		});
-		menu.addItem((menuItem) => {
-			menuItem.setTitle(revealLabel)
-				.setIcon("folder-open")
-				.onClick(() => { void this.options.onContextAction?.("reveal", item); });
-		});
+		if (path) {
+			menu.addItem((menuItem) => {
+				menuItem.setTitle(pathLabel)
+					.setIcon("copy")
+					.onClick(() => { void this.copyPathToClipboard(path); });
+			});
+		}
+		if (kind === "image") {
+			menu.addItem((menuItem) => {
+				menuItem.setTitle(copyImageLabel)
+					.setIcon("image")
+					.onClick(() => { void this.copyImageToClipboard(path); });
+			});
+		}
+
+		if (this.options.onContextAction) {
+			if (path || kind === "image") menu.addSeparator();
+			menu.addItem((menuItem) => {
+				menuItem.setTitle(deleteLabel)
+					.setIcon("trash")
+					.onClick(() => { void this.options.onContextAction?.("delete", item); });
+			});
+			menu.addItem((menuItem) => {
+				menuItem.setTitle(revealLabel)
+					.setIcon("folder-open")
+					.onClick(() => { void this.options.onContextAction?.("reveal", item); });
+			});
+		}
+
 		menu.showAtPosition({ x: e.clientX, y: e.clientY });
 		window.setTimeout(() => {
 			document.querySelectorAll("body > .menu, .menu").forEach((el) => {
 				(el as HTMLElement).style.setProperty("z-index", "100001", "important");
 			});
 		}, 0);
+	}
+
+	private async copyPathToClipboard(path: string): Promise<void> {
+		const zh = isZhUi();
+		try {
+			if (navigator?.clipboard?.writeText) {
+				await navigator.clipboard.writeText(path);
+				new Notice(zh ? "路径已复制" : "Path copied");
+				return;
+			}
+		} catch { /* fallback */ }
+		try {
+			const ta = document.createElement("textarea");
+			ta.value = path;
+			ta.style.position = "fixed";
+			ta.style.opacity = "0";
+			document.body.appendChild(ta);
+			ta.select();
+			const ok = document.execCommand("copy");
+			ta.remove();
+			new Notice(ok
+				? (zh ? "路径已复制" : "Path copied")
+				: (zh ? "复制路径失败" : "Failed to copy path"));
+		} catch {
+			new Notice(zh ? "复制路径失败" : "Failed to copy path");
+		}
+	}
+
+	/** 将当前图片写入系统剪贴板（PNG） */
+	private async copyImageToClipboard(path: string | null): Promise<void> {
+		const zh = isZhUi();
+		try {
+			const blob = await this.getCurrentImageBlob(path);
+			if (!blob) {
+				new Notice(zh ? "无法读取图片" : "Failed to read image");
+				return;
+			}
+
+			// ① ClipboardItem（Chromium / 较新 Electron）
+			if (typeof ClipboardItem !== "undefined" && navigator?.clipboard?.write) {
+				await navigator.clipboard.write([
+					new ClipboardItem({ [blob.type || "image/png"]: blob }),
+				]);
+				new Notice(zh ? "图片已复制到剪贴板" : "Image copied to clipboard");
+				return;
+			}
+
+			// ② Electron nativeImage
+			const req = (typeof window !== "undefined" && (window as any).require)
+				? (window as any).require
+				: null;
+			if (req) {
+				const electron = req("electron");
+				const clipboard = electron?.clipboard ?? electron?.remote?.clipboard;
+				const nativeImage = electron?.nativeImage ?? electron?.remote?.nativeImage;
+				if (clipboard?.writeImage && nativeImage?.createFromBuffer) {
+					const buf = Buffer.from(await blob.arrayBuffer());
+					const img = nativeImage.createFromBuffer(buf);
+					if (!img.isEmpty()) {
+						clipboard.writeImage(img);
+						new Notice(zh ? "图片已复制到剪贴板" : "Image copied to clipboard");
+						return;
+					}
+				}
+			}
+
+			new Notice(zh ? "当前环境不支持复制图片" : "Copy image not supported here");
+		} catch (err) {
+			console.error("[note-chain] copyImageToClipboard", err);
+			new Notice(zh ? "复制图片失败" : "Failed to copy image");
+		}
+	}
+
+	private async getCurrentImageBlob(path: string | null): Promise<Blob | null> {
+		// 优先用已显示的 <img> 画到 canvas（blob:/data: 通常可用）
+		if (
+			this.imgEl &&
+			!this.imgEl.hidden &&
+			this.imgEl.src &&
+			this.imgEl.complete &&
+			this.imgEl.naturalWidth > 0
+		) {
+			try {
+				const canvas = document.createElement("canvas");
+				canvas.width = this.imgEl.naturalWidth;
+				canvas.height = this.imgEl.naturalHeight;
+				const ctx = canvas.getContext("2d");
+				if (ctx) {
+					ctx.drawImage(this.imgEl, 0, 0);
+					const fromCanvas = await new Promise<Blob | null>((resolve) =>
+						canvas.toBlob((b) => resolve(b), "image/png"),
+					);
+					if (fromCanvas) return fromCanvas;
+				}
+			} catch { /* 跨域等失败则走 URL */ }
+		}
+
+		const url = this.imgEl?.src
+			|| (path ? await this.options.resolveUrl(path) : null);
+		if (!url) return null;
+
+		if (url.startsWith("data:")) {
+			const res = await fetch(url);
+			return await res.blob();
+		}
+
+		try {
+			const res = await fetch(url);
+			if (!res.ok) return null;
+			const blob = await res.blob();
+			if (blob.type.startsWith("image/") || !blob.type) return blob;
+			// 非 image mime 时仍尝试当作图片
+			return blob;
+		} catch {
+			return null;
+		}
 	}
 
 	/** 删除当前条目后刷新；若已空则关闭 */
