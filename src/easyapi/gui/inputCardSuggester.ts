@@ -932,15 +932,26 @@ export class CardNavigatorModal extends Modal {
 		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
 		const fsApi = nc?.easyapi?.fs;
 		const fileApi = nc?.easyapi?.file;
+		const adapter = this.app.vault.adapter as any;
 
 		const tfile = fileApi?.get_tfile?.(path) as TFile | null;
-		if (tfile && fsApi?.abspath) {
-			const abs = fsApi.abspath(tfile, true);
-			if (abs) return abs;
+		if (tfile) {
+			if (typeof adapter?.getFullPath === "function") {
+				const full = adapter.getFullPath(tfile.path);
+				if (full) return full;
+			}
+			if (fsApi?.abspath) {
+				const abs = fsApi.abspath(tfile, true);
+				if (abs) return abs;
+			}
 		}
 		if (fsApi) {
 			const abs = fsApi.abspath(path, true) || (fsApi.isfile(path) ? path : null);
 			if (abs && fsApi.isfile(abs)) return abs;
+		}
+		if (typeof adapter?.getFullPath === "function" && !this.isFilesystemPath(path)) {
+			const full = adapter.getFullPath(path);
+			if (full && fsApi?.isfile?.(full)) return full;
 		}
 		if (this.isFilesystemPath(path)) return path;
 		return null;
@@ -960,22 +971,18 @@ export class CardNavigatorModal extends Modal {
 			new Notice("网络资源无法在文件浏览器中打开");
 			return;
 		}
-		const abs = this.resolveLocalAbsPath(mediaPath);
-		if (!abs) {
-			new Notice("未找到本地文件");
+		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const fsApi = nc?.easyapi?.fs;
+		if (!fsApi?.show_in_system_explorer) {
+			new Notice("文件系统接口不可用");
 			return;
 		}
-		try {
-			const electron = require("electron");
-			const shell = electron?.remote?.shell ?? electron?.shell;
-			if (!shell?.showItemInFolder) {
-				new Notice("当前环境不支持打开文件位置");
-				return;
-			}
-			shell.showItemInFolder(abs);
-		} catch (err) {
-			console.error("[note-chain] revealCardMediaInExplorer", err);
-			new Notice("打开文件位置失败");
+		const target = this.isFilesystemPath(mediaPath)
+			? mediaPath
+			: (this.resolveLocalAbsPath(mediaPath) ?? mediaPath);
+		const ok = fsApi.show_in_system_explorer(target);
+		if (!ok) {
+			new Notice(`打开文件位置失败：${target}`);
 		}
 	}
 

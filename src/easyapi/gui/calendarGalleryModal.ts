@@ -990,16 +990,28 @@ export class CalendarGalleryModal extends Modal {
 		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
 		const fsApi = nc?.easyapi?.fs;
 		const fileApi = nc?.easyapi?.file;
+		const adapter = this.app.vault.adapter as any;
 
 		const tfile = fileApi?.get_tfile?.(path) as TFile | null;
-		if (tfile && fsApi?.abspath) {
-			const abs = fsApi.abspath(tfile, true);
-			if (abs) return abs;
+		if (tfile) {
+			if (typeof adapter?.getFullPath === "function") {
+				const full = adapter.getFullPath(tfile.path);
+				if (full) return full;
+			}
+			if (fsApi?.abspath) {
+				const abs = fsApi.abspath(tfile, true);
+				if (abs) return abs;
+			}
 		}
 
 		if (fsApi) {
 			const abs = fsApi.abspath(path, true) || (fsApi.isfile(path) ? path : null);
 			if (abs && fsApi.isfile(abs)) return abs;
+		}
+
+		if (typeof adapter?.getFullPath === "function" && !isFilesystemPath(path)) {
+			const full = adapter.getFullPath(path);
+			if (full && fsApi?.isfile?.(full)) return full;
 		}
 
 		if (isFilesystemPath(path)) return path;
@@ -1021,23 +1033,21 @@ export class CalendarGalleryModal extends Modal {
 			return;
 		}
 
-		const abs = this.resolveLocalAbsPath(mediaPath);
-		if (!abs) {
-			new Notice(isZhUi() ? "未找到本地文件" : "Local file not found");
+		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const fsApi = nc?.easyapi?.fs;
+		if (!fsApi?.show_in_system_explorer) {
+			new Notice(isZhUi() ? "文件系统接口不可用" : "Filesystem API unavailable");
 			return;
 		}
 
-		try {
-			const electron = require("electron");
-			const shell = electron?.remote?.shell ?? electron?.shell;
-			if (!shell?.showItemInFolder) {
-				new Notice(isZhUi() ? "当前环境不支持打开文件位置" : "Cannot open system explorer");
-				return;
-			}
-			shell.showItemInFolder(abs);
-		} catch (err) {
-			console.error("[note-chain] revealMediaInExplorer", err);
-			new Notice(isZhUi() ? "打开文件位置失败" : "Failed to show in explorer");
+		// 系统绝对路径直接交给 fs；库内路径再解析
+		const target = isFilesystemPath(mediaPath)
+			? mediaPath
+			: (this.resolveLocalAbsPath(mediaPath) ?? mediaPath);
+
+		const ok = fsApi.show_in_system_explorer(target);
+		if (!ok) {
+			new Notice(isZhUi() ? `打开文件位置失败：${target}` : `Failed to show in explorer: ${target}`);
 		}
 	}
 

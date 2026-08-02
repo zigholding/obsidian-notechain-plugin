@@ -72,6 +72,16 @@ export class FsEditor{
             tfile = tfile.replace(/\$\{VAULT\}/g,this.app.vault.getName());
             tfile = this.expandPropertyAtLinkPath(tfile);
 
+            // 系统绝对路径（非 vault）：优先直接判定，避免 get_tfile 同名误匹配到库内文件
+            if (this.is_system_abs_path(tfile)) {
+                const candidates = this.system_path_candidates(tfile);
+                for (const c of candidates) {
+                    if (this.isPath(c)) return c;
+                }
+                if (!strict) return tfile;
+                return null;
+            }
+
             let xfile = this.easyapi.file.get_tfile(tfile);
             if(xfile){
                 return this.abspath(xfile);
@@ -120,16 +130,156 @@ export class FsEditor{
         return null;
 	}
 
+    /** Windows 盘符 / UNC / Unix 绝对路径（且不是 vault 内相对路径） */
+    is_system_abs_path(path: string): boolean {
+        const p = (path ?? "").trim();
+        if (!p) return false;
+        if (/^file:\/\//i.test(p)) return true;
+        if (/^[a-zA-Z]:[\\/]/.test(p)) return true;
+        if (/^\\\\/.test(p)) return true; // UNC
+        // Unix 绝对路径：以 / 开头，但排除 vault 特殊前缀
+        if (p.startsWith("/") && !p.startsWith("/oldbuddy")) return true;
+        return false;
+    }
+
+    /** 生成系统路径的几种写法，提高 existsSync 命中率 */
+    private system_path_candidates(path: string): string[] {
+        let p = path.trim();
+        if (/^file:\/\/\//i.test(p)) {
+            p = decodeURIComponent(p.slice("file:///".length));
+            if (/^[a-zA-Z]:/.test(p)) {
+                // keep drive form
+            } else {
+                p = "/" + p.replace(/^\/+/, "");
+            }
+        } else if (/^file:\/\//i.test(p)) {
+            p = decodeURIComponent(p.slice("file://".length));
+        }
+        const out: string[] = [];
+        const add = (x: string) => { if (x && !out.includes(x)) out.push(x); };
+        add(p);
+        add(p.replace(/\//g, "\\"));
+        add(p.replace(/\\/g, "/"));
+        return out;
+    }
+
     isPath(path:string){
-        return this.fs.existsSync(path);
+        try {
+            return this.fs.existsSync(path);
+        } catch {
+            return false;
+        }
     }
 
     isfile(path:string){
-        return this.fs.existsSync(path) && this.fs.statSync(path).isFile();
+        try {
+            return this.fs.existsSync(path) && this.fs.statSync(path).isFile();
+        } catch {
+            return false;
+        }
     }
 
     isdir(path:string){
-        return this.fs.existsSync(path) && this.fs.statSync(path).isDirectory();
+        try {
+            return this.fs.existsSync(path) && this.fs.statSync(path).isDirectory();
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * 在系统文件浏览器中定位并选中文件（支持 vault 路径与系统绝对路径）。
+     */
+    show_in_system_explorer(filePath: string): boolean {
+        if ((this.app as any).isMobile) return false;
+
+        const input = (filePath ?? "").trim();
+        if (!input) return false;
+
+        let abs: string | null = null;
+
+        // ① 系统绝对路径：直接用，不走 vault 解析
+        if (this.is_system_abs_path(input)) {
+            for (const c of this.system_path_candidates(input)) {
+                if (this.isfile(c)) { abs = c; break; }
+                if (this.isdir(c)) { abs = c; break; }
+            }
+        }
+
+        // ② vault / 相对路径
+        if (!abs) {
+            abs = this.abspath(input, true) || (this.isfile(input) ? input : null);
+        }
+        if (!abs) {
+            const adapter = this.app.vault.adapter as any;
+            if (typeof adapter?.getFullPath === "function" && !this.is_system_abs_path(input)) {
+                const full = adapter.getFullPath(input);
+                if (full && (this.isfile(full) || this.isdir(full))) abs = full;
+            }
+        }
+        if (!abs) return false;
+
+        const isDir = this.isdir(abs);
+        if (!isDir && !this.isfile(abs)) return false;
+
+        const sep = this.path?.sep || ((typeof process !== "undefined" && process.platform === "win32") ? "\\" : "/");
+        const nativePath = abs.replace(/[\\/]/g, sep);
+
+        const req = (typeof window !== "undefined" && (window as any).require)
+            ? (window as any).require
+            : require;
+
+        // ① Electron shell.showItemInFolder
+        try {
+            const electron = req("electron");
+            const shell = electron?.remote?.shell ?? electron?.shell;
+            if (typeof shell?.showItemInFolder === "function") {
+                shell.showItemInFolder(nativePath);
+                return true;
+            }
+            // 至少打开所在目录
+            if (typeof shell?.openPath === "function") {
+                const target = isDir ? nativePath : this.path.dirname(nativePath);
+                void shell.openPath(target);
+                return true;
+            }
+        } catch (e) {
+            console.warn("[note-chain] electron reveal failed", e);
+        }
+
+        // ② 系统命令回退（Windows 上对系统路径最可靠）
+        try {
+            const { execFile, exec } = req("child_process");
+            const platform = (typeof process !== "undefined" && process.platform) ? process.platform : "win32";
+            if (platform === "win32") {
+                if (isDir) {
+                    execFile("explorer.exe", [nativePath], () => {});
+                } else {
+                    // /select, 与路径之间不要空格；路径含空格时整体作为参数
+                    execFile("explorer.exe", ["/select,", nativePath], (err: Error | null) => {
+                        if (err) {
+                            // 部分环境 execFile 参数形式失败，再试 cmd
+                            exec(`cmd /c start "" explorer /select,"${nativePath.replace(/"/g, "")}"`);
+                        }
+                    });
+                }
+                return true;
+            }
+            if (platform === "darwin") {
+                if (isDir) {
+                    execFile("open", [nativePath]);
+                } else {
+                    execFile("open", ["-R", nativePath]);
+                }
+                return true;
+            }
+            const dir = isDir ? nativePath : this.path.dirname(nativePath);
+            execFile("xdg-open", [dir]);
+            return true;
+        } catch (e) {
+            console.error("[note-chain] show_in_system_explorer fallback failed", e);
+            return false;
+        }
     }
 
     get_outfiles(tfile= this.easyapi.cfile): string[] | null {
