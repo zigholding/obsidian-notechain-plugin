@@ -270,6 +270,9 @@ export class WebViewerLLMModule {
 		}
 		if (!source) return;
 
+		// 提示词笔记（卡片选中的模板）；与 cfile（${tfile.*} 所指）区分
+		let promptFile: TFile | null = source instanceof TFile ? source : null;
+
 		// 2. 解析出原始 prompt（笔记取模板段，字符串则直接用，并把 tfile 回退为当前激活文件）
 		let prompt = '';
 		if (source instanceof TFile) {
@@ -281,8 +284,13 @@ export class WebViewerLLMModule {
 		}
 		prompt = prompt.replace(/^\s*%%[\s\S]*?%%/, '').trim();
 
+		// 任一方 frontmatter `parse_templater: false` 则整段不再二次 Templater
+		const allowTemplater =
+			this.is_templater_parse_enabled(promptFile) &&
+			this.is_templater_parse_enabled(cfile);
+
 		// 3. 展开内置占位符：${selection}、${tfile.*}、${[[wiki]]} 等
-		const expanded = await this.expand_prompt_placeholders(prompt, cfile);
+		const expanded = await this.expand_prompt_placeholders(prompt, cfile, allowTemplater);
 		if (expanded == null) return;
 		prompt = expanded;
 
@@ -294,8 +302,8 @@ export class WebViewerLLMModule {
 		// 5. 应用调用方传入的 target 替换
 		prompt = this.apply_target_replacements(prompt, target);
 
-		// 6. Templater 解析
-		prompt = await this.run_prompt_templater(prompt, tfile, cfile);
+		// 6. Templater 解析（可由 parse_templater: false 关闭）
+		prompt = await this.run_prompt_templater(prompt, tfile, cfile, allowTemplater);
 
 		// 7. 选择并追加参考笔记
 		prompt = await this.append_selected_references(prompt, tfile, cfile, xrefiles);
@@ -315,6 +323,20 @@ export class WebViewerLLMModule {
 			dispatched.response,
 			dispatched.llm
 		);
+	}
+
+	/**
+	 * frontmatter `parse_templater`：默认 true；显式 false / "false" / 0 时关闭二次解析。
+	 * 可写在提示词笔记或当前激活笔记（${tfile.*} 来源）上。
+	 */
+	private is_templater_parse_enabled(file: TFile | null | undefined): boolean {
+		if (!(file instanceof TFile)) return true;
+		const v = this.easyapi.editor.get_frontmatter(file, 'parse_templater', true);
+		if (v === false || v === 0) return false;
+		if (typeof v === 'string' && ['false', '0', 'no', 'off'].includes(v.trim().toLowerCase())) {
+			return false;
+		}
+		return true;
 	}
 
 	/** 将文本中解析出的笔记去重追加到列表 */
@@ -405,11 +427,13 @@ export class WebViewerLLMModule {
 	/**
 	 * 展开 prompt 中的内置占位符。
 	 * 支持：`${selection?fallback}`、`${selection}`、`${tfile.*}`、`${[[笔记]]}`。
+	 * @param allowTemplater false 时 `${[[wiki]]}` 只摘录正文，不跑 Templater
 	 * @returns 展开后的 prompt；缺 selection 时返回 null
 	 */
 	private async expand_prompt_placeholders(
 		prompt: string,
-		cfile: TFile | null
+		cfile: TFile | null,
+		allowTemplater = true
 	): Promise<string | null> {
 		const ea = this.easyapi;
 		const conditionalRegex = /\$\{([a-zA-Z0-9.]+)\?([a-zA-Z0-9.]+)\}/g;
@@ -472,8 +496,11 @@ export class WebViewerLLMModule {
 		for (const am of amatches) {
 			const xfile = ea.file.get_tfile(am);
 			if (xfile) {
-				const ctx = await ea.tpl.parse_templater(xfile, true, { cfile: cfile });
-				let actx = ctx.join('\n');
+				let actx = '';
+				if (allowTemplater) {
+					const ctx = await ea.tpl.parse_templater(xfile, true, { cfile: cfile });
+					actx = ctx.join('\n');
+				}
 				if (actx.length > 0) {
 					replacements.set(`\${[[${am}]]}`, actx);
 				} else {
@@ -547,12 +574,21 @@ export class WebViewerLLMModule {
 		return prompt;
 	}
 
-	/** 对整段 prompt 跑一遍 Templater（字符串模式） */
+	/**
+	 * 对整段 prompt 跑一遍 Templater（字符串模式）。
+	 * 提示词笔记或当前激活笔记 frontmatter `parse_templater: false` 时跳过，
+	 * 避免 `${tfile.content}` 展开后正文里的 tpl 代码块被二次执行（默认 true）。
+	 */
 	private async run_prompt_templater(
 		prompt: string,
 		tfile: TFile,
-		cfile: TFile | null
+		cfile: TFile | null,
+		allowTemplater = true
 	): Promise<string> {
+		if (!allowTemplater) {
+			return prompt;
+		}
+
 		const ea = this.easyapi;
 		let prompts: unknown = [prompt];
 		try {
