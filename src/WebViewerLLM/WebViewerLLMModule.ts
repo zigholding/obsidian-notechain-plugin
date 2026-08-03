@@ -249,109 +249,171 @@ export class WebViewerLLMModule {
 		return rsp;
 	}
 
+	/**
+	 * 与目标笔记/文本对话：选源 → 展开占位符 → 参考笔记 → 预处理 → 发送/复制 → 后处理。
+	 * @param tfile 指定提示词来源笔记；为空则弹出卡片选择器
+	 * @param target 额外替换：字符串替换全部 `${...}`，数组逐个替换，对象按 key 替换
+	 */
 	async cmd_chat_with_target_tfile(tfile: TFile | null = null, target: any = null) {
-		let llm: BaseWebViewer | undefined;
-
 		const ea = this.easyapi;
 		const cfile = ea.file.get_last_activate_file();
-		let selection = await ea.editor.get_selection();
+		const selection = await ea.editor.get_selection();
+
+		// 1. 选择提示词来源（笔记 / 选区 / 剪贴板 / 手动输入）
+		let source: TFile | string | null = tfile;
 		let xrefiles: Array<TFile> = [];
-		if (!tfile) {
-			const tfiles = ea.file.get_all_tfiles_of_tags(
-				this.plugin.settings.webviewllm.prompt_name.trim().split('\n')
-			);
-			if (cfile) {
-				const i = tfiles.findIndex((f) => f.path === cfile.path);
-				if (i >= 0) tfiles.splice(i, 1);
-				tfiles.unshift(cfile);
-			}
-			const data: CardItem[] = tfiles.map((file) => ({
-				name: file.basename,
-				detail: file.path,
-				image: this.easyapi.editor.get_frontmatter(file, 'cover'),
-				file,
-				async action(_item: CardItem): Promise<void> {},
-			}));
-
-			if (selection) {
-				data.unshift({
-					name: this.easyapi.isZh ? '选择文本' : 'Select text',
-					detail: selection,
-					image: 'paste',
-					file: selection,
-					async action(_item: CardItem): Promise<void> {},
-				});
-				let curr = ea.file.get_tfiles(selection);
-				for(let c of curr){
-					if(!xrefiles.includes(c)){
-						xrefiles.push(c)
-					}
-				}
-			}
-
-			data.unshift({
-				name: this.easyapi.isZh ? '输入' : 'Input text',
-				detail: selection,
-				image: 'pencil',
-				file: '__input__',
-				async action(_item: CardItem): Promise<void> {},
-			});
-
-			let clp = await this.easyapi.editor.read_clipboard();
-			if(clp){
-				data.unshift({
-					name: this.easyapi.isZh ? '剪贴板' : 'Clipboard',
-					detail: clp,
-					image: 'paste',
-					file: clp,
-					async action(_item: CardItem): Promise<void> {},
-				});
-				let curr = ea.file.get_tfiles(clp);
-				for(let c of curr){
-					if(!xrefiles.includes(c)){
-						xrefiles.push(c)
-					}
-				}
-			}
-	
-			// 4️⃣ 打开卡片选择器
-			let sel = await this.easyapi.dialog_cards(data);
-			if(sel?.file == '__input__'){
-				let input = await this.easyapi.dialog_prompt(
-					this.easyapi.isZh ? '输入' : 'Input text', 
-					this.easyapi.isZh ? '请输入文本' : 'Enter text...',
-					selection ?? '',
-					true
-				);
-				if(input){
-					tfile = input;
-					let curr = ea.file.get_tfiles(input);
-					for(let c of curr){
-						if(!xrefiles.includes(c)){
-							xrefiles.push(c)
-						}
-					}
-				}else{
-					return;
-				}
-			}else{
-				tfile = sel?.file;
-			}
-			
+		if (!source) {
+			const selected = await this.select_chat_source(cfile, selection);
+			if (!selected) return;
+			source = selected.source;
+			xrefiles = selected.xrefiles;
 		}
-		if (!tfile) {
-			return;
-		}
+		if (!source) return;
+
+		// 2. 解析出原始 prompt（笔记取模板段，字符串则直接用，并把 tfile 回退为当前激活文件）
 		let prompt = '';
-		if(tfile instanceof TFile){ 
-			prompt = await this.get_prompt(tfile);
-		}else{
-			prompt = tfile as string;
+		if (source instanceof TFile) {
+			prompt = await this.get_prompt(source);
+			tfile = source;
+		} else {
+			prompt = source;
 			tfile = cfile as TFile;
 		}
 		prompt = prompt.replace(/^\s*%%[\s\S]*?%%/, '').trim();
+
+		// 3. 展开内置占位符：${selection}、${tfile.*}、${[[wiki]]} 等
+		const expanded = await this.expand_prompt_placeholders(prompt, cfile);
+		if (expanded == null) return;
+		prompt = expanded;
+
+		// 4. 交互式 ${prompt.xxx} 占位符
+		const filled = await this.fill_interactive_prompt_vars(prompt, selection);
+		if (filled == null) return;
+		prompt = filled;
+
+		// 5. 应用调用方传入的 target 替换
+		prompt = this.apply_target_replacements(prompt, target);
+
+		// 6. Templater 解析
+		prompt = await this.run_prompt_templater(prompt, tfile, cfile);
+
+		// 7. 选择并追加参考笔记
+		prompt = await this.append_selected_references(prompt, tfile, cfile, xrefiles);
+
+		// 8. 全局预处理脚本
+		prompt = await this.run_webviewllm_preprocess(prompt, tfile, cfile);
+
+		// 9. 按设置复制剪贴板 / 发送给 LLM
+		const dispatched = await this.dispatch_chat_prompt(prompt, tfile, cfile);
+		if (!dispatched) return;
+
+		// 10. 全局后处理脚本
+		await this.run_webviewllm_postprocess(
+			prompt,
+			tfile,
+			cfile,
+			dispatched.response,
+			dispatched.llm
+		);
+	}
+
+	/** 将文本中解析出的笔记去重追加到列表 */
+	private push_unique_tfiles(text: string, dest: TFile[]) {
+		const curr = this.easyapi.file.get_tfiles(text);
+		for (const c of curr) {
+			if (!dest.includes(c)) dest.push(c);
+		}
+	}
+
+	/**
+	 * 弹出卡片选择器，让用户选择提示词来源。
+	 * @returns source 为 TFile 或纯文本；xrefiles 为源文本中提到的相关笔记
+	 */
+	private async select_chat_source(
+		cfile: TFile | null,
+		selection: string
+	): Promise<{ source: TFile | string; xrefiles: TFile[] } | null> {
+		const ea = this.easyapi;
+		const xrefiles: TFile[] = [];
+
+		const tfiles = ea.file.get_all_tfiles_of_tags(
+			this.plugin.settings.webviewllm.prompt_name.trim().split('\n')
+		);
+		if (cfile) {
+			const i = tfiles.findIndex((f) => f.path === cfile.path);
+			if (i >= 0) tfiles.splice(i, 1);
+			tfiles.unshift(cfile);
+		}
+
+		const data: CardItem[] = tfiles.map((file) => ({
+			name: file.basename,
+			detail: file.path,
+			image: this.easyapi.editor.get_frontmatter(file, 'cover'),
+			file,
+			async action(_item: CardItem): Promise<void> {},
+		}));
+
+		if (selection) {
+			data.unshift({
+				name: this.easyapi.isZh ? '选择文本' : 'Select text',
+				detail: selection,
+				image: 'paste',
+				file: selection,
+				async action(_item: CardItem): Promise<void> {},
+			});
+			this.push_unique_tfiles(selection, xrefiles);
+		}
+
+		data.unshift({
+			name: this.easyapi.isZh ? '输入' : 'Input text',
+			detail: selection,
+			image: 'pencil',
+			file: '__input__',
+			async action(_item: CardItem): Promise<void> {},
+		});
+
+		const clp = await this.easyapi.editor.read_clipboard();
+		if (clp) {
+			data.unshift({
+				name: this.easyapi.isZh ? '剪贴板' : 'Clipboard',
+				detail: clp,
+				image: 'paste',
+				file: clp,
+				async action(_item: CardItem): Promise<void> {},
+			});
+			this.push_unique_tfiles(clp, xrefiles);
+		}
+
+		const sel = await this.easyapi.dialog_cards(data);
+		if (sel?.file == '__input__') {
+			const input = await this.easyapi.dialog_prompt(
+				this.easyapi.isZh ? '输入' : 'Input text',
+				this.easyapi.isZh ? '请输入文本' : 'Enter text...',
+				selection ?? '',
+				true
+			);
+			if (!input) return null;
+			this.push_unique_tfiles(input, xrefiles);
+			return { source: input, xrefiles };
+		}
+
+		const source = sel?.file;
+		if (!source) return null;
+		return { source, xrefiles };
+	}
+
+	/**
+	 * 展开 prompt 中的内置占位符。
+	 * 支持：`${selection?fallback}`、`${selection}`、`${tfile.*}`、`${[[笔记]]}`。
+	 * @returns 展开后的 prompt；缺 selection 时返回 null
+	 */
+	private async expand_prompt_placeholders(
+		prompt: string,
+		cfile: TFile | null
+	): Promise<string | null> {
+		const ea = this.easyapi;
 		const conditionalRegex = /\$\{([a-zA-Z0-9.]+)\?([a-zA-Z0-9.]+)\}/g;
-		let selectionValue = null;
+		let selectionValue: string | null = null;
 		let hasSelection = false;
 
 		if (prompt.includes('${selection}') || conditionalRegex.test(prompt)) {
@@ -366,9 +428,9 @@ export class WebViewerLLMModule {
 			return match;
 		});
 
-		const replacements = new Map();
+		const replacements = new Map<string, string>();
 
-		if (hasSelection) {
+		if (hasSelection && selectionValue != null) {
 			replacements.set('${selection}', selectionValue);
 		}
 
@@ -382,7 +444,8 @@ export class WebViewerLLMModule {
 			}
 
 			if (prompt.includes('${tfile.brothers}')) {
-				const ctx = '- ' + ea.file.get_brothers(cfile).map((x: TFile) => x.basename).join('\n- ');
+				const ctx =
+					'- ' + ea.file.get_brothers(cfile).map((x: TFile) => x.basename).join('\n- ');
 				replacements.set('${tfile.brothers}', ctx);
 			}
 
@@ -395,9 +458,10 @@ export class WebViewerLLMModule {
 
 		if (!hasSelection && prompt.includes('${selection}')) {
 			new Notice('请选择文本/Select text first');
-			return;
+			return null;
 		}
 
+		// ${[[wiki-link]]} → templater 渲染结果，或笔记全文摘录
 		const sparasRegex = /\$\{\[\[(.*?)\]\]\}/g;
 		const amatches = new Set<string>();
 		let amatch;
@@ -408,23 +472,39 @@ export class WebViewerLLMModule {
 		for (const am of amatches) {
 			const xfile = ea.file.get_tfile(am);
 			if (xfile) {
-				let ctx = await ea.tpl.parse_templater(xfile, true, { cfile: cfile });
+				const ctx = await ea.tpl.parse_templater(xfile, true, { cfile: cfile });
 				let actx = ctx.join('\n');
-				if(actx.length>0){
-					replacements.set(`\$\{[[${am}]]\}`, actx);
-				}else{
-					actx = await this.append_reference([xfile],false);
-					replacements.set(`\$\{[[${am}]]\}`, actx);
+				if (actx.length > 0) {
+					replacements.set(`\${[[${am}]]}`, actx);
+				} else {
+					actx = await this.append_reference([xfile], false);
+					replacements.set(`\${[[${am}]]}`, actx);
 				}
 			}
 		}
 
-		const placeholderRegex = new RegExp(
-			Array.from(replacements.keys()).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'),
-			'g'
-		);
-		prompt = prompt.replace(placeholderRegex, (m: string) => replacements.get(m) || m);
+		if (replacements.size > 0) {
+			const placeholderRegex = new RegExp(
+				Array.from(replacements.keys())
+					.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+					.join('|'),
+				'g'
+			);
+			prompt = prompt.replace(placeholderRegex, (m: string) => replacements.get(m) || m);
+		}
 
+		return prompt;
+	}
+
+	/**
+	 * 弹出对话框填充 `${prompt.xxx}` 占位符。
+	 * @returns 填充后的 prompt；用户取消时返回 null
+	 */
+	private async fill_interactive_prompt_vars(
+		prompt: string,
+		selection: string
+	): Promise<string | null> {
+		const ea = this.easyapi;
 		const promptRegex = /\$\{prompt\.([a-zA-Z0-9_]+)\}/g;
 		const promptMatches: Set<string> = new Set();
 		let pMatch;
@@ -436,162 +516,239 @@ export class WebViewerLLMModule {
 		for (const placeholder of promptMatches) {
 			const title = placeholder.charAt(0).toUpperCase() + placeholder.slice(1);
 			let value = '';
-			if(placeholder == 'selection'){
+			if (placeholder == 'selection') {
 				value = selection;
 			}
-			const ctx = await ea.dialog_prompt(title, `Enter value for ${placeholder}...`,value);
+			const ctx = await ea.dialog_prompt(title, `Enter value for ${placeholder}...`, value);
 			if (ctx === void 0 || ctx === null) {
 				return null;
 			}
 			prompt = prompt.replace(new RegExp(`\\$\\{prompt\\.${placeholder}\\}`, 'g'), ctx);
 		}
+		return prompt;
+	}
 
+	/** 按 target 类型替换剩余 `${...}` 占位符 */
+	private apply_target_replacements(prompt: string, target: any): string {
 		if (typeof target === 'string' && target.trim() !== '') {
-			prompt = prompt.replace(/\$\{.*?\}/g, target.trim());
-		} else if (Array.isArray(target)) {
+			return prompt.replace(/\$\{.*?\}/g, target.trim());
+		}
+		if (Array.isArray(target)) {
 			for (const i of target) {
 				prompt = prompt.replace(/\$\{.*?\}/, i);
 			}
-		} else if (typeof target === 'object' && target) {
+			return prompt;
+		}
+		if (typeof target === 'object' && target) {
 			for (const k in target) {
 				prompt = prompt.replace(`\${${k}}`, target[k]);
 			}
 		}
-		
-		let prompts = [prompt]
-		try{
-			prompts = await ea.tpl.parse_templater(prompt, false, {tfile, cfile, prompt });
-		}catch(e){
-			console.error('parse_templater error',e)
+		return prompt;
+	}
+
+	/** 对整段 prompt 跑一遍 Templater（字符串模式） */
+	private async run_prompt_templater(
+		prompt: string,
+		tfile: TFile,
+		cfile: TFile | null
+	): Promise<string> {
+		const ea = this.easyapi;
+		let prompts: unknown = [prompt];
+		try {
+			prompts = await ea.tpl.parse_templater(prompt, false, { tfile, cfile, prompt });
+		} catch (e) {
+			console.error('parse_templater error', e);
 		}
-		
-		prompt = (Array.isArray(prompts) ? prompts : [prompts])
+		return (Array.isArray(prompts) ? prompts : [prompts])
 			.filter((x: unknown): x is string => typeof x === 'string')
 			.join('\n');
-		// 选择参考笔记
-		if(tfile instanceof TFile && ea.editor.get_frontmatter(tfile, 'reference','link') != false){
-			let refFiles: (TFile | string)[] = [tfile];
-			for(let xfile of xrefiles){
-				if(!refFiles.contains(xfile)){
-					refFiles.push(xfile);
-				}
-			}
-			let ciinks = ea.file.get_links(cfile) || [];
-			for(let clink of ciinks){
-				if(!refFiles.contains(clink)){
-					refFiles.push(clink);
-				}
-			}
+	}
 
-			let outfiles = ea.fs.get_outfiles(cfile) || [];
-			for(let outfile of outfiles){
-				if(!refFiles.contains(outfile)){
-					refFiles.push(outfile);
-				}
+	/**
+	 * 按 frontmatter `reference` 收集候选笔记，供用户多选后追加到 prompt。
+	 * reference=false 时跳过；默认含当前笔记、选区相关笔记、激活文件链接与附件。
+	 */
+	private async append_selected_references(
+		prompt: string,
+		tfile: TFile,
+		cfile: TFile | null,
+		xrefiles: TFile[]
+	): Promise<string> {
+		const ea = this.easyapi;
+		if (!(tfile instanceof TFile) || ea.editor.get_frontmatter(tfile, 'reference', 'link') == false) {
+			return prompt;
+		}
+
+		let refFiles: (TFile | string)[] = [tfile];
+		for (const xfile of xrefiles) {
+			if (!refFiles.contains(xfile)) refFiles.push(xfile);
+		}
+		const ciinks = ea.file.get_links(cfile) || [];
+		for (const clink of ciinks) {
+			if (!refFiles.contains(clink)) refFiles.push(clink);
+		}
+		const cOutfiles = ea.fs.get_outfiles(cfile) || [];
+		for (const outfile of cOutfiles) {
+			if (!refFiles.contains(outfile)) refFiles.push(outfile);
+		}
+
+		const ref = ea.editor.get_frontmatter(tfile, 'reference', 'link');
+		if (ref == 'link') {
+			const linkFiles = ea.file.get_links(tfile);
+			for (const clink of linkFiles) {
+				if (!refFiles.contains(clink)) refFiles.push(clink);
 			}
-
-			if (tfile instanceof TFile) {
-				let ref = ea.editor.get_frontmatter(tfile, 'reference','link');
-				if(ref == 'link'){
-					let linkFiles = ea.file.get_links(tfile);
-					for(let clink of linkFiles){
-						if(!refFiles.contains(clink)){
-							refFiles.push(clink);
-						}
-					}
-
-					let outfiles = ea.fs.get_outfiles(tfile) || [];
-					for(let outfile of outfiles){
-						if(!refFiles.contains(outfile)){
-							refFiles.push(outfile);
-						}
-					}
-					
-				}else if(ref == 'all'){
-					refFiles = ea.file.get_all_tfiles();
-				}else if(ref == 'folder'){
-					refFiles = ea.file.get_tfiles_of_folder(tfile.parent);
-					refFiles = ea.nc.chain.sort_tfiles_by_chain(refFiles);
-				}else if(ref){
-					refFiles = ea.file.get_group(ref);
-				}
+			const outfiles = ea.fs.get_outfiles(tfile) || [];
+			for (const outfile of outfiles) {
+				if (!refFiles.contains(outfile)) refFiles.push(outfile);
 			}
+		} else if (ref == 'all') {
+			refFiles = ea.file.get_all_tfiles();
+		} else if (ref == 'folder') {
+			refFiles = ea.file.get_tfiles_of_folder(tfile.parent);
+			refFiles = ea.nc.chain.sort_tfiles_by_chain(refFiles);
+		} else if (ref) {
+			refFiles = ea.file.get_group(ref);
+		}
 
-			if (refFiles.length > 0) {
-				const selectedLinks = await ea.dialog_multi_suggest(
-					refFiles.map((x: TFile|string) => x instanceof TFile ? x.basename : x),
-					refFiles,
-					'',
-					(this.easyapi.isZh) ? '选择参考链接笔记' : 'Select reference link notes',
-				);
-				if (selectedLinks?.length) {
-					prompt += await this.append_reference(selectedLinks);
-				}
+		if (refFiles.length > 0) {
+			const selectedLinks = await ea.dialog_multi_suggest(
+				refFiles.map((x: TFile | string) => (x instanceof TFile ? x.basename : x)),
+				refFiles,
+				'',
+				this.easyapi.isZh ? '选择参考链接笔记' : 'Select reference link notes'
+			);
+			if (selectedLinks?.length) {
+				prompt += await this.append_reference(selectedLinks);
 			}
 		}
-		
-		for(let line of this.plugin.settings.webviewllm.preprocess?.trim().split('\n') ?? []){
-			let xfile = ea.file.get_tfile(line);
-			if(xfile){
-				let ctx = await ea.tpl.parse_templater(xfile, true, {tfile, cfile, prompt });
+		return prompt;
+	}
+
+	/** 执行设置中的 preprocess 笔记脚本，依次改写 prompt */
+	private async run_webviewllm_preprocess(
+		prompt: string,
+		tfile: TFile,
+		cfile: TFile | null
+	): Promise<string> {
+		const ea = this.easyapi;
+		for (const line of this.plugin.settings.webviewllm.preprocess?.trim().split('\n') ?? []) {
+			const xfile = ea.file.get_tfile(line);
+			if (xfile) {
+				const ctx = await ea.tpl.parse_templater(xfile, true, { tfile, cfile, prompt });
 				prompt = ctx.join('\n');
 			}
 		}
+		return prompt;
+	}
 
+	/**
+	 * 按 `write_clipboard` 设置分发：
+	 * - '1' 仅复制
+	 * - '2' 复制并发送 LLM，再跑笔记内「后处理」标题
+	 * - '3' 仅发送 LLM
+	 * @returns null 表示提前中止（无 LLM 等）
+	 */
+	private async dispatch_chat_prompt(
+		prompt: string,
+		tfile: TFile,
+		cfile: TFile | null
+	): Promise<{ response: string; llm: BaseWebViewer | undefined } | null> {
+		const ea = this.easyapi;
+		const mode = this.plugin.settings.webviewllm.write_clipboard;
 		let response = '';
+		let llm: BaseWebViewer | undefined;
 
-		if(this.plugin.settings.webviewllm.write_clipboard == '1'){
+		if (mode == '1') {
 			const copied = await this.easyapi.editor.write_clipboard(prompt);
 			if (!copied) {
-				new Notice(this.easyapi.isZh ? '复制失败，请检查剪贴板权限' : 'Copy failed, please check clipboard permission');
+				new Notice(
+					this.easyapi.isZh
+						? '复制失败，请检查剪贴板权限'
+						: 'Copy failed, please check clipboard permission'
+				);
 			} else {
 				new Notice(this.easyapi.isZh ? '提示词已复制' : 'Prompt copied');
 			}
-		}else if(this.plugin.settings.webviewllm.write_clipboard == '2'){
+		} else if (mode == '2') {
 			llm = await this.get_last_active_llm();
 			if (!llm) {
-				new Notice(this.easyapi.isZh ? '未找到活动的 LLM Webview，已复制提示词' : 'No active LLM webview found, prompt copied to clipboard');
+				new Notice(
+					this.easyapi.isZh
+						? '未找到活动的 LLM Webview，已复制提示词'
+						: 'No active LLM webview found, prompt copied to clipboard'
+				);
 				await this.easyapi.editor.write_clipboard(prompt);
-				return;
+				return null;
 			}
 			const copied = await this.easyapi.editor.write_clipboard(prompt);
 			if (!copied) {
-				new Notice(this.easyapi.isZh ? '复制失败，请检查剪贴板权限' : 'Copy failed, please check clipboard permission');
+				new Notice(
+					this.easyapi.isZh
+						? '复制失败，请检查剪贴板权限'
+						: 'Copy failed, please check clipboard permission'
+				);
 			}
 			response = (await llm.request(prompt)) ?? '';
-			let postprocess = await ea.editor.get_heading_section(tfile,'后处理');
-			if(postprocess?.length==0){
-				postprocess = await ea.editor.get_heading_section(tfile,'Postprocess');
-			}
-			if(postprocess){
-				const codes = await ea.editor.extract_code_block(postprocess, [
-					'js //templater',
-					'js templater',
-					'js tpl',
-					'js //tpl',
-				]);
-				if (codes.length === 0 && response) {
-					if (llm.view) {
-						this.app.workspace.setActiveLeaf(llm.view.leaf);
-					}
-				} else {
-					await ea.tpl.parse_templater(postprocess, true, {tfile,cfile, prompt, response, llm });
-				}
-			}
-			
-		}else if(this.plugin.settings.webviewllm.write_clipboard == '3'){
+			await this.run_note_postprocess_section(tfile, cfile, prompt, response, llm);
+		} else if (mode == '3') {
 			llm = await this.get_last_active_llm();
 			if (!llm) {
-				new Notice(this.easyapi.isZh ? '未找到活动的 LLM Webview' : 'No active LLM webview found');
-				return;
+				new Notice(
+					this.easyapi.isZh ? '未找到活动的 LLM Webview' : 'No active LLM webview found'
+				);
+				return null;
 			}
 			response = (await llm.request(prompt)) ?? '';
 		}
 
-		for(let line of this.plugin.settings.webviewllm.postprocess?.trim().split('\n') ?? []){
-			let xfile = ea.file.get_tfile(line);
-			if(xfile){
-				await ea.tpl.parse_templater(xfile, true, {tfile, cfile, prompt,response,llm });
+		return { response, llm };
+	}
+
+	/** 执行提示词笔记中「后处理 / Postprocess」标题下的 Templater 代码块 */
+	private async run_note_postprocess_section(
+		tfile: TFile,
+		cfile: TFile | null,
+		prompt: string,
+		response: string,
+		llm: BaseWebViewer
+	) {
+		const ea = this.easyapi;
+		let postprocess = await ea.editor.get_heading_section(tfile, '后处理');
+		if (postprocess?.length == 0) {
+			postprocess = await ea.editor.get_heading_section(tfile, 'Postprocess');
+		}
+		if (!postprocess) return;
+
+		const codes = await ea.editor.extract_code_block(postprocess, [
+			'js //templater',
+			'js templater',
+			'js tpl',
+			'js //tpl',
+		]);
+		if (codes.length === 0 && response) {
+			if (llm.view) {
+				this.app.workspace.setActiveLeaf(llm.view.leaf);
+			}
+		} else {
+			await ea.tpl.parse_templater(postprocess, true, { tfile, cfile, prompt, response, llm });
+		}
+	}
+
+	/** 执行设置中的 postprocess 笔记脚本 */
+	private async run_webviewllm_postprocess(
+		prompt: string,
+		tfile: TFile,
+		cfile: TFile | null,
+		response: string,
+		llm: BaseWebViewer | undefined
+	) {
+		const ea = this.easyapi;
+		for (const line of this.plugin.settings.webviewllm.postprocess?.trim().split('\n') ?? []) {
+			const xfile = ea.file.get_tfile(line);
+			if (xfile) {
+				await ea.tpl.parse_templater(xfile, true, { tfile, cfile, prompt, response, llm });
 			}
 		}
 	}
