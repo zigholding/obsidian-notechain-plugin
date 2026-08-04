@@ -47,6 +47,8 @@ export default class NoteChainPlugin extends Plugin {
 	ob: any;
 	easyapi!: EasyAPI;
 	httpServer: HTTPServer | null = null;
+	_autoNotechainTimers: Map<string, number> | null = null;
+	_autoNotechainPending: Map<string, TFile> | null = null;
 
 	/** 原 NCEditor API：与 `easyapi.editor` 相同 */
 	get editor(): EasyEditor {
@@ -161,6 +163,13 @@ export default class NoteChainPlugin extends Plugin {
 
 
 	async onunload() {
+		if (this._autoNotechainTimers) {
+			for (const timer of this._autoNotechainTimers.values()) {
+				window.clearTimeout(timer);
+			}
+			this._autoNotechainTimers.clear();
+			this._autoNotechainPending?.clear();
+		}
 		// 先停 HTTP，避免 explorer 等耗时逻辑拖后导致退出时端口仍被占用
 		if (this.httpServer) {
 			try {
@@ -186,27 +195,49 @@ export default class NoteChainPlugin extends Plugin {
 			let target = await (this.app as any).plugins.getPlugin("obsidian-tasks-plugin");
 			target && target.cache.notifySubscribers();
 		}
-		if (this.settings.notechain.auto_notechain) {
-			await this.auto_notechain(file);
-		}
 	}
 
-	async auto_notechain(file: TFile) {
-		let notes = this.easyapi.file.get_brothers(file);
-		if (notes.length == 0) { return; }
-		if (!this.wordcount.filter(file)) { return; }
-		if (this.explorer?.file_explorer) {
-			notes = this.chain.sort_tfiles(notes, (this.explorer.file_explorer as any).sortOrder);
-			notes = this.chain.sort_tfiles(notes, 'chain');
-			let bnotes = notes.filter((x: TFile) => x.basename.contains('.sync-conflict'));
-			let anotes = notes.filter((x: TFile) => !x.basename.contains('.sync-conflict'));
-			notes = this.utils.concat_array(anotes, bnotes);
-			if (notes.length > 0) {
-				await this.chain.chain_concat_tfiles(notes);
-				await this.chain.chain_set_prev(notes[0], null);
-				await this.chain.chain_set_next(notes[notes.length - 1], null);
+	/** Debounced entry: coalesce bulk create/sync into one fill per folder. */
+	schedule_auto_notechain(file: TFile, delayMs = 500) {
+		if (!this.settings.notechain.auto_notechain) { return; }
+		if (!(file instanceof TFile) || !this.wordcount.filter(file)) { return; }
+		const folderPath = file.parent?.path ?? '';
+		if (!this._autoNotechainTimers) {
+			this._autoNotechainTimers = new Map();
+		}
+		this._autoNotechainPending = this._autoNotechainPending || new Map();
+		this._autoNotechainPending.set(folderPath, file);
+		const prev = this._autoNotechainTimers.get(folderPath);
+		if (prev != null) { window.clearTimeout(prev); }
+		const timer = window.setTimeout(async () => {
+			this._autoNotechainTimers?.delete(folderPath);
+			const pending = this._autoNotechainPending?.get(folderPath);
+			this._autoNotechainPending?.delete(folderPath);
+			if (pending) {
+				await this.auto_notechain(pending);
 			}
-			this.explorer.sort();
+		}, delayMs);
+		this._autoNotechainTimers.set(folderPath, timer);
+	}
+
+	/**
+	 * Only fill gaps: never reshape an existing sibling chain.
+	 * Triggered on create / move-into-folder (not on every file-open).
+	 */
+	async auto_notechain(file: TFile) {
+		if (!(file instanceof TFile)) { return; }
+		if (!this.wordcount.filter(file)) { return; }
+		if (file.basename.contains('.sync-conflict')) { return; }
+
+		let notes: TFile[] = this.easyapi.file.get_brothers(file);
+		notes = notes.filter((x: TFile) =>
+			this.wordcount.filter(x) && !x.basename.contains('.sync-conflict')
+		);
+		if (notes.length == 0) { return; }
+
+		const changed = await this.chain.chain_fill_folder_orphans(file, notes);
+		if (changed) {
+			this.explorer?.sort();
 		}
 	}
 

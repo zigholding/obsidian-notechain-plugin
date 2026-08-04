@@ -641,6 +641,80 @@ export class NoteChain {
 		return res;
 	}
 
+	/** Walk Prev/Next only among `files` (ignore links that leave the set). */
+	get_chain_among(tfile: TFile, files: Set<TFile> | TFile[]): TFile[] {
+		const set = files instanceof Set ? files : new Set(files);
+		if (!tfile || !set.has(tfile)) { return []; }
+
+		const res: TFile[] = [tfile];
+		let tmp: TFile = tfile;
+		while (true) {
+			const prev = this.get_prev_note(tmp);
+			if (!prev || !set.has(prev) || res.includes(prev)) { break; }
+			res.unshift(prev);
+			tmp = prev;
+		}
+		tmp = tfile;
+		while (true) {
+			const next = this.get_next_note(tmp);
+			if (!next || !set.has(next) || res.includes(next)) { break; }
+			res.push(next);
+			tmp = next;
+		}
+		return res;
+	}
+
+	/**
+	 * Fill gaps only: leave existing sibling chains intact.
+	 * - If notes already form one chain covering the folder → no-op
+	 * - If no multi-note chain → bootstrap alphabetically (stable across devices)
+	 * - Else append notes not in the main chain to its tail (alpha order)
+	 */
+	async chain_fill_folder_orphans(file: TFile, notes: TFile[]) {
+		if (!file || notes.length === 0) { return false; }
+
+		const noteSet = new Set(notes);
+		const visited = new Set<TFile>();
+		const chains: TFile[][] = [];
+		for (const note of notes) {
+			if (visited.has(note)) { continue; }
+			const chain = this.get_chain_among(note, noteSet);
+			for (const n of chain) { visited.add(n); }
+			chains.push(chain);
+		}
+
+		if (chains.length === 1 && chains[0].length === notes.length) {
+			return false;
+		}
+
+		let main =
+			chains.find(c => c.length > 1 && c.includes(file)) ||
+			chains.filter(c => c.length > 1).sort((a, b) => b.length - a.length)[0] ||
+			[];
+
+		const inMain = new Set(main);
+		const orphans = notes
+			.filter(n => !inMain.has(n))
+			.sort((a, b) => a.name.localeCompare(b.name));
+
+		if (main.length <= 1) {
+			if (orphans.length <= 1) { return false; }
+			await this.chain_concat_tfiles(orphans);
+			return true;
+		}
+
+		if (orphans.length === 0) { return false; }
+
+		for (const orphan of orphans) {
+			await this.chain_pop_node(orphan);
+			await this.chain_set_prev(orphan, null);
+			await this.chain_set_next(orphan, null);
+		}
+		const tail = this.get_last_note(main[0]) || main[main.length - 1];
+		await this.chain_concat_tfiles([tail, ...orphans]);
+		return true;
+	}
+
 	get_first_note(tfile = this.current_note) {
 		let notes = this.get_chain(tfile, -1, 0, false);
 		if (notes.length > 0) {

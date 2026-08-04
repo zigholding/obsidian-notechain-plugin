@@ -411,9 +411,9 @@ export class Strings{
 
     get setting_auto_notechain(){
         if(this.language=='zh'){
-            return '打开文件时，自动重塑文件夹笔记链？'
+            return '创建或移入文件夹时，将未入链笔记补入链条？（不重塑已有链）'
         }else{
-            return "Auto build notechain of folder while open new file?";
+            return "On create/move into a folder, link notes not yet in the chain? (does not reshape existing chains)";
         }
     }
 

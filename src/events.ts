@@ -28,7 +28,10 @@ const onDeleteFile = (plugin: NoteChainPlugin) => {
 const onCreateFile = (plugin: NoteChainPlugin) => {
 	plugin.registerEvent(plugin.app.vault.on(
 		'create',
-		async () => {
+		async (file: TAbstractFile) => {
+			if (plugin.settings.notechain.auto_notechain && file instanceof TFile) {
+				plugin.schedule_auto_notechain(file);
+			}
 			await sleep(500);
 			plugin.explorer.sort(0, true);
 		}
@@ -44,7 +47,7 @@ const onRenameFile = (plugin: NoteChainPlugin) => {
 			);
 			if (oldFolder != file.parent && plugin.settings.notechain.auto_notechain) {
 				await plugin.chain.chain_pop_node(file);
-				await plugin.auto_notechain(file);
+				plugin.schedule_auto_notechain(file);
 			}
 			oldFolder && plugin.chain.refresh_folder(oldFolder);
 			plugin.chain.refresh_tfile(file);
