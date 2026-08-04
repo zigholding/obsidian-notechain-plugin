@@ -102,45 +102,46 @@ export default class NoteChainPlugin extends Plugin {
 		this.dailyjob = new DailyJob(this)
 		this.webviewerllm = new WebViewerLLMModule(this);
 
-		// 初始化 HTTP 服务器
-		const vaultRoot = (this.app.vault.adapter as any).basePath as string;
-		const configDirAbs = path.join(vaultRoot, this.app.vault.configDir);
-		this.httpServer = new HTTPServer(
-			this.app,
-			this.easyapi.tpl,
-			configDirAbs,
-			this.settings.notechain.httpServerHost,
-			this.settings.notechain.httpServerPort
-		);
-		// 如果启用，自动启动服务器
-		if (!this.easyapi.isMobile && this.settings.notechain.httpServerEnabled) {
-			const nc = this.settings.notechain;
-			const https = !!nc.httpServerHttpsEnabled;
-			const http = !!nc.httpServerHttpEnabled;
-			if (https || http) {
-				this.httpServer.start({ https, http })
-					.then(() => {
-						const srv = this.httpServer;
-						if (srv && https) {
-							installWebviewTlsTrust(
-								getWebViewerPartition(this.app),
-								srv.getPort(),
-								srv.getTlsDir(),
-							);
-						}
-						if (srv?.isHttpsRunning()) {
-							console.log(`Note-Chain HTTPS: ${srv.getBaseUrl()}/oldbuddy`);
-						}
-						if (srv?.isHttpRunning()) {
-							console.log(`Note-Chain HTTP: ${srv.getHttpBaseUrl()}/oldbuddy`);
-						}
-					})
-					.catch((error) => {
-						console.error('Failed to start HTTP Server:', error);
-						if (this.debug) {
-							new Notice(`Failed to start HTTP Server: ${error.message}`, 5000);
-						}
-					});
+		// HTTP/HTTPS 仅桌面端（依赖 Node crypto / fs；selfsigned 在 mobile 会因 webcrypto 崩溃）
+		if (!this.easyapi.isMobile) {
+			const vaultRoot = (this.app.vault.adapter as any).basePath as string;
+			const configDirAbs = path.join(vaultRoot, this.app.vault.configDir);
+			this.httpServer = new HTTPServer(
+				this.app,
+				this.easyapi.tpl,
+				configDirAbs,
+				this.settings.notechain.httpServerHost,
+				this.settings.notechain.httpServerPort
+			);
+			if (this.settings.notechain.httpServerEnabled) {
+				const nc = this.settings.notechain;
+				const https = !!nc.httpServerHttpsEnabled;
+				const http = !!nc.httpServerHttpEnabled;
+				if (https || http) {
+					this.httpServer.start({ https, http })
+						.then(() => {
+							const srv = this.httpServer;
+							if (srv && https) {
+								installWebviewTlsTrust(
+									getWebViewerPartition(this.app),
+									srv.getPort(),
+									srv.getTlsDir(),
+								);
+							}
+							if (srv?.isHttpsRunning()) {
+								console.log(`Note-Chain HTTPS: ${srv.getBaseUrl()}/oldbuddy`);
+							}
+							if (srv?.isHttpRunning()) {
+								console.log(`Note-Chain HTTP: ${srv.getHttpBaseUrl()}/oldbuddy`);
+							}
+						})
+						.catch((error) => {
+							console.error('Failed to start HTTP Server:', error);
+							if (this.debug) {
+								new Notice(`Failed to start HTTP Server: ${error.message}`, 5000);
+							}
+						});
+				}
 			}
 		}
 

@@ -2,8 +2,12 @@ let fs = require('fs');
 let path = require('path');
 let os = require('os');
 let crypto = require('crypto');
-let selfsigned = require('selfsigned');
 import { getTailscaleSelfInfo } from './tailscaleUtil';
+
+/** Lazy-load: selfsigned touches nodeCrypto.webcrypto at require-time (breaks Obsidian mobile). */
+function getSelfsigned(): any {
+	return require('selfsigned');
+}
 
 function normalizeCertFingerprint(fp: string): string {
     return String(fp || '').replace(/:/g, '').toUpperCase();
@@ -127,7 +131,7 @@ export async function ensureSelfSignedCert(tlsDir: string): Promise<{ key: strin
     const notAfterDate = new Date();
     notAfterDate.setDate(notAfterDate.getDate() + 825);
 
-    const pems = await selfsigned.generate([{ name: 'commonName', value: 'NoteChain' }], {
+    const pems = await getSelfsigned().generate([{ name: 'commonName', value: 'NoteChain' }], {
         keySize: 2048,
         algorithm: 'sha256',
         notAfterDate,
