@@ -391,6 +391,59 @@ export class EasyEditor {
         return true;
     }
 
+    /** Strip Obsidian blockquote / callout prefixes (`>`, `> >`, …) from a line. */
+    private strip_blockquote_prefix(line: string): string {
+        return line.replace(/^(?:>[ \t]*)+/, '');
+    }
+
+    /**
+     * Walk markdown lines and collect fenced blocks whose info string matches `fenceInfo`.
+     * Supports fences nested in `>` quotes / callouts (each line may be prefixed with `>`).
+     */
+    private scan_fenced_blocks(
+        content: string,
+        fenceInfo: string,
+        marks: string[] = ['```', '~~~'],
+    ): { inner: string; start: number; end: number }[] {
+        const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const lines = content.split(/\r?\n/);
+        const found: { inner: string; start: number; end: number }[] = [];
+        let i = 0;
+        while (i < lines.length) {
+            let hit = false;
+            for (const mark of marks) {
+                const openRe = new RegExp(
+                    `^(?:>[ \\t]*)*${escapeRegExp(mark)}${fenceInfo}[ \\t]*$`
+                );
+                if (!openRe.test(lines[i])) {
+                    continue;
+                }
+                const closeRe = new RegExp(`^(?:>[ \\t]*)*${escapeRegExp(mark)}[ \\t]*$`);
+                const body: string[] = [];
+                const start = i;
+                i++;
+                while (i < lines.length && !closeRe.test(lines[i])) {
+                    body.push(this.strip_blockquote_prefix(lines[i]));
+                    i++;
+                }
+                if (i < lines.length) {
+                    found.push({
+                        inner: body.join('\n').trim(),
+                        start,
+                        end: i,
+                    });
+                    i++;
+                }
+                hit = true;
+                break;
+            }
+            if (!hit) {
+                i++;
+            }
+        }
+        return found;
+    }
+
     async extract_code_block(tfile: TFile | string, btype: string | string[]) {
         let xfile = this.ea.file.get_tfile(tfile);
         if (xfile) {
@@ -408,18 +461,7 @@ export class EasyEditor {
             ? escapeRegExp(types[0])
             : `(?:${types.map(escapeRegExp).join('|')})`;
 
-        let blocks = [];
-        let reg = new RegExp(String.raw`\`\`\`${fenceInfo}\r?\n([\s\S]*?)\r?\n\`\`\``, 'g');
-        let matches;
-        while ((matches = reg.exec(tfile)) !== null) {
-            blocks.push(matches[1].trim());
-        }
-
-        reg = new RegExp(String.raw`~~~${fenceInfo}\r?\n([\s\S]*?)\r?\n~~~`, 'g');
-        while ((matches = reg.exec(tfile)) !== null) {
-            blocks.push(matches[1].trim());
-        }
-        return blocks;
+        return this.scan_fenced_blocks(tfile, fenceInfo).map(b => b.inner);
     }
 
     /** `[[note|alias]]` 或整段匹配的正则 */
@@ -509,22 +551,31 @@ export class EasyEditor {
 
     
 
-    /** Inline ```js //templater``` (and sibling info strings) → `<%* … -%>`, matching {@link extract_templater_block} so full-text `parse_commands` runs fenced tpl. */
+    /** Inline ```js //templater``` (and sibling info strings) → `<%* … -%>`, matching {@link extract_templater_block} so full-text `parse_commands` runs fenced tpl. Also handles fences inside `>` quotes / callouts. */
     expand_fenced_templater_in_full_text(content: string): string {
         const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const types = ['js //templater', 'js templater', 'js tpl', 'js //tpl'];
         const fenceInfo = `(?:${types.map(escapeRegExp).join('|')})`;
-        let s = content;
-        const replaceFences = (mark: string) => {
-            const reg = new RegExp(
-                mark + fenceInfo + String.raw`\r?\n([\s\S]*?)\r?\n` + mark,
-                'g'
-            );
-            s = s.replace(reg, (_m, inner: string) => `<%*\n${inner.trim()}\n-%>`);
-        };
-        replaceFences('```');
-        replaceFences('~~~');
-        return s;
+        const lines = content.split(/\r?\n/);
+        const blocks = this.scan_fenced_blocks(content, fenceInfo);
+        if (blocks.length === 0) {
+            return content;
+        }
+        const out: string[] = [];
+        let i = 0;
+        for (const b of blocks) {
+            while (i < b.start) {
+                out.push(lines[i]);
+                i++;
+            }
+            out.push(`<%*\n${b.inner}\n-%>`);
+            i = b.end + 1;
+        }
+        while (i < lines.length) {
+            out.push(lines[i]);
+            i++;
+        }
+        return out.join('\n');
     }
 
     async extract_templater_block(tfile: TFile | string, reg = /<%\*\s*([\s\S]*?)\s*-?%>/g): Promise<string[]> {
@@ -546,6 +597,7 @@ export class EasyEditor {
             'js tpl',
             'js //tpl'
         ]);
+        
         for (const tpl of tpls) {
             cssCodeBlocks.push(`<%*\n${tpl}\n-%>`);
         }

@@ -426,9 +426,9 @@ export class WebViewerLLMModule {
 
 	/**
 	 * 展开 prompt 中的内置占位符。
-	 * 支持：`${selection?fallback}`、`${selection}`、`${tfile.*}`、`${[[笔记]]}`。
+	 * 支持：`${selection?fallback}`、`${selection}`、`${tfile.*}`、`${file}`、`${files}`、`${[[笔记]]}`。
 	 * @param allowTemplater false 时 `${[[wiki]]}` 只摘录正文，不跑 Templater
-	 * @returns 展开后的 prompt；缺 selection 时返回 null
+	 * @returns 展开后的 prompt；缺 selection / 取消选文件时返回 null
 	 */
 	private async expand_prompt_placeholders(
 		prompt: string,
@@ -485,6 +485,26 @@ export class WebViewerLLMModule {
 			return null;
 		}
 
+		// ${files} 先于 ${file}，避免短占位符抢先匹配
+		if (prompt.includes('${files}')) {
+			const paths = await this.pick_system_files(true);
+			if (!paths?.length) return null;
+			replacements.set('${files}', await this.append_reference(paths, false));
+		}
+
+		if (prompt.includes('${file}')) {
+			const paths = await this.pick_system_files(false);
+			if (!paths?.length) return null;
+			const body = await ea.fs.read_file(paths[0]);
+			if (body == null) {
+				new Notice(
+					this.easyapi.isZh ? `无法读取文件：${paths[0]}` : `Failed to read file: ${paths[0]}`
+				);
+				return null;
+			}
+			replacements.set('${file}', String(body));
+		}
+
 		// ${[[wiki-link]]} → templater 渲染结果，或笔记全文摘录
 		const sparasRegex = /\$\{\[\[(.*?)\]\]\}/g;
 		const amatches = new Set<string>();
@@ -511,16 +531,59 @@ export class WebViewerLLMModule {
 		}
 
 		if (replacements.size > 0) {
+			const keys = Array.from(replacements.keys()).sort((a, b) => b.length - a.length);
 			const placeholderRegex = new RegExp(
-				Array.from(replacements.keys())
-					.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-					.join('|'),
+				keys.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'),
 				'g'
 			);
 			prompt = prompt.replace(placeholderRegex, (m: string) => replacements.get(m) || m);
 		}
 
 		return prompt;
+	}
+
+	/**
+	 * 从系统选择文件（桌面 Electron 对话框；移动端回退为库内文件选择）。
+	 * @returns 绝对路径或库内 path 列表；取消时 null
+	 */
+	private async pick_system_files(multi: boolean): Promise<string[] | null> {
+		const title = multi
+			? this.easyapi.isZh
+				? '选择多个文件'
+				: 'Select files'
+			: this.easyapi.isZh
+				? '选择文件'
+				: 'Select a file';
+
+		if (!(this.app as any).isMobile) {
+			try {
+				const { dialog } = require('electron').remote;
+				const result = await dialog.showOpenDialog({
+					title,
+					properties: multi ? ['openFile', 'multiSelections'] : ['openFile'],
+				});
+				if (result?.canceled || !result?.filePaths?.length) return null;
+				return result.filePaths as string[];
+			} catch (e) {
+				console.warn('[webviewllm] system file picker failed, fallback to vault', e);
+			}
+		}
+
+		const files = this.app.vault.getFiles();
+		const labels = files.map((f) => f.path);
+		if (multi) {
+			const sel = await this.easyapi.dialog_multi_suggest(
+				labels,
+				files,
+				'',
+				title
+			);
+			if (!sel?.length) return null;
+			return sel.map((f: TFile) => f.path);
+		}
+		const sel = await this.easyapi.dialog_suggest(labels, files, title);
+		if (!sel) return null;
+		return [(sel as TFile).path];
 	}
 
 	/**
