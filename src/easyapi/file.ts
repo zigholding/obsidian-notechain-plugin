@@ -280,29 +280,7 @@ export class File {
 		}
 	}
 
-	get_all_tfiles_of_tags(tags: string | Array<string>) {
-		if (!Array.isArray(tags)) {
-			tags = [tags]
-		}
-
-		tags = tags.map(x => {
-			if (x.startsWith('#')) {
-				return x;
-			} else {
-				return '#' + x;
-			}
-		})
-
-		let tfiles = this.get_all_tfiles().filter(x => {
-			let ttags = this.get_tags(x);
-			for (let tag of tags) {
-				if (ttags.contains(tag)) {
-					return true;
-				}
-			}
-		})
-		return tfiles;
-	}
+	
 
 	generate_structure(tfolder: TFolder, depth = 0, isRoot = true, only_folder = false, only_md = true) {
 		let structure = '';

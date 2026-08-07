@@ -358,7 +358,7 @@ export class WebViewerLLMModule {
 		const ea = this.easyapi;
 		const xrefiles: TFile[] = [];
 
-		const tfiles = ea.file.get_all_tfiles_of_tags(
+		const tfiles = ea.file.get_all_tfiles_tags(
 			this.plugin.settings.webviewllm.prompt_name.trim().split('\n')
 		);
 		if (cfile) {
