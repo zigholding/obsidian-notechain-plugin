@@ -149,7 +149,12 @@ export class Templater {
             active_file = target_file;
         }
 
-        const runtime_extra = extra ? { ...extra } : null;
+        // Keep primitives (e.g. title string from wxmp) as-is.
+        // Only shallow-copy plain objects so callers cannot mutate config.extra.
+        const runtime_extra =
+            extra == null
+                ? null
+                : (typeof extra === 'object' && !Array.isArray(extra) ? { ...extra } : extra);
 
         // Templater internals may read template_file.path even in dynamic mode.
         // When input template is raw text, fallback to target_file to avoid null access.
