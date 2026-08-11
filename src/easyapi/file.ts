@@ -544,7 +544,7 @@ export class File {
 			return (_a = x.dataset) == null ? void 0 : _a.path;
 		});
 		let tfiles = items.map(
-			(x) => this.get_tfile(x)).filter((x) => x.extension == "md"
+			(x: any) => this.get_tfile(x)).filter((x: any) => x.extension == "md"
 			)
 		if (tfiles.length > 0) {
 			return tfiles
@@ -609,12 +609,12 @@ export class File {
 		}
 
 		// 3️⃣ 转成 CardItem 结构
-		const data = Object.entries(groups).map(([folder, files]) => {
+		const data = Object.entries(groups).map(([folder, files]: [string, TFile[]]) => {
 			return {
 				name: folder.split('/').pop(), // 只显示最后一级目录名
 				detail: `${files.length} 个笔记`,
 				image: this.ea.editor.get_frontmatter(folder, 'cover') || "folder",
-				action: files.map(file => ({
+				action: files.map((file: TFile) => ({
 					name: file.basename,
 					detail: file.path,
 					image: this.ea.editor.get_frontmatter(file, 'cover') || "file",

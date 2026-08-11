@@ -1156,12 +1156,15 @@ export class CalendarGalleryModal extends Modal {
 		};
 
 		if (images.length > 1) {
-			const prev = wrap.createDiv({ cls: "nc-cal-carousel-btn nc-cal-carousel-prev", attr: { "aria-label": "Previous" } });
-			setIcon(prev, "chevron-left");
-			const next = wrap.createDiv({ cls: "nc-cal-carousel-btn nc-cal-carousel-next", attr: { "aria-label": "Next" } });
-			setIcon(next, "chevron-right");
-			prev.onclick = (e) => { e.stopPropagation(); setMedia(current - 1); };
-			next.onclick = (e) => { e.stopPropagation(); setMedia(current + 1); };
+			// 手机日历卡片空间小，不显示左右切换按钮；预览/lightbox 仍可切换
+			if (!(this.app as any).isMobile) {
+				const prev = wrap.createDiv({ cls: "nc-cal-carousel-btn nc-cal-carousel-prev", attr: { "aria-label": "Previous" } });
+				setIcon(prev, "chevron-left");
+				const next = wrap.createDiv({ cls: "nc-cal-carousel-btn nc-cal-carousel-next", attr: { "aria-label": "Next" } });
+				setIcon(next, "chevron-right");
+				prev.onclick = (e) => { e.stopPropagation(); setMedia(current - 1); };
+				next.onclick = (e) => { e.stopPropagation(); setMedia(current + 1); };
+			}
 
 			dots = wrap.createDiv({ cls: "nc-cal-dots" });
 			images.forEach((_, i) => {
