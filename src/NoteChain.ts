@@ -6,13 +6,11 @@ import {
 	TFile, TFolder
 } from 'obsidian';
 
-import NoteChainPlugin from "../main";
-import { get_tp_func } from './utils';
+import NoteChainPlugin from "./plugin";
 import { NoteContentModal, NoteEditorModal } from './NCModal'
 import { NoteContentView } from './NCView'
 import { LexoRank } from "lexorank";
 import { strings } from './NoteChain/strings';
-import { off } from 'process';
 
 
 

@@ -2,7 +2,7 @@ import {
 	App, Notice, PluginSettingTab, Setting, ButtonComponent
 } from 'obsidian';
 
-import NoteChainPlugin from '../../main';
+import NoteChainPlugin from '../plugin';
 import { strings } from './strings';
 import { getWebViewerPartition, installWebviewTlsTrust } from '../server/tlsWebviewTrust';
 

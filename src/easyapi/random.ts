@@ -110,7 +110,7 @@ export class Random {
     }
 
 	_get_tfiles_(filter:null|Function){
-		let tfiles = this.ea.nc.chain.get_all_tfiles();
+		let tfiles = this.ea.file.get_all_tfiles();
 		if(filter){
 			tfiles = tfiles.filter((x:TFile)=>filter(x))
 		}

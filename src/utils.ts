@@ -1,18 +1,8 @@
-import { on } from 'events';
-import { get } from 'http';
-import { 
+import {
 	App,
     TFile,
-    Notice,
     TFolder,
-    TAbstractFile
 } from 'obsidian';
-
-import {NoteContentView} from './NCView'
-
-export function get_plugins(app:App,name:string){
-
-}
 
 export function array_prefix_id(items:Array<any>,offset=1){
     let res = new Array();
@@ -136,18 +126,19 @@ export async function get_str_func(app:App,target:string) {
 
 export async function toogle_note_css(app:App,document:any,name:string,refresh=false) {
     let nc = (app as any).plugins.getPlugin('note-chain');
-    let tfile = nc.chain.get_tfile(name);
+    const fileApi = nc.easyapi.file;
+    let tfile = fileApi.get_tfile(name);
     if(!tfile){
         let tfiles;
         if(name=='/'){
-            tfiles = nc.chain.get_all_tfiles()
+            tfiles = fileApi.get_all_tfiles()
         }else{
-            let folder = nc.chain.get_all_folders().filter((x:TFolder)=>x.name==name)
+            let folder = fileApi.get_all_folders().filter((x:TFolder)=>x.name==name)
             if(folder.length==0){
                 return;
             }
             tfiles = nc.utils.concat_array(
-                folder.map((x:TFolder)=>nc.chain.get_tfiles_of_folder(x))
+                folder.map((x:TFolder)=>fileApi.get_tfiles_of_folder(x))
             );
         }
         

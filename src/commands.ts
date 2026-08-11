@@ -1,5 +1,5 @@
 
-import NoteChainPlugin from '../main';
+import NoteChainPlugin from './plugin';
 
 import { addNoteChainCommands } from 'src/NoteChain/commands';
 import { addWebViewerLLMCommands } from 'src/WebViewerLLM/commands';

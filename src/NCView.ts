@@ -1,5 +1,5 @@
 import { ItemView, WorkspaceLeaf, MarkdownRenderer, TFile,ViewStateResult,EventRef, Menu} from 'obsidian';
-import NoteChainPlugin from "../main";
+import NoteChainPlugin from "./plugin";
 import { getWebViewerPartition, installWebviewTlsTrust, isNoteChainServerUrl, toWebViewerUrl } from './server/tlsWebviewTrust';
 
 export class NoteContentView extends ItemView {

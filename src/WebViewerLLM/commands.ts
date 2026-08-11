@@ -1,4 +1,4 @@
-import type NoteChainPlugin from '../../main';
+import type NoteChainPlugin from '../plugin';
 import { strings } from './strings';
 
 const cmd_chat_sequence = (plugin: NoteChainPlugin) => ({

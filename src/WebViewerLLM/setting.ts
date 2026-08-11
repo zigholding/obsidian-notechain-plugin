@@ -1,6 +1,6 @@
 import { Setting } from 'obsidian';
 
-import type NoteChainPlugin from '../../main';
+import type NoteChainPlugin from '../plugin';
 import { strings } from './strings';
 
 export interface WebviewLLMSettings {

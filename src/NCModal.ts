@@ -4,7 +4,7 @@ import {
     TFile
 } from 'obsidian';
 
-import NoteChainPlugin from "../main";
+import NoteChainPlugin from "./plugin";
 
 export class NoteContentModal extends Modal {
     content: string;

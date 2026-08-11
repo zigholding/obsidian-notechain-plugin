@@ -1,11 +1,8 @@
-import { time } from 'console';
-import { 
-    App, Editor, MarkdownView, Modal, Notice, 
-    Plugin, PluginSettingTab, Setting,
-    TFile, TFolder, moment, EditorPosition, EditorSelection
+import {
+    App, MarkdownView, Notice,
+    TFile, TFolder, moment, EditorPosition
 } from 'obsidian';
-import NoteChainPlugin from "../main";
-import * as internal from 'stream';
+import NoteChainPlugin from "./plugin";
 
 
 export class WordCount{

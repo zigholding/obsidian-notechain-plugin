@@ -2,7 +2,7 @@ import {
 	Notice, TFile, TFolder
 } from 'obsidian';
 
-import NoteChainPlugin from '../../main';
+import NoteChainPlugin from '../plugin';
 
 const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 	id: "longform2notechain",

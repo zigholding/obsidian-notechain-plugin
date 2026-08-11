@@ -4,7 +4,7 @@ import {
 	App, Notice, TFile, moment
 } from 'obsidian';
 
-import NoteChainPlugin from "../main";
+import NoteChainPlugin from "./plugin";
 
 export class DailyJob {
 	plugin: NoteChainPlugin;

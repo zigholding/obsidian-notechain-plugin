@@ -8,7 +8,7 @@ import {
 } from 'obsidian';
 import * as yaml from 'js-yaml';
 
-import NoteChainPlugin from "../main";
+import NoteChainPlugin from "./plugin";
 
 /** textarea 内 `[[` 笔记待选浮窗 */
 class TextareaWikiLinkSuggest extends MarkdownRenderChild {

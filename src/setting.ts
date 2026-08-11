@@ -2,7 +2,7 @@ import {
 	App, PluginSettingTab
 } from 'obsidian';
 
-import NoteChainPlugin from '../main';
+import NoteChainPlugin from './plugin';
 import { renderNoteChainSettings } from 'src/NoteChain/setting';
 import { renderWebViewerLLMSettings } from 'src/WebViewerLLM/setting';
 

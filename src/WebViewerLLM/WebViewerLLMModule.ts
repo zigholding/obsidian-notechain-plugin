@@ -1,7 +1,7 @@
 import { Notice, TFile } from 'obsidian';
 
 import type { CardItem } from '../easyapi/gui/inputCardSuggester';
-import type NoteChainPlugin from '../../main';
+import type NoteChainPlugin from '../plugin';
 import { WebViewLLMSettings_DEFAULT } from './setting';
 import { strings } from './strings';
 import { BaseWebViewer } from './LLM/BaseWebViewer';
@@ -13,7 +13,6 @@ import { ChatGPT } from './LLM/ChatGPT';
 import { ChatGLM } from './LLM/ChatGLM';
 import { Gemini } from './LLM/Gemini';
 import { Claude } from './LLM/Claude';
-import { link } from 'fs';
 
 /** YAML `turndown_styles` after defaults; list keys are string rule lines */
 export interface WebViewerTurndownStylesNormalized {

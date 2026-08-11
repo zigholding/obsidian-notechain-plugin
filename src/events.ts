@@ -6,7 +6,7 @@ import {
 	Notice
 } from 'obsidian';
 
-import NoteChainPlugin from '../main';
+import NoteChainPlugin from './plugin';
 
 
 const onFileOpen = (plugin: NoteChainPlugin) => {

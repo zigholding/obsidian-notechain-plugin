@@ -2,7 +2,7 @@ import {
 	App,TAbstractFile,TFile,TFolder,Vault,CachedMetadata
 } from 'obsidian';
 
-import NoteChainPlugin from "../main";
+import NoteChainPlugin from "./plugin";
 import {NoteChain} from "./NoteChain";
 import { around } from 'monkey-around';
 
