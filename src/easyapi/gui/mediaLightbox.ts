@@ -244,6 +244,10 @@ export class MediaLightbox<T> {
 	private getScriptMenuTitle(tfile: TFile): string {
 		const nc = (this.options.app as any).plugins?.plugins?.["note-chain"];
 		const ea = nc?.easyapi ?? (window as any).ea;
+		const title = ea?.editor?.get_frontmatter?.(tfile, "lightbox",'').trim();
+		if (title) {
+			return title;
+		}
 		const emoji = ea?.editor?.get_frontmatter?.(tfile, "emoji");
 		const prefix = typeof emoji === "string" && emoji.trim() ? `${emoji.trim()} ` : "";
 		return `${prefix}${tfile.basename}`;
