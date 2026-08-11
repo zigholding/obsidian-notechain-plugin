@@ -634,6 +634,13 @@ export class File {
 	}
 
 	query_tfiles_by_datacore(query: string) {
+		query = query.trim();
+		if(query==''){
+			return this.get_all_tfiles();
+		}
+		if (!query.startsWith('@')) {
+			query = '@page and'+query;
+		}
 		let data = this.ea.dc?.query(query);
 		if (!data) {
 			return [];
