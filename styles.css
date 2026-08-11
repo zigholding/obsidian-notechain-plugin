@@ -878,6 +878,41 @@
   gap: 8px;
 }
 
+/* textarea 代码块：输入 [[ 时的笔记待选浮窗 */
+.nc-textarea-inline-suggest {
+  display: none;
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  max-height: 360px;
+  overflow-y: auto;
+  z-index: 99999;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.nc-textarea-inline-suggest.is-open {
+  display: block;
+}
+
+.nc-textarea-inline-suggest-item {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+}
+
+.nc-textarea-inline-suggest-item:last-child {
+  border-bottom: none;
+}
+
+.nc-textarea-inline-suggest-item:hover,
+.nc-textarea-inline-suggest-item.is-selected {
+  background: color-mix(in srgb, var(--interactive-accent) 14%, var(--background-primary));
+}
+
 /* ==========================================================================
    9. Calendar Gallery Modal
    ========================================================================== */

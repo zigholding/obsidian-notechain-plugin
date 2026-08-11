@@ -8,6 +8,7 @@ import {
 } from '../httpUtil';
 import { OLDBUDDY_PAGE_HTML } from '../oldbuddyPageHtml';
 import { OldBuddyStore, inferOldBuddyMessageType } from './oldbuddyStore';
+import type { Buffer } from 'buffer';
 
 const BASE = '/oldbuddy';
 

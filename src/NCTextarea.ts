@@ -3,13 +3,225 @@ import {
 	Plugin, PluginSettingTab, Setting, moment, MarkdownRenderer, Component,
 	TAbstractFile,
 	TFile, TFolder,
-	MarkdownPostProcessorContext
+	MarkdownPostProcessorContext,
+	MarkdownRenderChild
 } from 'obsidian';
+import * as yaml from 'js-yaml';
 
 import NoteChainPlugin from "../main";
 
+/** textarea 内 `[[` 笔记待选浮窗 */
+class TextareaWikiLinkSuggest extends MarkdownRenderChild {
+	private allNoteNames: string[] = [];
+	private linkSuggestions: string[] = [];
+	private selectedSuggestionIndex = 0;
+	private linkTriggerStart = -1;
+	private suggestionEl!: HTMLDivElement;
+
+	constructor(
+		containerEl: HTMLElement,
+		private area: HTMLTextAreaElement,
+		private app: App
+	) {
+		super(containerEl);
+	}
+
+	onload() {
+		this.area.setAttribute('data-nc-wikilink-suggest', '1');
+		// 必须挂到 body：Live Preview 祖先常有 transform，fixed 会错位并被 overflow 裁掉
+		this.suggestionEl = document.body.createDiv({
+			cls: 'nc-textarea-inline-suggest',
+		});
+		Object.assign(this.suggestionEl.style, {
+			display: 'none',
+			position: 'fixed',
+			zIndex: '99999',
+			boxSizing: 'border-box',
+			overflowY: 'auto',
+			border: '1px solid var(--background-modifier-border)',
+			borderRadius: '8px',
+			background: 'var(--background-primary)',
+			boxShadow: '0 8px 20px rgba(0, 0, 0, 0.2)',
+		});
+
+		this.cacheNoteNames();
+		this.registerDomEvent(this.area, 'input', this.onSuggestTrigger);
+		this.registerDomEvent(this.area, 'compositionend', this.onSuggestTrigger);
+		this.registerDomEvent(this.area, 'click', this.onSuggestTrigger);
+		this.registerDomEvent(this.area, 'keyup', this.onSuggestTrigger);
+		this.registerDomEvent(this.area, 'keydown', this.onKeyDown);
+		this.registerDomEvent(window, 'resize', this.onReposition);
+		this.registerDomEvent(window, 'scroll', this.onReposition, { capture: true });
+	}
+
+	onunload() {
+		this.closeSuggestionList();
+		this.suggestionEl?.remove();
+	}
+
+	private cacheNoteNames = () => {
+		this.allNoteNames = this.app.vault
+			.getMarkdownFiles()
+			.sort((a: TFile, b: TFile) => a.basename.localeCompare(b.basename))
+			.map((file: TFile) => file.basename);
+	};
+
+	private onSuggestTrigger = () => this.updateInlineSuggestions();
+
+	private onReposition = () => {
+		if (this.linkSuggestions.length > 0) this.positionSuggestionList();
+	};
+
+	private closeSuggestionList = () => {
+		this.linkSuggestions = [];
+		this.selectedSuggestionIndex = 0;
+		this.linkTriggerStart = -1;
+		if (!this.suggestionEl) return;
+		this.suggestionEl.empty();
+		this.suggestionEl.removeClass('is-open');
+		this.suggestionEl.style.display = 'none';
+	};
+
+	private positionSuggestionList = () => {
+		if (this.linkSuggestions.length === 0) return;
+		const inputRect = this.area.getBoundingClientRect();
+		const viewportPadding = 8;
+		const gap = 6;
+		const spaceBelow = window.innerHeight - inputRect.bottom - viewportPadding;
+		const spaceAbove = inputRect.top - viewportPadding;
+		const preferAbove = spaceBelow < 180 && spaceAbove > spaceBelow;
+		const available = preferAbove ? spaceAbove : spaceBelow;
+		const maxHeight = Math.max(120, Math.min(360, available - gap));
+		const top = preferAbove
+			? Math.max(viewportPadding, inputRect.top - maxHeight - gap)
+			: inputRect.bottom + gap;
+
+		Object.assign(this.suggestionEl.style, {
+			left: `${Math.max(viewportPadding, inputRect.left)}px`,
+			top: `${top}px`,
+			width: `${Math.max(160, inputRect.width)}px`,
+			maxHeight: `${maxHeight}px`,
+			display: 'block',
+		});
+	};
+
+	private renderSuggestionList = () => {
+		this.suggestionEl.empty();
+		if (this.linkSuggestions.length === 0) {
+			this.closeSuggestionList();
+			return;
+		}
+		this.suggestionEl.addClass('is-open');
+		this.suggestionEl.style.display = 'block';
+		this.positionSuggestionList();
+
+		this.linkSuggestions.forEach((name, index) => {
+			const itemEl = this.suggestionEl.createDiv({
+				cls: `nc-textarea-inline-suggest-item${index === this.selectedSuggestionIndex ? ' is-selected' : ''}`,
+				text: name,
+			});
+			Object.assign(itemEl.style, {
+				padding: '8px 10px',
+				borderBottom: '1px solid var(--background-modifier-border)',
+				cursor: 'pointer',
+				background:
+					index === this.selectedSuggestionIndex
+						? 'color-mix(in srgb, var(--interactive-accent) 14%, var(--background-primary))'
+						: '',
+			});
+			itemEl.addEventListener('mousedown', (evt) => {
+				evt.preventDefault();
+				this.applySuggestion(index);
+			});
+		});
+	};
+
+	private moveSuggestionSelection = (step: number) => {
+		if (!this.linkSuggestions.length) return;
+		const size = this.linkSuggestions.length;
+		this.selectedSuggestionIndex =
+			((this.selectedSuggestionIndex + step) % size + size) % size;
+		this.renderSuggestionList();
+	};
+
+	private applySuggestion = (index: number) => {
+		const selected = this.linkSuggestions[index];
+		if (!selected) return;
+		const cursor = this.area.selectionStart ?? this.area.value.length;
+		const before = this.area.value.slice(0, this.linkTriggerStart);
+		const after = this.area.value.slice(cursor);
+		const inserted = `[[${selected}]]`;
+		this.area.value = `${before}${inserted}${after}`;
+		const nextCursor = before.length + inserted.length;
+		this.area.setSelectionRange(nextCursor, nextCursor);
+		this.area.focus();
+		this.area.dispatchEvent(new Event('input', { bubbles: true }));
+		this.closeSuggestionList();
+	};
+
+	private normalizeWikiLinkTrigger = (): number => {
+		const cursor = this.area.selectionStart ?? this.area.value.length;
+		const normalize = (value: string) =>
+			value
+				.replace(/(?:\[|【){2,}/g, '[[')
+				.replace(/(?:\]|】){2,}/g, ']]');
+		const normalizedValue = normalize(this.area.value);
+		if (normalizedValue === this.area.value) return cursor;
+		const nextCursor = normalize(this.area.value.slice(0, cursor)).length;
+		this.area.value = normalizedValue;
+		this.area.setSelectionRange(nextCursor, nextCursor);
+		return nextCursor;
+	};
+
+	private updateInlineSuggestions = () => {
+		const cursor = this.normalizeWikiLinkTrigger();
+		const textBeforeCursor = this.area.value.slice(0, cursor);
+		const linkMatch = textBeforeCursor.match(/\[\[([^\]\n]*)$/);
+		if (!linkMatch) {
+			this.closeSuggestionList();
+			return;
+		}
+		this.cacheNoteNames();
+		const query = (linkMatch[1] ?? '').trim().toLowerCase();
+		this.linkTriggerStart = cursor - linkMatch[0].length;
+		const candidates = this.allNoteNames.filter((name) =>
+			query.length === 0 ? true : name.toLowerCase().includes(query)
+		);
+		this.linkSuggestions = candidates.slice(0, 12);
+		this.selectedSuggestionIndex = 0;
+		this.renderSuggestionList();
+	};
+
+	private onKeyDown = (evt: KeyboardEvent) => {
+		if (this.linkSuggestions.length === 0) return;
+		if (evt.key === 'ArrowDown') {
+			evt.preventDefault();
+			evt.stopPropagation();
+			this.moveSuggestionSelection(1);
+			return;
+		}
+		if (evt.key === 'ArrowUp') {
+			evt.preventDefault();
+			evt.stopPropagation();
+			this.moveSuggestionSelection(-1);
+			return;
+		}
+		if (evt.key === 'Enter' || evt.key === 'Tab') {
+			evt.preventDefault();
+			evt.stopPropagation();
+			this.applySuggestion(this.selectedSuggestionIndex);
+			return;
+		}
+		if (evt.key === 'Escape') {
+			evt.preventDefault();
+			evt.stopPropagation();
+			this.closeSuggestionList();
+		}
+	};
+}
+
 export class NCTextarea {
-	yamljs = require('js-yaml')
+	yamljs = yaml;
 	plugin: NoteChainPlugin;
 	app: App;
 
@@ -36,7 +248,7 @@ export class NCTextarea {
 			ctx: MarkdownPostProcessorContext
 		) => {
 			source = source.trim()
-			let config;
+			let config: any;
 			if (source == '') {
 				config = {}
 			} else {
@@ -249,6 +461,9 @@ export class NCTextarea {
 				}
 			}
 
+			if (area) {
+				ctx.addChild(new TextareaWikiLinkSuggest(container, area, nc.app));
+			}
 			if (area && config['focus'] != false) {
 				area.focus()
 			}
@@ -269,5 +484,4 @@ export class NCTextarea {
 		console.log(area)
 	}
 }
-
 

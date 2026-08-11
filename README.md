@@ -1,5 +1,4 @@
-
-> Thoughts as river, notes as chain. Add prev and next notes to a notes, and order files by the chain in File Explorer.
+> Thoughts as river, notes as chain. Sort and indent notes in File Explorer, expose MCP/EasyAPI, and automate AI chats in Web Viewer.
 
 ![Obsidian Downloads](https://img.shields.io/badge/dynamic/json?logo=obsidian&color=%23483699&label=downloads&query=$["note-chain"].downloads&url=https://raw.githubusercontent.com/obsidianmd/obsidian-releases%2Fmaster/community-plugin-stats.json)
 
@@ -25,7 +24,7 @@ graph LR
 Head -.-> P[...] --> PrevA --> A --> NextA -.-> N[...] --> Tail
 ```
 
-`Note Chain` defines the pre-note and post-note of the current note through metadata `PrevNote` and `NextNote`. Through this relationship, notes on the same chain are linked together.
+`Note Chain` defines the pre-note and post-note of the current note through metadata `PrevNote` and `NextNote` (field names are configurable). Through this relationship, notes on the same chain are linked together.
 
 - Prev note: The note that precedes the current note;
 - Next note: The note that follows the current note;
@@ -46,24 +45,40 @@ Head -.-> P[...] --> PrevA --> A --> NextA -.-> N[...] --> Tail
 
 ![image](./assets/Pasted%20image%2020240727220947.png)
 
-`Files` in the file list also provides two commands to facilitate the creation of note chains:
+`Files` in the file list also provides commands to facilitate the creation of note chains:
 
 - `Create next note`: Create a post-file for the current note;
-- `Move as next note`: Set the current note or folder as a post-note for a certain note. For notes, select from all notes. For folders, only select notes in the same directory.
+- `Move as next note`: Set the current note or folder as a post-note for a certain note. For notes, select from all notes. For folders, only select notes in the same directory;
+- `Move as next notes (selected)`: Chain multiple selected notes as next notes.
 
 The methods introduced above are all for setting nodes for a single note. `Note Chain` also provides multiple commands to organize notes in the same folder.
 
-`Reset the chain of current folder` will string all notes in the current note's folder into a note chain. You can create a note chain based on the file name `name`, creation time `ctme`, and modification time `mtime`, in ascending order (`a to z`) or descending order (`z to a`), which is suitable for initialization. You can also create a note chain based on the existing note chain `chain`, suitable for situations where there are multiple note chains in a directory.
+`Rebuild the chain of current folder` will string all notes in the current note's folder into a note chain. You can create a note chain based on the file name `name`, creation time `ctime`, and modification time `mtime`, in ascending order (`a to z`) or descending order (`z to a`), which is suitable for initialization. You can also create a note chain based on the existing note chain `chain`, suitable for situations where there are multiple note chains in a directory.
 
-`Reset note chain by longform` and `Reset longform scenes by note chain` are a set of mutually reinforcing commands, which correspond the note chain of the current folder notes to the scenes of the [[LongForm]] plugin. `Reset longform scenes by note chain` generates `longform` project metadata in the folder's namesake note and sets the current note chain as its scene. You can move the order of individual or multiple notes in the metadata with `Move line down` and `Move line up`, or cut notes to a specified location. Then, set the corresponding note chain with `Reset note chain by longform`. This set of commands can make it more convenient to organize notes.
+`Reset note chain by longform` and `Reset longform scenes by note chain` are a set of mutually reinforcing commands, which correspond the note chain of the current folder notes to the scenes of the `LongForm` plugin. `Reset longform scenes by note chain` generates `longform` project metadata in the folder's namesake note and sets the current note chain as its scene. You can move the order of individual or multiple notes in the metadata with `Move line down` and `Move line up`, or cut notes to a specified location. Then, set the corresponding note chain with `Reset note chain by longform`. Nested LongForm scenes also sync indentation levels (`notechain.level`).
 
-`Note Chain 1.0.7` also supports automatic reshaping of note chains in the folder. Check `Auto build notechain of folder while open new file` on the `Settings` page, when opening a note, the notes in the current folder will be automatically strung into a note chain, similar to automatically executing `Reset the chain of current folder` with `chain`. If some folders do not need to be automatically reshaped, you can enter the folders to skip in `Ignore these folder`, and multiple folders are separated by line breaks.
+Enable `On create/move into a folder, link notes not yet in the chain?` on the Settings page: when a note is created or moved into a folder, notes that are not yet in any chain can be appended automatically (existing chains are not reshaped). Use `Ignore these folders` under word-count settings to skip folders where needed.
+
+## Hierarchical Indentation
+
+Beyond linear order, notes can show hierarchy in File Explorer via Confluence-style indentation stored in frontmatter `notechain.level` (a string of tab characters `\t`).
+
+- `Increase the indentation level` — recommended hotkey `Mod+Shift+L`
+- `Decrease the indentation level` — recommended hotkey `Mod+Shift+J`
+- `Remove the indentation level` — recommended hotkey `Mod+Shift+K`
+
+Indentation is prefixed to the File Explorer display name. LongForm scene nesting and note-chain level stay in sync when you use the LongForm ↔ chain commands.
 
 ## `Files'` Sorting Rules
 
 After setting the note chain, turn on `Sort by chain in file explorer` on the settings page, and the files in the `Files` list will be sorted in the order of the note chain.
 
 ![image](./assets/Pasted%20image%2020240728152820.png)
+
+Optional explorer behaviors:
+
+- `Sort folder first in file explorer?` — folders before files when sorting;
+- `Sort files by drag & drop?` — drag a note in File Explorer to reorder the chain.
 
 ### Note Sorting Rules
 
@@ -101,6 +116,17 @@ NoteA --> NoteB --> FolderC --> FolderD --> NoteF
 
 Set folder sorting, in the `Files/Files` list, right-click the directory, and click `Move as next note`, choose after which note.
 
+### Display Text & Style
+
+Customize how notes appear in File Explorer:
+
+- `notechain.display` — display template. Placeholders use `<field>` syntax:
+  - `<$0>` — original file name / basename;
+  - `<title|alias|$0>` — first non-empty frontmatter field, else basename;
+  - `<?($1)>` style suffix — when a value exists, wrap it (e.g. `<title?「$1」>`);
+  - Indentation from `notechain.level` is always applied in front of the template.
+- `notechain.style` — File Explorer item style: a CSS color string, a style object, or a function name resolved via EasyAPI. Use `Set background color field via color picker` to write a color quickly.
+
 ### `canvas` Whiteboard Sorting Rules
 
 `canvas` whiteboards cannot set pre and post notes, and it is already a file, creating a namesake note for it like a folder feels redundant. But I suddenly thought, it is often after having notes that there is a need for a whiteboard. So, the sorting rule for the whiteboard is:
@@ -136,29 +162,124 @@ Set folder sorting, in the `Files/Files` list, right-click the directory, and cl
 
 The last two commands are suitable for linked notes, and specific examples are [here](http://mp.weixin.qq.com/s?__biz=MzI5MzMxMTU1OQ==&mid=2247486786&idx=1&sn=bda7acb189427ab44690e04289658225&chksm=ec75486adb02c17c64b9193c01197f6b44d57649d21fdc0f4f2dbbb5ec3823d862bf22acc4c8#rd)
 
+Other handy commands:
+
+- `Open note in modal` / `Open note in view` — preview a note in a modal or custom view;
+- `Execute current note` — run Templater JS / extract CSS / open as modal (`Alt+R` recommended);
+- `Execute Templater modal` — pick a script note and insert its output;
+- `Mermaid of notes` / linked / folder — generate Mermaid flowcharts;
+- `Toogle css block in note` — enable or disable a CSS code block in the note;
+- `Set frontmatter for selected notes` — batch set properties;
+- `Replace by regex` — regex replace across notes;
+- Desktop: `File - open with system app`, `File - show in system explorer`, `File - rename file`.
+
+## `textarea` Code Blocks
+
+In reading view, fenced blocks with language `textarea` become interactive panels (YAML config + optional text area + button rows):
+
+````markdown
+```textarea
+textarea:
+  style:
+    height: 120px
+buttons:
+  - Clear: clear_area
+  - Copy: copy_area
+  - Run: my_templater_func
+```
+````
+
+- Frontmatter of the host note is merged into the config unless `frontmatter: false`;
+- Buttons can call built-ins (`clear_area`, `copy_area`, `log_area`), Templater/CustomJS functions, Obsidian commands, or script notes;
+- Wiki-link autocomplete (`[[`) works inside the textarea;
+- Online vault can run button actions via `/online/api/textarea-exec`.
+
+## Local HTTP Server (Desktop)
+
+Settings → **Note Chain** tab → enable the server. You can turn on HTTPS and/or HTTP independently.
+
+| Option | Role |
+|--------|------|
+| `Enable server` | Master switch |
+| `HTTPS (mobile / LAN)` | Self-signed TLS; phone/LAN access, e.g. `https://IP:3000/oldbuddy` |
+| `HTTP localhost (Obsidian WebViewer)` | Local HTTP for Web Viewer; when HTTPS is also on, HTTP uses `HTTPS port + 1` |
+| `Listen Host` / `HTTPS port` | Shared host; default `0.0.0.0` / `3000` |
+
+### MCP for Agents
+
+Note Chain exposes vault tools over MCP so Cursor / other agents can call Obsidian workflows.
+
+Tools are defined in the vault (Templater scripts): prefer `obsidian_mcp_list_tools.md`, or notes with frontmatter `mcp_tool` / names like `mcp_*`. Calling a tool runs the matching `{name}.md` through Templater.
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/mcp/list_tools` | List tools |
+| `/mcp/call_tool` | Call a tool `{ name, arguments }` |
+| `/sse` + `/messages` | MCP SSE / JSON-RPC |
+| `/mcp/test` | Browser test page |
+| `/mcp/skill` | Generated Agent `SKILL.md` |
+| `/templater` | Run a Templater script remotely |
+
+Command `Generate MCP Agent Skill (SKILL.md)` saves a ready-to-use skill document for agents.
+
+### Online Vault
+
+Browse and edit vault markdown from a browser at `/online` (search, read/save, render, media, textarea-exec APIs under `/online/api/*`).
+
+### OldBuddy
+
+Local chat companion UI at `/oldbuddy` (WebSocket + message APIs). Command `Open OldBuddy in Web Viewer` opens it inside Obsidian Web Viewer (requires HTTP enabled).
+
+## WebViewer LLM
+
+Automate AI chats inside Obsidian **Web Viewer** via selector-driven profiles.
+
+Supported sites: Yuanbao, ChatGPT, Kimi, Doubao, DeepSeek, ChatGLM, Gemini, Claude.
+
+Useful commands:
+
+- `WebviewLLM: Chat with Target File` — build a prompt from a template note and send (`Alt+F` recommended);
+- `WebviewLLM: New AI Chat` / send to first or all models;
+- Start / stop continuous chat;
+- Paste last AI content; paste as tab/card list;
+- Probe elements / copy active AI profile snippet (for maintaining selectors).
+
+Prompt templates support placeholders such as `${selection}`, `${tfile.content}`, `${[[Note]]}`, `${prompt.xxx}`, optional reference notes, and Templater pre/post-process. See [cmd_chat_with_target_tfile 用法.md](./cmd_chat_with_target_tfile%20用法.md) for details.
+
+Settings live under the **Web viewer AI** tab (prompt tag filter, reference notes, clipboard, pre/post-process, auto-stop phrases, HTML→Markdown styles).
+
 ## Other Features
 
 ### Settings Page
 
-`Refresh dataview while open new file`: Whether to refresh `dataview` when opening a new note;
+Two tabs: **Note Chain** and **Web viewer AI**.
 
-`Refresh tasks while open new file`: Whether to refresh `task` when opening a new note.
+Common Note Chain options also include:
+
+- `Refresh dataview while open new file?` / `Refresh tasks while open new file?`;
+- `Notice while modify note chain?`;
+- Configurable frontmatter field names for prev/next/display/level/style;
+- `Tags or folder of script note` — where script notes for Templater / MCP live;
+- `Avata` — avatar field name used by related UIs.
 
 ### Word Count
 
-`Register daily word count`: Whether to record the word count of the note for the day when modifying the note, the word count is similar to the core plugin `Word Count`. This feature can track the output of notes.
+`Register daily word count`: Whether to record the word count of the note for the day when modifying the note, the word count is similar to the core plugin `Word Count`. This feature can track the output of notes. Skip folders via `Ignore these folders`.
 
 ```js
 let nc = app.plugins.getPlugin('note-chain');
 let note = nc.chain.current_note;
 // Get the number of words updated for the note on a specific date
-nc.wordcout.get_new_words(note,'2024-07-15')
+nc.wordcount.get_new_words(note,'2024-07-15')
 ```
 
-### Utility Functions
+### EasyAPI & Utility Functions
+
+`Note Chain` exposes `window.ea` (EasyAPI) for Templater / Dataview / scripts: file helpers, editor/frontmatter, dialogs (suggest, multi-suggest, prompt, cards, calendar, color), Templater runner, time/random/web/fs utilities, plus shortcuts such as `ea.nc`, `ea.wv`, `ea.dv`, `ea.cfile`.
 
 ```js
 let nc = app.plugins.getPlugin('note-chain');
+let ea = window.ea;
 ```
 
 > `let note = nc.chain.get_last_daily_note()`
@@ -183,15 +304,18 @@ Get the user-defined function of the `Templater` plugin;
 
 ## Installation
 
-Note Chain depends on the following plugins:
-- [[Templater]] + [[DataView]] + [[Recent Files]] + [[Tasks]]
+Note Chain works best with:
+
+- `Templater` + `Dataview` + `Recent Files` + `Tasks`
+- Obsidian core **Web Viewer** (for WebViewer LLM / OldBuddy in-app)
+- Optional: `LongForm` for scene ↔ chain sync
 
 ### Install from the Plugin Community
 
 1. In Obsidian, `ctrl+,` to open `Settings`;
 2. Click `Browse` in `Community Plugins`;
-4. Search and select `Note Chain`;
-5. Click Install and Enable;
+3. Search and select `Note Chain`;
+4. Click Install and Enable;
 
 You can also install from [obsidian plugins note-chain](https://obsidian.md/plugins?search=note-chain).
 
