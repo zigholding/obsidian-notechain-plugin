@@ -25,6 +25,7 @@ import { HTTPServer } from './server/httpServer';
 import { getWebViewerPartition, installWebviewTlsTrust } from './server/tlsWebviewTrust';
 import { DailyJob } from './daily_job';
 import { WebViewerLLMModule } from './WebViewerLLM/WebViewerLLMModule';
+import { moveSelectedNotesAsNext } from './NoteChain/chainInsert';
 
 let path = require('path');
 
@@ -294,22 +295,7 @@ export default class NoteChainPlugin extends Plugin {
 		let items = Object.values(selector).map((x: any) => x.dataset?.path)
 		let tfiles = items.map(x => this.easyapi.file.get_tfile(x)).filter(x => x.extension == 'md')
 		if (tfiles.length > 1) {
-			tfiles = this.chain.sort_tfiles_by_chain(tfiles)
-			let notes = this.easyapi.file.get_all_tfiles()
-			notes = notes.filter((x: TFile) => !tfiles.contains(x))
-			let anchor = await this.chain.sugguster_note(notes)
-			if (!anchor) { return }
-			for (let tfile of tfiles) {
-				if (tfile.parent.path != anchor.parent.path) {
-					let dst = anchor.parent.path + "/" + tfile.name;
-					await this.app.fileManager.renameFile(tfile, dst);
-				}
-				await this.chain.chain_pop_node(tfile)
-			}
-			tfiles.unshift(anchor)
-			let anchor_next = this.chain.get_next_note(anchor);
-			if (anchor_next) { tfiles.push(anchor_next) }
-			await this.chain.chain_concat_tfiles(tfiles);
+			await moveSelectedNotesAsNext(this, tfiles, { alignConfluenceTab: false });
 			return
 		}
 

@@ -7,6 +7,7 @@ import {
 } from 'obsidian';
 
 import NoteChainPlugin from './plugin';
+import { moveSelectedNotesAsNext } from './NoteChain/chainInsert';
 
 
 const onFileOpen = (plugin: NoteChainPlugin) => {
@@ -146,27 +147,7 @@ const onFileMenuMoveAsNextNote = (plugin: NoteChainPlugin) => {
 						.setTitle(plugin.strings.filemenu_move_as_next_notes)
 						.setIcon('hand')
 						.onClick(async () => {
-							tfiles = plugin.chain.sort_tfiles_by_chain(tfiles);
-							let notes = plugin.easyapi.file.get_all_tfiles();
-							notes = notes.filter((x: TFile) => !tfiles.contains(x));
-							const anchor = await plugin.chain.sugguster_note(notes);
-							if (!anchor) { return; }
-							for (let tfile of tfiles) {
-								if (tfile.parent.path != anchor.parent.path) {
-									const dst = anchor.parent.path + '/' + tfile.name;
-									await plugin.app.fileManager.renameFile(tfile, dst);
-								}
-								await plugin.chain.chain_pop_node(tfile);
-							}
-							tfiles.unshift(anchor);
-							const anchor_next = plugin.chain.get_next_note(anchor);
-							if (anchor_next) { tfiles.push(anchor_next); }
-							await plugin.chain.chain_concat_tfiles(tfiles);
-							for (let dst of tfiles.slice(1, tfiles.length - 1)) {
-								await plugin.editor.set_frontmatter_align_file(
-									anchor, dst, plugin.settings.notechain.field_of_confluence_tab_format
-								);
-							}
+							await moveSelectedNotesAsNext(plugin, tfiles, { alignConfluenceTab: true });
 						});
 				});
 			}
