@@ -632,5 +632,13 @@ export class File {
 		// 5️⃣ 返回选中的 TFile
 		return result?.file || null;
 	}
-}
 
+	query_tfiles_by_datacore(query: string) {
+		let data = this.ea.dc?.query(query);
+		if (!data) {
+			return [];
+		}
+		let tfiles = data.map((x: any) => this.get_tfile(x.$path));
+		return tfiles.filter((x: any) => x !== null);
+	}
+}

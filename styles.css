@@ -1630,3 +1630,274 @@ body:has(.nc-cal-lightbox.is-open) .menu {
     background: color-mix(in srgb, var(--background-primary) 92%, transparent);
   }
 }
+
+/* ── Calendar Gallery: mobile ─────────────────────────────────────────────── */
+
+.nc-calendar-gallery-modal.is-mobile {
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  max-height: 100dvh !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  margin: 0 !important;
+  transform: none !important;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  box-shadow: none;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-modal-resizer {
+  display: none;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-header {
+  padding: 10px 12px 8px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-header-row {
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+  min-height: 0;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-month-subtitle {
+  flex: 1 1 100%;
+  font-size: 14px;
+  -webkit-line-clamp: 1;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-header-right {
+  flex: 1 1 100%;
+  margin-left: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-query-input {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: none;
+  height: 36px;
+  line-height: 36px;
+  font-size: 14px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-toolbar {
+  flex: 1 1 100%;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-nav-btn {
+  width: 36px;
+  height: 36px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-picker {
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+  gap: 4px;
+  padding: 2px 4px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-select {
+  height: 34px;
+  padding: 0 24px 0 8px;
+  font-size: 13px;
+  background-position: right 6px center;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-year-select {
+  min-width: 64px;
+  flex: 1;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-month-select {
+  min-width: 48px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-today-btn {
+  margin-left: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-week-header {
+  gap: 2px;
+  padding: 4px 8px 2px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-week-cell {
+  font-size: 10px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-body {
+  padding: 2px 8px 10px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-grid {
+  gap: 2px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-day-card {
+  height: 100%;
+  min-height: 0;
+  border-radius: 6px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-day-card:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-day-card.has-images .nc-cal-day-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  padding: 2px 3px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.5), transparent);
+  pointer-events: none;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-day-card.has-images .nc-cal-day-num {
+  color: #fff;
+  font-size: 10px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-day-card.has-images.is-today .nc-cal-day-num {
+  width: 16px;
+  height: 16px;
+  font-size: 9px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-day-top {
+  padding: 2px 3px 0;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-day-num {
+  font-size: 11px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-day-card.is-today .nc-cal-day-num {
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-badges {
+  display: none;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-day-card.has-images .nc-cal-day-body {
+  position: relative;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-day-card.has-images .nc-cal-img-wrap {
+  position: absolute;
+  inset: 0;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-day-card.has-images .nc-cal-audio-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.55), transparent);
+  border-top: none;
+  color: rgba(255, 255, 255, 0.92);
+  justify-content: center;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-img-placeholder svg {
+  width: 16px;
+  height: 16px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-dots {
+  bottom: 2px;
+  gap: 2px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-dot {
+  width: 3px;
+  height: 3px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-day-card.has-images.has-audio .nc-cal-dots {
+  bottom: 14px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-audio-wrap {
+  padding: 2px 3px;
+  font-size: 9px;
+  gap: 2px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-audio-label {
+  font-size: 9px;
+}
+
+.nc-calendar-gallery-modal.is-mobile .nc-cal-audio-nav {
+  display: none;
+}
+
+/* Lightbox sits on body; tune for phone */
+body.is-mobile .nc-cal-lightbox-meta {
+  max-width: 96vw;
+  padding: 0 8px;
+}
+
+body.is-mobile .nc-cal-lightbox-text {
+  max-height: 80px;
+  font-size: 12px;
+}
+
+body.is-mobile .nc-cal-lightbox-prev { left: 8px; }
+body.is-mobile .nc-cal-lightbox-next { right: 8px; }
+
+/* Narrow phone / small window fallback (desktop resized) */
+@media (max-width: 640px) {
+  .nc-calendar-gallery-modal:not(.is-mobile) {
+    max-width: 100vw;
+    max-height: 100dvh;
+    border-radius: 12px;
+  }
+
+  .nc-calendar-gallery-modal:not(.is-mobile) .nc-cal-header-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .nc-calendar-gallery-modal:not(.is-mobile) .nc-cal-month-subtitle {
+    flex: 1 1 100%;
+  }
+
+  .nc-calendar-gallery-modal:not(.is-mobile) .nc-cal-header-right {
+    flex: 1 1 100%;
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+
+  .nc-calendar-gallery-modal:not(.is-mobile) .nc-cal-query-input {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: none;
+  }
+
+  .nc-calendar-gallery-modal:not(.is-mobile) .nc-cal-toolbar {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+}

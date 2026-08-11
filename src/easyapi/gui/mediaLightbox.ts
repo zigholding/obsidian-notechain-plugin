@@ -1,4 +1,4 @@
-import { App, Menu, Notice, Scope, setIcon } from "obsidian";
+import { App, Menu, Notice, Scope, TFile, setIcon } from "obsidian";
 
 export type MediaKind = "image" | "video" | "audio";
 
@@ -18,6 +18,18 @@ export interface MediaLightboxItemInfo {
 	kind: MediaKind;
 }
 
+/** 传给 `#lightbox` 脚本笔记的 `tp.config.extra.media` */
+export interface MediaLightboxScriptMedia<T = unknown> {
+	path: string | null;
+	kind: MediaKind;
+	item: T;
+	meta: MediaLightboxMeta;
+	index: number;
+	items: T[];
+	/** 当前灯箱实例，脚本可调用 close / removeCurrent 等 */
+	lightbox: MediaLightbox<T>;
+}
+
 export interface MediaLightboxOptions<T> {
 	app: App;
 	resolveUrl: (src: string) => Promise<string | null>;
@@ -34,6 +46,11 @@ export interface MediaLightboxOptions<T> {
 	closeOnEscape?: boolean;
 	/** 滚轮切换防抖（ms）；默认 140 */
 	wheelDebounceMs?: number;
+	/**
+	 * 右键菜单要加载的脚本笔记标签；默认 `lightbox`。
+	 * 笔记需带该标签，执行时通过 `tp.config.extra.media` 取得当前媒体。
+	 */
+	scriptTag?: string;
 }
 
 function isZhUi(): boolean {
@@ -189,12 +206,80 @@ export class MediaLightbox<T> {
 			});
 		}
 
+		const scripts = this.getLightboxScriptNotes();
+		if (scripts.length) {
+			menu.addSeparator();
+			for (const script of scripts) {
+				const title = this.getScriptMenuTitle(script);
+				menu.addItem((menuItem) => {
+					menuItem.setTitle(title)
+						.setIcon("file-terminal")
+						.onClick(() => { void this.runLightboxScript(script, item, info); });
+				});
+			}
+		}
+
 		menu.showAtPosition({ x: e.clientX, y: e.clientY });
 		window.setTimeout(() => {
 			document.querySelectorAll("body > .menu, .menu").forEach((el) => {
 				(el as HTMLElement).style.setProperty("z-index", "100001", "important");
 			});
 		}, 0);
+	}
+
+	/** 查找标签为 `#lightbox`（或自定义 scriptTag）的脚本笔记 */
+	private getLightboxScriptNotes(): TFile[] {
+		const nc = (this.options.app as any).plugins?.plugins?.["note-chain"];
+		const ea = nc?.easyapi ?? (window as any).ea;
+		if (!ea?.file?.get_all_tfiles_tags) return [];
+
+		const tag = (this.options.scriptTag ?? "lightbox").replace(/^#/, "");
+		let files: TFile[] = ea.file.get_all_tfiles_tags(tag) ?? [];
+		if (nc?.chain?.sort_tfiles_by_chain) {
+			files = nc.chain.sort_tfiles_by_chain(files);
+		}
+		return files;
+	}
+
+	private getScriptMenuTitle(tfile: TFile): string {
+		const nc = (this.options.app as any).plugins?.plugins?.["note-chain"];
+		const ea = nc?.easyapi ?? (window as any).ea;
+		const emoji = ea?.editor?.get_frontmatter?.(tfile, "emoji");
+		const prefix = typeof emoji === "string" && emoji.trim() ? `${emoji.trim()} ` : "";
+		return `${prefix}${tfile.basename}`;
+	}
+
+	private async runLightboxScript(
+		script: TFile,
+		item: T,
+		info: MediaLightboxItemInfo,
+	): Promise<void> {
+		const zh = isZhUi();
+		const nc = (this.options.app as any).plugins?.plugins?.["note-chain"];
+		const ea = nc?.easyapi ?? (window as any).ea;
+		if (!ea?.tpl?.parse_templater) {
+			new Notice(zh ? "无法执行脚本笔记" : "Cannot run script note");
+			return;
+		}
+
+		const media: MediaLightboxScriptMedia<T> = {
+			path: info.path,
+			kind: info.kind,
+			item,
+			meta: this.options.getMeta(item, this.index, this.items),
+			index: this.index,
+			items: this.items,
+			lightbox: this,
+		};
+
+		try {
+			await ea.tpl.parse_templater(script, true, { media });
+		} catch (err) {
+			console.error("[note-chain] lightbox script", script.path, err);
+			new Notice(zh
+				? `脚本执行失败：${script.basename}`
+				: `Script failed: ${script.basename}`);
+		}
 	}
 
 	private async copyPathToClipboard(path: string): Promise<void> {

@@ -395,11 +395,27 @@ export class CalendarGalleryModal extends Modal {
 
 	onOpen(): void {
 		this.modalEl.addClass("nc-calendar-gallery-modal");
-		this.modalEl.style.width = `${this.options.width}px`;
-		this.modalEl.style.height = `${this.options.height}px`;
+		const isMobile = (this.app as any).isMobile === true;
+		if (isMobile) {
+			this.modalEl.addClass("is-mobile");
+			this.modalEl.style.width = "100vw";
+			this.modalEl.style.height = "100vh";
+			this.modalEl.style.height = "100dvh";
+			this.modalEl.style.maxWidth = "100vw";
+			this.modalEl.style.maxHeight = "100vh";
+			this.modalEl.style.maxHeight = "100dvh";
+			this.modalEl.style.borderRadius = "0";
+		} else {
+			this.modalEl.style.width = `${this.options.width}px`;
+			this.modalEl.style.height = `${this.options.height}px`;
+		}
 
 		const resizer = this.modalEl.createDiv({ cls: "nc-modal-resizer" });
-		this.initResizer(resizer);
+		if (isMobile) {
+			resizer.hide();
+		} else {
+			this.initResizer(resizer);
+		}
 
 		this.tooltipEl = document.body.createDiv({ cls: "nc-cal-tooltip" });
 		this.tooltipEl.hide();
@@ -469,7 +485,9 @@ export class CalendarGalleryModal extends Modal {
 		this.contentEl.createDiv({ cls: "nc-cal-week-header" });
 		const body = this.contentEl.createDiv({ cls: "nc-cal-body" });
 		this.gridEl = body.createDiv({ cls: "nc-cal-grid" });
-		this.gridEl.style.setProperty("--nc-cal-card-height", `${CARD_HEIGHTS[this.options.cardSize]}px`);
+		if (!(this.app as any).isMobile) {
+			this.gridEl.style.setProperty("--nc-cal-card-height", `${CARD_HEIGHTS[this.options.cardSize]}px`);
+		}
 		this.gridEl.setAttr("data-image-fit", this.options.imageFit);
 
 		this.renderHeader();
@@ -1016,20 +1034,23 @@ export class CalendarGalleryModal extends Modal {
 		if (cell.key === todayKey) card.addClass("is-today");
 		if (cell.key === this.selectedKey) card.addClass("is-selected");
 
+		const images = dayData?.images ?? [];
+		const audios = dayData?.audios ?? [];
+		const imgCount = images.length;
+		const audioCount = audios.length;
+		if (imgCount > 0) card.addClass("has-images");
+		if (audioCount > 0 && this.options.showAudio) card.addClass("has-audio");
+
 		const topRow = card.createDiv({ cls: "nc-cal-day-top" });
 		topRow.createDiv({ cls: "nc-cal-day-num", text: String(cell.day) });
 
 		const badges = topRow.createDiv({ cls: "nc-cal-badges" });
-		const imgCount = dayData?.images?.length ?? 0;
-		const audioCount = dayData?.audios?.length ?? 0;
 		if (imgCount > 0) badges.createSpan({ cls: "nc-cal-badge", text: `📷${imgCount}` });
 		if (audioCount > 0 && this.options.showAudio) {
 			badges.createSpan({ cls: "nc-cal-badge", text: `🎤${audioCount}` });
 		}
 
 		const body = card.createDiv({ cls: "nc-cal-day-body" });
-		const images = dayData?.images ?? [];
-		const audios = dayData?.audios ?? [];
 
 		if (images.length > 0) {
 			this.renderImageArea(body, images, cell.key, dayData);
@@ -1047,7 +1068,7 @@ export class CalendarGalleryModal extends Modal {
 			this.options.onOpenDay?.(dayData ?? emptyDayData(cell.key));
 		};
 
-		if (this.options.showTooltip && dayData?.text) {
+		if (this.options.showTooltip && !(this.app as any).isMobile && dayData?.text) {
 			const plain = stripMarkdown(dayData.text).slice(0, 300);
 			if (plain) {
 				card.addEventListener("mouseenter", () => this.showTooltip(card, plain));
@@ -1395,7 +1416,11 @@ export class CalendarGalleryModal extends Modal {
 			const item = audios[current];
 			const title = item.title ?? "Voice";
 			const dur = formatDuration(item.duration);
-			label.setText(dur ? `🎤 ${title} · ${dur}` : `🎤 ${title}`);
+			if ((this.app as any).isMobile) {
+				label.setText(audios.length > 1 ? `🎤${current + 1}/${audios.length}` : dur ? `🎤${dur}` : "🎤");
+			} else {
+				label.setText(dur ? `🎤 ${title} · ${dur}` : `🎤 ${title}`);
+			}
 		};
 
 		update();
