@@ -2,7 +2,7 @@ let fs = require('fs');
 let path = require('path');
 let crypto = require('crypto');
 
-import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem, OldBuddyAvatarMap, isUserSender } from './types';
+import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem, OldBuddyAvatarMap, OldBuddyAttachment, isUserSender, normalizeAttachments, OLDBUDDY_MESSAGE_TYPES } from './types';
 import { OldBuddyWebSocketHub, OldBuddyWsClient } from './oldbuddyWebSocket';
 import {
     JIUJIU_MAX_ATTACH_BYTES,
@@ -13,6 +13,8 @@ import {
     jiujiuTimestampToIso,
     jiujiuWelcomePacket,
     oldBuddyToJiujiuPacket,
+    envelopeToJiujiuPacket,
+    jiujiuTypeToOldBuddy,
     parseJiujiuPacket,
     type JiujiuPacket,
 } from './jiujiu';
@@ -117,14 +119,31 @@ export class OldBuddyStore {
     ): Promise<OldBuddyMessage | null> {
         this.ensureLoaded();
         const content = String(packet.content || '').trim();
-        const attachments = Array.isArray(packet.attachments) ? packet.attachments : [];
-        const type = String(packet.type || 'message').toLowerCase();
-        const first = attachments[0];
-        const buf = first ? decodeJiujiuBase64(first.data) : null;
-        if (buf && buf.length > JIUJIU_MAX_ATTACH_BYTES) {
-            throw new Error('attachment too large');
+        const rawAtts = Array.isArray(packet.attachments) ? packet.attachments : [];
+        const saved: OldBuddyAttachment[] = [];
+        for (const att of rawAtts) {
+            const buf = decodeJiujiuBase64(att.data);
+            if (!buf) continue;
+            if (buf.length > JIUJIU_MAX_ATTACH_BYTES) {
+                throw new Error('attachment too large');
+            }
+            const mime = String(att.mime || 'application/octet-stream');
+            const filename = String(att.name || 'upload');
+            const file = this.saveUpload(buf, filename, mime);
+            const kind = String(att.kind || jiujiuKindToType(att.kind, mime));
+            const row: OldBuddyAttachment = {
+                name: filename,
+                mime,
+                kind: kind === 'video' ? 'file' : kind,
+                url: file.url,
+                size: buf.length,
+            };
+            if (att.durationMs != null && Number.isFinite(Number(att.durationMs))) {
+                row.durationMs = Number(att.durationMs);
+            }
+            saved.push(row);
         }
-        if (!content && !buf) return null;
+        if (!content && !saved.length) return null;
 
         const id = String(packet.msgId || '').trim() || this.newId();
         if (!opts.echoToJiujiu) {
@@ -135,44 +154,20 @@ export class OldBuddyStore {
             : jiujiuSenderToOldBuddy(opts.senderId);
         const target = String(opts.target || packet.target || DEFAULT_TARGET).trim() || DEFAULT_TARGET;
         const timestamp = jiujiuTimestampToIso(packet.timestamp);
+        const senderName = String(packet.senderName || '').trim() || undefined;
 
-        let userMsg: OldBuddyMessage;
-        if (buf && first) {
-            const mime = String(first.mime || 'application/octet-stream');
-            const filename = String(first.name || 'upload');
-            const saved = this.saveUpload(buf, filename, mime);
-            const declared = type === 'audio' ? 'audio' : jiujiuKindToType(first.kind, mime);
-            const messageType = inferOldBuddyMessageType(
-                declared === 'video' ? 'video' : declared === 'audio' ? 'audio' : declared === 'image' ? 'image' : 'file',
-                mime,
-                filename,
-            );
-            userMsg = await this.pushExternalMessage({
-                content: saved.url,
-                sender,
-                target,
-                type: messageType,
-                extra_text: content || undefined,
-                file_name: filename,
-                file_size: buf.length,
-                id,
-                timestamp,
-                skip_reply: opts.skipReply ? true : undefined,
-                source: 'jiujiu',
-            });
-        } else {
-            userMsg = await this.pushExternalMessage({
-                content,
-                sender,
-                target,
-                type: 'text',
-                id,
-                timestamp,
-                skip_reply: opts.skipReply ? true : undefined,
-                source: 'jiujiu',
-            });
-        }
-        return userMsg;
+        return this.pushExternalMessage({
+            content,
+            sender,
+            senderName,
+            target,
+            type: jiujiuTypeToOldBuddy(packet.type),
+            attachments: saved,
+            id,
+            timestamp,
+            skip_reply: !!(opts.skipReply || jiujiuTypeToOldBuddy(packet.type) === 'welcome'),
+            source: 'jiujiu',
+        });
     }
 
     ensureLoaded() {
@@ -236,7 +231,20 @@ export class OldBuddyStore {
 
     private async emitJiujiu(msg: OldBuddyMessage) {
         try {
-            const attachment = msg.type === 'text' ? null : this.readUploadFromContent(msg.content);
+            const atts = normalizeAttachments(msg.attachments);
+            if (atts.length) {
+                const files = [];
+                for (const att of atts) {
+                    const file = this.readUploadFromContent(String(att.url || ''));
+                    if (!file) continue;
+                    files.push({ att, data: file.data, mime: file.mime });
+                }
+                this.ws.broadcastJiujiu(envelopeToJiujiuPacket(msg, files));
+                return;
+            }
+            const attachment = msg.type === 'text' || msg.type === 'message' || msg.type === 'welcome'
+                ? null
+                : this.readUploadFromContent(msg.content);
             this.ws.broadcastJiujiu(oldBuddyToJiujiuPacket(msg, attachment));
         } catch (e) {
             console.warn('[oldbuddy] jiujiu broadcast failed:', e);
@@ -713,15 +721,18 @@ export class OldBuddyStore {
         skip_reply?: boolean | string;
         quick_cmd_id?: string;
         source?: string;
+        senderName?: string;
+        attachments?: OldBuddyAttachment[];
     }): Promise<OldBuddyMessage> {
         this.ensureLoaded();
-        const content = String(params.content ?? '').trim();
-        if (!content) {
-            throw new Error('content required');
-        }
-        const type = params.type || 'text';
-        if (!['text', 'image', 'audio', 'video', 'file'].includes(type)) {
+        const attachments = normalizeAttachments(params.attachments);
+        const type = params.type || (attachments.length ? 'message' : 'text');
+        if (!(OLDBUDDY_MESSAGE_TYPES as readonly string[]).includes(type)) {
             throw new Error('invalid type');
+        }
+        const content = String(params.content ?? '').trim();
+        if (!content && !attachments.length) {
+            throw new Error('content required');
         }
         const id = String(params.id || '').trim() || this.newId();
         const existing = this.messages.findIndex((m) => m.id === id);
@@ -733,6 +744,12 @@ export class OldBuddyStore {
             type,
             content,
         };
+        if (params.senderName != null && String(params.senderName).trim()) {
+            msg.senderName = String(params.senderName).trim();
+        }
+        if (attachments.length) {
+            msg.attachments = attachments;
+        }
         if (params.extra_text != null && String(params.extra_text).trim()) {
             msg.extra_text = String(params.extra_text);
         }
@@ -762,7 +779,7 @@ export class OldBuddyStore {
             userMsg = this.pushMessage(msg);
         }
         const skipReply = params.skip_reply === true || params.skip_reply === 'true';
-        if (!skipReply && isUserSender(params.sender || 'buddy')) {
+        if (!skipReply && type !== 'welcome' && isUserSender(params.sender || 'buddy')) {
             await this.generateReply(userMsg, params.quick_cmd_id, params.source);
         }
         return userMsg;
@@ -803,7 +820,15 @@ export class OldBuddyStore {
         }
 
         if (!replyText) {
-            if (userMsg.type === 'text') {
+            if (userMsg.type === 'welcome') {
+                return;
+            }
+            const nAtt = Array.isArray(userMsg.attachments) ? userMsg.attachments.length : 0;
+            if (userMsg.type === 'message') {
+                replyText = nAtt
+                    ? `收到${userMsg.content ? `：${userMsg.content}` : ''}（${nAtt} 个附件）`
+                    : `嗯，我听到了：${userMsg.content}`;
+            } else if (userMsg.type === 'text') {
                 replyText = `嗯，我听到了：${userMsg.content}`;
             } else if (userMsg.type === 'image') {
                 replyText = '收到你的图片了。';
@@ -873,11 +898,15 @@ function normalizeMessageRow(m: unknown): OldBuddyMessage | null {
         return null;
     }
     const type = String(row.type || 'text') as OldBuddyMessage['type'];
-    return {
+    const attachments = normalizeAttachments(row.attachments);
+    const out: OldBuddyMessage = {
         ...row,
-        type: ['text', 'image', 'audio', 'video', 'file'].includes(type) ? type : 'text',
+        type: (OLDBUDDY_MESSAGE_TYPES as readonly string[]).includes(type) ? type : 'text',
         content: row.content != null ? String(row.content) : '',
     };
+    if (attachments.length) out.attachments = attachments;
+    if (row.senderName) out.senderName = String(row.senderName);
+    return out;
 }
 
 function isValidMessage(m: unknown): m is OldBuddyMessage {

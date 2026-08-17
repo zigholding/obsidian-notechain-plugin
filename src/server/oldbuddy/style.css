@@ -289,6 +289,13 @@ body {
     cursor: zoom-in;
 }
 
+.message-attachments {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+}
+
 .message-audio {
     width: min(72vw, 280px);
 }

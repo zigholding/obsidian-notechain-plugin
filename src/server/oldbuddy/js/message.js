@@ -624,6 +624,80 @@ function createAudioElement(src) {
     return audio;
 }
 
+function messageAttachments(msg) {
+    return Array.isArray(msg && msg.attachments) ? msg.attachments.filter(Boolean) : [];
+}
+
+function attachmentKind(att) {
+    const kind = String(att && att.kind || '').toLowerCase();
+    const mime = String(att && att.mime || '').toLowerCase();
+    const url = String(att && att.url || '');
+    if (kind === 'image' || mime.startsWith('image/')) return 'image';
+    if (kind === 'audio' || mime.startsWith('audio/')) return 'audio';
+    if (kind === 'video' || mime.startsWith('video/') || isVideoMediaUrl(url)) return 'video';
+    return 'file';
+}
+
+function appendAttachment(contentDiv, att) {
+    const url = String(att && att.url || '');
+    if (!url) return;
+    const kind = attachmentKind(att);
+    if (kind === 'image') {
+        const img = document.createElement('img');
+        img.src = url;
+        img.className = 'message-image';
+        img.alt = att.name || '';
+        img.addEventListener('click', () => showImagePreview(url));
+        contentDiv.appendChild(img);
+        return;
+    }
+    if (kind === 'video') {
+        contentDiv.appendChild(createVideoElement(url));
+        return;
+    }
+    if (kind === 'audio') {
+        contentDiv.appendChild(createAudioElement(url));
+        return;
+    }
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = att.name || '下载文件';
+    if (att.name) link.download = att.name;
+    contentDiv.appendChild(link);
+    if (att.size) {
+        const meta = document.createElement('div');
+        meta.className = 'message-extra-text';
+        meta.textContent = `大小: ${att.size} 字节`;
+        contentDiv.appendChild(meta);
+    }
+}
+
+function appendEnvelopeAttachments(contentDiv, msg) {
+    const atts = messageAttachments(msg);
+    if (!atts.length) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'message-attachments';
+    for (const att of atts) appendAttachment(wrap, att);
+    contentDiv.appendChild(wrap);
+}
+
+function appendMarkdownBody(contentDiv, text, msg) {
+    if (!text) return;
+    if (typeof window.renderMarkdown === 'function') {
+        contentDiv.classList.add('markdown');
+        if (useMarkdownCard(msg)) contentDiv.classList.add('markdown-card');
+        const body = document.createElement('div');
+        body.innerHTML = window.renderMarkdown(text);
+        contentDiv.appendChild(body);
+    } else {
+        const body = document.createElement('div');
+        body.textContent = text;
+        contentDiv.appendChild(body);
+    }
+}
+
 /**
  * 渲染单条消息（支持 prependMessage 从旧到新加载逻辑）
  */
@@ -705,7 +779,13 @@ function renderMessage(msg) {
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
 
-    if (msg.type === 'text') {
+    if (msg.type === 'message' || msg.type === 'welcome') {
+        appendMarkdownBody(contentDiv, msg.content, msg);
+        appendEnvelopeAttachments(contentDiv, msg);
+        if (!msg.content && !messageAttachments(msg).length) {
+            contentDiv.textContent = '';
+        }
+    } else if (msg.type === 'text') {
         if (typeof window.renderMarkdown === 'function') {
             contentDiv.classList.add('markdown');
             if (useMarkdownCard(msg)) contentDiv.classList.add('markdown-card');
@@ -736,8 +816,14 @@ function renderMessage(msg) {
         contentDiv.appendChild(createVideoElement(msg.content));
         appendExtraText(contentDiv, msg);
     } else if (msg.type === 'audio') {
-        contentDiv.appendChild(createAudioElement(msg.content));
+        const atts = messageAttachments(msg);
+        const src = (atts[0] && atts[0].url) || msg.content;
+        if (src) contentDiv.appendChild(createAudioElement(src));
+        if (atts.length > 1) appendEnvelopeAttachments(contentDiv, { attachments: atts.slice(1) });
         appendExtraText(contentDiv, msg);
+        if (msg.content && atts.length && msg.content !== src) {
+            appendMarkdownBody(contentDiv, msg.content, msg);
+        }
     } else if (msg.type === 'file') {
         const link = document.createElement('a');
         link.href = msg.content;
@@ -881,6 +967,7 @@ function findMessageNode(id) {
 }
 
 function messageNodeSignature(msg) {
+    const atts = messageAttachments(msg).map((a) => `${a.kind || ''}|${a.url || ''}|${a.name || ''}`).join(',');
     return [
         msg.type || '',
         msg.content || '',
@@ -888,6 +975,7 @@ function messageNodeSignature(msg) {
         msg.file_name || '',
         msg.sender || '',
         msg.target || '',
+        atts,
     ].join('\x1e');
 }
 

@@ -1,4 +1,4 @@
-import type { OldBuddyMessage, OldBuddyMessageType } from './types';
+import type { OldBuddyAttachment, OldBuddyMessage, OldBuddyMessageType } from './types';
 import { isUserSender } from './types';
 
 export const JIUJIU_MAX_ATTACH_BYTES = 6 * 1024 * 1024;
@@ -106,23 +106,61 @@ export function oldBuddyToJiujiuPacket(
     msg: OldBuddyMessage,
     attachment?: { data: Buffer; mime: string } | null,
 ): JiujiuPacket {
-    const isMedia = msg.type !== 'text';
+    const isMedia = msg.type !== 'text' && msg.type !== 'message' && msg.type !== 'welcome';
     const packet: JiujiuPacket = {
-        type: msg.type === 'audio' ? 'audio' : 'message',
+        type: msg.type === 'audio' ? 'audio' : msg.type === 'welcome' ? 'welcome' : 'message',
         content: isMedia ? String(msg.extra_text || msg.file_name || '') : msg.content,
         msgId: msg.id,
         timestamp: oldBuddyTimestampToMs(msg.timestamp),
     };
+    if (msg.sender) packet.senderId = msg.sender;
+    if (msg.senderName) packet.senderName = msg.senderName;
     if (isMedia && attachment?.data?.length && attachment.data.length <= JIUJIU_MAX_ATTACH_BYTES) {
         packet.attachments = [
             {
                 name: msg.file_name || 'file',
                 mime: attachment.mime || 'application/octet-stream',
-                kind: oldBuddyTypeToJiujiuKind(msg.type),
+                kind: oldBuddyTypeToJiujiuKind(
+                    msg.type === 'image' ? 'image' : msg.type === 'audio' ? 'audio' : 'file',
+                ),
                 data: attachment.data.toString('base64'),
                 durationMs: 0,
             },
         ];
     }
     return packet;
+}
+
+export function envelopeToJiujiuPacket(
+    msg: OldBuddyMessage,
+    files: Array<{ att: OldBuddyAttachment; data: Buffer; mime: string }>,
+): JiujiuPacket {
+    const packet: JiujiuPacket = {
+        type: msg.type === 'audio' ? 'audio' : msg.type === 'welcome' ? 'welcome' : 'message',
+        content: String(msg.content || ''),
+        msgId: msg.id,
+        timestamp: oldBuddyTimestampToMs(msg.timestamp),
+    };
+    if (msg.sender) packet.senderId = msg.sender;
+    if (msg.senderName) packet.senderName = msg.senderName;
+    const attachments: JiujiuAttachment[] = [];
+    for (const row of files) {
+        if (!row.data?.length || row.data.length > JIUJIU_MAX_ATTACH_BYTES) continue;
+        attachments.push({
+            name: row.att.name || 'file',
+            mime: row.mime || row.att.mime || 'application/octet-stream',
+            kind: row.att.kind || oldBuddyTypeToJiujiuKind(jiujiuKindToType(row.att.kind, row.mime)),
+            data: row.data.toString('base64'),
+            durationMs: row.att.durationMs || 0,
+        });
+    }
+    if (attachments.length) packet.attachments = attachments;
+    return packet;
+}
+
+export function jiujiuTypeToOldBuddy(type: string | undefined): OldBuddyMessageType {
+    const t = String(type || 'message').toLowerCase();
+    if (t === 'audio') return 'audio';
+    if (t === 'welcome') return 'welcome';
+    return 'message';
 }
