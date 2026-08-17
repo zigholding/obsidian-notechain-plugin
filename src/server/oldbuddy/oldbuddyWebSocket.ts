@@ -2,11 +2,29 @@ let crypto = require('crypto');
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
-/** 轻量 WebSocket 服务（仅文本帧，供 oldbuddy 实时推送） */
-export class OldBuddyWebSocketHub {
-    private clients = new Set<any>();
+export type OldBuddyWsKind = 'web' | 'jiujiu';
 
-    handleUpgrade(req: any, socket: any, head: Buffer) {
+export interface OldBuddyWsClient {
+    socket: any;
+    buffer: Buffer;
+    kind: OldBuddyWsKind;
+    target: string;
+    senderId: string;
+}
+
+export interface OldBuddyWsUpgradeOpts {
+    kind?: OldBuddyWsKind;
+    target?: string;
+    senderId?: string;
+}
+
+/** 轻量 WebSocket 服务：网页实时推送 + 啾啾 Native Chat */
+export class OldBuddyWebSocketHub {
+    private clients = new Set<OldBuddyWsClient>();
+    onJiujiuMessage: ((client: OldBuddyWsClient, raw: string) => void | Promise<void>) | null = null;
+    onJiujiuOpen: ((client: OldBuddyWsClient) => void | Promise<void>) | null = null;
+
+    handleUpgrade(req: any, socket: any, head: Buffer, opts?: OldBuddyWsUpgradeOpts) {
         const key = req.headers['sec-websocket-key'];
         if (!key) {
             socket.destroy();
@@ -29,7 +47,13 @@ export class OldBuddyWebSocketHub {
         socket.setNoDelay(true);
         socket.setKeepAlive(true);
 
-        const client = { socket, buffer: Buffer.alloc(0) };
+        const client: OldBuddyWsClient = {
+            socket,
+            buffer: Buffer.isBuffer(head) && head.length ? Buffer.from(head) : Buffer.alloc(0),
+            kind: opts?.kind === 'jiujiu' ? 'jiujiu' : 'web',
+            target: String(opts?.target || '').trim() || 'local',
+            senderId: String(opts?.senderId || '').trim(),
+        };
         this.clients.add(client);
 
         const onData = (chunk: Buffer) => {
@@ -43,20 +67,36 @@ export class OldBuddyWebSocketHub {
         socket.on('data', onData);
         socket.on('close', cleanup);
         socket.on('error', cleanup);
+
+        if (client.buffer.length) {
+            client.buffer = this.consumeFrames(client, client.buffer);
+        }
+        if (client.kind === 'jiujiu' && this.onJiujiuOpen) {
+            void Promise.resolve(this.onJiujiuOpen(client));
+        }
     }
 
+    /** 网页客户端：OldBuddyMessage JSON */
     broadcast(payload: unknown) {
-        const text = JSON.stringify(payload);
-        const frame = this.encodeTextFrame(text);
-        for (const client of this.clients) {
-            try {
-                if (!client.socket.destroyed) {
-                    client.socket.write(frame);
-                }
-            } catch {
-                this.clients.delete(client);
-            }
+        this.writeToKind('web', payload);
+    }
+
+    /** 啾啾客户端：JiuJiu 协议包 */
+    broadcastJiujiu(payload: unknown) {
+        this.writeToKind('jiujiu', payload);
+    }
+
+    sendTo(client: OldBuddyWsClient, payload: unknown) {
+        if (!this.clients.has(client) || client.socket?.destroyed) return;
+        this.writeFrame(client, this.encodeTextFrame(JSON.stringify(payload)));
+    }
+
+    jiujiuCount(): number {
+        let n = 0;
+        for (const c of this.clients) {
+            if (c.kind === 'jiujiu' && !c.socket?.destroyed) n++;
         }
+        return n;
     }
 
     closeAll() {
@@ -71,7 +111,25 @@ export class OldBuddyWebSocketHub {
         this.clients.clear();
     }
 
-    private consumeFrames(client: any, buf: Buffer): Buffer {
+    private writeToKind(kind: OldBuddyWsKind, payload: unknown) {
+        const frame = this.encodeTextFrame(JSON.stringify(payload));
+        for (const client of this.clients) {
+            if (client.kind !== kind) continue;
+            this.writeFrame(client, frame);
+        }
+    }
+
+    private writeFrame(client: OldBuddyWsClient, frame: Buffer) {
+        try {
+            if (!client.socket.destroyed) {
+                client.socket.write(frame);
+            }
+        } catch {
+            this.clients.delete(client);
+        }
+    }
+
+    private consumeFrames(client: OldBuddyWsClient, buf: Buffer): Buffer {
         while (buf.length >= 2) {
             const fin = (buf[0] & 0x80) !== 0;
             const opcode = buf[0] & 0x0f;
@@ -109,6 +167,10 @@ export class OldBuddyWebSocketHub {
             if (opcode === 0x9) {
                 client.socket.write(this.encodePongFrame(payload));
             }
+            if (opcode === 0x1 && fin && client.kind === 'jiujiu' && this.onJiujiuMessage) {
+                const text = payload.toString('utf8');
+                void Promise.resolve(this.onJiujiuMessage(client, text));
+            }
             if (!fin) continue;
         }
         return buf;
@@ -140,7 +202,6 @@ export class OldBuddyWebSocketHub {
                 (hi >> 8) & 0xff,
                 hi & 0xff,
                 (lo >> 24) & 0xff,
-                (lo >> 16) & 0xff,
                 (lo >> 8) & 0xff,
                 lo & 0xff,
             );

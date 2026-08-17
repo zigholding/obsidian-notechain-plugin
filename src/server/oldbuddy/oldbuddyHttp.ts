@@ -8,9 +8,28 @@ import {
 } from '../httpUtil';
 import { OLDBUDDY_PAGE_HTML } from '../oldbuddyPageHtml';
 import { OldBuddyStore, inferOldBuddyMessageType } from './oldbuddyStore';
+import { parseJiujiuPacket } from './jiujiu';
 import type { Buffer } from 'buffer';
 
+let url = require('url');
+
 const BASE = '/oldbuddy';
+
+function headerVal(req: any, name: string): string {
+    const v = req?.headers?.[name] ?? req?.headers?.[name.toLowerCase()];
+    return Array.isArray(v) ? String(v[0] || '') : String(v || '');
+}
+
+function isJiujiuWsPath(pathname: string | null | undefined): boolean {
+    const p = pathname || '';
+    return (
+        p === '/oldbuddy/jiujiu' ||
+        p === '/jiujiu' ||
+        p === '/oldbuddy' ||
+        p === '/' ||
+        p === '/ws'
+    );
+}
 
 /** /oldbuddy 聊天页与 API（页面 HTML 内嵌于 main.js，同 onlineHttp） */
 export class OldBuddyHttpHandlers {
@@ -18,20 +37,60 @@ export class OldBuddyHttpHandlers {
 
     matches(pathname: string | null | undefined): boolean {
         if (!pathname) return false;
+        if (pathname === '/push' || pathname === '/jiujiu' || pathname === '/ws') return true;
         return pathname === BASE || pathname.startsWith(`${BASE}/`);
     }
 
     handleUpgrade(req: any, socket: any, head: Buffer) {
-        this.store.getWebSocketHub().handleUpgrade(req, socket, head);
+        const parsed = url.parse(req.url || '', true);
+        const pathname = parsed.pathname || '';
+        const kind = pathname === `${BASE}/ws` ? 'web' : 'jiujiu';
+        const target = String(parsed.query?.target || '').trim();
+        const senderId = headerVal(req, 'x-sender-id');
+        this.store.getWebSocketHub().handleUpgrade(req, socket, head, {
+            kind,
+            target: target || undefined,
+            senderId: senderId || undefined,
+        });
     }
 
     isWebSocketPath(pathname: string | null | undefined): boolean {
-        return pathname === `${BASE}/ws`;
+        return pathname === `${BASE}/ws` || isJiujiuWsPath(pathname);
     }
 
     async handle(req: any, res: any, parsedUrl: any): Promise<boolean> {
         const pathname = parsedUrl.pathname || '';
         if (!this.matches(pathname)) return false;
+
+        if ((pathname === '/push' || pathname === `${BASE}/push`) && req.method === 'POST') {
+            await this.handleJiujiuPush(req, res);
+            return true;
+        }
+        if ((pathname === '/push' || pathname === `${BASE}/push`) && req.method === 'GET') {
+            jsonResponse(res, 200, {
+                ok: true,
+                protocol: 'jiujiu',
+                clients: this.store.getWebSocketHub().jiujiuCount(),
+            });
+            return true;
+        }
+        if (
+            (pathname === '/jiujiu' || pathname === `${BASE}/jiujiu` || pathname === '/ws') &&
+            req.method === 'GET'
+        ) {
+            jsonResponse(res, 200, {
+                ok: true,
+                protocol: 'jiujiu',
+                ws: '/oldbuddy/jiujiu',
+                push: '/push',
+            });
+            return true;
+        }
+
+        if (!pathname.startsWith(`${BASE}/`) && pathname !== BASE) {
+            jsonResponse(res, 404, { error: 'Not Found', path: pathname });
+            return true;
+        }
 
         const sub = pathname.slice(BASE.length).replace(/^\//, '') || '';
 
@@ -114,6 +173,26 @@ export class OldBuddyHttpHandlers {
 
         jsonResponse(res, 404, { error: 'Not Found', path: pathname });
         return true;
+    }
+
+    private async handleJiujiuPush(req: any, res: any) {
+        try {
+            const body = await readHttpBody(req);
+            const ct = String(req.headers['content-type'] || '');
+            let fields: Record<string, unknown> = {};
+            if (ct.includes('application/json') || String(body || '').trim().startsWith('{')) {
+                fields = JSON.parse(body || '{}');
+            } else {
+                fields = parseUrlEncoded(body);
+            }
+            const packet = parseJiujiuPacket(JSON.stringify(fields)) || { content: String(fields.content || '') };
+            const result = await this.store.handleJiujiuHttpPush(packet);
+            jsonResponse(res, 200, result);
+        } catch (e: any) {
+            const msg = e?.message || 'push failed';
+            const status = msg === 'no jiujiu client' ? 503 : msg === 'content required' || msg === 'attachment too large' ? 400 : 500;
+            jsonResponse(res, status, { ok: false, error: msg });
+        }
     }
 
     handleOldBuddyPage(_req: any, res: any) {

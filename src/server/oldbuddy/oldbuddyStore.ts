@@ -3,7 +3,19 @@ let path = require('path');
 let crypto = require('crypto');
 
 import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem, OldBuddyAvatarMap, isUserSender } from './types';
-import { OldBuddyWebSocketHub } from './oldbuddyWebSocket';
+import { OldBuddyWebSocketHub, OldBuddyWsClient } from './oldbuddyWebSocket';
+import {
+    JIUJIU_MAX_ATTACH_BYTES,
+    decodeJiujiuBase64,
+    isJiujiuHelp,
+    jiujiuKindToType,
+    jiujiuSenderToOldBuddy,
+    jiujiuTimestampToIso,
+    jiujiuWelcomePacket,
+    oldBuddyToJiujiuPacket,
+    parseJiujiuPacket,
+    type JiujiuPacket,
+} from './jiujiu';
 import { Templater } from '../../easyapi/templater';
 
 const DEFAULT_TARGETS: OldBuddyLabelTextItem[] = [{ label: 'local', text: 'local' }];
@@ -28,6 +40,8 @@ export class OldBuddyStore {
     private loaded = false;
     /** save 模板返回 true 的消息 id 不写入 messages.json（仅 vault/日志） */
     private vaultOnlyMessageIds = new Set<string>();
+    /** 啾啾 App 已本地展示的消息，广播时不再回推 */
+    private jiujiuEchoIds = new Set<string>();
 
     constructor(
         private templater: Templater,
@@ -37,10 +51,128 @@ export class OldBuddyStore {
         this.dataDir = path.join(configDir, 'plugins', 'note-chain', 'oldbuddy-data');
         this.uploadsDir = path.join(this.dataDir, 'uploads');
         this.messagesFile = path.join(this.dataDir, 'messages.json');
+        this.ws.onJiujiuOpen = (client) => {
+            console.log(`[oldbuddy] jiujiu connected target=${client.target || 'local'}`);
+            this.ws.sendTo(client, jiujiuWelcomePacket());
+        };
+        this.ws.onJiujiuMessage = (client, raw) => this.handleJiujiuIncoming(client, raw);
     }
 
     getWebSocketHub() {
         return this.ws;
+    }
+
+    /** 啾啾 App WebSocket 入站：入库后走 nochain_oldbuddy_reply */
+    async handleJiujiuIncoming(client: OldBuddyWsClient, raw: string) {
+        const packet = parseJiujiuPacket(raw);
+        if (!packet) return;
+        if (isJiujiuHelp(packet)) {
+            this.ws.sendTo(client, jiujiuWelcomePacket());
+            return;
+        }
+        const type = String(packet.type || 'message').toLowerCase();
+        if (type === 'welcome' || type === 'action' || type === 'timer' || type === 'alarm' || type === 'player') {
+            return;
+        }
+        try {
+            await this.ingestJiujiuPacket(packet, {
+                senderId: packet.senderId || client.senderId,
+                target: client.target,
+            });
+        } catch (e) {
+            console.warn('[oldbuddy] jiujiu ingest failed:', e);
+        }
+    }
+
+    /** POST /push：广播给已连接的啾啾；无客户端时抛 no jiujiu client */
+    async handleJiujiuHttpPush(packet: JiujiuPacket): Promise<{ ok: true; clients: number }> {
+        if (this.ws.jiujiuCount() <= 0) {
+            throw new Error('no jiujiu client');
+        }
+        const content = String(packet.content || '').trim();
+        const attachments = Array.isArray(packet.attachments) ? packet.attachments : [];
+        if (!content && !attachments.length) {
+            throw new Error('content required');
+        }
+        const msg = await this.ingestJiujiuPacket(packet, {
+            senderId: 'buddy',
+            target: packet.target != null ? String(packet.target) : 'local',
+            skipReply: true,
+            echoToJiujiu: true,
+        });
+        if (!msg) {
+            this.ws.broadcastJiujiu(packet);
+        }
+        return { ok: true, clients: this.ws.jiujiuCount() };
+    }
+
+    private async ingestJiujiuPacket(
+        packet: JiujiuPacket,
+        opts: {
+            senderId?: string;
+            target?: string;
+            skipReply?: boolean;
+            echoToJiujiu?: boolean;
+        },
+    ): Promise<OldBuddyMessage | null> {
+        this.ensureLoaded();
+        const content = String(packet.content || '').trim();
+        const attachments = Array.isArray(packet.attachments) ? packet.attachments : [];
+        const type = String(packet.type || 'message').toLowerCase();
+        const first = attachments[0];
+        const buf = first ? decodeJiujiuBase64(first.data) : null;
+        if (buf && buf.length > JIUJIU_MAX_ATTACH_BYTES) {
+            throw new Error('attachment too large');
+        }
+        if (!content && !buf) return null;
+
+        const id = String(packet.msgId || '').trim() || this.newId();
+        if (!opts.echoToJiujiu) {
+            this.jiujiuEchoIds.add(id);
+        }
+        const sender = opts.skipReply
+            ? String(opts.senderId || 'buddy')
+            : jiujiuSenderToOldBuddy(opts.senderId);
+        const target = String(opts.target || packet.target || DEFAULT_TARGET).trim() || DEFAULT_TARGET;
+        const timestamp = jiujiuTimestampToIso(packet.timestamp);
+
+        let userMsg: OldBuddyMessage;
+        if (buf && first) {
+            const mime = String(first.mime || 'application/octet-stream');
+            const filename = String(first.name || 'upload');
+            const saved = this.saveUpload(buf, filename, mime);
+            const declared = type === 'audio' ? 'audio' : jiujiuKindToType(first.kind, mime);
+            const messageType = inferOldBuddyMessageType(
+                declared === 'video' ? 'video' : declared === 'audio' ? 'audio' : declared === 'image' ? 'image' : 'file',
+                mime,
+                filename,
+            );
+            userMsg = await this.pushExternalMessage({
+                content: saved.url,
+                sender,
+                target,
+                type: messageType,
+                extra_text: content || undefined,
+                file_name: filename,
+                file_size: buf.length,
+                id,
+                timestamp,
+                skip_reply: opts.skipReply ? true : undefined,
+                source: 'jiujiu',
+            });
+        } else {
+            userMsg = await this.pushExternalMessage({
+                content,
+                sender,
+                target,
+                type: 'text',
+                id,
+                timestamp,
+                skip_reply: opts.skipReply ? true : undefined,
+                source: 'jiujiu',
+            });
+        }
+        return userMsg;
     }
 
     ensureLoaded() {
@@ -83,13 +215,44 @@ export class OldBuddyStore {
         if (this.messages.length > MAX_MESSAGES) {
             this.messages = this.messages.slice(-MAX_MESSAGES);
         }
-        this.ws.broadcast(msg);
+        this.emitRealtime(msg);
         if (!this.templater.ea.file.get_tfile(SAVE_TEMPLATE)) {
             this.persist();
         } else {
             void this.afterPushMessage(msg);
         }
         return msg;
+    }
+
+    private emitRealtime(msg: OldBuddyMessage) {
+        this.ws.broadcast(msg);
+        if (this.jiujiuEchoIds.has(msg.id)) {
+            this.jiujiuEchoIds.delete(msg.id);
+            return;
+        }
+        if (this.ws.jiujiuCount() <= 0) return;
+        void this.emitJiujiu(msg);
+    }
+
+    private async emitJiujiu(msg: OldBuddyMessage) {
+        try {
+            const attachment = msg.type === 'text' ? null : this.readUploadFromContent(msg.content);
+            this.ws.broadcastJiujiu(oldBuddyToJiujiuPacket(msg, attachment));
+        } catch (e) {
+            console.warn('[oldbuddy] jiujiu broadcast failed:', e);
+        }
+    }
+
+    private readUploadFromContent(content: string): { data: Buffer; mime: string } | null {
+        const s = String(content || '');
+        const m = /\/oldbuddy\/uploads\/([^/?#]+)/i.exec(s);
+        if (!m) return null;
+        try {
+            const fname = decodeURIComponent(m[1]);
+            return this.serveUploadFile(fname);
+        } catch {
+            return null;
+        }
     }
 
     /** save 模板返回 true 时标记为仅 vault，不写 messages.json */
@@ -549,6 +712,7 @@ export class OldBuddyStore {
         timestamp?: string;
         skip_reply?: boolean | string;
         quick_cmd_id?: string;
+        source?: string;
     }): Promise<OldBuddyMessage> {
         this.ensureLoaded();
         const content = String(params.content ?? '').trim();
@@ -587,7 +751,7 @@ export class OldBuddyStore {
             if (this.messages.length > MAX_MESSAGES) {
                 this.messages = this.messages.slice(-MAX_MESSAGES);
             }
-            this.ws.broadcast(msg);
+            this.emitRealtime(msg);
             if (!this.templater.ea.file.get_tfile(SAVE_TEMPLATE)) {
                 this.persist();
             } else {
@@ -599,12 +763,12 @@ export class OldBuddyStore {
         }
         const skipReply = params.skip_reply === true || params.skip_reply === 'true';
         if (!skipReply && isUserSender(params.sender || 'buddy')) {
-            await this.generateReply(userMsg, params.quick_cmd_id);
+            await this.generateReply(userMsg, params.quick_cmd_id, params.source);
         }
         return userMsg;
     }
 
-    private async generateReply(userMsg: OldBuddyMessage, quickCmdId?: string) {
+    private async generateReply(userMsg: OldBuddyMessage, quickCmdId?: string, extraSource?: string) {
         const targets = await this.loadTargetsConfig();
         const targetCfg = targets.targets.find((t) => t.id === userMsg.target);
         const template = targetCfg?.template || this.replyTemplate;
@@ -618,6 +782,7 @@ export class OldBuddyStore {
                     history: recent,
                     target: userMsg.target,
                     quick_cmd_id: quickCmdId || '',
+                    source: extraSource || '',
                 },
             };
             const result = await this.templater.parse_templater(template, true, extra, 0, '');
