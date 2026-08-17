@@ -10,12 +10,16 @@ export interface OldBuddyWsClient {
     kind: OldBuddyWsKind;
     target: string;
     senderId: string;
+    friendName: string;
+    friendId: string;
 }
 
 export interface OldBuddyWsUpgradeOpts {
     kind?: OldBuddyWsKind;
     target?: string;
     senderId?: string;
+    friendName?: string;
+    friendId?: string;
 }
 
 /** 轻量 WebSocket 服务：网页实时推送 + 啾啾 Native Chat */
@@ -53,6 +57,8 @@ export class OldBuddyWebSocketHub {
             kind: opts?.kind === 'jiujiu' ? 'jiujiu' : 'web',
             target: String(opts?.target || '').trim() || 'local',
             senderId: String(opts?.senderId || '').trim(),
+            friendName: String(opts?.friendName || '').trim(),
+            friendId: String(opts?.friendId || '').trim(),
         };
         this.clients.add(client);
 
@@ -92,11 +98,36 @@ export class OldBuddyWebSocketHub {
     }
 
     jiujiuCount(): number {
-        let n = 0;
-        for (const c of this.clients) {
-            if (c.kind === 'jiujiu' && !c.socket?.destroyed) n++;
-        }
-        return n;
+        return this.jiujiuClients().length;
+    }
+
+    jiujiuClients(): OldBuddyWsClient[] {
+        return [...this.clients].filter((c) => c.kind === 'jiujiu' && !c.socket?.destroyed);
+    }
+
+    listJiujiuFriends(): Array<{ friendName: string; friendId: string; target: string; senderId: string }> {
+        return this.jiujiuClients().map((c) => ({
+            friendName: c.friendName || '',
+            friendId: c.friendId || c.target || '',
+            target: c.target,
+            senderId: c.senderId,
+        }));
+    }
+
+    findJiujiuFriends(friendName?: string, friendId?: string): OldBuddyWsClient[] {
+        const name = String(friendName || '').trim();
+        const id = String(friendId || '').trim();
+        const all = this.jiujiuClients();
+        if (!name && !id) return all;
+        const want = [name, id].filter(Boolean);
+        return all.filter((c) => {
+            const keys = [c.friendName, c.friendId, c.target].map((s) => String(s || '').trim()).filter(Boolean);
+            return want.some((w) => keys.includes(w));
+        });
+    }
+
+    sendToMany(clients: OldBuddyWsClient[], payload: unknown) {
+        for (const c of clients) this.sendTo(c, payload);
     }
 
     closeAll() {

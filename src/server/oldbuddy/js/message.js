@@ -624,6 +624,56 @@ function createAudioElement(src) {
     return audio;
 }
 
+function appendActionBody(contentDiv, msg) {
+    const action = String(msg.action || '').toLowerCase();
+    const chip = document.createElement('div');
+    chip.className = 'message-action';
+    const icon = document.createElement('span');
+    icon.className = 'message-action-icon';
+    const label = document.createElement('span');
+    label.className = 'message-action-label';
+
+    if (action === 'player') {
+        chip.classList.add('message-action-player');
+        icon.textContent = '▶';
+        label.textContent = msg.name || msg.content || '播放';
+        chip.appendChild(icon);
+        chip.appendChild(label);
+        contentDiv.appendChild(chip);
+        const atts = messageAttachments(msg);
+        const audio = atts.find((a) => attachmentKind(a) === 'audio');
+        if (audio && audio.url) contentDiv.appendChild(createAudioElement(audio.url));
+        else if (atts.length) appendEnvelopeAttachments(contentDiv, msg);
+        if (msg.content && msg.content !== (msg.name || '')) {
+            appendMarkdownBody(contentDiv, msg.content, msg);
+        }
+        return;
+    }
+    if (action === 'timer') {
+        icon.textContent = '⏱';
+        const sec = Math.max(1, Math.round(Number(msg.durationMs || 0) / 1000));
+        label.textContent = msg.content || `倒计时 ${sec}s`;
+        chip.appendChild(icon);
+        chip.appendChild(label);
+        contentDiv.appendChild(chip);
+        return;
+    }
+    if (action === 'alarm') {
+        icon.textContent = '⏰';
+        const hh = msg.hour != null ? String(msg.hour).padStart(2, '0') : '';
+        const mm = msg.minute != null ? String(msg.minute).padStart(2, '0') : '';
+        const when = hh && mm ? `${hh}:${mm}` : '';
+        label.textContent = [when, msg.content].filter(Boolean).join(' ') || '闹钟';
+        chip.appendChild(icon);
+        chip.appendChild(label);
+        contentDiv.appendChild(chip);
+        return;
+    }
+    label.textContent = msg.content || action || 'action';
+    chip.appendChild(label);
+    contentDiv.appendChild(chip);
+}
+
 function messageAttachments(msg) {
     return Array.isArray(msg && msg.attachments) ? msg.attachments.filter(Boolean) : [];
 }
@@ -785,6 +835,8 @@ function renderMessage(msg) {
         if (!msg.content && !messageAttachments(msg).length) {
             contentDiv.textContent = '';
         }
+    } else if (msg.type === 'action' || msg.action) {
+        appendActionBody(contentDiv, msg);
     } else if (msg.type === 'text') {
         if (typeof window.renderMarkdown === 'function') {
             contentDiv.classList.add('markdown');

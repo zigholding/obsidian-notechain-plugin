@@ -8,14 +8,20 @@ import {
     JIUJIU_MAX_ATTACH_BYTES,
     decodeJiujiuBase64,
     isJiujiuHelp,
+    isJiujiuActionPacket,
+    jiujiuActionName,
     jiujiuKindToType,
     jiujiuSenderToOldBuddy,
     jiujiuTimestampToIso,
     jiujiuWelcomePacket,
     oldBuddyToJiujiuPacket,
     envelopeToJiujiuPacket,
+    toJiujiuActionPacket,
     jiujiuTypeToOldBuddy,
     parseJiujiuPacket,
+    pickPushFriend,
+    pickPushSender,
+    JiujiuPushError,
     type JiujiuPacket,
 } from './jiujiu';
 import { Templater } from '../../easyapi/templater';
@@ -54,7 +60,9 @@ export class OldBuddyStore {
         this.uploadsDir = path.join(this.dataDir, 'uploads');
         this.messagesFile = path.join(this.dataDir, 'messages.json');
         this.ws.onJiujiuOpen = (client) => {
-            console.log(`[oldbuddy] jiujiu connected target=${client.target || 'local'}`);
+            console.log(
+                `[oldbuddy] jiujiu connected friendName=${client.friendName || '-'} friendId=${client.friendId || client.target} target=${client.target || 'local'}`,
+            );
             this.ws.sendTo(client, jiujiuWelcomePacket());
         };
         this.ws.onJiujiuMessage = (client, raw) => this.handleJiujiuIncoming(client, raw);
@@ -86,39 +94,79 @@ export class OldBuddyStore {
         }
     }
 
-    /** POST /push：广播给已连接的啾啾；无客户端时抛 no jiujiu client */
-    async handleJiujiuHttpPush(packet: JiujiuPacket): Promise<{ ok: true; clients: number }> {
-        if (this.ws.jiujiuCount() <= 0) {
-            throw new Error('no jiujiu client');
+    /** POST /oldbuddy/jiujiu/push：按 friendName / friendId 投递给匹配的啾啾连接 */
+    async handleJiujiuHttpPush(packet: JiujiuPacket): Promise<{ ok: true; clients: number; friendName?: string; friendId?: string }> {
+        const friends = this.ws.listJiujiuFriends();
+        if (friends.length <= 0) {
+            throw new JiujiuPushError(503, 'no jiujiu client');
         }
+        const { friendName, friendId } = pickPushFriend(packet);
+        let matched = this.ws.findJiujiuFriends(friendName, friendId);
+        if (!friendName && !friendId) {
+            if (friends.length > 1) {
+                throw new JiujiuPushError(400, 'friendName required', friends);
+            }
+            matched = this.ws.jiujiuClients();
+        } else if (!matched.length) {
+            throw new JiujiuPushError(404, 'friend not connected', friends);
+        }
+
+        const isAction = isJiujiuActionPacket(packet);
         const content = String(packet.content || '').trim();
         const attachments = Array.isArray(packet.attachments) ? packet.attachments : [];
-        if (!content && !attachments.length) {
+        const actionName = String(packet.name || '').trim();
+        if (!content && !attachments.length && !(isAction && actionName)) {
             throw new Error('content required');
         }
-        const msg = await this.ingestJiujiuPacket(packet, {
-            senderId: 'buddy',
-            target: packet.target != null ? String(packet.target) : 'local',
-            skipReply: true,
-            echoToJiujiu: true,
-        });
-        if (!msg) {
-            this.ws.broadcastJiujiu(packet);
+
+        const { senderId, senderName } = pickPushSender(packet);
+        packet.senderId = senderId;
+        if (senderName) packet.senderName = senderName;
+        if (!packet.msgId) packet.msgId = this.newId();
+
+        if (isAction) {
+            this.ws.sendToMany(matched, toJiujiuActionPacket(packet, { senderId, senderName, msgId: String(packet.msgId) }));
         }
-        return { ok: true, clients: this.ws.jiujiuCount() };
+
+        const msg = await this.ingestJiujiuPacket(packet, {
+            senderId,
+            senderName,
+            target: packet.target != null ? String(packet.target) : matched[0]?.target || 'local',
+            skipReply: !isUserSender(senderId),
+            echoToJiujiu: false,
+        });
+        if (!isAction) {
+            if (msg) {
+                await this.emitJiujiuTo(msg, matched);
+            } else {
+                this.ws.sendToMany(matched, packet);
+            }
+        }
+        return {
+            ok: true,
+            clients: matched.length,
+            friendName: friendName || matched[0]?.friendName || undefined,
+            friendId: friendId || matched[0]?.friendId || matched[0]?.target || undefined,
+        };
     }
 
     private async ingestJiujiuPacket(
         packet: JiujiuPacket,
         opts: {
             senderId?: string;
+            senderName?: string;
             target?: string;
             skipReply?: boolean;
             echoToJiujiu?: boolean;
         },
     ): Promise<OldBuddyMessage | null> {
         this.ensureLoaded();
-        const content = String(packet.content || '').trim();
+        const isAction = isJiujiuActionPacket(packet);
+        const action = jiujiuActionName(packet);
+        let content = String(packet.content || '').trim();
+        if (!content && isAction) {
+            content = String(packet.name || action || '').trim();
+        }
         const rawAtts = Array.isArray(packet.attachments) ? packet.attachments : [];
         const saved: OldBuddyAttachment[] = [];
         for (const att of rawAtts) {
@@ -143,7 +191,7 @@ export class OldBuddyStore {
             }
             saved.push(row);
         }
-        if (!content && !saved.length) return null;
+        if (!content && !saved.length && !isAction) return null;
 
         const id = String(packet.msgId || '').trim() || this.newId();
         if (!opts.echoToJiujiu) {
@@ -154,19 +202,26 @@ export class OldBuddyStore {
             : jiujiuSenderToOldBuddy(opts.senderId);
         const target = String(opts.target || packet.target || DEFAULT_TARGET).trim() || DEFAULT_TARGET;
         const timestamp = jiujiuTimestampToIso(packet.timestamp);
-        const senderName = String(packet.senderName || '').trim() || undefined;
+        const senderName = String(opts.senderName || packet.senderName || '').trim() || undefined;
 
+        const type = isAction ? 'action' : jiujiuTypeToOldBuddy(packet.type);
         return this.pushExternalMessage({
-            content,
+            content: content || String(packet.name || action || ''),
             sender,
             senderName,
             target,
-            type: jiujiuTypeToOldBuddy(packet.type),
+            type,
             attachments: saved,
             id,
             timestamp,
-            skip_reply: !!(opts.skipReply || jiujiuTypeToOldBuddy(packet.type) === 'welcome'),
+            skip_reply: !!(opts.skipReply || type === 'welcome'),
             source: 'jiujiu',
+            action: isAction ? action || 'player' : undefined,
+            name: String(packet.name || '').trim() || undefined,
+            durationMs: packet.durationMs != null ? Number(packet.durationMs) : undefined,
+            hour: packet.hour != null ? Number(packet.hour) : undefined,
+            minute: packet.minute != null ? Number(packet.minute) : undefined,
+            direct: packet.direct === true || packet.direct === 'true',
         });
     }
 
@@ -231,24 +286,36 @@ export class OldBuddyStore {
 
     private async emitJiujiu(msg: OldBuddyMessage) {
         try {
-            const atts = normalizeAttachments(msg.attachments);
-            if (atts.length) {
-                const files = [];
-                for (const att of atts) {
-                    const file = this.readUploadFromContent(String(att.url || ''));
-                    if (!file) continue;
-                    files.push({ att, data: file.data, mime: file.mime });
-                }
-                this.ws.broadcastJiujiu(envelopeToJiujiuPacket(msg, files));
-                return;
-            }
-            const attachment = msg.type === 'text' || msg.type === 'message' || msg.type === 'welcome'
-                ? null
-                : this.readUploadFromContent(msg.content);
-            this.ws.broadcastJiujiu(oldBuddyToJiujiuPacket(msg, attachment));
+            this.ws.broadcastJiujiu(await this.buildJiujiuPacket(msg));
         } catch (e) {
             console.warn('[oldbuddy] jiujiu broadcast failed:', e);
         }
+    }
+
+    private async emitJiujiuTo(msg: OldBuddyMessage, clients: OldBuddyWsClient[]) {
+        if (!clients.length) return;
+        try {
+            this.ws.sendToMany(clients, await this.buildJiujiuPacket(msg));
+        } catch (e) {
+            console.warn('[oldbuddy] jiujiu send failed:', e);
+        }
+    }
+
+    private async buildJiujiuPacket(msg: OldBuddyMessage) {
+        const atts = normalizeAttachments(msg.attachments);
+        if (atts.length) {
+            const files = [];
+            for (const att of atts) {
+                const file = this.readUploadFromContent(String(att.url || ''));
+                if (!file) continue;
+                files.push({ att, data: file.data, mime: file.mime });
+            }
+            return envelopeToJiujiuPacket(msg, files);
+        }
+        const attachment = msg.type === 'text' || msg.type === 'message' || msg.type === 'welcome' || msg.type === 'action'
+            ? null
+            : this.readUploadFromContent(msg.content);
+        return oldBuddyToJiujiuPacket(msg, attachment);
     }
 
     private readUploadFromContent(content: string): { data: Buffer; mime: string } | null {
@@ -723,6 +790,12 @@ export class OldBuddyStore {
         source?: string;
         senderName?: string;
         attachments?: OldBuddyAttachment[];
+        action?: string;
+        name?: string;
+        durationMs?: number;
+        hour?: number;
+        minute?: number;
+        direct?: boolean;
     }): Promise<OldBuddyMessage> {
         this.ensureLoaded();
         const attachments = normalizeAttachments(params.attachments);
@@ -731,7 +804,7 @@ export class OldBuddyStore {
             throw new Error('invalid type');
         }
         const content = String(params.content ?? '').trim();
-        if (!content && !attachments.length) {
+        if (!content && !attachments.length && type !== 'action') {
             throw new Error('content required');
         }
         const id = String(params.id || '').trim() || this.newId();
@@ -747,6 +820,14 @@ export class OldBuddyStore {
         if (params.senderName != null && String(params.senderName).trim()) {
             msg.senderName = String(params.senderName).trim();
         }
+        if (params.action) msg.action = String(params.action);
+        if (params.name != null && String(params.name).trim()) msg.name = String(params.name).trim();
+        if (params.durationMs != null && Number.isFinite(Number(params.durationMs))) {
+            msg.durationMs = Number(params.durationMs);
+        }
+        if (params.hour != null && Number.isFinite(Number(params.hour))) msg.hour = Number(params.hour);
+        if (params.minute != null && Number.isFinite(Number(params.minute))) msg.minute = Number(params.minute);
+        if (params.direct) msg.direct = true;
         if (attachments.length) {
             msg.attachments = attachments;
         }
@@ -820,7 +901,7 @@ export class OldBuddyStore {
         }
 
         if (!replyText) {
-            if (userMsg.type === 'welcome') {
+            if (userMsg.type === 'welcome' || userMsg.type === 'action') {
                 return;
             }
             const nAtt = Array.isArray(userMsg.attachments) ? userMsg.attachments.length : 0;

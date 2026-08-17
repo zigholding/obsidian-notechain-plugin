@@ -304,6 +304,45 @@ body {
     margin-top: 6px;
 }
 
+.message-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 18px;
+    background: rgba(0, 0, 0, 0.06);
+    font-size: 14px;
+    line-height: 1.3;
+}
+
+.message.user .message-action {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.message-action-player {
+    min-width: 120px;
+}
+
+.message-action-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #07c160;
+    color: #fff;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.message-action-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+}
+
 .message-audio {
     width: min(72vw, 280px);
 }
@@ -1486,6 +1525,56 @@ function createAudioElement(src) {
     return audio;
 }
 
+function appendActionBody(contentDiv, msg) {
+    const action = String(msg.action || '').toLowerCase();
+    const chip = document.createElement('div');
+    chip.className = 'message-action';
+    const icon = document.createElement('span');
+    icon.className = 'message-action-icon';
+    const label = document.createElement('span');
+    label.className = 'message-action-label';
+
+    if (action === 'player') {
+        chip.classList.add('message-action-player');
+        icon.textContent = '▶';
+        label.textContent = msg.name || msg.content || '播放';
+        chip.appendChild(icon);
+        chip.appendChild(label);
+        contentDiv.appendChild(chip);
+        const atts = messageAttachments(msg);
+        const audio = atts.find((a) => attachmentKind(a) === 'audio');
+        if (audio && audio.url) contentDiv.appendChild(createAudioElement(audio.url));
+        else if (atts.length) appendEnvelopeAttachments(contentDiv, msg);
+        if (msg.content && msg.content !== (msg.name || '')) {
+            appendMarkdownBody(contentDiv, msg.content, msg);
+        }
+        return;
+    }
+    if (action === 'timer') {
+        icon.textContent = '⏱';
+        const sec = Math.max(1, Math.round(Number(msg.durationMs || 0) / 1000));
+        label.textContent = msg.content || \`倒计时 \${sec}s\`;
+        chip.appendChild(icon);
+        chip.appendChild(label);
+        contentDiv.appendChild(chip);
+        return;
+    }
+    if (action === 'alarm') {
+        icon.textContent = '⏰';
+        const hh = msg.hour != null ? String(msg.hour).padStart(2, '0') : '';
+        const mm = msg.minute != null ? String(msg.minute).padStart(2, '0') : '';
+        const when = hh && mm ? \`\${hh}:\${mm}\` : '';
+        label.textContent = [when, msg.content].filter(Boolean).join(' ') || '闹钟';
+        chip.appendChild(icon);
+        chip.appendChild(label);
+        contentDiv.appendChild(chip);
+        return;
+    }
+    label.textContent = msg.content || action || 'action';
+    chip.appendChild(label);
+    contentDiv.appendChild(chip);
+}
+
 function messageAttachments(msg) {
     return Array.isArray(msg && msg.attachments) ? msg.attachments.filter(Boolean) : [];
 }
@@ -1647,6 +1736,8 @@ function renderMessage(msg) {
         if (!msg.content && !messageAttachments(msg).length) {
             contentDiv.textContent = '';
         }
+    } else if (msg.type === 'action' || msg.action) {
+        appendActionBody(contentDiv, msg);
     } else if (msg.type === 'text') {
         if (typeof window.renderMarkdown === 'function') {
             contentDiv.classList.add('markdown');
@@ -2178,10 +2269,10 @@ function wrapMessageWithAvatar(div, msg, contentDiv) {
     const body = document.createElement('div');
     body.className = 'message-body';
 
-    if (shouldShowNickname(msg.sender, profile)) {
+    if (shouldShowNickname(msg.sender, profile) || msg.senderName) {
         const nick = document.createElement('div');
         nick.className = 'message-nickname';
-        nick.textContent = profile.name;
+        nick.textContent = msg.senderName || profile.name;
         body.appendChild(nick);
     }
 

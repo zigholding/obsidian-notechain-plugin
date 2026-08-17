@@ -6,6 +6,7 @@ export const OLDBUDDY_MESSAGE_TYPES = [
     'file',
     'message',
     'welcome',
+    'action',
 ] as const;
 
 export type OldBuddyMessageType = (typeof OLDBUDDY_MESSAGE_TYPES)[number];
@@ -42,6 +43,13 @@ export interface OldBuddyMessage {
     card?: boolean;
     senderName?: string;
     attachments?: OldBuddyAttachment[];
+    /** 啾啾 action：player / timer / alarm */
+    action?: string;
+    name?: string;
+    durationMs?: number;
+    hour?: number;
+    minute?: number;
+    direct?: boolean;
 }
 
 export interface OldBuddyTarget {
@@ -76,7 +84,7 @@ export function isUserSender(sender?: string | null): boolean {
 
 export function isEnvelopeType(type?: string | null): boolean {
     const t = String(type || '');
-    return t === 'message' || t === 'welcome' || t === 'audio';
+    return t === 'message' || t === 'welcome' || t === 'audio' || t === 'action';
 }
 
 export function normalizeAttachments(raw: unknown): OldBuddyAttachment[] {

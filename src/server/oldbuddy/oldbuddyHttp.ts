@@ -8,7 +8,7 @@ import {
 } from '../httpUtil';
 import { OLDBUDDY_PAGE_HTML } from '../oldbuddyPageHtml';
 import { OldBuddyStore, inferOldBuddyMessageType } from './oldbuddyStore';
-import { parseJiujiuPacket } from './jiujiu';
+import { parseJiujiuPacket, JiujiuPushError } from './jiujiu';
 import type { Buffer } from 'buffer';
 
 let url = require('url');
@@ -37,7 +37,7 @@ export class OldBuddyHttpHandlers {
 
     matches(pathname: string | null | undefined): boolean {
         if (!pathname) return false;
-        if (pathname === '/push' || pathname === '/jiujiu' || pathname === '/ws') return true;
+        if (pathname === '/jiujiu' || pathname === '/ws') return true;
         return pathname === BASE || pathname.startsWith(`${BASE}/`);
     }
 
@@ -47,10 +47,15 @@ export class OldBuddyHttpHandlers {
         const kind = pathname === `${BASE}/ws` ? 'web' : 'jiujiu';
         const target = String(parsed.query?.target || '').trim();
         const senderId = headerVal(req, 'x-sender-id');
+        const q = parsed.query || {};
+        const friendName = String(q.friendName || q.friend || q.name || headerVal(req, 'x-friend-name') || '').trim();
+        const friendId = String(q.friendId || headerVal(req, 'x-friend-id') || '').trim() || target;
         this.store.getWebSocketHub().handleUpgrade(req, socket, head, {
             kind,
             target: target || undefined,
             senderId: senderId || undefined,
+            friendName: friendName || undefined,
+            friendId: friendId || undefined,
         });
     }
 
@@ -62,15 +67,16 @@ export class OldBuddyHttpHandlers {
         const pathname = parsedUrl.pathname || '';
         if (!this.matches(pathname)) return false;
 
-        if ((pathname === '/push' || pathname === `${BASE}/push`) && req.method === 'POST') {
+        if (pathname === `${BASE}/jiujiu/push` && req.method === 'POST') {
             await this.handleJiujiuPush(req, res);
             return true;
         }
-        if ((pathname === '/push' || pathname === `${BASE}/push`) && req.method === 'GET') {
+        if (pathname === `${BASE}/jiujiu/push` && req.method === 'GET') {
             jsonResponse(res, 200, {
                 ok: true,
                 protocol: 'jiujiu',
                 clients: this.store.getWebSocketHub().jiujiuCount(),
+                friends: this.store.getWebSocketHub().listJiujiuFriends(),
             });
             return true;
         }
@@ -82,7 +88,7 @@ export class OldBuddyHttpHandlers {
                 ok: true,
                 protocol: 'jiujiu',
                 ws: '/oldbuddy/jiujiu',
-                push: '/push',
+                push: '/oldbuddy/jiujiu/push',
             });
             return true;
         }
@@ -189,8 +195,16 @@ export class OldBuddyHttpHandlers {
             const result = await this.store.handleJiujiuHttpPush(packet);
             jsonResponse(res, 200, result);
         } catch (e: any) {
+            if (e instanceof JiujiuPushError) {
+                jsonResponse(res, e.status, {
+                    ok: false,
+                    error: e.message,
+                    friends: e.friends,
+                });
+                return;
+            }
             const msg = e?.message || 'push failed';
-            const status = msg === 'no jiujiu client' ? 503 : msg === 'content required' || msg === 'attachment too large' ? 400 : 500;
+            const status = msg === 'content required' || msg === 'attachment too large' ? 400 : 500;
             jsonResponse(res, status, { ok: false, error: msg });
         }
     }

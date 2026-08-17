@@ -22,8 +22,93 @@ export interface JiujiuPacket {
     senderId?: string;
     senderName?: string;
     target?: string;
+    friendName?: string;
+    friend?: string;
+    friendId?: string;
+    sender?: string;
+    name?: string;
+    durationMs?: number;
+    hour?: number;
+    minute?: number;
+    direct?: boolean | string;
     attachments?: JiujiuAttachment[];
     [key: string]: unknown;
+}
+
+export function pickPushFriend(packet: JiujiuPacket): { friendName: string; friendId: string } {
+    const friendName = String(packet.friendName ?? packet.friend ?? '').trim();
+    const friendId = String(packet.friendId ?? '').trim();
+    return { friendName, friendId };
+}
+
+export function pickPushSender(packet: JiujiuPacket): { senderId: string; senderName: string } {
+    const senderName = String(packet.senderName ?? '').trim();
+    const senderField = String(packet.sender ?? '').trim();
+    let senderId = String(packet.senderId ?? '').trim();
+    if (!senderId) {
+        const candidate = senderField || senderName;
+        senderId = isUserSender(candidate) ? candidate : 'buddy';
+    }
+    return { senderId, senderName: senderName || senderField };
+}
+
+export function jiujiuActionName(packet: JiujiuPacket): string {
+    const action = String(packet.action || '').toLowerCase();
+    if (action === 'player' || action === 'timer' || action === 'alarm') return action;
+    const type = String(packet.type || '').toLowerCase();
+    if (type === 'player' || type === 'timer' || type === 'alarm') return type;
+    return '';
+}
+
+export function isJiujiuActionPacket(packet: JiujiuPacket): boolean {
+    const type = String(packet.type || '').toLowerCase();
+    return type === 'action' || !!jiujiuActionName(packet);
+}
+
+export function toJiujiuActionPacket(
+    packet: JiujiuPacket,
+    extra?: { senderId?: string; senderName?: string; msgId?: string },
+): JiujiuPacket {
+    const action = jiujiuActionName(packet) || 'player';
+    const out: JiujiuPacket = {
+        type: 'action',
+        action,
+        content: String(packet.content || packet.name || ''),
+        msgId: String(extra?.msgId || packet.msgId || ''),
+        timestamp: Number(packet.timestamp) > 0 ? Number(packet.timestamp) : Date.now(),
+    };
+    const name = String(packet.name || '').trim();
+    if (name) out.name = name;
+    if (packet.durationMs != null && Number.isFinite(Number(packet.durationMs))) {
+        out.durationMs = Number(packet.durationMs);
+    }
+    if (packet.hour != null && Number.isFinite(Number(packet.hour))) out.hour = Number(packet.hour);
+    if (packet.minute != null && Number.isFinite(Number(packet.minute))) {
+        out.minute = Number(packet.minute);
+    }
+    if (packet.direct === true || packet.direct === 'true') out.direct = true;
+    const senderId = extra?.senderId || packet.senderId;
+    const senderName = extra?.senderName || packet.senderName;
+    if (senderId) out.senderId = String(senderId);
+    if (senderName) out.senderName = String(senderName);
+    if (Array.isArray(packet.attachments) && packet.attachments.length) {
+        out.attachments = packet.attachments;
+    }
+    return out;
+}
+
+export class JiujiuPushError extends Error {
+    status: number;
+    friends: Array<{ friendName: string; friendId: string; target: string; senderId: string }>;
+    constructor(
+        status: number,
+        message: string,
+        friends: Array<{ friendName: string; friendId: string; target: string; senderId: string }> = [],
+    ) {
+        super(message);
+        this.status = status;
+        this.friends = friends;
+    }
 }
 
 export function parseJiujiuPacket(raw: string): JiujiuPacket | null {
@@ -102,10 +187,48 @@ export function oldBuddyTypeToJiujiuKind(type: OldBuddyMessageType): JiujiuAttac
     return 'file';
 }
 
+export function actionMessageToJiujiuPacket(
+    msg: OldBuddyMessage,
+    files: Array<{ att: OldBuddyAttachment; data: Buffer; mime: string }> = [],
+): JiujiuPacket {
+    const packet: JiujiuPacket = {
+        type: 'action',
+        action: String(msg.action || 'player'),
+        content: String(msg.content || msg.name || ''),
+        msgId: msg.id,
+        timestamp: oldBuddyTimestampToMs(msg.timestamp),
+    };
+    if (msg.name) packet.name = msg.name;
+    if (msg.durationMs != null && Number.isFinite(Number(msg.durationMs))) {
+        packet.durationMs = Number(msg.durationMs);
+    }
+    if (msg.hour != null && Number.isFinite(Number(msg.hour))) packet.hour = Number(msg.hour);
+    if (msg.minute != null && Number.isFinite(Number(msg.minute))) packet.minute = Number(msg.minute);
+    if (msg.direct) packet.direct = true;
+    if (msg.sender) packet.senderId = msg.sender;
+    if (msg.senderName) packet.senderName = msg.senderName;
+    const attachments: JiujiuAttachment[] = [];
+    for (const row of files) {
+        if (!row.data?.length || row.data.length > JIUJIU_MAX_ATTACH_BYTES) continue;
+        attachments.push({
+            name: row.att.name || 'file',
+            mime: row.mime || row.att.mime || 'application/octet-stream',
+            kind: row.att.kind || 'audio',
+            data: row.data.toString('base64'),
+            durationMs: row.att.durationMs || 0,
+        });
+    }
+    if (attachments.length) packet.attachments = attachments;
+    return packet;
+}
+
 export function oldBuddyToJiujiuPacket(
     msg: OldBuddyMessage,
     attachment?: { data: Buffer; mime: string } | null,
 ): JiujiuPacket {
+    if (msg.type === 'action' || msg.action) {
+        return actionMessageToJiujiuPacket(msg);
+    }
     const isMedia = msg.type !== 'text' && msg.type !== 'message' && msg.type !== 'welcome';
     const packet: JiujiuPacket = {
         type: msg.type === 'audio' ? 'audio' : msg.type === 'welcome' ? 'welcome' : 'message',
@@ -135,6 +258,9 @@ export function envelopeToJiujiuPacket(
     msg: OldBuddyMessage,
     files: Array<{ att: OldBuddyAttachment; data: Buffer; mime: string }>,
 ): JiujiuPacket {
+    if (msg.type === 'action' || msg.action) {
+        return actionMessageToJiujiuPacket(msg, files);
+    }
     const packet: JiujiuPacket = {
         type: msg.type === 'audio' ? 'audio' : msg.type === 'welcome' ? 'welcome' : 'message',
         content: String(msg.content || ''),
@@ -162,5 +288,6 @@ export function jiujiuTypeToOldBuddy(type: string | undefined): OldBuddyMessageT
     const t = String(type || 'message').toLowerCase();
     if (t === 'audio') return 'audio';
     if (t === 'welcome') return 'welcome';
+    if (t === 'action' || t === 'player' || t === 'timer' || t === 'alarm') return 'action';
     return 'message';
 }

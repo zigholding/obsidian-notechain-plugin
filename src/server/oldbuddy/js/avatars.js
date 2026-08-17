@@ -72,10 +72,10 @@ function wrapMessageWithAvatar(div, msg, contentDiv) {
     const body = document.createElement('div');
     body.className = 'message-body';
 
-    if (shouldShowNickname(msg.sender, profile)) {
+    if (shouldShowNickname(msg.sender, profile) || msg.senderName) {
         const nick = document.createElement('div');
         nick.className = 'message-nickname';
-        nick.textContent = profile.name;
+        nick.textContent = msg.senderName || profile.name;
         body.appendChild(nick);
     }
 
