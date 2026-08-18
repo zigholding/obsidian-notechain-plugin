@@ -9,7 +9,7 @@ version=${2:-}
 
 git add .
 git commit -m "$msg"
-git push origin main
+git push origin master
 
 if [ -z "$version" ]; then
     echo "跳过标签上传"

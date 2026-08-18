@@ -227,7 +227,7 @@ export class MediaLightbox<T> {
 		}, 0);
 	}
 
-	/** 查找标签为 `#lightbox`（或自定义 scriptTag）的脚本笔记 */
+	/** 查找 `#lightbox` 脚本笔记；手机端还需同时带 `#mobile` */
 	private getLightboxScriptNotes(): TFile[] {
 		const nc = (this.options.app as any).plugins?.plugins?.["note-chain"];
 		const ea = nc?.easyapi ?? (window as any).ea;
@@ -235,6 +235,15 @@ export class MediaLightbox<T> {
 
 		const tag = (this.options.scriptTag ?? "lightbox").replace(/^#/, "");
 		let files: TFile[] = ea.file.get_all_tfiles_tags(tag) ?? [];
+
+		const isMobile = (this.options.app as any).isMobile === true;
+		if (isMobile && ea.file.get_tags) {
+			files = files.filter((f) => {
+				const tags: string[] = ea.file.get_tags(f) ?? [];
+				return tags.includes("#mobile") || tags.includes("mobile");
+			});
+		}
+
 		if (nc?.chain?.sort_tfiles_by_chain) {
 			files = nc.chain.sort_tfiles_by_chain(files);
 		}
