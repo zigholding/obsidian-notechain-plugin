@@ -4,22 +4,31 @@
 # 第一个参数作为 commit message，默认为 "update"
 msg=${1:-"update"}
 
-# 第二个参数，控制是否上传 tag（true/false），默认为 false
-upload_tag=${2:-false}
+# 第二个参数为版本号（如 0.6.5）；未传则不打 tag
+version=${2:-}
 
 git add .
 git commit -m "$msg"
-git push origin master
+git push origin main
 
-# 如果第二个参数为 true，则推送 tag
-if [ "$upload_tag" = "true" ]; then
-    # 删除远程和本地 tag（如果存在）
-    git tag -d 1.4.5 2>/dev/null
-    git push origin -d tag 1.4.5 2>/dev/null
-
-    # 重新创建本地 tag
-    git tag -a 1.4.5 -m "1.4.5"
-    git push origin 1.4.5
-else
+if [ -z "$version" ]; then
     echo "跳过标签上传"
+    exit 0
 fi
+
+# 本地已有该 tag 则先删除
+if git rev-parse "$version" >/dev/null 2>&1; then
+    echo "删除本地 tag: $version"
+    git tag -d "$version"
+fi
+
+# 远程已有该 tag 则先删除
+if git ls-remote --tags origin "refs/tags/$version" | grep -q "$version"; then
+    echo "删除远程 tag: $version"
+    git push origin -d "refs/tags/$version"
+fi
+
+# 创建并推送新 tag
+git tag -a "$version" -m "$version"
+git push origin "$version"
+echo "已上传 tag: $version"

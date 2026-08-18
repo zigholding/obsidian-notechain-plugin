@@ -39,6 +39,8 @@ export interface CalendarGalleryOptions {
 	onOpenDay?: (day: DayData) => void;
 	onOpenImage?: (image: ImageItem) => void;
 	onPlayAudio?: (audio: AudioItem) => void;
+	/** 日历弹窗关闭后回调（用于释放脚本侧缓存） */
+	onModalClose?: () => void;
 	/**
 	 * 放大预览中删除媒体后回调（文件已尝试删除、日历缓存已更新）。
 	 * 用于同步外部数据源。
@@ -69,10 +71,13 @@ export interface CalendarGalleryOptions {
 type ResolvedOptions = Required<
 	Omit<
 		CalendarGalleryOptions,
-		"onOpenDay" | "onOpenImage" | "onPlayAudio" | "onDeleteMedia"
+		"onOpenDay" | "onOpenImage" | "onPlayAudio" | "onDeleteMedia" | "onModalClose"
 	>
 > &
-	Pick<CalendarGalleryOptions, "onOpenDay" | "onOpenImage" | "onPlayAudio" | "onDeleteMedia">;
+	Pick<
+		CalendarGalleryOptions,
+		"onOpenDay" | "onOpenImage" | "onPlayAudio" | "onDeleteMedia" | "onModalClose"
+	>;
 
 const DEFAULT_OPTIONS: ResolvedOptions = {
 	getMonthlyData: async () => ({ year: 0, month: 0, days: [] }),
@@ -340,11 +345,19 @@ export class CalendarGalleryModal extends Modal {
 	private gridEl!: HTMLElement;
 	private tooltipEl!: HTMLElement;
 	private slideDir: "left" | "right" | null = null;
-	private mediaLightbox: MediaLightbox<FlatMediaEntry>;
+	private mediaLightbox: MediaLightbox<FlatMediaEntry> | null = null;
 	private cardAudioEl: HTMLAudioElement | null = null;
 	private cardAudioBlobUrl: string | null = null;
 	/** 系统路径媒体转 blob 后需释放 */
 	private mediaObjectUrls: string[] = [];
+	private closed = false;
+	private slideTimer: number | null = null;
+	private monthWaiters = new Map<string, Array<() => void>>();
+	private mediaLoadQueue: Array<() => void> = [];
+	private mediaLoadInFlight = 0;
+	private static readonly MEDIA_LOAD_CONCURRENCY = 3;
+	private static readonly THUMB_MAX_EDGE = 320;
+	private static readonly THUMB_MAX_FILE_BYTES = 25 * 1024 * 1024;
 	private playingAudioWrap: HTMLElement | null = null;
 	private playingAudioRestore: (() => void) | null = null;
 	private playingAudioPath: string | null = null;
@@ -362,7 +375,10 @@ export class CalendarGalleryModal extends Modal {
 		this.currentYear = now.getFullYear();
 		this.currentMonth = now.getMonth() + 1;
 		this.selectedKey = dateKey(this.currentYear, this.currentMonth, now.getDate());
-		this.mediaLightbox = new MediaLightbox<FlatMediaEntry>({
+	}
+
+	private createMediaLightbox(): MediaLightbox<FlatMediaEntry> {
+		return new MediaLightbox<FlatMediaEntry>({
 			app: this.app,
 			resolveUrl: (src) => this.resolveMediaUrl(src),
 			getItemInfo: (entry) => ({
@@ -394,6 +410,8 @@ export class CalendarGalleryModal extends Modal {
 	}
 
 	onOpen(): void {
+		this.closed = false;
+		if (!this.mediaLightbox) this.mediaLightbox = this.createMediaLightbox();
 		this.modalEl.addClass("nc-calendar-gallery-modal");
 		const isMobile = (this.app as any).isMobile === true;
 		if (isMobile) {
@@ -428,17 +446,38 @@ export class CalendarGalleryModal extends Modal {
 	}
 
 	onClose(): void {
+		this.closed = true;
 		this.renderSession++;
+		this.loadingMonths.clear();
+		this.resolveAllMonthWaiters();
+		this.flushMediaLoadQueue();
 		if (this.queryDebounceTimer != null) {
 			window.clearTimeout(this.queryDebounceTimer);
 			this.queryDebounceTimer = null;
 		}
+		if (this.slideTimer != null) {
+			window.clearTimeout(this.slideTimer);
+			this.slideTimer = null;
+		}
 		this.modalEl.removeEventListener("keydown", this.onKeyDown);
 		this.stopCardAudio();
-		this.revokeMediaObjectUrls();
+		this.releaseMediaElements(this.modalEl);
 		this.mediaLightbox?.destroy();
+		this.mediaLightbox = null;
+		this.revokeMediaObjectUrls();
+		this.monthCache.clear();
 		this.tooltipEl?.remove();
+		if (this.cardAudioEl) {
+			this.cardAudioEl.remove();
+			this.cardAudioEl = null;
+		}
 		this.contentEl.empty();
+		try {
+			this.options.onModalClose?.();
+		} catch (err) {
+			console.error("[note-chain] onModalClose", err);
+		}
+		this.dropExternalRefs();
 	}
 
 	refresh(): void {
@@ -669,7 +708,7 @@ export class CalendarGalleryModal extends Modal {
 					normalizeMediaPath(e.image.path) === normalizeMediaPath(image.path)
 			);
 		}
-		this.mediaLightbox.open(list, idx >= 0 ? idx : 0);
+		this.mediaLightbox?.open(list, idx >= 0 ? idx : 0);
 	}
 
 	private async handleLightboxContextAction(
@@ -806,7 +845,7 @@ export class CalendarGalleryModal extends Modal {
 		// 4) 刷新日历日卡片 + 预览列表
 		const { year, month, day } = parseDateKey(entry.dateKey);
 		this.refreshDay(new Date(year, month - 1, day));
-		this.mediaLightbox.removeCurrent();
+		this.mediaLightbox?.removeCurrent();
 
 		new Notice(isZhUi() ? `已删除${kindLabel}` : `${kindLabel} deleted`);
 	}
@@ -898,13 +937,14 @@ export class CalendarGalleryModal extends Modal {
 	// ── Data loading ──────────────────────────────────────────────────────────
 
 	private async fetchMonth(year: number, month: number): Promise<MonthlyData> {
+		if (this.closed) return { year, month, days: [] };
 		const key = this.cacheKey(year, month);
 		const cached = this.monthCache.get(key);
 		if (cached) return cached;
 
 		if (this.loadingMonths.has(key)) {
 			await this.waitForMonth(key);
-			return this.monthCache.get(key)!;
+			return this.monthCache.get(key) ?? { year, month, days: [] };
 		}
 
 		this.loadingMonths.add(key);
@@ -913,27 +953,119 @@ export class CalendarGalleryModal extends Modal {
 				new Date(year, month - 1, 1),
 				this.currentQuery
 			);
-			this.monthCache.set(key, data);
+			if (!this.closed) this.monthCache.set(key, data);
 			return data;
 		} finally {
 			this.loadingMonths.delete(key);
+			this.resolveMonthWaiters(key);
 		}
 	}
 
 	private waitForMonth(key: string): Promise<void> {
+		if (this.closed || this.monthCache.has(key) || !this.loadingMonths.has(key)) {
+			return Promise.resolve();
+		}
 		return new Promise((resolve) => {
-			const check = () => {
-				if (this.monthCache.has(key) || !this.loadingMonths.has(key)) {
-					resolve();
-				} else {
-					requestAnimationFrame(check);
-				}
-			};
-			check();
+			const list = this.monthWaiters.get(key) ?? [];
+			list.push(resolve);
+			this.monthWaiters.set(key, list);
 		});
 	}
 
+	private resolveMonthWaiters(key: string): void {
+		const list = this.monthWaiters.get(key);
+		if (!list) return;
+		this.monthWaiters.delete(key);
+		for (const resolve of list) resolve();
+	}
+
+	private resolveAllMonthWaiters(): void {
+		for (const key of [...this.monthWaiters.keys()]) {
+			this.resolveMonthWaiters(key);
+		}
+	}
+
+	private dropExternalRefs(): void {
+		this.options.getMonthlyData = async () => ({ year: 0, month: 0, days: [] });
+		this.options.onOpenDay = undefined;
+		this.options.onOpenImage = undefined;
+		this.options.onPlayAudio = undefined;
+		this.options.onDeleteMedia = undefined;
+		this.options.onModalClose = undefined;
+	}
+
+	private releaseMediaElements(root?: HTMLElement | null): void {
+		if (!root) return;
+		root.querySelectorAll("video, audio").forEach((node) => {
+			const el = node as HTMLMediaElement;
+			try {
+				el.pause();
+				el.removeAttribute("src");
+				while (el.firstChild) el.removeChild(el.firstChild);
+				el.load();
+			} catch { /* ignore */ }
+		});
+		root.querySelectorAll("img").forEach((node) => {
+			const el = node as HTMLImageElement;
+			el.onload = null;
+			el.onerror = null;
+			el.removeAttribute("src");
+			el.src = "";
+		});
+	}
+
+	private enqueueMediaLoad<T>(task: () => Promise<T>): Promise<T | null> {
+		return new Promise((resolve) => {
+			const start = () => {
+				if (this.closed) {
+					resolve(null);
+					return;
+				}
+				this.mediaLoadInFlight++;
+				void task()
+					.then((value) => resolve(this.closed ? null : value))
+					.catch(() => resolve(null))
+					.finally(() => {
+						this.mediaLoadInFlight--;
+						this.pumpMediaLoadQueue();
+					});
+			};
+			this.mediaLoadQueue.push(start);
+			this.pumpMediaLoadQueue();
+		});
+	}
+
+	private pumpMediaLoadQueue(): void {
+		if (this.closed) {
+			this.flushMediaLoadQueue();
+			return;
+		}
+		while (
+			this.mediaLoadInFlight < CalendarGalleryModal.MEDIA_LOAD_CONCURRENCY &&
+			this.mediaLoadQueue.length
+		) {
+			const next = this.mediaLoadQueue.shift();
+			next?.();
+		}
+	}
+
+	private flushMediaLoadQueue(): void {
+		const pending = this.mediaLoadQueue.splice(0);
+		for (const job of pending) job();
+	}
+
+	private trackObjectUrl(url: string | null): string | null {
+		if (!url) return null;
+		if (this.closed) {
+			try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+			return null;
+		}
+		this.mediaObjectUrls.push(url);
+		return url;
+	}
+
 	private preloadAdjacentMonths(year: number, month: number): void {
+		if (this.closed) return;
 		const prev = shiftMonth(year, month, -1);
 		const next = shiftMonth(year, month, 1);
 		void this.fetchMonth(prev.year, prev.month);
@@ -941,11 +1073,12 @@ export class CalendarGalleryModal extends Modal {
 	}
 
 	private async loadAndRenderMonth(year: number, month: number, forceGrid = false): Promise<void> {
+		if (this.closed) return;
 		const session = this.renderSession;
 		if (forceGrid) this.renderSkeleton();
 
 		await this.fetchMonth(year, month);
-		if (session !== this.renderSession) return;
+		if (this.closed || session !== this.renderSession) return;
 
 		this.syncHeaderNav();
 		this.renderGrid();
@@ -987,6 +1120,7 @@ export class CalendarGalleryModal extends Modal {
 		const mainMap = mainData ? this.buildDayMap(mainData) : new Map<string, DayData>();
 
 		this.stopCardAudio();
+		this.releaseMediaElements(this.gridEl);
 		this.revokeMediaObjectUrls();
 		this.gridEl.empty();
 		this.gridEl.removeClass("is-loading");
@@ -994,7 +1128,11 @@ export class CalendarGalleryModal extends Modal {
 		if (this.options.animation && this.slideDir) {
 			this.gridEl.addClass(`nc-cal-slide-${this.slideDir}`);
 			this.slideDir = null;
-			window.setTimeout(() => this.gridEl?.removeClass("nc-cal-slide-left", "nc-cal-slide-right"), 280);
+			if (this.slideTimer != null) window.clearTimeout(this.slideTimer);
+			this.slideTimer = window.setTimeout(() => {
+				this.slideTimer = null;
+				this.gridEl?.removeClass("nc-cal-slide-left", "nc-cal-slide-right");
+			}, 280);
 		}
 
 		const todayKey = dateKey(
@@ -1110,20 +1248,20 @@ export class CalendarGalleryModal extends Modal {
 		const wrap = container.createDiv({ cls: "nc-cal-img-wrap" });
 		const mediaContainer = wrap.createDiv({ cls: "nc-cal-media-container" });
 		let imgEl: HTMLImageElement | null = null;
-		let videoEl: HTMLVideoElement | null = null;
 
 		let current = 0;
 		const session = this.renderSession;
 		let dots: HTMLElement | null = null;
 
-		const showError = () => {
+		const showPlaceholder = (icon: string) => {
 			imgEl?.hide();
-			videoEl?.hide();
 			if (!mediaContainer.querySelector(".nc-cal-img-placeholder")) {
 				const ph = mediaContainer.createDiv({ cls: "nc-cal-img-placeholder" });
-				setIcon(ph, "image-off");
+				setIcon(ph, icon);
 			}
 		};
+
+		const showError = () => showPlaceholder("image-off");
 
 		const setMedia = (idx: number) => {
 			// 不循环：到头/尾停止，避免滚完又回到该日第一张
@@ -1135,30 +1273,23 @@ export class CalendarGalleryModal extends Modal {
 			mediaContainer.querySelector(".nc-cal-img-placeholder")?.remove();
 
 			if (kind === "video" && !item.thumbnail) {
-				imgEl?.hide();
-				if (!videoEl) {
-					videoEl = mediaContainer.createEl("video", { cls: "nc-cal-video" });
-					videoEl.setAttr("muted", "true");
-					videoEl.setAttr("playsinline", "true");
-					videoEl.setAttr("preload", "metadata");
-					videoEl.setAttr("draggable", "false");
+				// 日卡片不解码整段视频，避免关闭后 Chromium 媒体管线残留导致卡顿
+				if (imgEl) {
+					imgEl.hide();
+					imgEl.removeAttribute("src");
+					imgEl.src = "";
 				}
-				videoEl.onerror = showError;
-				void this.resolveMediaUrl(item.path).then((url) => {
-					if (session !== this.renderSession || !url || !videoEl) return;
-					videoEl.src = url;
-					videoEl.show();
-				});
+				showPlaceholder("play-circle");
 			} else {
-				videoEl?.hide();
 				if (!imgEl) {
 					imgEl = mediaContainer.createEl("img", { cls: "nc-cal-img" });
 					imgEl.setAttr("loading", "lazy");
+					imgEl.setAttr("decoding", "async");
 					imgEl.setAttr("draggable", "false");
 					imgEl.setAttr("alt", item.caption ?? item.path);
 					imgEl.onerror = showError;
 				}
-				this.resolveMediaSrc(thumb, imgEl, session);
+				this.resolveMediaSrc(thumb, imgEl, session, true);
 			}
 
 			dots?.querySelectorAll(".nc-cal-dot").forEach((d, i) => {
@@ -1208,9 +1339,9 @@ export class CalendarGalleryModal extends Modal {
 		if (this.options.animation) wrap.addClass("nc-cal-fade");
 	}
 
-	private resolveMediaSrc(src: string, imgEl: HTMLImageElement, session: number): void {
-		void this.resolveMediaUrl(src).then((url) => {
-			if (session !== this.renderSession) return;
+	private resolveMediaSrc(src: string, imgEl: HTMLImageElement, session: number, thumbnail = false): void {
+		void this.resolveMediaUrl(src, { thumbnail }).then((url) => {
+			if (this.closed || session !== this.renderSession) return;
 			if (url) {
 				imgEl.src = url;
 				imgEl.show();
@@ -1220,7 +1351,10 @@ export class CalendarGalleryModal extends Modal {
 		});
 	}
 
-	private async resolveMediaUrl(src: string): Promise<string | null> {
+	private async resolveMediaUrl(src: string, opts?: { thumbnail?: boolean }): Promise<string | null> {
+		if (this.closed) return null;
+		const session = this.renderSession;
+		const thumbnail = opts?.thumbnail === true;
 		const raw = (src ?? "").trim();
 		if (!raw) return null;
 
@@ -1230,44 +1364,126 @@ export class CalendarGalleryModal extends Modal {
 		// 远程 / data / app / blob：直接可用
 		if (isDirectMediaUrl(path)) return path;
 
-		// ① 库内 TFile：用 app:// 资源路径，浏览器原生按需解码
+		// ① 库内 TFile：缩略图需降采样；否则用 app:// 资源路径
 		const tfile = this.resolveMediaTFile(path);
 		if (tfile) {
+			if (thumbnail && IMAGE_EXT.test(tfile.path)) {
+				const thumb = await this.readVaultImageAsThumbnailUrl(tfile, session);
+				if (thumb) return thumb;
+				return null;
+			}
+			if (this.closed || session !== this.renderSession) return null;
 			return this.app.vault.getResourcePath(tfile);
 		}
 
 		// ② 系统绝对路径 / 库外文件：经 Node fs 读为 blob URL
 		if (isFilesystemPath(path) || IMAGE_EXT.test(path) || AUDIO_EXT.test(path) || VIDEO_EXT.test(path)) {
-			const fsUrl = await this.readFsMediaAsBlobUrl(path);
+			const fsUrl = await this.readFsMediaAsBlobUrl(path, session, thumbnail);
 			if (fsUrl) return fsUrl;
 		}
 
+		if (this.closed || session !== this.renderSession) return null;
+
 		// ③ 兜底：仍尝试库内相对路径的旧逻辑
 		if (IMAGE_EXT.test(path)) {
+			if (thumbnail) {
+				const t = this.app.vault.getFileByPath(normalizeMediaPath(path));
+				if (t) {
+					const thumb = await this.readVaultImageAsThumbnailUrl(t, session);
+					if (thumb) return thumb;
+				}
+			}
 			return this.readVaultImageAsDataUrl(path);
 		}
 		if (AUDIO_EXT.test(path) || VIDEO_EXT.test(path)) {
-			return this.readVaultMediaAsBlobUrl(path);
+			return this.readVaultMediaAsBlobUrl(path, session);
 		}
 
 		return null;
 	}
 
 	/** 系统路径 / 库外文件 → blob URL */
-	private async readFsMediaAsBlobUrl(path: string): Promise<string | null> {
+	private async readFsMediaAsBlobUrl(
+		path: string,
+		session: number,
+		thumbnail = false,
+	): Promise<string | null> {
+		if (this.closed || session !== this.renderSession) return null;
 		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
 		const fsApi = nc?.easyapi?.fs;
 		if (!fsApi) return null;
+
+		return this.enqueueMediaLoad(async () => {
+			if (this.closed || session !== this.renderSession) return null;
+			try {
+				const abs = fsApi.abspath(path, true) || (fsApi.isfile(path) ? path : null);
+				if (!abs || !fsApi.isfile(abs)) return null;
+
+				if (thumbnail) {
+					try {
+						const stat = fsApi.fs?.statSync?.(abs);
+						const size = Number(stat?.size ?? 0);
+						if (size > CalendarGalleryModal.THUMB_MAX_FILE_BYTES) return null;
+					} catch { /* ignore size check */ }
+				}
+
+				const mime = guessMediaMimeType(abs);
+				const buf = fsApi.fs.promises?.readFile
+					? await fsApi.fs.promises.readFile(abs)
+					: fsApi.fs.readFileSync(abs);
+				if (this.closed || session !== this.renderSession) return null;
+
+				const blob = new Blob([buf as BlobPart], { type: mime });
+				if (thumbnail) {
+					if (mime.startsWith("image/") && mime !== "image/svg+xml") {
+						const thumbUrl = await this.blobToThumbnailUrl(blob, session);
+						return this.trackObjectUrl(thumbUrl);
+					}
+					return null;
+				}
+				if (this.closed || session !== this.renderSession) return null;
+				return this.trackObjectUrl(URL.createObjectURL(blob));
+			} catch {
+				return null;
+			}
+		});
+	}
+
+	private async blobToThumbnailUrl(blob: Blob, session: number): Promise<string | null> {
+		if (this.closed || session !== this.renderSession) return null;
+		if (typeof createImageBitmap !== "function") return null;
 		try {
-			const abs = fsApi.abspath(path, true) || (fsApi.isfile(path) ? path : null);
-			if (!abs || !fsApi.isfile(abs)) return null;
-			const mime = guessMediaMimeType(abs);
-			const buf = fsApi.fs.promises?.readFile
-				? await fsApi.fs.promises.readFile(abs)
-				: fsApi.fs.readFileSync(abs);
-			const url = URL.createObjectURL(new Blob([buf as BlobPart], { type: mime }));
-			this.mediaObjectUrls.push(url);
-			return url;
+			let bitmap: ImageBitmap;
+			try {
+				bitmap = await createImageBitmap(blob, { imageOrientation: "from-image" } as ImageBitmapOptions);
+			} catch {
+				bitmap = await createImageBitmap(blob);
+			}
+			if (this.closed || session !== this.renderSession) {
+				bitmap.close();
+				return null;
+			}
+			const maxEdge = CalendarGalleryModal.THUMB_MAX_EDGE;
+			const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height, 1));
+			const w = Math.max(1, Math.round(bitmap.width * scale));
+			const h = Math.max(1, Math.round(bitmap.height * scale));
+			const canvas = document.createElement("canvas");
+			canvas.width = w;
+			canvas.height = h;
+			const ctx = canvas.getContext("2d");
+			if (!ctx) {
+				bitmap.close();
+				return null;
+			}
+			ctx.drawImage(bitmap, 0, 0, w, h);
+			bitmap.close();
+			const thumbBlob = await new Promise<Blob | null>((resolve) =>
+				canvas.toBlob((b) => resolve(b), "image/jpeg", 0.72),
+			);
+			canvas.width = 0;
+			canvas.height = 0;
+			if (!thumbBlob || this.closed || session !== this.renderSession) return null;
+			return URL.createObjectURL(thumbBlob);
 		} catch {
 			return null;
 		}
@@ -1280,19 +1496,39 @@ export class CalendarGalleryModal extends Modal {
 		this.mediaObjectUrls = [];
 	}
 
-	private async readVaultMediaAsBlobUrl(path: string): Promise<string | null> {
+	private async readVaultMediaAsBlobUrl(path: string, session: number): Promise<string | null> {
+		if (this.closed || session !== this.renderSession) return null;
 		const normalized = normalizeMediaPath(path);
 		const tfile = this.resolveMediaTFile(normalized) ?? this.app.vault.getFileByPath(normalized);
 		if (!tfile) return null;
-		try {
-			const buf = await this.app.vault.readBinary(tfile);
-			const blob = new Blob([buf], { type: guessMediaMimeType(tfile.path) });
-			const url = URL.createObjectURL(blob);
-			this.mediaObjectUrls.push(url);
-			return url;
-		} catch {
-			return null;
-		}
+		return this.enqueueMediaLoad(async () => {
+			if (this.closed || session !== this.renderSession) return null;
+			try {
+				const buf = await this.app.vault.readBinary(tfile);
+				if (this.closed || session !== this.renderSession) return null;
+				const blob = new Blob([buf], { type: guessMediaMimeType(tfile.path) });
+				return this.trackObjectUrl(URL.createObjectURL(blob));
+			} catch {
+				return null;
+			}
+		});
+	}
+
+	private async readVaultImageAsThumbnailUrl(tfile: TFile, session: number): Promise<string | null> {
+		if (this.closed || session !== this.renderSession) return null;
+		if ((tfile.stat?.size ?? 0) > CalendarGalleryModal.THUMB_MAX_FILE_BYTES) return null;
+		return this.enqueueMediaLoad(async () => {
+			if (this.closed || session !== this.renderSession) return null;
+			try {
+				const buf = await this.app.vault.readBinary(tfile);
+				if (this.closed || session !== this.renderSession) return null;
+				const blob = new Blob([buf], { type: guessImageMimeType(tfile.path) });
+				const thumbUrl = await this.blobToThumbnailUrl(blob, session);
+				return this.trackObjectUrl(thumbUrl);
+			} catch {
+				return null;
+			}
+		});
 	}
 
 	private resolveMediaTFile(path: string): TFile | null {
@@ -1364,7 +1600,7 @@ export class CalendarGalleryModal extends Modal {
 		this.stopCardAudio();
 
 		const url = await this.resolveMediaUrl(audio.path);
-		if (!url) return;
+		if (!url || this.closed) return;
 
 		if (url.startsWith("blob:")) this.cardAudioBlobUrl = url;
 
@@ -1390,6 +1626,7 @@ export class CalendarGalleryModal extends Modal {
 	}
 
 	private async readVaultImageAsDataUrl(path: string): Promise<string | null> {
+		if (this.closed) return null;
 		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
 		const fileApi = nc?.easyapi?.file;
 		if (!fileApi) return null;

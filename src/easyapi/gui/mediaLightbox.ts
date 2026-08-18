@@ -448,6 +448,11 @@ export class MediaLightbox<T> {
 
 	destroy(): void {
 		this.close(true);
+		this.stopPlayback();
+		this.imgEl.onload = null;
+		this.imgEl.onerror = null;
+		this.imgEl.removeAttribute("src");
+		this.imgEl.src = "";
 		this.overlay.remove();
 	}
 
