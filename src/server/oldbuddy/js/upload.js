@@ -19,7 +19,7 @@ function createUploadOverlay() {
 function appendExtraTextRow(overlay, placeholder) {
     const textInput = document.createElement('input');
     textInput.type = 'text';
-    textInput.placeholder = placeholder || '输入附加文字...';
+        textInput.placeholder = placeholder || '输入说明文字...';
     textInput.style.marginTop = '10px';
     textInput.style.padding = '8px 12px';
     textInput.style.width = '60%';
@@ -55,7 +55,7 @@ function appendSendCancelButtons(overlay, onSend, onCancel, failLabel) {
     };
 }
 
-/** 录音 / 视频上传前预览并输入 extra_text */
+/** 录音 / 视频上传前预览并输入说明（仍 POST extra_text，服务端写入 content） */
 function handleMediaUpload(fileOrBlob, kind, opts = {}) {
     const { filename, inputEl, failLabel } = opts;
     const isVideo = kind === 'video';

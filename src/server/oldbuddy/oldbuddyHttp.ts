@@ -263,6 +263,7 @@ export class OldBuddyHttpHandlers {
                 extra_text: fields.extra_text,
                 file_name: file.filename || undefined,
                 file_size: file.data.length,
+                mime: file.mime || undefined,
             });
             jsonResponse(res, 200, { message });
         } catch (e: any) {
@@ -287,7 +288,7 @@ export class OldBuddyHttpHandlers {
                 content: String(fields.content || ''),
                 sender: fields.sender != null ? String(fields.sender) : undefined,
                 target: fields.target != null ? String(fields.target) : undefined,
-                type: fields.type != null ? (String(fields.type) as 'text' | 'image' | 'audio' | 'video' | 'file') : undefined,
+                type: fields.type != null ? String(fields.type) : undefined,
                 extra_text: fields.extra_text != null ? String(fields.extra_text) : undefined,
                 file_name: fields.file_name != null ? String(fields.file_name) : undefined,
                 file_size: fields.file_size != null ? Number(fields.file_size) : undefined,
@@ -296,6 +297,8 @@ export class OldBuddyHttpHandlers {
                 timestamp: fields.timestamp != null ? String(fields.timestamp) : undefined,
                 skip_reply: fields.skip_reply as boolean | string | undefined,
                 quick_cmd_id: fields.quick_cmd_id != null ? String(fields.quick_cmd_id) : undefined,
+                senderName: fields.senderName != null ? String(fields.senderName) : undefined,
+                attachments: Array.isArray(fields.attachments) ? (fields.attachments as any) : undefined,
             });
             jsonResponse(res, 200, { ok: true, message });
         } catch (e: any) {

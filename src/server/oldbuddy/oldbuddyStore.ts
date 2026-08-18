@@ -2,7 +2,7 @@ let fs = require('fs');
 let path = require('path');
 let crypto = require('crypto');
 
-import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem, OldBuddyAvatarMap, OldBuddyAttachment, isUserSender, normalizeAttachments, OLDBUDDY_MESSAGE_TYPES } from './types';
+import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem, OldBuddyAvatarMap, OldBuddyAttachment, isUserSender, normalizeAttachments, normalizeOldBuddyMessage, attachmentKindFromMime } from './types';
 import { OldBuddyWebSocketHub, OldBuddyWsClient } from './oldbuddyWebSocket';
 import {
     JIUJIU_MAX_ATTACH_BYTES,
@@ -10,7 +10,6 @@ import {
     isJiujiuHelp,
     isJiujiuActionPacket,
     jiujiuActionName,
-    jiujiuKindToType,
     jiujiuSenderToOldBuddy,
     jiujiuTimestampToIso,
     jiujiuWelcomePacket,
@@ -178,11 +177,11 @@ export class OldBuddyStore {
             const mime = String(att.mime || 'application/octet-stream');
             const filename = String(att.name || 'upload');
             const file = this.saveUpload(buf, filename, mime);
-            const kind = String(att.kind || jiujiuKindToType(att.kind, mime));
+            const kind = attachmentKindFromMime(mime, filename, att.kind);
             const row: OldBuddyAttachment = {
                 name: filename,
                 mime,
-                kind: kind === 'video' ? 'file' : kind,
+                kind,
                 url: file.url,
                 size: buf.length,
             };
@@ -238,7 +237,9 @@ export class OldBuddyStore {
                 const raw = fs.readFileSync(this.messagesFile, 'utf8');
                 const parsed = JSON.parse(raw);
                 if (Array.isArray(parsed)) {
-                    this.messages = parsed;
+                    this.messages = parsed
+                        .map((row) => normalizeOldBuddyMessage(row))
+                        .filter((m): m is OldBuddyMessage => !!m);
                 }
             }
         } catch (e) {
@@ -261,6 +262,7 @@ export class OldBuddyStore {
     }
 
     private pushMessage(msg: OldBuddyMessage) {
+        msg = normalizeOldBuddyMessage(msg) || msg;
         this.messages.push(msg);
         if (this.messages.length > MAX_MESSAGES) {
             this.messages = this.messages.slice(-MAX_MESSAGES);
@@ -312,9 +314,9 @@ export class OldBuddyStore {
             }
             return envelopeToJiujiuPacket(msg, files);
         }
-        const attachment = msg.type === 'text' || msg.type === 'message' || msg.type === 'welcome' || msg.type === 'action'
-            ? null
-            : this.readUploadFromContent(msg.content);
+        const attachment = msg.type === 'audio'
+            ? this.readUploadFromContent(msg.content)
+            : null;
         return oldBuddyToJiujiuPacket(msg, attachment);
     }
 
@@ -380,7 +382,7 @@ export class OldBuddyStore {
             list = list.filter((m) => (m.target || DEFAULT_TARGET) === target);
         }
         const hasMore = list.length > pageSize;
-        const messages = list.slice(-pageSize);
+        const messages = list.slice(-pageSize).map((m) => normalizeOldBuddyMessage(m) || m);
         return { messages, has_more: hasMore };
     }
 
@@ -430,22 +432,10 @@ export class OldBuddyStore {
         };
 
         const fieldsToMessage = (f: Record<string, string>, dateFallback: string): OldBuddyMessage | null => {
-            if (!f.id) return null;
-            return {
-                id: String(f.id),
-                sender: String(f.sender || 'user'),
-                target: String(f.target || DEFAULT_TARGET),
+            return normalizeOldBuddyMessage({
+                ...f,
                 timestamp: f.timestamp ? String(f.timestamp) : `${dateFallback}T00:00:00.000Z`,
-                type: (String(f.type || 'text') as OldBuddyMessage['type']),
-                content: f.content != null ? String(f.content) : '',
-                extra_text: f.extra_text ? String(f.extra_text) : undefined,
-                file_name: f.file_name ? String(f.file_name) : undefined,
-                file_size:
-                    f.file_size != null && Number.isFinite(Number(f.file_size))
-                        ? Number(f.file_size)
-                        : undefined,
-                card: f.card === 'true',
-            };
+            });
         };
 
         let dailies = app.vault
@@ -730,14 +720,15 @@ export class OldBuddyStore {
         skipReply?: boolean;
     }) {
         this.ensureLoaded();
+        const content = String(params.content || params.extra_text || '').trim();
         const userMsg = this.pushMessage({
             id: this.newId(),
             sender: params.sender || 'user',
             target: params.target || DEFAULT_TARGET,
             timestamp: new Date().toISOString(),
-            type: 'text',
-            content: params.content,
-            extra_text: params.extra_text,
+            type: 'message',
+            content,
+            quick_cmd_id: params.quick_cmd_id,
         });
 
         if (!params.skipReply && isUserSender(params.sender || 'user')) {
@@ -754,18 +745,27 @@ export class OldBuddyStore {
         extra_text?: string;
         file_name?: string;
         file_size?: number;
+        mime?: string;
     }) {
         this.ensureLoaded();
+        const kind = attachmentKindFromMime(params.mime, params.file_name, params.type);
+        const envelopeType = kind === 'audio' ? 'audio' : 'message';
         const userMsg = this.pushMessage({
             id: this.newId(),
             sender: params.sender || 'user',
             target: params.target || DEFAULT_TARGET,
             timestamp: new Date().toISOString(),
-            type: params.type,
-            content: params.url,
-            extra_text: params.extra_text,
-            file_name: params.file_name,
-            file_size: params.file_size,
+            type: envelopeType,
+            content: String(params.extra_text || '').trim(),
+            attachments: [
+                {
+                    name: params.file_name || undefined,
+                    mime: params.mime || undefined,
+                    kind,
+                    url: params.url,
+                    size: params.file_size,
+                },
+            ],
         });
         if (isUserSender(params.sender || 'user')) {
             await this.generateReply(userMsg);
@@ -778,7 +778,7 @@ export class OldBuddyStore {
         content: string;
         sender?: string;
         target?: string;
-        type?: OldBuddyMessage['type'];
+        type?: string;
         extra_text?: string;
         file_name?: string;
         file_size?: number;
@@ -796,53 +796,38 @@ export class OldBuddyStore {
         hour?: number;
         minute?: number;
         direct?: boolean;
+        mime?: string;
     }): Promise<OldBuddyMessage> {
         this.ensureLoaded();
-        const attachments = normalizeAttachments(params.attachments);
-        const type = params.type || (attachments.length ? 'message' : 'text');
-        if (!(OLDBUDDY_MESSAGE_TYPES as readonly string[]).includes(type)) {
-            throw new Error('invalid type');
-        }
-        const content = String(params.content ?? '').trim();
-        if (!content && !attachments.length && type !== 'action') {
-            throw new Error('content required');
-        }
-        const id = String(params.id || '').trim() || this.newId();
-        const existing = this.messages.findIndex((m) => m.id === id);
-        const msg: OldBuddyMessage = {
-            id,
+        const normalized = normalizeOldBuddyMessage({
+            id: String(params.id || '').trim() || this.newId(),
             sender: params.sender || 'buddy',
+            senderName: params.senderName,
             target: params.target || DEFAULT_TARGET,
             timestamp: params.timestamp || new Date().toISOString(),
-            type,
-            content,
-        };
-        if (params.senderName != null && String(params.senderName).trim()) {
-            msg.senderName = String(params.senderName).trim();
+            type: params.type || (params.attachments?.length ? 'message' : 'message'),
+            content: params.content,
+            extra_text: params.extra_text,
+            file_name: params.file_name,
+            file_size: params.file_size,
+            card: params.card,
+            attachments: params.attachments,
+            action: params.action,
+            name: params.name,
+            durationMs: params.durationMs,
+            hour: params.hour,
+            minute: params.minute,
+            direct: params.direct,
+            quick_cmd_id: params.quick_cmd_id,
+        });
+        if (!normalized) {
+            throw new Error('content required');
         }
-        if (params.action) msg.action = String(params.action);
-        if (params.name != null && String(params.name).trim()) msg.name = String(params.name).trim();
-        if (params.durationMs != null && Number.isFinite(Number(params.durationMs))) {
-            msg.durationMs = Number(params.durationMs);
+        if (!normalized.content && !normalizeAttachments(normalized.attachments).length && normalized.type !== 'action') {
+            throw new Error('content required');
         }
-        if (params.hour != null && Number.isFinite(Number(params.hour))) msg.hour = Number(params.hour);
-        if (params.minute != null && Number.isFinite(Number(params.minute))) msg.minute = Number(params.minute);
-        if (params.direct) msg.direct = true;
-        if (attachments.length) {
-            msg.attachments = attachments;
-        }
-        if (params.extra_text != null && String(params.extra_text).trim()) {
-            msg.extra_text = String(params.extra_text);
-        }
-        if (params.file_name != null && String(params.file_name).trim()) {
-            msg.file_name = String(params.file_name);
-        }
-        if (params.file_size != null && Number.isFinite(Number(params.file_size))) {
-            msg.file_size = Number(params.file_size);
-        }
-        if (params.card === true || params.card === 'true' || params.card === 1) {
-            msg.card = true;
-        }
+        const msg = normalized;
+        const existing = this.messages.findIndex((m) => m.id === msg.id);
         let userMsg: OldBuddyMessage;
         if (existing >= 0) {
             this.messages[existing] = msg;
@@ -860,7 +845,7 @@ export class OldBuddyStore {
             userMsg = this.pushMessage(msg);
         }
         const skipReply = params.skip_reply === true || params.skip_reply === 'true';
-        if (!skipReply && type !== 'welcome' && isUserSender(params.sender || 'buddy')) {
+        if (!skipReply && msg.type !== 'welcome' && isUserSender(params.sender || 'buddy')) {
             await this.generateReply(userMsg, params.quick_cmd_id, params.source);
         }
         return userMsg;
@@ -905,20 +890,17 @@ export class OldBuddyStore {
                 return;
             }
             const nAtt = Array.isArray(userMsg.attachments) ? userMsg.attachments.length : 0;
-            if (userMsg.type === 'message') {
-                replyText = nAtt
-                    ? `收到${userMsg.content ? `：${userMsg.content}` : ''}（${nAtt} 个附件）`
-                    : `嗯，我听到了：${userMsg.content}`;
-            } else if (userMsg.type === 'text') {
-                replyText = `嗯，我听到了：${userMsg.content}`;
-            } else if (userMsg.type === 'image') {
-                replyText = '收到你的图片了。';
-            } else if (userMsg.type === 'audio') {
+            const kinds = (userMsg.attachments || []).map((a) => String(a.kind || '').toLowerCase());
+            if (userMsg.type === 'audio' || kinds.includes('audio')) {
                 replyText = '收到你的语音了。';
-            } else if (userMsg.type === 'video') {
+            } else if (kinds.includes('image')) {
+                replyText = '收到你的图片了。';
+            } else if (kinds.includes('video')) {
                 replyText = '收到你的视频了。';
+            } else if (nAtt) {
+                replyText = `收到${userMsg.content ? `：${userMsg.content}` : ''}（${nAtt} 个附件）`;
             } else {
-                replyText = `收到你的${userMsg.file_name || '文件'}了。`;
+                replyText = `嗯，我听到了：${userMsg.content}`;
             }
         }
 
@@ -927,7 +909,7 @@ export class OldBuddyStore {
             sender: 'buddy',
             target: userMsg.target,
             timestamp: new Date().toISOString(),
-            type: 'text',
+            type: 'message',
             content: replyText,
             card: true,
         });
@@ -942,8 +924,9 @@ function mergeMessages(...sources: OldBuddyMessage[][]): OldBuddyMessage[] {
     const map = new Map<string, OldBuddyMessage>();
     for (const list of sources) {
         for (const m of list) {
-            if (m?.id) {
-                map.set(m.id, m);
+            const n = normalizeOldBuddyMessage(m);
+            if (n?.id) {
+                map.set(n.id, n);
             }
         }
     }
@@ -967,27 +950,9 @@ function normalizeMessages(result: unknown): OldBuddyMessage[] | null {
         return null;
     }
     const out = arr
-        .map((row) => normalizeMessageRow(row))
+        .map((row) => normalizeOldBuddyMessage(row))
         .filter((m): m is OldBuddyMessage => !!m && isValidMessage(m));
     return out.length ? out : null;
-}
-
-function normalizeMessageRow(m: unknown): OldBuddyMessage | null {
-    if (!m || typeof m !== 'object') return null;
-    const row = m as OldBuddyMessage;
-    if (typeof row.id !== 'string' || typeof row.sender !== 'string' || typeof row.timestamp !== 'string') {
-        return null;
-    }
-    const type = String(row.type || 'text') as OldBuddyMessage['type'];
-    const attachments = normalizeAttachments(row.attachments);
-    const out: OldBuddyMessage = {
-        ...row,
-        type: (OLDBUDDY_MESSAGE_TYPES as readonly string[]).includes(type) ? type : 'text',
-        content: row.content != null ? String(row.content) : '',
-    };
-    if (attachments.length) out.attachments = attachments;
-    if (row.senderName) out.senderName = String(row.senderName);
-    return out;
 }
 
 function isValidMessage(m: unknown): m is OldBuddyMessage {
@@ -1134,32 +1099,14 @@ function guessExt(mime: string) {
     return '';
 }
 
-/** 根据 MIME / 扩展名纠正消息类型（如相机录像误走 audio 接口） */
+/** 根据 MIME / 扩展名纠正附件 kind（如相机录像误走 audio 接口） */
 export function inferOldBuddyMessageType(
     declared: 'image' | 'audio' | 'video' | 'file',
     mime: string,
     filename: string,
 ): 'image' | 'audio' | 'video' | 'file' {
-    const m = String(mime || '').toLowerCase();
-    const ext = path.extname(String(filename || '')).toLowerCase();
-    const videoExt = new Set(['.mp4', '.mov', '.m4v', '.mkv', '.3gp', '.avi']);
-    const audioExt = new Set(['.m4a', '.mp3', '.wav', '.ogg', '.aac', '.amr', '.caf']);
-
-    if (m.startsWith('video/') || videoExt.has(ext)) {
-        return 'video';
-    }
-    if (m.startsWith('audio/') || audioExt.has(ext)) {
-        return 'audio';
-    }
-    if (m.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
-        return 'image';
-    }
-    if (ext === '.webm') {
-        if (m.startsWith('audio/')) return 'audio';
-        if (m.startsWith('video/')) return 'video';
-        if (declared === 'audio' || declared === 'video') return declared;
-        return 'video';
-    }
+    const kind = attachmentKindFromMime(mime, filename, declared);
+    if (kind === 'image' || kind === 'audio' || kind === 'video' || kind === 'file') return kind;
     return declared;
 }
 

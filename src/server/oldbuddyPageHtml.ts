@@ -1491,8 +1491,46 @@ function isVideoMediaUrl(url) {
     return /\\.(mp4|mov|m4v|mkv|3gp)(\\?|#|$)/i.test(String(url || ''));
 }
 
+function looksLikeUploadUrl(value) {
+    return /\\/oldbuddy\\/uploads\\//i.test(String(value || ''));
+}
+
+function normalizeClientMessage(raw) {
+    if (!raw || typeof raw !== 'object') return raw;
+    const msg = { ...raw };
+    const rawType = String(msg.type || 'message').toLowerCase();
+    let content = msg.content != null ? String(msg.content) : '';
+    const extraText = String(msg.extra_text || '').trim();
+    const fileName = String(msg.file_name || '').trim();
+    let attachments = Array.isArray(msg.attachments) ? msg.attachments.filter(Boolean).slice() : [];
+    const legacyMedia = rawType === 'image' || rawType === 'video' || rawType === 'file';
+    const legacyAudioUrl = rawType === 'audio' && looksLikeUploadUrl(content) && !attachments.length;
+    if ((legacyMedia || legacyAudioUrl) && looksLikeUploadUrl(content)) {
+        attachments = [{
+            name: fileName || undefined,
+            kind: rawType === 'file' ? 'file' : rawType,
+            url: content,
+            size: msg.file_size,
+        }, ...attachments];
+        content = extraText;
+        msg.type = rawType === 'audio' ? 'audio' : 'message';
+        msg.attachments = attachments;
+        msg.content = content;
+        delete msg.extra_text;
+        delete msg.file_name;
+        delete msg.file_size;
+    } else if (rawType === 'text') {
+        msg.type = 'message';
+        if (extraText && !content) msg.content = extraText;
+        delete msg.extra_text;
+    }
+    if (msg.action && msg.type !== 'action') msg.type = 'action';
+    return msg;
+}
+
 function appendExtraText(contentDiv, msg) {
-    if (!msg.extra_text) return;
+    const text = msg.extra_text || '';
+    if (!text) return;
     const extra = document.createElement('div');
     extra.className = 'message-extra-text';
     if (typeof window.renderMarkdown === 'function') {
@@ -1653,6 +1691,7 @@ function appendMarkdownBody(contentDiv, text, msg) {
  * 渲染单条消息（支持 prependMessage 从旧到新加载逻辑）
  */
 function renderMessage(msg) {
+    msg = normalizeClientMessage(msg) || msg;
     const div = document.createElement('div');
     const mid = msg.id ?? (\`local_\${Date.now()}_\${Math.random().toString(36).slice(2, 8)}\`);
     div.className = \`message \${messageSenderClass(msg.sender)}\`;
@@ -1730,85 +1769,24 @@ function renderMessage(msg) {
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
 
-    if (msg.type === 'message' || msg.type === 'welcome') {
+    if (msg.type === 'action' || msg.action) {
+        appendActionBody(contentDiv, msg);
+    } else if (msg.type === 'audio') {
+        const atts = messageAttachments(msg);
+        const src = (atts[0] && atts[0].url) || (looksLikeUploadUrl(msg.content) ? msg.content : '');
+        if (src && (!atts.length || atts[0].url !== src)) {
+            contentDiv.appendChild(createAudioElement(src));
+        }
+        appendEnvelopeAttachments(contentDiv, msg);
+        if (msg.content && msg.content !== src) {
+            appendMarkdownBody(contentDiv, msg.content, msg);
+        }
+    } else {
         appendMarkdownBody(contentDiv, msg.content, msg);
         appendEnvelopeAttachments(contentDiv, msg);
         if (!msg.content && !messageAttachments(msg).length) {
             contentDiv.textContent = '';
         }
-    } else if (msg.type === 'action' || msg.action) {
-        appendActionBody(contentDiv, msg);
-    } else if (msg.type === 'text') {
-        if (typeof window.renderMarkdown === 'function') {
-            contentDiv.classList.add('markdown');
-            if (useMarkdownCard(msg)) contentDiv.classList.add('markdown-card');
-            contentDiv.innerHTML = window.renderMarkdown(msg.content);
-        } else {
-            contentDiv.textContent = msg.content;
-        }
-    } else if (msg.type === 'image') {
-        const img = document.createElement('img');
-        img.src = msg.content;
-        img.className = 'message-image';
-        contentDiv.appendChild(img);
-        img.addEventListener('click', () => showImagePreview(msg.content));
-
-        if (msg.extra_text) {
-            const extra = document.createElement('div');
-            extra.className = 'message-extra-text';
-            if (typeof window.renderMarkdown === 'function') {
-                extra.classList.add('markdown');
-                if (useMarkdownCard(msg)) extra.classList.add('markdown-card');
-                extra.innerHTML = window.renderMarkdown(msg.extra_text);
-            } else {
-                extra.textContent = msg.extra_text;
-            }
-            contentDiv.appendChild(extra);
-        }
-    } else if (msg.type === 'video' || (msg.type === 'audio' && isVideoMediaUrl(msg.content))) {
-        contentDiv.appendChild(createVideoElement(msg.content));
-        appendExtraText(contentDiv, msg);
-    } else if (msg.type === 'audio') {
-        const atts = messageAttachments(msg);
-        const src = (atts[0] && atts[0].url) || msg.content;
-        if (src) contentDiv.appendChild(createAudioElement(src));
-        if (atts.length > 1) appendEnvelopeAttachments(contentDiv, { attachments: atts.slice(1) });
-        appendExtraText(contentDiv, msg);
-        if (msg.content && atts.length && msg.content !== src) {
-            appendMarkdownBody(contentDiv, msg.content, msg);
-        }
-    } else if (msg.type === 'file') {
-        const link = document.createElement('a');
-        link.href = msg.content;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = msg.file_name || '下载文件';
-        if (msg.file_name) {
-            link.download = msg.file_name;
-        }
-        contentDiv.appendChild(link);
-
-        if (msg.file_size) {
-            const meta = document.createElement('div');
-            meta.className = 'message-extra-text';
-            meta.textContent = \`大小: \${msg.file_size} 字节\`;
-            contentDiv.appendChild(meta);
-        }
-
-        if (msg.extra_text) {
-            const extra = document.createElement('div');
-            extra.className = 'message-extra-text';
-            if (typeof window.renderMarkdown === 'function') {
-                extra.classList.add('markdown');
-                if (useMarkdownCard(msg)) extra.classList.add('markdown-card');
-                extra.innerHTML = window.renderMarkdown(msg.extra_text);
-            } else {
-                extra.textContent = msg.extra_text;
-            }
-            contentDiv.appendChild(extra);
-        }
-    } else {
-        contentDiv.textContent = msg.content || JSON.stringify(msg);
     }
 
     if (typeof wrapMessageWithAvatar === 'function') {
@@ -1920,12 +1898,13 @@ function findMessageNode(id) {
 }
 
 function messageNodeSignature(msg) {
+    msg = normalizeClientMessage(msg) || msg;
     const atts = messageAttachments(msg).map((a) => \`\${a.kind || ''}|\${a.url || ''}|\${a.name || ''}\`).join(',');
     return [
         msg.type || '',
         msg.content || '',
-        msg.extra_text || '',
-        msg.file_name || '',
+        msg.action || '',
+        msg.name || '',
         msg.sender || '',
         msg.target || '',
         atts,
@@ -2964,7 +2943,7 @@ function createUploadOverlay() {
 function appendExtraTextRow(overlay, placeholder) {
     const textInput = document.createElement('input');
     textInput.type = 'text';
-    textInput.placeholder = placeholder || '输入附加文字...';
+        textInput.placeholder = placeholder || '输入说明文字...';
     textInput.style.marginTop = '10px';
     textInput.style.padding = '8px 12px';
     textInput.style.width = '60%';
@@ -3000,7 +2979,7 @@ function appendSendCancelButtons(overlay, onSend, onCancel, failLabel) {
     };
 }
 
-/** 录音 / 视频上传前预览并输入 extra_text */
+/** 录音 / 视频上传前预览并输入说明（仍 POST extra_text，服务端写入 content） */
 function handleMediaUpload(fileOrBlob, kind, opts = {}) {
     const { filename, inputEl, failLabel } = opts;
     const isVideo = kind === 'video';

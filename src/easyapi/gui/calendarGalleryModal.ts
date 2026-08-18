@@ -1790,7 +1790,7 @@ export class CalendarGalleryModal extends Modal {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-export function openCalendarGallery(options: CalendarGalleryOptions): CalendarGalleryModal {
+export function openCalendarGallery(this: { app: App }, options: CalendarGalleryOptions): CalendarGalleryModal {
 	const modal = new CalendarGalleryModal(this.app, options);
 	modal.open();
 	return modal;
