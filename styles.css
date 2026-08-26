@@ -265,8 +265,39 @@
   position: relative;
 }
 
+.nc-card-media {
+  height: 46%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.nc-card-media .nc-card-cover {
+  height: auto;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.nc-card-cover.nc-cal-img-wrap {
+  display: block;
+}
+
+.nc-card-btn.has-audio:not(.has-images) .nc-card-media {
+  height: auto;
+}
+
+.nc-card-media .nc-cal-audio-wrap {
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--background-primary) 40%, transparent);
+}
+
 .nc-card-cover img,
-.nc-card-cover video {
+.nc-card-cover video,
+.nc-card-cover .nc-cal-img,
+.nc-card-cover .nc-cal-video {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -274,7 +305,9 @@
 
 /* contain：完整显示图片（可能留边）；cover：填满裁切 */
 .nc-card-container[data-image-fit="contain"] .nc-card-cover img,
-.nc-card-container[data-image-fit="contain"] .nc-card-cover video {
+.nc-card-container[data-image-fit="contain"] .nc-card-cover video,
+.nc-card-container[data-image-fit="contain"] .nc-card-cover .nc-cal-img,
+.nc-card-container[data-image-fit="contain"] .nc-card-cover .nc-cal-video {
   object-fit: contain;
 }
 

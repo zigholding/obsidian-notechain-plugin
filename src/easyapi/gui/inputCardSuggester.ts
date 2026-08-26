@@ -1,12 +1,23 @@
 import { App, Modal, Notice, setIcon, TFile } from "obsidian";
 import { MediaLightbox } from "./mediaLightbox";
+import type { AudioItem, ImageItem } from "./calendarGalleryModal";
+
+export type { AudioItem, ImageItem };
 
 export type StyledValue = string | [string, Record<string, string>];
 
 export interface CardItem {
     name: StyledValue;
     detail?: StyledValue;
-    image?: StyledValue | null;
+    /**
+     * 封面：图标名、单个媒体路径、`[路径, 样式]`、路径数组，或 `ImageItem[]`。
+     * 多图/视频请优先使用 `images`（与日历视图相同结构）。
+     */
+    image?: StyledValue | string[] | ImageItem[] | null;
+    /** 图片/视频列表，结构与日历视图 `ImageItem[]` 相同 */
+    images?: ImageItem[];
+    /** 音频列表，结构与日历视图 `AudioItem[]` 相同 */
+    audios?: AudioItem[];
     action?: CardItem[] | ((item: CardItem) => void | Promise<void>);
     [key: string]: any;
 }
@@ -25,14 +36,18 @@ export interface CardNavigatorOptions {
      * - `contain`：完整显示（可能留边）
      */
     imageFit?: "cover" | "contain";
+    /** 是否在卡片上显示音频条；默认 true */
+    showAudio?: boolean;
     /**
-     * 放大预览中删除媒体后回调（文件已尝试删除、卡片数据已移除）。
+     * 放大预览中删除媒体后回调（文件已尝试删除、卡片数据已更新）。
      * 用于同步外部数据源。
      */
     onDeleteMedia?: (info: {
         item: CardItem;
         path: string;
         kind: "image" | "video" | "audio";
+        image?: ImageItem;
+        audio?: AudioItem;
     }) => void | Promise<void>;
 }
 
@@ -48,20 +63,177 @@ const DEFAULT_OPTIONS: ResolvedCardNavigatorOptions = {
     cardHeight: 240,
     searchPlaceholder: "🔍 输入关键词搜索...",
     imageFit: "cover",
+    showAudio: true,
 };
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif)(\?.*)?$/i;
 const VIDEO_EXT = /\.(mp4|webm|mov|m4v|mkv|ogv)(\?.*)?$/i;
 const AUDIO_EXT = /\.(mp3|m4a|wav|ogg|flac|aac|wma|opus)(\?.*)?$/i;
 
+interface CardMediaEntry {
+	kind: "image" | "video" | "audio";
+	item: CardItem;
+	image?: ImageItem;
+	audio?: AudioItem;
+}
+
+interface ResolvedCardMedia {
+	images: ImageItem[];
+	audios: AudioItem[];
+	icon: string | null;
+	coverStyle: Record<string, string>;
+}
+
+function isZhUi(): boolean {
+	return window.localStorage.getItem("language") === "zh";
+}
+
+function formatDuration(sec?: number): string {
+	if (sec == null || !Number.isFinite(sec)) return "";
+	const m = Math.floor(sec / 60);
+	const s = Math.floor(sec % 60);
+	return `${m}:${s < 10 ? "0" : ""}${s}`;
+}
+
 function isDirectMediaUrl(path: string): boolean {
 	return /^(https?:\/\/|data:|app:\/\/|blob:)/i.test(path);
 }
 
-function guessMediaKind(path: string): "image" | "video" | "audio" {
-	if (AUDIO_EXT.test(path)) return "audio";
-	if (VIDEO_EXT.test(path)) return "video";
-	return "image";
+function isFilesystemPath(path: string): boolean {
+	const p = path.trim();
+	if (/^file:\/\//i.test(p)) return true;
+	if (/^[a-zA-Z]:[\\/]/.test(p)) return true;
+	if (/^\\\\/.test(p)) return true;
+	if (/^[\/\\]/.test(p)) return true;
+	return false;
+}
+
+function stripFileUrl(path: string): string {
+	let p = path.trim();
+	if (/^file:\/\/\//i.test(p)) {
+		p = decodeURIComponent(p.slice("file:///".length));
+		if (/^[a-zA-Z]:/.test(p)) return p;
+		return "/" + p.replace(/^\/+/, "");
+	}
+	if (/^file:\/\//i.test(p)) {
+		return decodeURIComponent(p.slice("file://".length));
+	}
+	return p;
+}
+
+function normalizeMediaPath(raw: string): string {
+	let path = raw.trim();
+	path = path.replace(/^!\[\[/, "").replace(/^\[\[/, "").replace(/\]\]$/, "");
+	if (path.includes("|")) path = path.split("|")[0];
+	if (path.includes("#")) path = path.split("#")[0];
+	return path.trim();
+}
+
+function isVisualMediaKind(path: string): "image" | "video" {
+	return VIDEO_EXT.test(normalizeMediaPath(path)) ? "video" : "image";
+}
+
+function isMediaPath(path: string): boolean {
+	const p = stripFileUrl(normalizeMediaPath(path));
+	if (!p) return false;
+	if (isDirectMediaUrl(p)) return true;
+	if (IMAGE_EXT.test(p) || VIDEO_EXT.test(p) || AUDIO_EXT.test(p)) return true;
+	if (isFilesystemPath(p)) return true;
+	return false;
+}
+
+function isStyleMap(v: unknown): v is Record<string, string> {
+	return !!v && typeof v === "object" && !Array.isArray(v) && !("path" in (v as object));
+}
+
+function isStyledTuple(v: unknown): v is [string, Record<string, string>] {
+	return Array.isArray(v) && v.length === 2 && typeof v[0] === "string" && isStyleMap(v[1]);
+}
+
+function isImageItem(v: unknown): v is ImageItem {
+	return !!v && typeof v === "object" && !Array.isArray(v) && typeof (v as ImageItem).path === "string";
+}
+
+function pathKey(path: string): string {
+	return normalizeMediaPath(stripFileUrl(path)).replace(/\\/g, "/").toLowerCase();
+}
+
+function toImageItem(entry: string | ImageItem): ImageItem {
+	return typeof entry === "string" ? { path: entry } : entry;
+}
+
+function splitMediaItem(entry: ImageItem): { image?: ImageItem; audio?: AudioItem } {
+	const p = stripFileUrl(normalizeMediaPath(String(entry.path ?? "")));
+	if (p && AUDIO_EXT.test(p) && !IMAGE_EXT.test(p) && !VIDEO_EXT.test(p)) {
+		return { audio: { path: p, title: entry.caption } };
+	}
+	return { image: entry };
+}
+
+function parseImageField(imageVal: CardItem["image"]): ResolvedCardMedia {
+	const empty: ResolvedCardMedia = { images: [], audios: [], icon: null, coverStyle: {} };
+	if (imageVal == null) return empty;
+
+	if (isStyledTuple(imageVal)) {
+		const raw = String(imageVal[0] ?? "").trim();
+		const coverStyle = imageVal[1] ?? {};
+		if (!raw) return { ...empty, coverStyle };
+		const split = splitMediaItem({ path: raw });
+		if (split.audio) return { images: [], audios: [split.audio], icon: null, coverStyle };
+		if (isMediaPath(raw)) return { images: [{ path: raw }], audios: [], icon: null, coverStyle };
+		return { images: [], audios: [], icon: raw, coverStyle };
+	}
+
+	if (Array.isArray(imageVal)) {
+		const images: ImageItem[] = [];
+		const audios: AudioItem[] = [];
+		for (const entry of imageVal) {
+			const item = toImageItem(entry as string | ImageItem);
+			const split = splitMediaItem(item);
+			if (split.audio) audios.push(split.audio);
+			else if (split.image) {
+				const p = String(split.image.path ?? "").trim();
+				if (!p) continue;
+				if (isMediaPath(p) || isImageItem(entry)) images.push(split.image);
+			}
+		}
+		return { images, audios, icon: null, coverStyle: {} };
+	}
+
+	const raw = String(imageVal).trim();
+	if (!raw) return empty;
+	const split = splitMediaItem({ path: raw });
+	if (split.audio) return { images: [], audios: [split.audio], icon: null, coverStyle: {} };
+	if (isMediaPath(raw)) return { images: [{ path: raw }], audios: [], icon: null, coverStyle: {} };
+	return { images: [], audios: [], icon: raw, coverStyle: {} };
+}
+
+function resolveCardMedia(item: CardItem): ResolvedCardMedia {
+	const fromField = parseImageField(item.image);
+	const images = item.images?.length ? item.images.slice() : fromField.images;
+	const audios = [...(item.audios ?? [])];
+	for (const a of fromField.audios) {
+		if (!audios.some((x) => pathKey(x.path) === pathKey(a.path))) audios.push(a);
+	}
+
+	const visuals: ImageItem[] = [];
+	for (const img of images) {
+		const split = splitMediaItem(img);
+		if (split.audio) {
+			if (!audios.some((x) => pathKey(x.path) === pathKey(split.audio!.path))) {
+				audios.push(split.audio);
+			}
+		} else if (split.image) {
+			visuals.push(split.image);
+		}
+	}
+
+	return {
+		images: visuals,
+		audios,
+		icon: item.images?.length ? null : fromField.icon,
+		coverStyle: fromField.coverStyle,
+	};
 }
 
 export class CardNavigatorModal extends Modal {
@@ -77,7 +249,12 @@ export class CardNavigatorModal extends Modal {
 	private mediaObserver: IntersectionObserver | null = null;
 	/** 每个待加载封面元素对应的加载回调 */
 	private mediaLoaders = new WeakMap<Element, () => void>();
-	private mediaLightbox: MediaLightbox<CardItem> | null = null;
+	private mediaLightbox: MediaLightbox<CardMediaEntry> | null = null;
+	private cardAudioEl: HTMLAudioElement | null = null;
+	private cardAudioBlobUrl: string | null = null;
+	private playingAudioWrap: HTMLElement | null = null;
+	private playingAudioRestore: (() => void) | null = null;
+	private playingAudioPath: string | null = null;
 	/** 当前卡片列表视图，用于关闭预览后定位到最后查看的卡片 */
 	private listView: {
 		scrollArea: HTMLElement;
@@ -85,6 +262,7 @@ export class CardNavigatorModal extends Modal {
 		getCurrentList: () => CardItem[];
 		ensureRenderedTo: (index: number) => void;
 		removeAndRedraw: (item: CardItem) => void;
+		redrawItem: (item: CardItem) => void;
 	} | null = null;
 
     constructor(app: App, private rootData: CardItem[], options: CardNavigatorOptions = {}) {
@@ -102,19 +280,33 @@ export class CardNavigatorModal extends Modal {
         this.modalEl.style.width = `${this.options.width}px`;
         this.modalEl.style.height = `${this.options.height}px`;
 
-        this.mediaLightbox = new MediaLightbox<CardItem>({
+        this.mediaLightbox = new MediaLightbox<CardMediaEntry>({
             app: this.app,
             resolveUrl: (src) => this.resolveCardMediaSrc(src),
-            getItemInfo: (item) => {
-                const path = this.getCardMediaPath(item);
-                return { path, kind: path ? guessMediaKind(path) : "image" };
-            },
-            getMeta: (item) => ({
-                title: this.getRawText(item.name),
-                detail: this.getRawText(item.detail),
+            getItemInfo: (entry) => ({
+                path: this.getEntryMediaPath(entry),
+                kind: entry.kind,
             }),
-            onClosed: (item) => this.revealCardInList(item),
-            onContextAction: (action, item) => this.handleLightboxContextAction(action, item),
+            getMeta: (entry, index, items) => {
+                const caption = entry.kind === "audio"
+                    ? (entry.audio?.title?.trim() ?? "")
+                    : (entry.image?.caption?.trim() ?? "");
+                const cardName = this.getRawText(entry.item.name);
+                const cardEntries = items.filter((e) => e.item === entry.item);
+                const cardIdx = cardEntries.indexOf(entry);
+                const cardPart = cardIdx >= 0 && cardEntries.length > 1
+                    ? `${cardIdx + 1}/${cardEntries.length}`
+                    : "";
+                const globalPart = `${index + 1} / ${items.length}`;
+                return {
+                    subtitle: caption ? cardName : undefined,
+                    title: caption || cardName,
+                    detail: this.getRawText(entry.item.detail),
+                    counter: cardPart ? `${cardPart} · 总 ${globalPart}` : globalPart,
+                };
+            },
+            onClosed: (entry) => this.revealCardInList(entry.item),
+            onContextAction: (action, entry) => this.handleLightboxContextAction(action, entry),
             wrapNavigation: true,
             closeOnEscape: true,
         });
@@ -157,6 +349,7 @@ export class CardNavigatorModal extends Modal {
     private renderUI(items: CardItem[], canGoBack: boolean, revealTarget?: CardItem) {
 		const session = ++this.renderSession;
 		this.mediaLightbox?.close(true);
+		this.stopCardAudio();
 		this.revokeMediaObjectUrls();
 		this.contentEl.empty();
 		this.listView = null;
@@ -230,30 +423,7 @@ export class CardNavigatorModal extends Modal {
 			if (!currentList || renderedCount >= currentList.length) return;
 			const slice = currentList.slice(renderedCount, renderedCount + pageSize);
 			slice.forEach((item) => {
-				const isFolder = Array.isArray(item.action);
-				const hasImage = item.image != null;
-				const classes = [`nc-card-btn`];
-				if (isFolder) classes.push("nc-is-folder");
-				if (!hasImage) classes.push("nc-card-text-only");
-				if (revealTarget && item === revealTarget) classes.push("nc-card-reveal");
-				const card = container.createDiv({ cls: classes.join(" ") });
-				if (hasImage) {
-					const cover = card.createDiv({ cls: "nc-card-cover" });
-					const canPreview = !!this.getCardMediaPath(item);
-					if (canPreview) {
-						cover.addClass("nc-card-cover-previewable");
-						cover.setAttr("title", "点击放大预览");
-						cover.onclick = (e) => {
-							e.stopPropagation();
-							this.openCardLightbox(currentList, item);
-						};
-					}
-					this.renderIconOrImage(cover, item.image, isFolder, session);
-				}
-				const info = card.createDiv({ cls: "nc-card-info" });
-				this.renderStyledElement(info.createDiv(), item.name, "nc-card-name");
-				if (item.detail) this.renderStyledElement(info.createDiv(), item.detail, "nc-card-detail");
-				card.onclick = () => this.handleItemClick(item, currentList);
+				container.appendChild(this.createCardEl(item, currentList, session, revealTarget));
 			});
 			renderedCount += slice.length;
 		};
@@ -270,18 +440,29 @@ export class CardNavigatorModal extends Modal {
 			removeAndRedraw: (item: CardItem) => {
 				const idx = currentList.indexOf(item);
 				if (idx >= 0) currentList.splice(idx, 1);
-				// 当前层级原始列表（非搜索结果）也同步移除
 				if (items !== currentList) {
 					const i = items.indexOf(item);
 					if (i >= 0) items.splice(i, 1);
 				}
 				drawCards(currentList, true);
 			},
+			redrawItem: (item: CardItem) => {
+				if (session !== this.renderSession) return;
+				const idx = currentList.indexOf(item);
+				if (idx < 0 || idx >= renderedCount) return;
+				const cards = container.getElementsByClassName("nc-card-btn");
+				const el = cards.item(idx) as HTMLElement | null;
+				if (!el) return;
+				const wasReveal = el.hasClass("nc-card-reveal");
+				const newEl = this.createCardEl(item, currentList, session, wasReveal ? item : undefined);
+				el.replaceWith(newEl);
+			},
 		};
 
 		// 渲染函数：重置并只加载首批
 		const drawCards = (displayItems: CardItem[], keepLightbox = false) => {
 			if (session !== this.renderSession) return;
+			this.stopCardAudio();
 			if (!keepLightbox) {
 				this.mediaLightbox?.close(true);
 				this.revokeMediaObjectUrls();
@@ -352,30 +533,306 @@ export class CardNavigatorModal extends Modal {
 		const session = this.renderSession;
         container.empty();
         filteredItems.forEach((item) => {
-            const isFolder = Array.isArray(item.action);
-            const hasImage = item.image != null;
-            const card = container.createDiv({
-                cls: `nc-card-btn ${isFolder ? "nc-is-folder" : ""}${hasImage ? "" : " nc-card-text-only"}`.trim(),
-            });
-            if (hasImage) {
-                const cover = card.createDiv({ cls: "nc-card-cover" });
-                const canPreview = !!this.getCardMediaPath(item);
-                if (canPreview) {
-                    cover.addClass("nc-card-cover-previewable");
-                    cover.setAttr("title", "点击放大预览");
-                    cover.onclick = (e) => {
-                        e.stopPropagation();
-                        this.openCardLightbox(originalItems, item);
-                    };
-                }
-                this.renderIconOrImage(cover, item.image, isFolder, session);
-            }
-            const info = card.createDiv({ cls: "nc-card-info" });
-            this.renderStyledElement(info.createDiv(), item.name, "nc-card-name");
-            if (item.detail) this.renderStyledElement(info.createDiv(), item.detail, "nc-card-detail");
-            card.onclick = () => this.handleItemClick(item, originalItems);
+            container.appendChild(this.createCardEl(item, originalItems, session));
         });
     }
+
+	private createCardEl(
+		item: CardItem,
+		currentList: CardItem[],
+		session: number,
+		revealTarget?: CardItem,
+	): HTMLElement {
+		const isFolder = Array.isArray(item.action);
+		const media = resolveCardMedia(item);
+		const showAudio = this.options.showAudio && media.audios.length > 0;
+		const hasVisual = media.images.length > 0;
+		const hasIcon = !hasVisual && !!media.icon;
+		const hasCover = hasVisual || hasIcon;
+
+		const classes = ["nc-card-btn"];
+		if (isFolder) classes.push("nc-is-folder");
+		if (!hasCover && !showAudio) classes.push("nc-card-text-only");
+		if (hasVisual) classes.push("has-images");
+		if (showAudio) classes.push("has-audio");
+		if (revealTarget && item === revealTarget) classes.push("nc-card-reveal");
+
+		const card = document.createElement("div");
+		card.className = classes.join(" ");
+
+		if (hasCover || showAudio) {
+			const mediaEl = card.createDiv({ cls: "nc-card-media" });
+			if (hasVisual) {
+				this.renderCardImageArea(mediaEl, item, media.images, currentList, session, media.coverStyle);
+			} else if (hasIcon) {
+				const cover = mediaEl.createDiv({ cls: "nc-card-cover" });
+				if (media.coverStyle) Object.assign(cover.style, media.coverStyle);
+				this.renderIconOrImage(cover, media.icon, isFolder, session);
+			}
+			if (showAudio) {
+				this.renderCardAudioArea(mediaEl, item, media.audios, currentList);
+			}
+		}
+
+		const info = card.createDiv({ cls: "nc-card-info" });
+		this.renderStyledElement(info.createDiv(), item.name, "nc-card-name");
+		if (item.detail) this.renderStyledElement(info.createDiv(), item.detail, "nc-card-detail");
+
+		card.onclick = (e) => {
+			const target = e.target as HTMLElement;
+			if (target.closest(".nc-cal-carousel-btn, .nc-cal-audio-btn, .nc-cal-img-wrap, .nc-cal-audio-wrap, .nc-card-cover-previewable")) {
+				return;
+			}
+			void this.handleItemClick(item, currentList);
+		};
+
+		return card;
+	}
+
+	private renderCardImageArea(
+		container: HTMLElement,
+		item: CardItem,
+		images: ImageItem[],
+		currentList: CardItem[],
+		session: number,
+		style: Record<string, string>,
+	): void {
+		const wrap = container.createDiv({ cls: "nc-card-cover nc-cal-img-wrap nc-card-cover-previewable" });
+		wrap.setAttr("title", isZhUi() ? "点击放大预览" : "Click to preview");
+		if (style) Object.assign(wrap.style, style);
+
+		const mediaContainer = wrap.createDiv({ cls: "nc-cal-media-container" });
+		let imgEl: HTMLImageElement | null = null;
+		let current = 0;
+		let ready = false;
+		let dots: HTMLElement | null = null;
+
+		const showPlaceholder = (icon: string) => {
+			imgEl?.hide();
+			if (!mediaContainer.querySelector(".nc-cal-img-placeholder")) {
+				const ph = mediaContainer.createDiv({ cls: "nc-cal-img-placeholder" });
+				setIcon(ph, icon);
+			}
+		};
+
+		const setMedia = (idx: number) => {
+			if (idx < 0 || idx >= images.length) return;
+			current = idx;
+			wrap.dataset.mediaIndex = String(current);
+			const mediaItem = images[current];
+			const thumb = mediaItem.thumbnail ?? mediaItem.path;
+			const kind = isVisualMediaKind(mediaItem.path);
+			mediaContainer.querySelector(".nc-cal-img-placeholder")?.remove();
+
+			dots?.querySelectorAll(".nc-cal-dot").forEach((d, i) => {
+				d.toggleClass("is-active", i === current);
+			});
+
+			if (!ready) return;
+
+			if (kind === "video" && !mediaItem.thumbnail) {
+				if (imgEl) {
+					imgEl.hide();
+					imgEl.removeAttribute("src");
+					imgEl.src = "";
+				}
+				showPlaceholder("play-circle");
+				return;
+			}
+
+			if (!imgEl) {
+				imgEl = mediaContainer.createEl("img", { cls: "nc-cal-img" });
+				imgEl.setAttr("loading", "lazy");
+				imgEl.setAttr("decoding", "async");
+				imgEl.setAttr("draggable", "false");
+				imgEl.onerror = () => showPlaceholder(kind === "video" ? "video" : "image-off");
+			}
+			imgEl.setAttr("alt", mediaItem.caption ?? mediaItem.path);
+			const shownIndex = current;
+			void this.resolveCardMediaSrc(stripFileUrl(normalizeMediaPath(thumb))).then((src) => {
+				if (session !== this.renderSession || !wrap.isConnected) return;
+				if (current !== shownIndex) return;
+				if (src) {
+					imgEl!.src = src;
+					imgEl!.show();
+				} else {
+					imgEl!.dispatchEvent(new Event("error"));
+				}
+			});
+		};
+
+		wrap.onclick = (e) => {
+			if ((e.target as HTMLElement).closest(".nc-cal-carousel-btn")) return;
+			e.stopPropagation();
+			this.openCardLightbox(currentList, item, images[current]);
+		};
+
+		if (images.length > 1) {
+			if (!(this.app as any).isMobile) {
+				const prev = wrap.createDiv({ cls: "nc-cal-carousel-btn nc-cal-carousel-prev", attr: { "aria-label": "Previous" } });
+				setIcon(prev, "chevron-left");
+				const next = wrap.createDiv({ cls: "nc-cal-carousel-btn nc-cal-carousel-next", attr: { "aria-label": "Next" } });
+				setIcon(next, "chevron-right");
+				prev.onclick = (e) => { e.stopPropagation(); setMedia(current - 1); };
+				next.onclick = (e) => { e.stopPropagation(); setMedia(current + 1); };
+			}
+
+			dots = wrap.createDiv({ cls: "nc-cal-dots" });
+			images.forEach((_, i) => {
+				dots!.createDiv({ cls: `nc-cal-dot${i === 0 ? " is-active" : ""}` });
+			});
+
+			let wheelLock = false;
+			wrap.addEventListener("wheel", (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				if (wheelLock) return;
+				wheelLock = true;
+				setMedia(current + (e.deltaY > 0 ? 1 : -1));
+				window.setTimeout(() => { wheelLock = false; }, 140);
+			}, { passive: false });
+		}
+
+		wrap.addClass("nc-card-cover-loading");
+		this.observeMedia(wrap, () => {
+			if (session !== this.renderSession || !wrap.isConnected) return;
+			wrap.removeClass("nc-card-cover-loading");
+			ready = true;
+			setMedia(current);
+		});
+		setMedia(0);
+	}
+
+	private renderCardAudioArea(
+		container: HTMLElement,
+		item: CardItem,
+		audios: AudioItem[],
+		currentList: CardItem[],
+	): void {
+		const wrap = container.createDiv({ cls: "nc-cal-audio-wrap" });
+		let current = 0;
+
+		const label = wrap.createDiv({ cls: "nc-cal-audio-label" });
+		const nav = wrap.createDiv({ cls: "nc-cal-audio-nav" });
+
+		const update = () => {
+			const audio = audios[current];
+			const title = audio.title ?? (isZhUi() ? "录音" : "Voice");
+			const dur = formatDuration(audio.duration);
+			if ((this.app as any).isMobile) {
+				label.setText(audios.length > 1 ? `🎤${current + 1}/${audios.length}` : dur ? `🎤${dur}` : "🎤");
+			} else {
+				label.setText(dur ? `🎤 ${title} · ${dur}` : `🎤 ${title}`);
+			}
+		};
+
+		update();
+
+		const playCurrent = (e: MouseEvent) => {
+			e.stopPropagation();
+			void this.playCardAudio(audios[current], wrap, update);
+		};
+
+		label.onclick = playCurrent;
+
+		if (audios.length > 1) {
+			const prev = nav.createDiv({ cls: "nc-cal-audio-btn", attr: { "aria-label": "Previous audio" } });
+			setIcon(prev, "chevron-left");
+			const next = nav.createDiv({ cls: "nc-cal-audio-btn", attr: { "aria-label": "Next audio" } });
+			setIcon(next, "chevron-right");
+			prev.onclick = (e) => {
+				e.stopPropagation();
+				if (this.playingAudioWrap === wrap) this.stopCardAudio();
+				current = (current - 1 + audios.length) % audios.length;
+				update();
+			};
+			next.onclick = (e) => {
+				e.stopPropagation();
+				if (this.playingAudioWrap === wrap) this.stopCardAudio();
+				current = (current + 1) % audios.length;
+				update();
+			};
+		}
+
+		wrap.onclick = (e) => {
+			if ((e.target as HTMLElement).closest(".nc-cal-audio-btn")) return;
+			playCurrent(e);
+		};
+
+		wrap.oncontextmenu = (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			this.openCardLightbox(currentList, item, undefined, audios[current]);
+		};
+	}
+
+	private getCardAudioEl(): HTMLAudioElement {
+		if (!this.cardAudioEl) {
+			this.cardAudioEl = this.modalEl.createEl("audio");
+			this.cardAudioEl.style.display = "none";
+		}
+		return this.cardAudioEl;
+	}
+
+	private clearAudioPlayingVisual(): void {
+		this.playingAudioWrap?.removeClass("is-playing");
+		this.playingAudioWrap = null;
+		this.playingAudioRestore?.();
+		this.playingAudioRestore = null;
+		this.playingAudioPath = null;
+	}
+
+	private stopCardAudio(): void {
+		if (this.cardAudioBlobUrl) {
+			URL.revokeObjectURL(this.cardAudioBlobUrl);
+			this.cardAudioBlobUrl = null;
+		}
+		if (this.cardAudioEl) {
+			this.cardAudioEl.onended = null;
+			this.cardAudioEl.pause();
+			this.cardAudioEl.removeAttribute("src");
+			this.cardAudioEl.load();
+		}
+		this.clearAudioPlayingVisual();
+	}
+
+	private async playCardAudio(
+		audio: AudioItem,
+		wrap: HTMLElement,
+		restoreLabel: () => void,
+	): Promise<void> {
+		const key = pathKey(audio.path);
+
+		if (this.cardAudioEl && this.playingAudioPath === key && !this.cardAudioEl.paused) {
+			this.stopCardAudio();
+			return;
+		}
+
+		this.stopCardAudio();
+
+		const url = await this.resolveCardMediaSrc(stripFileUrl(normalizeMediaPath(audio.path)));
+		if (!url || !wrap.isConnected) return;
+
+		if (url.startsWith("blob:")) this.cardAudioBlobUrl = url;
+
+		const el = this.getCardAudioEl();
+		el.src = url;
+		el.load();
+		try {
+			await el.play();
+		} catch {
+			return;
+		}
+
+		this.playingAudioWrap = wrap;
+		this.playingAudioRestore = restoreLabel;
+		this.playingAudioPath = key;
+		wrap.addClass("is-playing");
+		const label = wrap.querySelector(".nc-cal-audio-label");
+		if (label) label.setText(isZhUi() ? "🔊 播放中…" : "🔊 Playing…");
+
+		el.onended = () => this.stopCardAudio();
+	}
 
     /**
      * 根据查询串构建匹配函数：
@@ -441,97 +898,25 @@ export class CardNavigatorModal extends Modal {
         return [...new Set(results)]; // 去重
     }
 
-    private renderIconOrImage(el: HTMLElement, imageVal: StyledValue | null | undefined, isFolder: boolean, session: number) {
-		
-        let rawImage: unknown = "";
-        let style: Record<string, string> = {};
-
-        if (Array.isArray(imageVal)) {
-            rawImage = imageVal[0];
-            if (imageVal[1]) style = imageVal[1];
-        } else {
-            rawImage = imageVal ?? "";
-        }
-
-        if (style) Object.assign(el.style, style);
-
-        const imageStr = rawImage == null ? "" : String(rawImage).trim();
-
-        if (!imageStr) {
-            setIcon(el, isFolder ? "folder" : "file-text");
-            return;
-        }
-
-        // 1. 远程 / data / app / blob URL：直接挂载
-        if (/^(https?:\/\/|data:|app:\/\/|blob:)/i.test(imageStr)) {
-            this.mountCardMedia(el, imageStr, style, imageStr);
-            return;
-        }
-
-        // 2. 库内相对路径、绝对系统路径（含 Windows 盘符 / file://）、视频：
-        //    先放占位骨架，交给 IntersectionObserver 在滚动进入视口时才真正读取
-        if (IMAGE_EXT.test(imageStr) || VIDEO_EXT.test(imageStr) || AUDIO_EXT.test(imageStr) || this.isFilesystemPath(imageStr)) {
-            el.addClass("nc-card-cover-loading");
-            const load = async () => {
-                try {
-                    if (session !== this.renderSession || !el.isConnected) return;
-                    const src = await this.resolveCardMediaSrc(imageStr);
-                    if (session !== this.renderSession || !el.isConnected) return;
-                    el.removeClass("nc-card-cover-loading");
-                    if (!src) {
-                        setIcon(el, isFolder ? "folder" : "file-text");
-                        return;
-                    }
-                    this.mountCardMedia(el, src, style, imageStr);
-                } catch {
-                    // 读取失败时退回到默认图标，而不是抛错
-                    if (el.isConnected) {
-                        el.removeClass("nc-card-cover-loading");
-                        setIcon(el, isFolder ? "folder" : "file-text");
-                    }
-                }
-            };
-            this.observeMedia(el, () => { void load(); });
-            return;
-        }
-
-        // 3. 其它：优先当作图标 ID，失败时退化为纯文本
-        try {
-            setIcon(el, imageStr);
-            if (el.innerHTML === "") el.setText(imageStr);
-        } catch {
-            el.empty();
-            el.setText(imageStr);
-        }
-    }
-
-	/** Windows 盘符、UNC、Unix 绝对路径、file:// */
-	private isFilesystemPath(path: string): boolean {
-		const p = path.trim();
-		if (/^file:\/\//i.test(p)) return true;
-		if (/^[a-zA-Z]:[\\/]/.test(p)) return true;
-		if (/^\\\\/.test(p)) return true;
-		if (/^[\/\\]/.test(p)) return true;
-		return false;
-	}
-
-	private stripFileUrl(path: string): string {
-		let p = path.trim();
-		if (/^file:\/\/\//i.test(p)) {
-			p = decodeURIComponent(p.slice("file:///".length));
-			// file:///C:/foo → C:/foo；file:///home/foo 保持 /home/foo
-			if (/^[a-zA-Z]:/.test(p)) return p;
-			return "/" + p.replace(/^\/+/, "");
+    private renderIconOrImage(el: HTMLElement, imageVal: string | null | undefined, isFolder: boolean, _session: number) {
+		const imageStr = (imageVal ?? "").trim();
+		if (!imageStr) {
+			setIcon(el, isFolder ? "folder" : "file-text");
+			return;
 		}
-		if (/^file:\/\//i.test(p)) {
-			return decodeURIComponent(p.slice("file://".length));
+		try {
+			setIcon(el, imageStr);
+			if (el.innerHTML === "") el.setText(imageStr);
+		} catch {
+			el.empty();
+			el.setText(imageStr);
 		}
-		return p;
 	}
 
 	private async resolveCardMediaSrc(raw: string): Promise<string | null> {
-		const path = this.stripFileUrl(raw);
+		const path = stripFileUrl(normalizeMediaPath(raw));
 		if (!path) return null;
+		if (isDirectMediaUrl(path)) return path;
 
 		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
 		const fileApi = nc?.easyapi?.file;
@@ -600,74 +985,76 @@ export class CardNavigatorModal extends Modal {
 		this.mediaObserver.observe(el);
 	}
 
-	private mountCardMedia(
-		el: HTMLElement,
-		src: string,
-		style: Record<string, string>,
-		pathHint: string,
-	) {
-		el.empty();
-		const hint = this.stripFileUrl(pathHint);
-		if (VIDEO_EXT.test(hint) || VIDEO_EXT.test(src)) {
-			const video = el.createEl("video", {
-				attr: {
-					src,
-					muted: "true",
-					playsinline: "true",
-					preload: "metadata",
-				},
-			});
-			if (style) Object.assign(video.style, style);
-			return;
+	private buildVisibleMediaList(list: CardItem[]): CardMediaEntry[] {
+		const entries: CardMediaEntry[] = [];
+		for (const item of list) {
+			const media = resolveCardMedia(item);
+			for (const image of media.images) {
+				entries.push({
+					kind: isVisualMediaKind(image.path),
+					item,
+					image,
+				});
+			}
+			if (this.options.showAudio) {
+				for (const audio of media.audios) {
+					entries.push({ kind: "audio", item, audio });
+				}
+			}
 		}
-		const img = el.createEl("img", { attr: { src, loading: "lazy", decoding: "async" } });
-		if (style) Object.assign(img.style, style);
+		return entries;
 	}
 
-	/** 从 CardItem.image 提取可预览的媒体路径；图标名等非媒体返回 null */
-	private getCardMediaPath(item: CardItem): string | null {
-		const raw = Array.isArray(item.image) ? item.image[0] : item.image;
-		const imageStr = raw == null ? "" : String(raw).trim();
-		if (!imageStr) return null;
-		if (/^(https?:\/\/|data:|app:\/\/|blob:)/i.test(imageStr)) return imageStr;
-		if (
-			IMAGE_EXT.test(imageStr) ||
-			VIDEO_EXT.test(imageStr) ||
-			AUDIO_EXT.test(imageStr) ||
-			this.isFilesystemPath(imageStr)
-		) {
-			return this.stripFileUrl(imageStr);
+	private getEntryMediaPath(entry: CardMediaEntry): string | null {
+		if (entry.kind === "audio") {
+			const p = entry.audio?.path?.trim();
+			return p ? stripFileUrl(normalizeMediaPath(p)) : null;
 		}
-		return null;
+		const p = entry.image?.path?.trim();
+		return p ? stripFileUrl(normalizeMediaPath(p)) : null;
 	}
 
 	/** 打开当前列表中可预览媒体的放大层；左右键/滚轮可切换 */
-	private openCardLightbox(list: CardItem[], target: CardItem): void {
-		const mediaItems = list.filter((it) => !!this.getCardMediaPath(it));
-		if (!mediaItems.length) return;
-		let idx = mediaItems.indexOf(target);
-		if (idx < 0) {
-			const targetPath = this.getCardMediaPath(target);
-			idx = targetPath
-				? mediaItems.findIndex((it) => this.getCardMediaPath(it) === targetPath)
-				: 0;
+	private openCardLightbox(
+		list: CardItem[],
+		target: CardItem,
+		targetImage?: ImageItem,
+		targetAudio?: AudioItem,
+	): void {
+		const entries = this.buildVisibleMediaList(list);
+		if (!entries.length) return;
+		let idx = -1;
+		if (targetImage) {
+			idx = entries.findIndex((e) => e.item === target && e.image === targetImage);
+			if (idx < 0) {
+				const key = pathKey(targetImage.path);
+				idx = entries.findIndex((e) => e.item === target && e.image && pathKey(e.image.path) === key);
+			}
+		} else if (targetAudio) {
+			idx = entries.findIndex((e) => e.item === target && e.audio === targetAudio);
+			if (idx < 0) {
+				const key = pathKey(targetAudio.path);
+				idx = entries.findIndex((e) => e.item === target && e.audio && pathKey(e.audio.path) === key);
+			}
 		}
-		this.mediaLightbox?.open(mediaItems, idx >= 0 ? idx : 0);
+		if (idx < 0) idx = entries.findIndex((e) => e.item === target);
+		this.stopCardAudio();
+		this.mediaLightbox?.open(entries, idx >= 0 ? idx : 0);
 	}
 
 	private async handleLightboxContextAction(
 		action: "delete" | "reveal",
-		item: CardItem,
+		entry: CardMediaEntry,
 	): Promise<void> {
 		if (action === "reveal") {
-			await this.revealCardMediaInExplorer(item);
+			await this.revealCardMediaInExplorer(entry);
 			return;
 		}
-		await this.deleteCardMedia(item);
+		await this.deleteCardMedia(entry);
 	}
 
 	private resolveLocalAbsPath(rawPath: string): string | null {
-		const path = this.stripFileUrl(rawPath.trim());
+		const path = stripFileUrl(normalizeMediaPath(rawPath));
 		if (!path || isDirectMediaUrl(path)) return null;
 
 		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
@@ -690,69 +1077,112 @@ export class CardNavigatorModal extends Modal {
 			const abs = fsApi.abspath(path, true) || (fsApi.isfile(path) ? path : null);
 			if (abs && fsApi.isfile(abs)) return abs;
 		}
-		if (typeof adapter?.getFullPath === "function" && !this.isFilesystemPath(path)) {
+		if (typeof adapter?.getFullPath === "function" && !isFilesystemPath(path)) {
 			const full = adapter.getFullPath(path);
 			if (full && fsApi?.isfile?.(full)) return full;
 		}
-		if (this.isFilesystemPath(path)) return path;
+		if (isFilesystemPath(path)) return path;
 		return null;
 	}
 
-	private async revealCardMediaInExplorer(item: CardItem): Promise<void> {
+	private async revealCardMediaInExplorer(entry: CardMediaEntry): Promise<void> {
 		if ((this.app as any).isMobile) {
-			new Notice("移动端不支持在文件浏览器中打开");
+			new Notice(isZhUi() ? "移动端不支持在文件浏览器中打开" : "Not supported on mobile");
 			return;
 		}
-		const mediaPath = this.getCardMediaPath(item);
+		const mediaPath = this.getEntryMediaPath(entry);
 		if (!mediaPath) {
-			new Notice("无法定位文件路径");
+			new Notice(isZhUi() ? "无法定位文件路径" : "Cannot resolve file path");
 			return;
 		}
 		if (isDirectMediaUrl(mediaPath) && !/^file:/i.test(mediaPath)) {
-			new Notice("网络资源无法在文件浏览器中打开");
+			new Notice(isZhUi() ? "网络资源无法在文件浏览器中打开" : "Remote URL cannot be revealed in explorer");
 			return;
 		}
 		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
 		const fsApi = nc?.easyapi?.fs;
 		if (!fsApi?.show_in_system_explorer) {
-			new Notice("文件系统接口不可用");
+			new Notice(isZhUi() ? "文件系统接口不可用" : "Filesystem API unavailable");
 			return;
 		}
-		const target = this.isFilesystemPath(mediaPath)
+		const target = isFilesystemPath(mediaPath)
 			? mediaPath
 			: (this.resolveLocalAbsPath(mediaPath) ?? mediaPath);
 		const ok = fsApi.show_in_system_explorer(target);
 		if (!ok) {
-			new Notice(`打开文件位置失败：${target}`);
+			new Notice(isZhUi() ? `打开文件位置失败：${target}` : `Failed to show in explorer: ${target}`);
 		}
 	}
 
-	private async deleteCardMedia(item: CardItem): Promise<void> {
-		const mediaPath = this.getCardMediaPath(item);
-		if (!mediaPath) {
-			new Notice("无法定位文件路径");
+	private removeMediaFromCard(item: CardItem, path: string, kind: "image" | "video" | "audio"): void {
+		const key = pathKey(path);
+		const matches = (p: string) => pathKey(p) === key;
+
+		if (kind === "audio") {
+			if (item.audios?.length) {
+				item.audios = item.audios.filter((a) => !matches(a.path));
+			}
+		} else if (item.images?.length) {
+			item.images = item.images.filter((img) => !matches(img.path));
+		}
+
+		if (item.image == null) return;
+
+		if (isStyledTuple(item.image)) {
+			if (matches(String(item.image[0] ?? ""))) item.image = null;
 			return;
 		}
-		const kind = guessMediaKind(mediaPath);
-		const kindLabel = kind === "audio" ? "音频" : kind === "video" ? "视频" : "图片";
-		const ok = window.confirm(`确定删除此${kindLabel}？\n${mediaPath}`);
+		if (Array.isArray(item.image)) {
+			item.image = (item.image as Array<string | ImageItem>).filter((entry) => {
+				const p = typeof entry === "string" ? entry : entry.path;
+				return !matches(p);
+			}) as string[] | ImageItem[];
+			if ((item.image as unknown[]).length === 0) item.image = null;
+			return;
+		}
+		if (matches(String(item.image))) item.image = null;
+	}
+
+	private async deleteCardMedia(entry: CardMediaEntry): Promise<void> {
+		const mediaPath = this.getEntryMediaPath(entry);
+		if (!mediaPath) {
+			new Notice(isZhUi() ? "无法定位文件路径" : "Cannot resolve file path");
+			return;
+		}
+		const kind = entry.kind;
+		const kindLabel = kind === "audio"
+			? (isZhUi() ? "音频" : "audio")
+			: kind === "video"
+				? (isZhUi() ? "视频" : "video")
+				: (isZhUi() ? "图片" : "image");
+		const ok = window.confirm(
+			isZhUi()
+				? `确定删除此${kindLabel}？\n${mediaPath}`
+				: `Delete this ${kindLabel}?\n${mediaPath}`,
+		);
 		if (!ok) return;
 
 		const deleted = await this.deleteLocalMediaFile(mediaPath);
 		if (!deleted && isDirectMediaUrl(mediaPath) && !/^file:/i.test(mediaPath)) {
-			new Notice("网络资源无法删除本地文件，仅从列表中移除");
+			new Notice(isZhUi() ? "网络资源无法删除本地文件，仅从列表中移除" : "Remote URL: removed from list only");
 		}
 
-		this.removeCardFromData(item);
+		this.removeMediaFromCard(entry.item, mediaPath, kind);
 		try {
-			await this.options.onDeleteMedia?.({ item, path: mediaPath, kind });
+			await this.options.onDeleteMedia?.({
+				item: entry.item,
+				path: mediaPath,
+				kind,
+				image: entry.image,
+				audio: entry.audio,
+			});
 		} catch (err) {
 			console.error("[note-chain] onDeleteMedia", err);
 		}
 
 		this.mediaLightbox?.removeCurrent();
-		this.listView?.removeAndRedraw(item);
-		new Notice(`已删除${kindLabel}`);
+		this.listView?.redrawItem(entry.item);
+		new Notice(isZhUi() ? `已删除${kindLabel}` : `${kindLabel} deleted`);
 	}
 
 	private async deleteLocalMediaFile(mediaPath: string): Promise<boolean> {
@@ -777,22 +1207,6 @@ export class CardNavigatorModal extends Modal {
 			return false;
 		}
 		return false;
-	}
-
-	/** 从整棵卡片树中移除该卡片（按引用） */
-	private removeCardFromData(item: CardItem): boolean {
-		const removeFrom = (list: CardItem[]): boolean => {
-			const idx = list.indexOf(item);
-			if (idx >= 0) {
-				list.splice(idx, 1);
-				return true;
-			}
-			for (const it of list) {
-				if (Array.isArray(it.action) && removeFrom(it.action)) return true;
-			}
-			return false;
-		};
-		return removeFrom(this.rootData);
 	}
 
 	/** 关闭放大预览后，滚动并高亮到最后查看的媒体所在卡片 */
@@ -831,6 +1245,14 @@ export class CardNavigatorModal extends Modal {
         if (lower.endsWith(".mov")) return "video/quicktime";
         if (lower.endsWith(".mkv")) return "video/x-matroska";
         if (lower.endsWith(".ogv")) return "video/ogg";
+        if (lower.endsWith(".m4a")) return "audio/mp4";
+        if (lower.endsWith(".mp3")) return "audio/mpeg";
+        if (lower.endsWith(".wav")) return "audio/wav";
+        if (lower.endsWith(".ogg")) return "audio/ogg";
+        if (lower.endsWith(".flac")) return "audio/flac";
+        if (lower.endsWith(".aac")) return "audio/aac";
+        if (lower.endsWith(".wma")) return "audio/x-ms-wma";
+        if (lower.endsWith(".opus")) return "audio/opus";
         return "image/png";
     }
 
@@ -911,12 +1333,17 @@ export class CardNavigatorModal extends Modal {
     onClose() {
 		// 取消所有过期的异步任务（如图片读取）
 		this.renderSession++;
+		this.stopCardAudio();
 		this.mediaLightbox?.destroy();
 		this.mediaLightbox = null;
 		this.mediaObserver?.disconnect();
 		this.mediaObserver = null;
 		this.listView = null;
 		this.revokeMediaObjectUrls();
+		if (this.cardAudioEl) {
+			this.cardAudioEl.remove();
+			this.cardAudioEl = null;
+		}
         if (!this.resolved && this.resolveResult) this.resolveResult(null);
         this.contentEl.empty();
     }
