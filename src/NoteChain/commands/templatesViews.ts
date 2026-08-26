@@ -116,13 +116,33 @@ export const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
 		let cfile = plugin.chain.current_note;
 		if(!cfile){return}
 
-		let ctx = await plugin.app.vault.cachedRead(cfile);
 		let flag = false;
+		let ctx2 = await plugin.easyapi.editor.get_current_section();
+		if(ctx2){
+			ctx2 = ctx2.replace('```js\n','```js tpl\n');
+			console.log(ctx2)
+			if (/```js\s*(\/\/)?(templater|tpl)\n/.test(ctx2)){
+				new Notice(`执行当前脚本块：${cfile.basename}`)
+				flag = true;
+				let rsp = await plugin.easyapi.tpl.parse_templater(ctx2,true)
+				if(!rsp){
+					rsp = 'Success but no return';
+				}
+				console.log(rsp.join('\n'))
+				new Notice(rsp);
+				return;
+			}
+		}
+
+		let ctx = await plugin.app.vault.cachedRead(cfile);
+		
 		if (/\n```js\s*(\/\/)?(templater|tpl)\n/.test(ctx)){
 			new Notice(`执行当前脚本：${cfile.basename}`)
 			flag = true;
-			plugin.easyapi.tpl.parse_templater(cfile.basename)
+			plugin.easyapi.tpl.parse_templater(cfile.basename,true,null,-2)
 		}
+		
+
 		if(ctx.search('\n```css\n')>0){
 			let all_css = await plugin.easyapi.editor.extract_code_block(cfile,'css');
 			let css = all_css.join('\n\n\n').trim();
@@ -142,6 +162,8 @@ export const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
 				plugin.utils.toogle_note_css(plugin.app,document,cfile.basename,false)
 			}
 		}
+
+
 		if(!flag){
 			plugin.chain.open_note_in_modal(cfile.path);
 		}

@@ -120,4 +120,7 @@ export class EasyEditorListParse {
         return true;
     }
 
+    range(end: number = 0,start: number = 0): number[] {
+        return Array.from({ length: end - start }, (_, index) => start + index);
+    }
 }

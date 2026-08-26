@@ -166,7 +166,36 @@ export class Templater {
             if(idx!=null){
                 let is_number = typeof idx === 'number';
                 if(typeof idx === 'number'){
-                    idx = [idx];
+                    if(idx<0){
+                        if(blocks.length<=1){
+                            idx = 0;
+                        }else if(idx==-1){
+                            idx = await this.ea.dialog_suggest(
+                                blocks.map(x=>x.split('\n').slice(1,-1).join('\n').trim().split('\n')[0]),
+                                this.ea.editor.range(blocks.length),
+                                '选择脚本', 
+                                false
+                            );
+                            if(idx==null){
+                                return '';
+                            }
+                            idx = idx as number;
+                        }else{
+                            idx = await this.ea.dialog_multi_suggest(
+                                blocks.map(x=>x.split('\n').slice(1,-1).join('\n').trim().split('\n')[0]), 
+                                this.ea.editor.range(blocks.length),
+                                '',
+                                '选择脚本'
+                            );
+                            if(idx==null){
+                                return '';
+                            }
+                            idx = idx as number[];
+                        }
+                    }
+                    if(typeof idx === 'number'){
+                        idx = [idx];
+                    }
                 }
                 for(let i of idx){
                     let block = blocks[i];
