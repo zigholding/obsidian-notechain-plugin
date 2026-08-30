@@ -56,6 +56,8 @@ export interface NCSettings {
 	wordcountxfolder: string,
 	modal_default_width: number,
 	modal_default_height: number,
+	modal_default_width_mobile: number,
+	modal_default_height_mobile: number,
 	avata: string,
 	tpl_tags_folder: string,
 	httpServerHost: string,
@@ -85,6 +87,8 @@ export const NCSettings_DEFAULT: NCSettings = {
 	wordcountxfolder: '',
 	modal_default_width: 800,
 	modal_default_height: 600,
+	modal_default_width_mobile: 0,
+	modal_default_height_mobile: 0,
 	avata: 'avata',
 	tpl_tags_folder: '脚本笔记\nScriptNote',
 	httpServerHost: "0.0.0.0",
@@ -258,6 +262,46 @@ export function renderNoteChainSettings(plugin: NoteChainPlugin, containerEl: HT
 					await plugin.saveSettings();
 				})
 			);
+
+		new Setting(containerEl)
+			.setName(strings.setting_modal_default_size)
+			.setDesc(strings.setting_modal_default_size_desc)
+			.addText(text => text
+				.setPlaceholder('800')
+				.setValue(String(settings.modal_default_width ?? 800))
+				.onChange(async (value) => {
+					const n = parseInt(value, 10);
+					settings.modal_default_width = Number.isFinite(n) && n > 0 ? n : 800;
+					await plugin.saveSettings();
+				}))
+			.addText(text => text
+				.setPlaceholder('600')
+				.setValue(String(settings.modal_default_height ?? 600))
+				.onChange(async (value) => {
+					const n = parseInt(value, 10);
+					settings.modal_default_height = Number.isFinite(n) && n > 0 ? n : 600;
+					await plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.setting_modal_default_size_mobile)
+			.setDesc(strings.setting_modal_default_size_mobile_desc)
+			.addText(text => text
+				.setPlaceholder('0')
+				.setValue(String(settings.modal_default_width_mobile ?? 0))
+				.onChange(async (value) => {
+					const n = parseInt(value, 10);
+					settings.modal_default_width_mobile = Number.isFinite(n) && n > 0 ? n : 0;
+					await plugin.saveSettings();
+				}))
+			.addText(text => text
+				.setPlaceholder('0')
+				.setValue(String(settings.modal_default_height_mobile ?? 0))
+				.onChange(async (value) => {
+					const n = parseInt(value, 10);
+					settings.modal_default_height_mobile = Number.isFinite(n) && n > 0 ? n : 0;
+					await plugin.saveSettings();
+				}));
 
 		new Setting(containerEl)
 			.setName(strings.setting_wordcout)

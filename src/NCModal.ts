@@ -46,7 +46,7 @@ dv.span(\`![[${sourcePath}]]\`);
         this.modalEl.style.display = 'flex';
         this.modalEl.style.overflow = 'auto'; // 添加滚动条
 
-        // 根据 frontmatter 配置设置 modal 大小
+        // 根据 frontmatter 配置设置 modal 大小；读不到则用电脑/手机默认尺寸
         this.setModalSize();
 
         const container = contentEl.createDiv({ cls: 'note-content-container' });
@@ -84,43 +84,147 @@ dv.span(\`![[${sourcePath}]]\`);
     }
 
     private setModalSize() {
-        if (!this.sourcePath) {
-            return;
+        const isMobile = this.plugin.easyapi.isMobile;
+        if (isMobile) {
+            this.modalEl.addClass('is-mobile');
         }
 
-        const file = this.app.vault.getAbstractFileByPath(this.sourcePath);
-        if (!file) {
-            return;
+        let { width, height } = this.getDefaultModalSize(isMobile);
+
+        if (this.sourcePath) {
+            const file = this.app.vault.getAbstractFileByPath(this.sourcePath);
+            if (file) {
+                const parsed = this.parseModalSizeConfig(
+                    this.plugin.editor.get_frontmatter_config(file, 'notechain.modal_size'),
+                    isMobile
+                );
+                if (parsed) {
+                    width = parsed.width;
+                    height = parsed.height;
+                }
+            }
         }
 
-        const modalSizeConfig = this.plugin.editor.get_frontmatter_config(file, 'notechain.modal_size');
-        if (!Array.isArray(modalSizeConfig) || (modalSizeConfig.length !== 2 && modalSizeConfig.length !== 4)) {
-            return;
+        this.applyModalSize(width, height);
+    }
+
+    /** 电脑默认读设置 800×600；手机默认铺满可视区域。 */
+    private getDefaultModalSize(isMobile: boolean): { width: number | string; height: number | string } {
+        const settings = this.plugin.settings?.notechain ?? {};
+        if (isMobile) {
+            const w = this.normalizeSize(settings.modal_default_width_mobile);
+            const h = this.normalizeSize(settings.modal_default_height_mobile);
+            if (w != null && h != null) {
+                return { width: w, height: h };
+            }
+            return { width: '92vw', height: '85dvh' };
+        }
+        const width = this.normalizeSize(settings.modal_default_width) ?? 800;
+        const height = this.normalizeSize(settings.modal_default_height) ?? 600;
+        return { width, height };
+    }
+
+    /**
+     * 元数据 `notechain.modal_size`：
+     * - [w, h] 电脑和手机共用
+     * - [pc_w, pc_h, mobile_w, mobile_h]
+     * - { pc: [w, h], mobile: [w, h] } 或 { width, height }
+     * 数值视为 px，也可用 `90vw` / `80%` 等 CSS 单位。
+     */
+    private parseModalSizeConfig(
+        config: unknown,
+        isMobile: boolean
+    ): { width: number | string; height: number | string } | null {
+        if (config == null) {
+            return null;
         }
 
-        // 判断设备类型
-        const isMobile = (this.app as any).isMobile === true;
-        
-        let width: number, height: number;
-        
-        if (modalSizeConfig.length === 2) {
-            // 长度为2时，mobile和pc使用相同的尺寸
-            // 格式: [width, height]
-            width = modalSizeConfig[0];
-            height = modalSizeConfig[1];
-        } else {
-            // 长度为4时，根据设备类型选择对应的尺寸配置
-            // 格式: [pc_width, pc_height, mobile_width, mobile_height]
-            width = isMobile ? modalSizeConfig[2] : modalSizeConfig[0];
-            height = isMobile ? modalSizeConfig[3] : modalSizeConfig[1];
+        if (Array.isArray(config)) {
+            if (config.length === 2) {
+                return this.pairSize(config[0], config[1]);
+            }
+            if (config.length >= 4) {
+                return isMobile
+                    ? this.pairSize(config[2], config[3])
+                    : this.pairSize(config[0], config[1]);
+            }
+            return null;
         }
-        
-        if (typeof width === 'number' && typeof height === 'number') {
-            this.modalEl.style.width = `${width}px`;
-            this.modalEl.style.height = `${height}px`;
-            this.modalEl.style.maxWidth = `${width}px`;
-            this.modalEl.style.maxHeight = `${height}px`;
+
+        if (typeof config !== 'object') {
+            return null;
         }
+
+        const obj = config as Record<string, unknown>;
+        const device = isMobile ? (obj.mobile ?? obj.phone) : (obj.pc ?? obj.desktop);
+        if (Array.isArray(device) && device.length >= 2) {
+            const pair = this.pairSize(device[0], device[1]);
+            if (pair) {
+                return pair;
+            }
+        }
+        if (device && typeof device === 'object' && !Array.isArray(device)) {
+            const d = device as Record<string, unknown>;
+            const pair = this.pairSize(d.width ?? d.w, d.height ?? d.h);
+            if (pair) {
+                return pair;
+            }
+        }
+        if (isMobile) {
+            const pair = this.pairSize(
+                obj.mobile_width ?? obj.width ?? obj.w,
+                obj.mobile_height ?? obj.height ?? obj.h
+            );
+            if (pair) {
+                return pair;
+            }
+        }
+        return this.pairSize(obj.width ?? obj.w, obj.height ?? obj.h);
+    }
+
+    private pairSize(
+        width: unknown,
+        height: unknown
+    ): { width: number | string; height: number | string } | null {
+        const w = this.normalizeSize(width);
+        const h = this.normalizeSize(height);
+        if (w == null || h == null) {
+            return null;
+        }
+        return { width: w, height: h };
+    }
+
+    private normalizeSize(value: unknown): number | string | null {
+        if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return null;
+            }
+            const asNum = Number(trimmed);
+            if (Number.isFinite(asNum) && asNum > 0) {
+                return asNum;
+            }
+            if (/^\d+(\.\d+)?(px|vw|vh|dvh|svh|lvh|%|rem|em)$/i.test(trimmed)) {
+                return trimmed;
+            }
+        }
+        return null;
+    }
+
+    private applyModalSize(width: number | string, height: number | string) {
+        const cssWidth = typeof width === 'number'
+            ? `${Math.min(width, window.innerWidth)}px`
+            : width;
+        const cssHeight = typeof height === 'number'
+            ? `${Math.min(height, window.innerHeight)}px`
+            : height;
+        this.modalEl.style.width = cssWidth;
+        this.modalEl.style.height = cssHeight;
+        this.modalEl.style.maxWidth = cssWidth;
+        this.modalEl.style.maxHeight = cssHeight;
     }
 
     onClose() {
@@ -171,47 +275,8 @@ dv.span(\`![[${sourcePath}]]\`);
             await this.app.workspace.openLinkText(linkText, '', false, { active: true });
             this.close();
         } catch (error) {
-            new Notice(`Error opening note: ${error.message}`);
+            const message = error instanceof Error ? error.message : String(error);
+            new Notice(`Error opening note: ${message}`);
         }
-    }
-}
-
-
-export class NoteEditorModal extends Modal {
-    filePath: string; // 添加文件路径属性
-    isEditMode: boolean; // 添加编辑模式属性
-
-    constructor(app: App, filePath: string, isEditMode: boolean = false) {
-        super(app);
-        this.filePath = filePath;
-        this.isEditMode = isEditMode;
-    }
-
-    async onOpen() {
-        const { contentEl } = this;
-        contentEl.empty();
-
-        if (this.isEditMode) {
-            // 获取文件对象
-            let file = this.app.vault.getAbstractFileByPath(this.filePath) as TFile;
-            if (file) {
-                // 创建一个新的工作区叶子并打开文件
-                const leaf = this.app.workspace.getLeaf(true);
-                await leaf.openFile(file, { state: { mode: 'source' } }); // 以编辑模式打开文件
-
-                // 关闭当前模态窗口
-                this.close();
-            } else {
-                new Notice(`File not found: ${this.filePath}`);
-            }
-        } else {
-            // 其他模式的处理逻辑
-            new Notice('Not in edit mode.');
-        }
-    }
-
-    onClose() {
-        const { contentEl } = this;
-        contentEl.empty();
     }
 }

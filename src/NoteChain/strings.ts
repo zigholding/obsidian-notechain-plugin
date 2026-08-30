@@ -611,6 +611,38 @@ export class Strings{
         }
     }
 
+    get setting_modal_default_size(){
+        if(this.language=='zh'){
+            return '电脑端 Modal 默认宽高'
+        }else{
+            return "Default modal size (desktop)";
+        }
+    }
+
+    get setting_modal_default_size_desc(){
+        if(this.language=='zh'){
+            return '宽 × 高（像素）。笔记 frontmatter 的 notechain.modal_size 优先'
+        }else{
+            return "Width × height in px. Frontmatter notechain.modal_size overrides this.";
+        }
+    }
+
+    get setting_modal_default_size_mobile(){
+        if(this.language=='zh'){
+            return '手机端 Modal 默认宽高'
+        }else{
+            return "Default modal size (mobile)";
+        }
+    }
+
+    get setting_modal_default_size_mobile_desc(){
+        if(this.language=='zh'){
+            return '宽 × 高（像素）。填 0 则使用 92vw × 85dvh'
+        }else{
+            return "Width × height in px. Use 0 for 92vw × 85dvh.";
+        }
+    }
+
 
     get item_insert_suggester(){
         if(this.language=='zh'){

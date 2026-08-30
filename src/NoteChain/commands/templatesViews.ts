@@ -139,7 +139,7 @@ export const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
 		if (/```js\s*(\/\/)?(templater|tpl)\n/.test(ctx)){
 			new Notice(`执行当前脚本：${cfile.basename}`)
 			flag = true;
-			plugin.easyapi.tpl.parse_templater(cfile.basename,true,null,-2)
+			plugin.easyapi.tpl.parse_templater(cfile.basename,true,null,-1)
 		}
 		
 

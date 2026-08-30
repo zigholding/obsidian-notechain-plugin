@@ -66,6 +66,8 @@ export class MediaLightbox<T> {
 	private imgEl!: HTMLImageElement;
 	private videoEl!: HTMLVideoElement;
 	private audioPanelEl!: HTMLElement;
+	private audioIconEl!: HTMLElement;
+	private audioTitleEl!: HTMLElement;
 	private audioEl!: HTMLAudioElement;
 	private subtitleEl!: HTMLElement;
 	private captionEl!: HTMLElement;
@@ -118,6 +120,9 @@ export class MediaLightbox<T> {
 		this.videoEl.onclick = (e) => e.stopPropagation();
 
 		this.audioPanelEl = this.stageEl.createDiv({ cls: "nc-cal-lightbox-audio-panel" });
+		this.audioIconEl = this.audioPanelEl.createDiv({ cls: "nc-cal-lightbox-audio-icon" });
+		setIcon(this.audioIconEl, "file-audio");
+		this.audioTitleEl = this.audioPanelEl.createDiv({ cls: "nc-cal-lightbox-audio-title" });
 		this.audioEl = this.audioPanelEl.createEl("audio", { cls: "nc-cal-lightbox-audio" });
 		this.audioEl.setAttr("controls", "true");
 		this.audioEl.setAttr("preload", "metadata");
@@ -570,6 +575,12 @@ export class MediaLightbox<T> {
 		}
 
 		if (info.kind === "audio") {
+			const label = (meta.title ?? "").trim()
+				|| this.audioFallbackLabel(info.path);
+			this.audioTitleEl.setText(label);
+			if (label) this.audioTitleEl.show();
+			else this.audioTitleEl.hide();
+			this.captionEl.hide();
 			this.audioPanelEl.show();
 			this.audioEl.src = url;
 			return;
@@ -601,6 +612,12 @@ export class MediaLightbox<T> {
 		};
 		this.imgEl.src = url;
 		if (this.imgEl.complete && this.imgEl.naturalWidth > 0) this.imgEl.show();
+	}
+
+	private audioFallbackLabel(path: string | null): string {
+		if (!path) return isZhUi() ? "音频" : "Audio";
+		const name = path.replace(/\\/g, "/").split("/").pop() ?? path;
+		return name.replace(/\?.*$/, "") || (isZhUi() ? "音频" : "Audio");
 	}
 
 	private showLoadError(icon: string): void {

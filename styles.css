@@ -8,6 +8,10 @@
   flex-direction: column;
 }
 
+.notechain-modal.is-mobile {
+  border-radius: 0;
+}
+
 .notechain-modal .modal-content {
   flex: 1 1 auto;
   height: 100%;
@@ -1551,14 +1555,43 @@ body:has(.nc-cal-lightbox.is-open) .menu {
 
 .nc-cal-lightbox-audio-panel {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 14px;
   width: min(480px, 88vw);
-  padding: 28px 32px;
+  padding: 32px 36px 28px;
   border-radius: 14px;
   background: color-mix(in srgb, var(--background-primary) 92%, transparent);
   border: 1px solid var(--background-modifier-border);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+}
+
+.nc-cal-lightbox-audio-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--interactive-accent) 16%, var(--background-secondary));
+  color: var(--interactive-accent);
+}
+
+.nc-cal-lightbox-audio-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.nc-cal-lightbox-audio-title {
+  max-width: 100%;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-normal);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nc-cal-lightbox-audio {

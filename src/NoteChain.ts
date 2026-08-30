@@ -3,7 +3,6 @@ import {
 } from 'obsidian';
 
 import NoteChainPlugin from "./plugin";
-import { NoteEditorModal } from './NCModal'
 import { LexoRank } from "lexorank";
 
 import { NoteChainFolderChildren } from './NoteChain/folderChildren';
@@ -27,7 +26,6 @@ export class NoteChain {
 	fid: string;
 	nid: string;
 	children: { [key: string]: any };
-	NoteEditorModal: any
 	LexoRank: any;
 
 	constructor(plugin: NoteChainPlugin,
@@ -38,7 +36,6 @@ export class NoteChain {
 		this.app = plugin.app;
 		(window as any).nc = this.plugin;
 
-		this.NoteEditorModal = NoteEditorModal
 		this.LexoRank = LexoRank;
 
 		this.prev = prev;

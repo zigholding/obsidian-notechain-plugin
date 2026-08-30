@@ -29,7 +29,8 @@ export class NoteChainNavigation {
 				return modal;
 			}
 		} catch (error) {
-			new Notice(`Error opening note in modal: ${error.message}`);
+			const message = error instanceof Error ? error.message : String(error);
+			new Notice(`Error opening note in modal: ${message}`);
 		}
 	}
 
@@ -95,7 +96,8 @@ export class NoteChainNavigation {
 
 			view.setContent(content, sourcePath, webUrl);
 		} catch (error) {
-			new Notice(`Error opening note in modal: ${error.message}`);
+			const message = error instanceof Error ? error.message : String(error);
+			new Notice(`Error opening note in modal: ${message}`);
 		}
 	}
 
@@ -179,7 +181,7 @@ export class NoteChainNavigation {
 			}
 		}
 
-		let t = moment()
+		let t = (moment as unknown as typeof import('moment'))();
 		for (let i = 0; i < 20; i++) {
 			let xt = t.clone().add(-i, 'days')
 			// 库中所有文件

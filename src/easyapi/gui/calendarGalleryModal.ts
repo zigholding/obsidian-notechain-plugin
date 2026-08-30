@@ -387,7 +387,7 @@ export class CalendarGalleryModal extends Modal {
 			}),
 			getMeta: (entry, index, items) => {
 				const caption = entry.kind === "audio"
-					? (entry.audio?.title?.trim() ?? "")
+					? (entry.audio?.title?.trim() || (isZhUi() ? "录音" : "Voice"))
 					: (entry.image?.caption?.trim() ?? "");
 				const dayText = entry.dayData?.text
 					? stripMarkdownForDisplay(entry.dayData.text)
@@ -696,18 +696,32 @@ export class CalendarGalleryModal extends Modal {
 		return entries;
 	}
 
-	private openMediaLightbox(dateKey: string, image: ImageItem): void {
+	private openMediaLightbox(dateKey: string, image?: ImageItem, audio?: AudioItem): void {
 		const list = this.buildVisibleMediaList();
 		if (!list.length) return;
-		let idx = list.findIndex((e) => e.image === image && e.dateKey === dateKey);
-		if (idx < 0) {
-			idx = list.findIndex(
-				(e) =>
-					e.image &&
-					e.dateKey === dateKey &&
-					normalizeMediaPath(e.image.path) === normalizeMediaPath(image.path)
-			);
+		let idx = -1;
+		if (image) {
+			idx = list.findIndex((e) => e.image === image && e.dateKey === dateKey);
+			if (idx < 0) {
+				idx = list.findIndex(
+					(e) =>
+						e.image &&
+						e.dateKey === dateKey &&
+						normalizeMediaPath(e.image.path) === normalizeMediaPath(image.path)
+				);
+			}
+		} else if (audio) {
+			idx = list.findIndex((e) => e.audio === audio && e.dateKey === dateKey);
+			if (idx < 0) {
+				idx = list.findIndex(
+					(e) =>
+						e.audio &&
+						e.dateKey === dateKey &&
+						normalizeMediaPath(e.audio.path) === normalizeMediaPath(audio.path)
+				);
+			}
 		}
+		this.stopCardAudio();
 		this.mediaLightbox?.open(list, idx >= 0 ? idx : 0);
 	}
 
@@ -1194,7 +1208,7 @@ export class CalendarGalleryModal extends Modal {
 			this.renderImageArea(body, images, cell.key, dayData);
 		}
 		if (audios.length > 0 && this.options.showAudio) {
-			this.renderAudioArea(body, audios);
+			this.renderAudioArea(body, audios, cell.key);
 		}
 
 		card.onclick = (e) => {
@@ -1642,8 +1656,9 @@ export class CalendarGalleryModal extends Modal {
 
 	// ── Audio area ────────────────────────────────────────────────────────────
 
-	private renderAudioArea(container: HTMLElement, audios: AudioItem[]): void {
+	private renderAudioArea(container: HTMLElement, audios: AudioItem[], dateKey: string): void {
 		const wrap = container.createDiv({ cls: "nc-cal-audio-wrap" });
+		wrap.setAttr("title", isZhUi() ? "点击播放，右键放大预览" : "Click to play, right-click to preview");
 		let current = 0;
 
 		const label = wrap.createDiv({ cls: "nc-cal-audio-label" });
@@ -1691,6 +1706,12 @@ export class CalendarGalleryModal extends Modal {
 		wrap.onclick = (e) => {
 			if ((e.target as HTMLElement).closest(".nc-cal-audio-btn")) return;
 			playCurrent(e);
+		};
+
+		wrap.oncontextmenu = (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			this.openMediaLightbox(dateKey, undefined, audios[current]);
 		};
 	}
 
