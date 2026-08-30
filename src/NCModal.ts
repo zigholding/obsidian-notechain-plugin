@@ -17,6 +17,7 @@ export class NoteContentModal extends Modal {
         this.plugin = plugin;
         // 为当前 Modal 添加专用 class，方便精确控制样式而不影响其他插件 / 核心模态框
         this.modalEl.addClass('notechain-modal');
+        this.containerEl.addClass('notechain-modal-container');
         if(sourcePath && (sourcePath.endsWith('.canvas') || sourcePath.endsWith('.base'))){
             if('datacore' in (this.plugin.app as any).plugins.plugins){
                 content = `

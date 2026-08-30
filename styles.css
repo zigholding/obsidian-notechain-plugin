@@ -8,6 +8,16 @@
   flex-direction: column;
 }
 
+/* 盖过 lightbox（.nc-cal-lightbox 为 100000），避免从灯箱脚本打开笔记时弹窗被挡住 */
+.notechain-modal-container {
+  z-index: 100010;
+}
+
+body:has(.notechain-modal-container) > .menu,
+body:has(.notechain-modal-container) .menu {
+  z-index: 100011 !important;
+}
+
 .notechain-modal.is-mobile {
   border-radius: 0;
 }

@@ -57,6 +57,25 @@ function isZhUi(): boolean {
 	return window.localStorage.getItem("language") === "zh";
 }
 
+/** 当前处于打开状态的灯箱（卡片 / 日历共用） */
+const openLightboxes = new Set<MediaLightbox<unknown>>();
+
+/**
+ * 关闭当前放大预览（若存在）。
+ * @returns 是否确实关闭了某个灯箱
+ */
+export function exitLightbox(): boolean {
+	const list = [...openLightboxes];
+	if (!list.length) return false;
+	for (const lb of list) lb.close();
+	return true;
+}
+
+/** 是否有正在显示的放大预览 */
+export function isLightboxOpen(): boolean {
+	return openLightboxes.size > 0;
+}
+
 /**
  * 通用媒体放大预览（图片 / 视频 / 音频），供卡片与日历复用。
  */
@@ -442,6 +461,7 @@ export class MediaLightbox<T> {
 		this.items = items;
 		this.index = Math.max(0, Math.min(startIndex, items.length - 1));
 		this.isOpen = true;
+		openLightboxes.add(this as MediaLightbox<unknown>);
 		this.overlay.addClass("is-open");
 		this.overlay.show();
 		this.attachKeyScope();
@@ -452,6 +472,7 @@ export class MediaLightbox<T> {
 	close(silent = false): void {
 		const current = this.isOpen ? (this.items[this.index] ?? null) : null;
 		this.isOpen = false;
+		openLightboxes.delete(this as MediaLightbox<unknown>);
 		this.overlay.removeClass("is-open");
 		this.session++;
 		this.stopPlayback();
