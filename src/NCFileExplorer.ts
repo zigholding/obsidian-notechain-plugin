@@ -115,7 +115,13 @@ export class NCFileExplorer{
 							let res = original.call(this, e);
 							let tfiles = plugin.chain.children[e.path];
 							if (tfiles) {
-								res = res.sort((a:any, b:any) => tfiles.indexOf(a.file) - tfiles.indexOf(b.file));
+								res = res.sort((a:any, b:any) => {
+									let ia = tfiles.indexOf(a.file);
+									let ib = tfiles.indexOf(b.file);
+									if (ia < 0) { ia = tfiles.length; }
+									if (ib < 0) { ib = tfiles.length; }
+									return ia - ib;
+								});
 							}
 							return res;
 						} catch (e) {

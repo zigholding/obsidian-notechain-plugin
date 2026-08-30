@@ -1,5 +1,6 @@
 import {
 	Notice,
+	TAbstractFile,
 	TFile, TFolder
 } from 'obsidian';
 
@@ -25,31 +26,42 @@ export class NoteChainChainOps {
 			return false;
 		}
 
-		let main =
-			chains.find(c => c.length > 1 && c.includes(file)) ||
-			chains.filter(c => c.length > 1).sort((a, b) => b.length - a.length)[0] ||
-			[];
+		const folderPath = file.parent?.path ?? '';
+		const base: TAbstractFile[] = this.children[folderPath] ?? notes;
+		const baseIndex = (f: TFile) => {
+			const i = base.indexOf(f);
+			return i >= 0 ? i : Number.MAX_SAFE_INTEGER;
+		};
+		const byBaseThenName = (a: TFile, b: TFile) => {
+			const d = baseIndex(a) - baseIndex(b);
+			return d !== 0 ? d : a.name.localeCompare(b.name);
+		};
 
-		const inMain = new Set(main);
-		const orphans = notes
-			.filter(n => !inMain.has(n))
-			.sort((a, b) => a.name.localeCompare(b.name));
+		const multi = chains.filter(c => c.length > 1);
+		const orphans = chains.filter(c => c.length === 1).map(c => c[0]);
 
-		if (main.length <= 1) {
+		if (multi.length === 0) {
 			if (orphans.length <= 1) { return false; }
-			await this.chain_concat_tfiles(orphans);
+			await this.chain_concat_tfiles([...orphans].sort(byBaseThenName));
 			return true;
 		}
 
 		if (orphans.length === 0) { return false; }
 
-		for (const orphan of orphans) {
+		multi.sort((a, b) => {
+			if (b.length !== a.length) { return b.length - a.length; }
+			return Math.min(...a.map(baseIndex)) - Math.min(...b.map(baseIndex));
+		});
+		const main = multi[0];
+		const orderedOrphans = [...orphans].sort(byBaseThenName);
+
+		for (const orphan of orderedOrphans) {
 			await this.chain_pop_node(orphan);
 			await this.chain_set_prev(orphan, null);
 			await this.chain_set_next(orphan, null);
 		}
-		const tail = this.get_last_note(main[0]) || main[main.length - 1];
-		await this.chain_concat_tfiles([tail, ...orphans]);
+		const tail = main[main.length - 1];
+		await this.chain_concat_tfiles([tail, ...orderedOrphans]);
 		return true;
 	}
 

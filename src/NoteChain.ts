@@ -3,19 +3,16 @@ import {
 } from 'obsidian';
 
 import NoteChainPlugin from "./plugin";
-import { LexoRank } from "lexorank";
 
 import { NoteChainFolderChildren } from './NoteChain/folderChildren';
 import { NoteChainNavigation } from './NoteChain/navigation';
 import { NoteChainChainOps } from './NoteChain/chainOps';
-import { NoteChainLexorank } from './NoteChain/lexorank';
 import { NoteChainMisc } from './NoteChain/misc';
 
 export interface NoteChain extends
 	NoteChainFolderChildren,
 	NoteChainNavigation,
 	NoteChainChainOps,
-	NoteChainLexorank,
 	NoteChainMisc {}
 
 export class NoteChain {
@@ -23,25 +20,17 @@ export class NoteChain {
 	app: App;
 	prev: string;
 	next: string;
-	fid: string;
-	nid: string;
 	children: { [key: string]: any };
-	LexoRank: any;
 
 	constructor(plugin: NoteChainPlugin,
 		prev = "PrevNote", next = "NextNote",
-		nid = "lexorank", fid = 'lexorank_folder'
 	) {
 		this.plugin = plugin;
 		this.app = plugin.app;
 		(window as any).nc = this.plugin;
 
-		this.LexoRank = LexoRank;
-
 		this.prev = prev;
 		this.next = next;
-		this.nid = nid;
-		this.fid = fid;
 		this.init_children();
 
 	}
@@ -64,6 +53,5 @@ applyMixins(NoteChain, [
 	NoteChainFolderChildren,
 	NoteChainNavigation,
 	NoteChainChainOps,
-	NoteChainLexorank,
 	NoteChainMisc,
 ]);

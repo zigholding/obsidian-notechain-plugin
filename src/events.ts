@@ -21,6 +21,9 @@ const onDeleteFile = (plugin: NoteChainPlugin) => {
 		'delete',
 		async (file: TFile) => {
 			await plugin.chain.chain_pop_node(file);
+			if (file.parent) {
+				plugin.chain.refresh_folder(file.parent);
+			}
 			await plugin.explorer.sort();
 		}
 	));
@@ -30,11 +33,13 @@ const onCreateFile = (plugin: NoteChainPlugin) => {
 	plugin.registerEvent(plugin.app.vault.on(
 		'create',
 		async (file: TAbstractFile) => {
+			if (file.parent) {
+				plugin.chain.refresh_folder(file.parent);
+			}
+			plugin.explorer.sort();
 			if (plugin.settings.notechain.auto_notechain && file instanceof TFile) {
 				plugin.schedule_auto_notechain(file);
 			}
-			await sleep(500);
-			plugin.explorer.sort(0, true);
 		}
 	));
 };
@@ -164,10 +169,12 @@ const onMetadataChanged = (plugin: NoteChainPlugin) => {
 					clearTimeout(plugin.timerId);
 				}
 				const timerId = setTimeout(async () => {
+					const folderPath = file.parent?.path ?? '';
+					if (plugin._autoNotechainBusy?.has(folderPath)) {
+						return;
+					}
 					if (file.parent) {
-						plugin.chain.children[file.parent.path] = plugin.chain.sort_tfiles_by_chain(
-							file.parent.children
-						);
+						plugin.chain.refresh_folder(file.parent);
 					}
 					plugin.explorer.sort(0, false);
 

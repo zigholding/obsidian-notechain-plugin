@@ -24,7 +24,6 @@
 	},
 	"dependencies": {
 		"js-yaml": "^4.1.0",
-		"lexorank": "^1.0.5",
 		"monkey-around": "^3.0.0",
 		"selfsigned": "^5.5.0",
 		"turndown": "^7.2.2",

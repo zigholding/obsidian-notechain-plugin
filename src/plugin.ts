@@ -49,6 +49,7 @@ export default class NoteChainPlugin extends Plugin {
 	httpServer: HTTPServer | null = null;
 	_autoNotechainTimers: Map<string, number> | null = null;
 	_autoNotechainPending: Map<string, TFile> | null = null;
+	_autoNotechainBusy: Set<string> | null = null;
 
 	/** 原 NCEditor API：与 `easyapi.editor` 相同 */
 	get editor(): EasyEditor {
@@ -230,15 +231,26 @@ export default class NoteChainPlugin extends Plugin {
 		if (!this.wordcount.filter(file)) { return; }
 		if (file.basename.contains('.sync-conflict')) { return; }
 
-		let notes: TFile[] = this.easyapi.file.get_brothers(file);
-		notes = notes.filter((x: TFile) =>
-			this.wordcount.filter(x) && !x.basename.contains('.sync-conflict')
-		);
-		if (notes.length == 0) { return; }
+		const folderPath = file.parent?.path ?? '';
+		this._autoNotechainBusy = this._autoNotechainBusy || new Set();
+		if (this._autoNotechainBusy.has(folderPath)) { return; }
+		this._autoNotechainBusy.add(folderPath);
+		try {
+			let notes: TFile[] = this.easyapi.file.get_brothers(file);
+			notes = notes.filter((x: TFile) =>
+				this.wordcount.filter(x) && !x.basename.contains('.sync-conflict')
+			);
+			if (notes.length == 0) { return; }
 
-		const changed = await this.chain.chain_fill_folder_orphans(file, notes);
-		if (changed) {
-			this.explorer?.sort();
+			const changed = await this.chain.chain_fill_folder_orphans(file, notes);
+			if (file.parent) {
+				this.chain.refresh_folder(file.parent);
+			}
+			if (changed) {
+				this.explorer?.sort();
+			}
+		} finally {
+			this._autoNotechainBusy.delete(folderPath);
 		}
 	}
 

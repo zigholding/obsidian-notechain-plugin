@@ -23,22 +23,23 @@ export class NoteChainFolderChildren {
 	}
 
 	init_children() {
-		this.children = {};
+		const next: { [key: string]: any } = {};
 		for (let f of this.plugin.easyapi.file.get_all_folders()) {
-			let tfiles = f.children;
+			let tfiles = f.children.slice();
 			if (this.plugin.explorer?.file_explorer) {
 				tfiles = this.sort_tfiles(
 					tfiles,
 					(this.plugin.explorer.file_explorer as any).sortOrder
 				);
 			}
-			(this.children as any)[f.path] = this.sort_tfiles_by_chain(tfiles);
+			next[f.path] = this.sort_tfiles_by_chain(tfiles);
 		}
+		this.children = next;
 	}
 
 	refresh_folder(tfolder: TFolder) {
 		if (tfolder?.children) {
-			let tfiles = tfolder.children;
+			let tfiles = tfolder.children.slice();
 			if (this.plugin.explorer.file_explorer) {
 				tfiles = this.sort_tfiles(
 					tfiles as any,
@@ -134,8 +135,6 @@ export class NoteChainFolderChildren {
 	}
 
 	sort_tfiles_by_chain(tfiles: Array<TAbstractFile>) {
-		// 1️⃣ 计算基准顺序：如果这些文件都在同一个文件夹下，
-		//    就使用该文件夹在 children 里已有的顺序作为“原始顺序”。
 		let baseOrder: TAbstractFile[] | null = null;
 		if (tfiles.length > 0) {
 			const parentPaths = new Set(
@@ -150,31 +149,47 @@ export class NoteChainFolderChildren {
 				}
 			}
 		}
+		const orderSrc = baseOrder ?? tfiles;
+		const indexOfInBase = (f: TAbstractFile) => {
+			const idx = orderSrc.indexOf(f);
+			return idx >= 0 ? idx : Number.MAX_SAFE_INTEGER;
+		};
 
-		let notes = tfiles.filter(f => f instanceof TFile ) as TFile[];
+		const notes = (tfiles.filter(f => f instanceof TFile) as TFile[])
+			.slice()
+			.sort((a, b) => {
+				const d = indexOfInBase(a) - indexOfInBase(b);
+				return d !== 0 ? d : a.name.localeCompare(b.name);
+			});
 
-		if (baseOrder) {
-			const indexOfInBase = (f: TAbstractFile) => {
-				const idx = baseOrder!.indexOf(f);
-				return idx >= 0 ? idx : Number.MAX_SAFE_INTEGER;
-			};
-			notes = notes.sort((a, b) => indexOfInBase(a) - indexOfInBase(b));
-		}
-		
-		let res: TAbstractFile[] = [];
-		let ctfiles: TFile[] = [];
-		while (notes.length > 0) {
-			let note = notes[0];
-			if (note instanceof TFile) {
-				let xchain = this.get_chain(note, -1, -1);
-				for (let x of xchain) {
-					if (notes.contains(x)) {
-						ctfiles.push(x);
-						notes.remove(x);
-					}
+		const remaining = new Set(notes);
+		const segments: TFile[][] = [];
+		for (const note of notes) {
+			if (!remaining.has(note)) { continue; }
+			const xchain = this.get_chain(note, -1, -1) as TFile[];
+			const segment: TFile[] = [];
+			for (const x of xchain) {
+				if (remaining.has(x)) {
+					segment.push(x);
+					remaining.delete(x);
 				}
 			}
+			if (segment.length === 0) {
+				remaining.delete(note);
+				segments.push([note]);
+			} else {
+				segments.push(segment);
+			}
 		}
+		segments.sort((a, b) => {
+			const ia = Math.min(...a.map(indexOfInBase));
+			const ib = Math.min(...b.map(indexOfInBase));
+			if (ia !== ib) { return ia - ib; }
+			return (a[0]?.name ?? '').localeCompare(b[0]?.name ?? '');
+		});
+
+		let res: TAbstractFile[] = [];
+		let ctfiles: TFile[] = segments.flat();
 
 		res.push(...ctfiles);
 		let canvas = res.filter(f => (f instanceof TFile) && (['canvas','base'].contains(f.extension)))
