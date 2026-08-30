@@ -387,6 +387,53 @@ body:has(.notechain-modal-container) .menu {
   text-overflow: ellipsis;
 }
 
+/* gallery：大图 + 音频 + 标题；悬停标题才弹出细节 */
+.nc-card-container[data-layout="gallery"] .nc-card-media {
+  height: auto;
+  flex: 1;
+}
+
+.nc-card-container[data-layout="gallery"] .nc-card-info {
+  position: relative;
+  flex: none;
+  padding: 8px 10px 10px;
+  z-index: 2;
+}
+
+.nc-card-container[data-layout="gallery"] .nc-card-name-has-detail {
+  cursor: help;
+}
+
+.nc-card-container[data-layout="gallery"] .nc-card-detail {
+  display: none;
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: calc(100% - 2px);
+  max-height: 140px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--background-primary) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 80%, transparent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: unset;
+  white-space: pre-line;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.nc-card-container[data-layout="gallery"] .nc-card-info:has(.nc-card-name:hover) .nc-card-detail,
+.nc-card-container[data-layout="gallery"] .nc-card-info:has(.nc-card-detail:hover) .nc-card-detail {
+  display: block;
+  pointer-events: auto;
+}
+
+.nc-card-container[data-layout="gallery"] .nc-card-btn.nc-card-text-only .nc-card-info {
+  justify-content: center;
+}
+
 /* 无封面图：仅标题 + 副文，标题占主导 */
 .nc-card-btn.nc-card-text-only {
   justify-content: center;

@@ -39,6 +39,12 @@ export interface CardNavigatorOptions {
     /** 是否在卡片上显示音频条；默认 true */
     showAudio?: boolean;
     /**
+     * 卡片布局：
+     * - `card`：图片、音频、标题、细节（默认）
+     * - `gallery`：图片、音频、标题；鼠标悬停标题时才显示细节
+     */
+    layout?: "card" | "gallery";
+    /**
      * 放大预览中删除媒体后回调（文件已尝试删除、卡片数据已更新）。
      * 用于同步外部数据源。
      */
@@ -64,6 +70,7 @@ const DEFAULT_OPTIONS: ResolvedCardNavigatorOptions = {
     searchPlaceholder: "🔍 输入关键词搜索...",
     imageFit: "cover",
     showAudio: true,
+    layout: "card",
 };
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif)(\?.*)?$/i;
@@ -409,6 +416,7 @@ export class CardNavigatorModal extends Modal {
 		container.style.setProperty("--nc-card-min-width", `${this.options.cardWidth}px`);
 		container.style.setProperty("--nc-card-height", `${this.options.cardHeight}px`);
 		container.setAttr("data-image-fit", this.options.imageFit);
+		container.setAttr("data-layout", this.options.layout);
 
 		// 图片懒加载观察者：仅当封面进入（或临近）视口时才读取，避免上万卡片时一次性读图卡顿
 		this.setupMediaObserver(scrollArea);
@@ -575,8 +583,14 @@ export class CardNavigatorModal extends Modal {
 		}
 
 		const info = card.createDiv({ cls: "nc-card-info" });
-		this.renderStyledElement(info.createDiv(), item.name, "nc-card-name");
-		if (item.detail) this.renderStyledElement(info.createDiv(), item.detail, "nc-card-detail");
+		const nameEl = info.createDiv();
+		this.renderStyledElement(nameEl, item.name, "nc-card-name");
+		if (item.detail) {
+			this.renderStyledElement(info.createDiv(), item.detail, "nc-card-detail");
+			if (this.options.layout === "gallery") {
+				nameEl.addClass("nc-card-name-has-detail");
+			}
+		}
 
 		card.onclick = (e) => {
 			const target = e.target as HTMLElement;
