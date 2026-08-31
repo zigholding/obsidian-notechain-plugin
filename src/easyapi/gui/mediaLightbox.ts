@@ -37,6 +37,8 @@ export interface MediaLightboxOptions<T> {
 	getMeta: (item: T, index: number, items: T[]) => MediaLightboxMeta;
 	onContextAction?: (action: "delete" | "reveal", item: T) => void | Promise<void>;
 	onClosed?: (item: T) => void;
+	/** 灯箱内视频/音频真正开始播放时（用户点了控件）。用来停掉页内录音，保证同时只有一路声音。 */
+	onPlaybackStart?: () => void;
 	/** 左右切换是否循环；默认 false */
 	wrapNavigation?: boolean;
 	/**
@@ -137,6 +139,7 @@ export class MediaLightbox<T> {
 		this.videoEl.setAttr("preload", "metadata");
 		this.videoEl.hide();
 		this.videoEl.onclick = (e) => e.stopPropagation();
+		this.videoEl.addEventListener("play", () => this.options.onPlaybackStart?.());
 
 		this.audioPanelEl = this.stageEl.createDiv({ cls: "nc-cal-lightbox-audio-panel" });
 		this.audioIconEl = this.audioPanelEl.createDiv({ cls: "nc-cal-lightbox-audio-icon" });
@@ -145,6 +148,7 @@ export class MediaLightbox<T> {
 		this.audioEl = this.audioPanelEl.createEl("audio", { cls: "nc-cal-lightbox-audio" });
 		this.audioEl.setAttr("controls", "true");
 		this.audioEl.setAttr("preload", "metadata");
+		this.audioEl.addEventListener("play", () => this.options.onPlaybackStart?.());
 		this.audioPanelEl.hide();
 
 		const nextBtn = frame.createDiv({ cls: "nc-cal-lightbox-nav nc-cal-lightbox-next", attr: { "aria-label": "Next" } });
@@ -530,6 +534,12 @@ export class MediaLightbox<T> {
 		if (next < 0 || next >= this.items.length) return;
 		this.index = next;
 		void this.showCurrent();
+	}
+
+	/** 暂停灯箱内视频/音频，不卸 src（切图时页内录音可继续；点新录音时停掉灯箱声音） */
+	pausePlayback(): void {
+		this.videoEl.pause();
+		this.audioEl.pause();
 	}
 
 	private stopPlayback(): void {

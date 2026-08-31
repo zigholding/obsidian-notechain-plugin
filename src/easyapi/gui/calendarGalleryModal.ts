@@ -361,6 +361,7 @@ export class CalendarGalleryModal extends Modal {
 	private playingAudioWrap: HTMLElement | null = null;
 	private playingAudioRestore: (() => void) | null = null;
 	private playingAudioPath: string | null = null;
+	private audioPlaySession = 0;
 	private currentQuery: string;
 	private queryInputEl!: HTMLInputElement;
 	private queryDebounceTimer: number | null = null;
@@ -404,6 +405,7 @@ export class CalendarGalleryModal extends Modal {
 				};
 			},
 			onContextAction: (action, entry) => this.handleLightboxContextAction(action, entry),
+			onPlaybackStart: () => this.stopCardAudio(),
 			wrapNavigation: false,
 			closeOnEscape: true,
 		});
@@ -721,7 +723,6 @@ export class CalendarGalleryModal extends Modal {
 				);
 			}
 		}
-		this.stopCardAudio();
 		this.mediaLightbox?.open(list, idx >= 0 ? idx : 0);
 	}
 
@@ -1586,6 +1587,7 @@ export class CalendarGalleryModal extends Modal {
 	}
 
 	private stopCardAudio(): void {
+		this.audioPlaySession++;
 		if (this.cardAudioBlobUrl) {
 			URL.revokeObjectURL(this.cardAudioBlobUrl);
 			this.cardAudioBlobUrl = null;
@@ -1611,14 +1613,17 @@ export class CalendarGalleryModal extends Modal {
 			return;
 		}
 
+		this.mediaLightbox?.pausePlayback();
 		this.stopCardAudio();
+		const session = this.audioPlaySession;
 
 		const url = await this.resolveMediaUrl(audio.path);
-		if (!url || this.closed) return;
+		if (session !== this.audioPlaySession || !url || this.closed) return;
 
 		if (url.startsWith("blob:")) this.cardAudioBlobUrl = url;
 
 		const el = this.getCardAudioEl();
+		el.pause();
 		el.src = url;
 		el.load();
 		try {
@@ -1626,6 +1631,7 @@ export class CalendarGalleryModal extends Modal {
 		} catch {
 			return;
 		}
+		if (session !== this.audioPlaySession) return;
 
 		this.playingAudioWrap = wrap;
 		this.playingAudioRestore = restoreLabel;

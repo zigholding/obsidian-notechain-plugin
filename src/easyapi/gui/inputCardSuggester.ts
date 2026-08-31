@@ -262,6 +262,7 @@ export class CardNavigatorModal extends Modal {
 	private playingAudioWrap: HTMLElement | null = null;
 	private playingAudioRestore: (() => void) | null = null;
 	private playingAudioPath: string | null = null;
+	private audioPlaySession = 0;
 	/** 当前卡片列表视图，用于关闭预览后定位到最后查看的卡片 */
 	private listView: {
 		scrollArea: HTMLElement;
@@ -314,6 +315,7 @@ export class CardNavigatorModal extends Modal {
             },
             onClosed: (entry) => this.revealCardInList(entry.item),
             onContextAction: (action, entry) => this.handleLightboxContextAction(action, entry),
+            onPlaybackStart: () => this.stopCardAudio(),
             wrapNavigation: true,
             closeOnEscape: true,
         });
@@ -801,6 +803,7 @@ export class CardNavigatorModal extends Modal {
 	}
 
 	private stopCardAudio(): void {
+		this.audioPlaySession++;
 		if (this.cardAudioBlobUrl) {
 			URL.revokeObjectURL(this.cardAudioBlobUrl);
 			this.cardAudioBlobUrl = null;
@@ -826,14 +829,17 @@ export class CardNavigatorModal extends Modal {
 			return;
 		}
 
+		this.mediaLightbox?.pausePlayback();
 		this.stopCardAudio();
+		const session = this.audioPlaySession;
 
 		const url = await this.resolveCardMediaSrc(stripFileUrl(normalizeMediaPath(audio.path)));
-		if (!url || !wrap.isConnected) return;
+		if (session !== this.audioPlaySession || !url || !wrap.isConnected) return;
 
 		if (url.startsWith("blob:")) this.cardAudioBlobUrl = url;
 
 		const el = this.getCardAudioEl();
+		el.pause();
 		el.src = url;
 		el.load();
 		try {
@@ -841,6 +847,7 @@ export class CardNavigatorModal extends Modal {
 		} catch {
 			return;
 		}
+		if (session !== this.audioPlaySession) return;
 
 		this.playingAudioWrap = wrap;
 		this.playingAudioRestore = restoreLabel;
@@ -1056,7 +1063,6 @@ export class CardNavigatorModal extends Modal {
 			}
 		}
 		if (idx < 0) idx = entries.findIndex((e) => e.item === target);
-		this.stopCardAudio();
 		this.mediaLightbox?.open(entries, idx >= 0 ? idx : 0);
 	}
 
