@@ -397,6 +397,7 @@ body:has(.notechain-modal-container) .menu {
   position: relative;
   flex: none;
   padding: 8px 10px 10px;
+  overflow: visible;
   z-index: 2;
 }
 

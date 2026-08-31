@@ -1,6 +1,7 @@
 # vscode
 .vscode 
 
+context
 # Intellij
 *.iml
 .idea

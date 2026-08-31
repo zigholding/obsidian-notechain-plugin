@@ -586,9 +586,13 @@ export class CardNavigatorModal extends Modal {
 		const nameEl = info.createDiv();
 		this.renderStyledElement(nameEl, item.name, "nc-card-name");
 		if (item.detail) {
-			this.renderStyledElement(info.createDiv(), item.detail, "nc-card-detail");
+			const detailEl = info.createDiv();
+			this.renderStyledElement(detailEl, item.detail, "nc-card-detail");
 			if (this.options.layout === "gallery") {
 				nameEl.addClass("nc-card-name-has-detail");
+				// 避免浏览器原生 title 提示盖住细节浮层（原生提示显示的是标题文本）
+				nameEl.removeAttribute("title");
+				detailEl.removeAttribute("title");
 			}
 		}
 
@@ -1363,6 +1367,6 @@ export class CardNavigatorModal extends Modal {
     }
 }
 
-export async function openCardNavigator(data: CardItem[], options?: CardNavigatorOptions) {
+export async function openCardNavigator(this: { app: App }, data: CardItem[], options?: CardNavigatorOptions) {
     return new CardNavigatorModal(this.app, data, options).openAndWait();
 }

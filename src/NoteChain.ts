@@ -31,6 +31,7 @@ export class NoteChain {
 
 		this.prev = prev;
 		this.next = next;
+		this.children = {};
 		this.init_children();
 
 	}

@@ -39,8 +39,11 @@ export class NoteChainFolderChildren {
 
 	refresh_folder(tfolder: TFolder) {
 		if (tfolder?.children) {
+			if (!this.children) {
+				this.children = {};
+			}
 			let tfiles = tfolder.children.slice();
-			if (this.plugin.explorer.file_explorer) {
+			if (this.plugin.explorer?.file_explorer) {
 				tfiles = this.sort_tfiles(
 					tfiles as any,
 					(this.plugin.explorer.file_explorer as any).sortOrder
@@ -60,10 +63,10 @@ export class NoteChainFolderChildren {
 
 	sort_folders_by_mtime(folders: Array<TFolder>, reverse = true) {
 		function ufunc(f: TFolder) {
-			return Math.max(
-				...f.children.filter((f: TFile) => f.basename).map((f: TFile) => f.stat
-					.mtime)
-			)
+			const mtimes = f.children
+				.filter((child): child is TFile => child instanceof TFile)
+				.map((file) => file.stat.mtime);
+			return mtimes.length > 0 ? Math.max(...mtimes) : 0;
 		}
 		let res = folders.sort((a, b) => ufunc(a) - ufunc(b));
 		if (reverse) {
@@ -144,7 +147,7 @@ export class NoteChainFolderChildren {
 			);
 			if (parentPaths.size === 1) {
 				const p = Array.from(parentPaths)[0];
-				if (this.children[p]) {
+				if (this.children?.[p]) {
 					baseOrder = this.children[p];
 				}
 			}
