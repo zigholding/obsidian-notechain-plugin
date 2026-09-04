@@ -6,7 +6,7 @@ import NoteChainPlugin from '../plugin';
 import { strings } from './strings';
 import { getWebViewerPartition, installWebviewTlsTrust } from '../server/tlsWebviewTrust';
 
-async function restartHttpServer(plugin: NoteChainPlugin): Promise<void> {
+export async function restartHttpServer(plugin: NoteChainPlugin): Promise<void> {
 	const settings = plugin.settings.notechain;
 	if (!plugin.httpServer) return;
 	await plugin.httpServer.stop();

@@ -2,6 +2,7 @@ import {
 	App, Editor, MarkdownView, Modal, Notice,
 	CachedMetadata,
 	Plugin,
+	Platform,
 	TAbstractFile,
 	moment,
 	TFile, TFolder
@@ -26,8 +27,6 @@ import { getWebViewerPartition, installWebviewTlsTrust } from './server/tlsWebvi
 import { DailyJob } from './daily_job';
 import { WebViewerLLMModule } from './WebViewerLLM/WebViewerLLMModule';
 import { moveSelectedNotesAsNext } from './NoteChain/chainInsert';
-
-let path = require('path');
 
 export default class NoteChainPlugin extends Plugin {
 	settings!: any;
@@ -106,9 +105,10 @@ export default class NoteChainPlugin extends Plugin {
 		this.webviewerllm = new WebViewerLLMModule(this);
 
 		// HTTP/HTTPS 仅桌面端（依赖 Node crypto / fs；selfsigned 在 mobile 会因 webcrypto 崩溃）
-		if (!this.easyapi.isMobile) {
+		if (Platform.isDesktopApp) {
+			const nodePath = require("path") as typeof import("path");
 			const vaultRoot = (this.app.vault.adapter as any).basePath as string;
-			const configDirAbs = path.join(vaultRoot, this.app.vault.configDir);
+			const configDirAbs = nodePath.join(vaultRoot, this.app.vault.configDir);
 			this.httpServer = new HTTPServer(
 				this.app,
 				this.easyapi.tpl,

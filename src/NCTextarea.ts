@@ -9,6 +9,7 @@ import {
 } from 'obsidian';
 
 import NoteChainPlugin from "./plugin";
+import { encodeOctets } from "./easyapi/octetText";
 
 /** textarea 内 `[[` 笔记待选浮窗 */
 class TextareaWikiLinkSuggest extends MarkdownRenderChild {
@@ -209,13 +210,7 @@ export class NCTextarea {
 	}
 
 	arrayBufferToBase64(buffer: ArrayBuffer) {
-		let binary = '';
-		let bytes = new Uint8Array(buffer);
-		let len = bytes.byteLength;
-		for (let i = 0; i < len; i++) {
-			binary += String.fromCharCode(bytes[i]);
-		}
-		return window.btoa(binary);
+		return encodeOctets(buffer);
 	}
 	async registerMarkdownCodeBlockProcessor(field = 'textarea') {
 		let nc = this.plugin

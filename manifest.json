@@ -1,8 +1,8 @@
 {
 	"id": "note-chain",
 	"name": "Note Chain",
-	"version": "2.1.1",
-	"minAppVersion": "1.7.7",
+	"version": "2.1.2",
+	"minAppVersion": "1.13.6",
 	"description": "File sorting and hierarchical indentation display in the File Explorer. MCP Server, easyapi, and more.",
 	"author": "ZigHolding",
 	"isDesktopOnly": false

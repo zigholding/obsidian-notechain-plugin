@@ -5,6 +5,7 @@ import { App, View, WorkspaceLeaf, TFile, TFolder, TAbstractFile } from 'obsidia
 import { CardNavigatorOptions, type CardItem } from './gui/inputCardSuggester'
 
 import { EasyAPI } from 'src/easyapi/easyapi'
+import { encodeOctets } from './octetText'
 
 export class File {
 	app: App;
@@ -558,14 +559,7 @@ export class File {
 		tfile = this.get_tfile(tfile)
 		if (!tfile) { return null }
 		let buffer = await this.app.vault.readBinary(tfile)
-
-		let binary = '';
-		let bytes = new Uint8Array(buffer);
-		let len = bytes.byteLength;
-		for (let i = 0; i < len; i++) {
-			binary += String.fromCharCode(bytes[i]);
-		}
-		let text = window.btoa(binary);
+		let text = encodeOctets(buffer);
 		let bs64 = `data:image/png;base64,${text}`;
 		return bs64
 	}

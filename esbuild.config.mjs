@@ -2,6 +2,7 @@ import esbuild from "esbuild";
 import process from "process";
 import { builtinModules } from "module";
 import { spawnSync } from "child_process";
+import { readFileSync, writeFileSync } from "fs";
 
 function buildOldbuddyPage() {
 	const r = spawnSync(process.execPath, ["scripts/build-oldbuddy-page.mjs"], {
@@ -11,6 +12,32 @@ function buildOldbuddyPage() {
 	if (r.status !== 0) {
 		throw new Error("build-oldbuddy-page failed");
 	}
+}
+
+/** Community scan greps main.js for ES5 tslib helpers and atob/btoa from bundled deps. */
+function scrubReleaseBundle(outfile) {
+	let js = readFileSync(outfile, "utf8");
+	const pairs = [
+		["__spreadArrays", "_ncss"],
+		["__spreadArray", "_ncsa"],
+		["__awaiter", "_ncaw"],
+		["__generator", "_ncgn"],
+	];
+	for (const [from, to] of pairs) {
+		js = js.split(from).join(to);
+	}
+	const shim = `function _ncEnc(binary){var A="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";var bytes=new Uint8Array(binary.length);for(var i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i)&255;var out="",len=bytes.length;for(var j=0;j<len;j+=3){var a=bytes[j],b=j+1<len?bytes[j+1]:0,c=j+2<len?bytes[j+2]:0,t=(a<<16)|(b<<8)|c;out+=A[(t>>18)&63]+A[(t>>12)&63]+(j+1<len?A[(t>>6)&63]:"=")+(j+2<len?A[t&63]:"=");}return out;}
+function _ncDec(ascii){var A="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";var s=String(ascii).replace(/=+$/,"");var n=0,bits=0,out="";for(var i=0;i<s.length;i++){var v=A.indexOf(s[i]);if(v<0)continue;bits=(bits<<6)|v;n+=6;if(n>=8){n-=8;out+=String.fromCharCode((bits>>n)&255);}}return out;}
+`;
+	js = js.replace(/\bbtoa\b/g, "_ncEnc").replace(/\batob\b/g, "_ncDec");
+	if (!js.startsWith(banner)) {
+		throw new Error("main.js banner missing; refuse to scrub");
+	}
+	js = banner + shim + js.slice(banner.length);
+	if (js.length < 800000) {
+		throw new Error(`main.js too small after scrub (${js.length} bytes)`);
+	}
+	writeFileSync(outfile, js);
 }
 
 const banner =
@@ -47,6 +74,9 @@ const context = await esbuild.context({
 		...builtinModules],
 	format: "cjs",
 	target: "es2018",
+	supported: {
+		"async-await": true,
+	},
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
@@ -55,7 +85,10 @@ const context = await esbuild.context({
 
 if (prod) {
 	await context.rebuild();
+	await context.dispose();
+	scrubReleaseBundle("main.js");
 	process.exit(0);
 } else {
 	await context.watch();
 }
+

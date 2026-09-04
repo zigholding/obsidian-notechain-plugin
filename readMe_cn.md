@@ -35,3 +35,15 @@
 
 相关专题：[[NoteChain 右键命令]] · [[NoteChain 可视化笔记]] · [[NoteChain 和 LongForm的超强联动]] · [[NoteChain 关系]]
 
+## 隐私与网络
+
+本插件**不会**把整个库上传到作者自己的服务器。网络仅出现在你主动使用的功能里：
+
+- **Web viewer AI**（可选命令）：在 Obsidian Web Viewer 中打开/操作你已在用的站点，包括 `yuanbao.tencent.com`、`chatgpt.com`、`www.kimi.com`、`www.doubao.com`、`chat.deepseek.com`、`chatglm.cn`、`gemini.google.com`、`claude.ai`。流量走 Web Viewer（你自己的登录态）。
+- **本地 HTTP/HTTPS**（桌面，需在设置中开启）：只监听本机/你指定的局域网地址（MCP、Online、OldBuddy），不主动外联。
+- 打开 `/mcp/test` 时，测试页可能从 `cdn.jsdelivr.net` 加载 `js-yaml`。
+- OldBuddy 地图链接（需你点击）：OpenStreetMap、高德、百度。
+- 「智能打开笔记」可能根据元数据给出 GitHub / Hugging Face / arXiv 链接，只有你点选才会打开。
+
+封面图、textarea 背景等会在本地编码为 `data:` URL，不用于隐藏密钥。
+

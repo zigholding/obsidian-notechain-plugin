@@ -194,6 +194,18 @@ buttons:
 - Wiki-link autocomplete (`[[`) works inside the textarea;
 - Online vault can run button actions via `/online/api/textarea-exec`.
 
+## Privacy and network
+
+This plugin does **not** send your vault to a third-party backend of its own. Network use is limited to features you turn on:
+
+- **Web viewer AI** (optional commands): opens or drives pages you already use in Obsidian Web Viewer. Homepages include `yuanbao.tencent.com`, `chatgpt.com`, `www.kimi.com`, `www.doubao.com`, `chat.deepseek.com`, `chatglm.cn`, `gemini.google.com`, and `claude.ai`. Traffic stays in the Web Viewer session (your login/cookies).
+- **Local HTTP/HTTPS server** (desktop, off unless you enable it): listens on your machine (`127.0.0.1` / LAN IP you choose) for MCP, Online vault, and OldBuddy. It does not phone home.
+- **MCP test page** may load `js-yaml` from `cdn.jsdelivr.net` in the browser when you open `/mcp/test`.
+- **OldBuddy map links** (user-tapped): OpenStreetMap, Amap, Baidu Maps.
+- **Open note smarter** may offer GitHub / Hugging Face / arXiv links derived from note metadata; those open in a browser only if you choose them.
+
+Binary vault files (covers, textarea backgrounds) are encoded locally for `data:` URLs. No API keys are stored that way.
+
 ## Local HTTP Server (Desktop)
 
 Settings → **Note Chain** tab → enable the server. You can turn on HTTPS and/or HTTP independently.
