@@ -984,6 +984,7 @@ body:has(.notechain-modal-container) .menu {
   left: 0;
   top: 0;
   width: 100%;
+  box-sizing: border-box;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
   background: var(--background-primary);

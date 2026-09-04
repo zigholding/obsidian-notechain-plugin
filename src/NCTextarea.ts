@@ -32,17 +32,6 @@ class TextareaWikiLinkSuggest extends MarkdownRenderChild {
 		this.suggestionEl = document.body.createDiv({
 			cls: 'nc-textarea-inline-suggest',
 		});
-		Object.assign(this.suggestionEl.style, {
-			display: 'none',
-			position: 'fixed',
-			zIndex: '99999',
-			boxSizing: 'border-box',
-			overflowY: 'auto',
-			border: '1px solid var(--background-modifier-border)',
-			borderRadius: '8px',
-			background: 'var(--background-primary)',
-			boxShadow: '0 8px 20px rgba(0, 0, 0, 0.2)',
-		});
 
 		this.cacheNoteNames();
 		this.registerDomEvent(this.area, 'input', this.onSuggestTrigger);
@@ -79,7 +68,6 @@ class TextareaWikiLinkSuggest extends MarkdownRenderChild {
 		if (!this.suggestionEl) return;
 		this.suggestionEl.empty();
 		this.suggestionEl.removeClass('is-open');
-		this.suggestionEl.removeClass('is-open');
 	};
 
 	private positionSuggestionList = () => {
@@ -101,7 +89,6 @@ class TextareaWikiLinkSuggest extends MarkdownRenderChild {
 			top: `${top}px`,
 			width: `${Math.max(160, inputRect.width)}px`,
 			maxHeight: `${maxHeight}px`,
-			display: 'block',
 		});
 	};
 
@@ -118,15 +105,6 @@ class TextareaWikiLinkSuggest extends MarkdownRenderChild {
 			const itemEl = this.suggestionEl.createDiv({
 				cls: `nc-textarea-inline-suggest-item${index === this.selectedSuggestionIndex ? ' is-selected' : ''}`,
 				text: name,
-			});
-			Object.assign(itemEl.style, {
-				padding: '8px 10px',
-				borderBottom: '1px solid var(--background-modifier-border)',
-				cursor: 'pointer',
-				background:
-					index === this.selectedSuggestionIndex
-						? 'color-mix(in srgb, var(--interactive-accent) 14%, var(--background-primary))'
-						: '',
 			});
 			itemEl.addEventListener('mousedown', (evt) => {
 				evt.preventDefault();
