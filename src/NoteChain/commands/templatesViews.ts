@@ -88,7 +88,7 @@ export const cmd_open_note_in_modal = (plugin: NoteChainPlugin) => ({
 		
 		let note = await plugin.chain.sugguster_note();
 		if(note){
-			plugin.chain.open_note_in_modal(note.path);
+			await plugin.chain.open_note_in_modal(note.path);
 		}
     }
 });
@@ -100,9 +100,9 @@ export const cmd_open_note_in_view = (plugin: NoteChainPlugin) => ({
     callback: async () => {
 		let note = await plugin.chain.sugguster_note(null,0,false,true);
 		if(typeof note === 'string'){
-			plugin.chain.open_note_in_view(note);
+			await plugin.chain.open_note_in_view(note);
 		}else{
-			plugin.chain.open_note_in_view(note.path);
+			await plugin.chain.open_note_in_view(note.path);
 		}
     }
 });
@@ -137,7 +137,7 @@ export const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
 		if (/```js\s*(\/\/)?(templater|tpl)\n/.test(ctx)){
 			new Notice(`执行当前脚本：${cfile.basename}`)
 			flag = true;
-			plugin.easyapi.tpl.parse_templater(cfile.basename,true,null,-1)
+			void plugin.easyapi.tpl.parse_templater(cfile.basename,true,null,-1)
 		}
 		
 
@@ -157,13 +157,13 @@ export const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
 					config['enabledCssSnippets'].push(cfile.basename);
 					await (plugin.app.vault as any).writeJson(plugin.app.vault.configDir+'/'+'appearance.json',config);
 				}
-				plugin.utils.toogle_note_css(plugin.app,document,cfile.basename,false)
+				void plugin.utils.toogle_note_css(plugin.app,document,cfile.basename,false)
 			}
 		}
 
 
 		if(!flag){
-			plugin.chain.open_note_in_modal(cfile.path);
+			await plugin.chain.open_note_in_modal(cfile.path);
 		}
     }
 });

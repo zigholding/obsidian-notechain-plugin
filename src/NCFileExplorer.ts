@@ -22,16 +22,16 @@ export class NCFileExplorer{
 		this.plugin = plugin;
 		this.chain = plugin.chain;
 		this.app = plugin.app;
-		this.register();
+		void this.register();
 	}
 
 	async register(){
 		await this.waitForFileExplorer();
 		await this.patchFileExplorer();
 		try {			
-			this.sort(0,true);
+			await this.sort(0,true);
 			this.set_display_text()
-			this.set_fileitem_style()
+			await this.set_fileitem_style()
 			
 		} catch (error) {
 			
@@ -87,7 +87,7 @@ export class NCFileExplorer{
 								}
 								// 需要先执行original.call(this,...args);
 								setTimeout(() => {
-									nc.chain.chain_set_next_files(tfiles,target,true);;
+									void nc.chain.chain_set_next_files(tfiles,target,true);
 								}, 100);
 								
 							}
@@ -97,7 +97,7 @@ export class NCFileExplorer{
 						}
 					}
 					if(nc.settings.isdraged){
-						move_file(dragManager);
+						void move_file(dragManager);
 					}
 					
 					original.call(this,...args);
@@ -206,7 +206,7 @@ export class NCFileExplorer{
 
 			if(Object.keys(this.plugin.chain.children).length==0){
 				setTimeout(()=>{
-					this.sort(nsleep,true);
+					void this.sort(nsleep,true);
 				}, 3000);
 			}else{
 				(this.file_explorer as any).sort();

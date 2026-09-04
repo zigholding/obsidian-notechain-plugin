@@ -20,7 +20,7 @@ export const clear_inlinks = (plugin:NoteChainPlugin) => ({
 	name: plugin.strings.clear_inlinks,
 	icon:'unlink',
 	callback: () => {
-		plugin.clear_inlinks();
+		void plugin.clear_inlinks();
 	}
 });
 
@@ -29,7 +29,7 @@ export const move_file_to_another_folder = (plugin:NoteChainPlugin) => ({
 	name: plugin.strings.move_file_to_another_folder,
 	icon:'folder-tree',
 	callback: () => {
-		plugin.chain.cmd_move_file_to_another_folder();
+		void plugin.chain.cmd_move_file_to_another_folder();
 	}
 });
 
@@ -169,7 +169,7 @@ export const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 					if(dst){
 						new Notice('Exist:'+res+note.extension,3000);
 					}else{
-						nc.app.fileManager.renameFile(note,npath);
+						await nc.app.fileManager.renameFile(note,npath);
 					}
 				}
 			}

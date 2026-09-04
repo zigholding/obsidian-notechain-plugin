@@ -392,7 +392,7 @@ export default class InputPrompt extends Modal {
 	}
 
 	onOpen() {
-		super.onOpen();
+		void super.onOpen();
 
 		this.inputComponent.inputEl.focus();
 		this.inputComponent.inputEl.select();

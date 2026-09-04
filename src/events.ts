@@ -36,7 +36,7 @@ const onCreateFile = (plugin: NoteChainPlugin) => {
 			if (file.parent) {
 				plugin.chain.refresh_folder(file.parent);
 			}
-			plugin.explorer.sort();
+			await plugin.explorer.sort();
 			if (plugin.settings.notechain.auto_notechain && file instanceof TFile) {
 				plugin.schedule_auto_notechain(file);
 			}
@@ -57,8 +57,8 @@ const onRenameFile = (plugin: NoteChainPlugin) => {
 			}
 			oldFolder && plugin.chain.refresh_folder(oldFolder);
 			plugin.chain.refresh_tfile(file);
-			plugin.explorer.sort();
-			plugin.explorer.set_fileitem_style_of_file(file);
+			await plugin.explorer.sort();
+			await plugin.explorer.set_fileitem_style_of_file(file);
 		}
 	));
 };
@@ -114,7 +114,7 @@ const onFileMenuMoveAsNextNote = (plugin: NoteChainPlugin) => {
 									const dst = anchor.parent.path + '/' + file.name;
 									await plugin.app.fileManager.renameFile(file, dst);
 								}
-								plugin.explorer.sort();
+								await plugin.explorer.sort();
 							}
 						});
 				});
@@ -168,7 +168,8 @@ const onMetadataChanged = (plugin: NoteChainPlugin) => {
 				if (file == plugin.chain.current_note) {
 					clearTimeout(plugin.timerId);
 				}
-				const timerId = setTimeout(async () => {
+				const timerId = setTimeout(() => {
+					void (async () => {
 					const folderPath = file.parent?.path ?? '';
 					if (plugin._autoNotechainBusy?.has(folderPath)) {
 						return;
@@ -176,7 +177,7 @@ const onMetadataChanged = (plugin: NoteChainPlugin) => {
 					if (file.parent) {
 						plugin.chain.refresh_folder(file.parent);
 					}
-					plugin.explorer.sort(0, false);
+					await plugin.explorer.sort(0, false);
 
 					if (plugin.settings.notechain.field_of_display_text) {
 						const txt = plugin.explorer.get_display_text(file);
@@ -240,6 +241,7 @@ const onMetadataChanged = (plugin: NoteChainPlugin) => {
 						}
 					}
 
+				})();
 				}, 500);
 				if (file == plugin.chain.current_note) {
 					plugin.timerId = timerId;

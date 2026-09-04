@@ -102,7 +102,7 @@ export function renderNoteChainSettings(plugin: NoteChainPlugin, containerEl: HT
 				.onChange(async (value) => {
 					settings.isSortFileExplorer = value;
 					await plugin.saveSettings();
-					plugin.explorer.sort();
+					await plugin.explorer.sort();
 				})
 			);
 
@@ -113,7 +113,7 @@ export function renderNoteChainSettings(plugin: NoteChainPlugin, containerEl: HT
 				.onChange(async (value) => {
 					settings.isFolderFirst = value;
 					await plugin.saveSettings();
-					plugin.explorer.sort();
+					await plugin.explorer.sort();
 				})
 			);
 
@@ -124,7 +124,7 @@ export function renderNoteChainSettings(plugin: NoteChainPlugin, containerEl: HT
 				.onChange(async (value) => {
 					settings.isdraged = value;
 					await plugin.saveSettings();
-					plugin.explorer.sort();
+					await plugin.explorer.sort();
 				})
 			);
 
@@ -222,7 +222,7 @@ export function renderNoteChainSettings(plugin: NoteChainPlugin, containerEl: HT
 				.setValue(settings.field_of_background_color)
 				.onChange(async (value) => {
 					settings.field_of_background_color = value;
-					plugin.explorer.set_fileitem_style()
+					await plugin.explorer.set_fileitem_style()
 					await plugin.saveSettings();
 				}));
 

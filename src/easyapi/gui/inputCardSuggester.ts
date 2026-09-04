@@ -279,7 +279,7 @@ export class CardNavigatorModal extends Modal {
     }
 
     openAndWait(): Promise<CardItem | null> {
-        this.open();
+        void this.open();
         return new Promise((resolve) => { this.resolveResult = resolve; });
     }
 
@@ -314,7 +314,9 @@ export class CardNavigatorModal extends Modal {
                 };
             },
             onClosed: (entry) => this.revealCardInList(entry.item),
-            onContextAction: (action, entry) => this.handleLightboxContextAction(action, entry),
+            onContextAction: (action, entry) => {
+                void this.handleLightboxContextAction(action, entry);
+            },
             onPlaybackStart: () => this.stopCardAudio(),
             wrapNavigation: true,
             closeOnEscape: true,
@@ -678,7 +680,7 @@ export class CardNavigatorModal extends Modal {
 				} else {
 					imgEl!.dispatchEvent(new Event("error"));
 				}
-			});
+			}).catch(() => { /* media src resolve failed */ });
 		};
 
 		wrap.onclick = (e) => {

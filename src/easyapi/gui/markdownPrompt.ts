@@ -49,7 +49,7 @@ class MarkdownInputPrompt extends Modal {
 	}
 
 	onOpen(): void {
-		super.onOpen();
+		void super.onOpen();
 		this.modalEl.addClass("nc-markdown-input-modal");
 		this.titleEl.setText(this.options.title ?? (this.isZh ? "Markdown 输入" : "Markdown Input"));
 		this.contentEl.empty();

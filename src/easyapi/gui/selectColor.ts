@@ -170,7 +170,7 @@ export default class SelectColor extends Modal {
 	}
 
 	onOpen() {
-		super.onOpen();
+		void super.onOpen();
 		this.colorInputEl?.focus();
 	}
 

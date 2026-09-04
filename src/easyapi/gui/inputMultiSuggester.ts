@@ -72,7 +72,7 @@ export default class InputMultiSuggester<T = string> extends Modal {
 	}
 
 	onOpen(): void {
-		super.onOpen();
+		void super.onOpen();
 		this.modalEl.addClass("nc-multi-suggest-modal");
 		this.titleEl.setText(this.options.title ?? "");
 

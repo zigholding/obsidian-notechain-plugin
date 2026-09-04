@@ -9,7 +9,7 @@ export const cmd_open_notes_smarter = (plugin:NoteChainPlugin) => ({
 	name: plugin.strings.cmd_open_notes_smarter,
 	icon:'binoculars',
 	callback: () => {
-		plugin.open_note_smarter();
+		void plugin.open_note_smarter();
 	}
 })
 
@@ -18,7 +18,7 @@ export const cmd_open_note = (plugin:NoteChainPlugin) => ({
 	name: plugin.strings.cmd_open_note,
 	icol: 'square-arrow-out-up-right',
 	callback: () => {
-		plugin.chain.sugguster_open_note();
+		void plugin.chain.sugguster_open_note();
 	}
 });
 

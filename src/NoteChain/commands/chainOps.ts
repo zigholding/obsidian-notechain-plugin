@@ -20,7 +20,7 @@ export const chain_set_seq_note = (plugin:NoteChainPlugin) => ({
 	icon:'wind-arrow-down',
 	callback: async () => {
 		await plugin.chain.chain_suggester_tfiles();
-		plugin.explorer.sort();
+		await plugin.explorer.sort();
 	}
 });
 

@@ -64,12 +64,12 @@ export class NoteContentView extends ItemView {
 				e.preventDefault();
 				const link = target.getAttr('href');
 				if (link) {
-					this.app.workspace.openLinkText(link, this.sourcePath, true);
+					void this.app.workspace.openLinkText(link, this.sourcePath, true);
 				}
 			}
 		});
 
-		MarkdownRenderer.render(this.app, "", div, '', this);
+		await MarkdownRenderer.render(this.app, "", div, '', this);
 	}
 
 	async setContent(content: string, sourcePath: string, webUrl = '') {
@@ -174,7 +174,7 @@ dv.span(\`![[${sourcePath}]]\`);
 				e.preventDefault();
 				const link = target.getAttr('href');
 				if (link) {
-					this.app.workspace.openLinkText(link, this.sourcePath, true);
+					void this.app.workspace.openLinkText(link, this.sourcePath, true);
 				}
 			}
 		});
@@ -197,11 +197,10 @@ dv.span(\`![[${sourcePath}]]\`);
 							window.clearTimeout(this.debounceTimer);
 						}
 						this.debounceTimer = window.setTimeout(() => {
-							this.app.vault.read(modifiedFile).then((newContent) => {
-								this.setContent(newContent, sourcePath);
-								// 更新图标
+							void this.app.vault.read(modifiedFile).then((newContent) => {
+								void this.setContent(newContent, sourcePath);
 								this.updateIcon();
-							});
+							}).catch(() => { /* read failed */ });
 							this.debounceTimer = null;
 						}, 5000); // 5秒防抖
 					}

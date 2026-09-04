@@ -69,9 +69,9 @@ dv.span(\`![[${sourcePath}]]\`);
         // 创建 Component 实例并手动管理生命周期
         this.renderComponent = new Component();
         this.renderComponent.load();
-        MarkdownRenderer.render(this.app, this.content, container, this.sourcePath, this.renderComponent).then(x=>{
+        MarkdownRenderer.render(this.app, this.content, container, this.sourcePath, this.renderComponent).then(()=>{
             this.addClickListener(container);
-        });
+        }).catch(() => { /* render failed */ });
         
     }
 
@@ -236,7 +236,7 @@ dv.span(\`![[${sourcePath}]]\`);
                 event.preventDefault();
                 let href = target.getAttribute('href');
                 if (href) {
-                    this.openNoteInMainView(href);
+                    void this.openNoteInMainView(href);
                 }
             }
         });

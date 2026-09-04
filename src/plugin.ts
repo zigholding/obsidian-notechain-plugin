@@ -59,9 +59,11 @@ export default class NoteChainPlugin extends Plugin {
 	async onload() {
 		this.status = 'waiting'
 		this.app.workspace.onLayoutReady(
-			async () => {
-				await this._onload_();
-				this._after_loading_()
+			() => {
+				void (async () => {
+					await this._onload_();
+					void this._after_loading_();
+				})();
 			}
 		)
 	}
@@ -71,12 +73,12 @@ export default class NoteChainPlugin extends Plugin {
 			await new Promise(resolve => setTimeout(resolve, 100)); // 等待100ms再检查
 		}
 
-		(this.app as any).commands.executeCommandById(
+		void (this.app as any).commands.executeCommandById(
 			"dataview:dataview-force-refresh-views"
 		);
 
 		let target = await (this.app as any).plugins.getPlugin("obsidian-tasks-plugin");
-		target && target.cache.notifySubscribers();
+		target && void target.cache.notifySubscribers();
 
 		// new Notice('Note Chain is ready!',3000)
 		return (this.app as any).plugins?.plugins['note-chain']
@@ -183,13 +185,13 @@ export default class NoteChainPlugin extends Plugin {
 			return;
 		}
 		if (this.settings.notechain.refreshDataView) {
-			(this.app as any).commands.executeCommandById(
+			void (this.app as any).commands.executeCommandById(
 				"dataview:dataview-force-refresh-views"
-			)
+			);
 		}
 		if (this.settings.notechain.refreshTasks) {
 			let target = await (this.app as any).plugins.getPlugin("obsidian-tasks-plugin");
-			target && target.cache.notifySubscribers();
+			target && void target.cache.notifySubscribers();
 		}
 	}
 
@@ -205,12 +207,12 @@ export default class NoteChainPlugin extends Plugin {
 		this._autoNotechainPending.set(folderPath, file);
 		const prev = this._autoNotechainTimers.get(folderPath);
 		if (prev != null) { window.clearTimeout(prev); }
-		const timer = window.setTimeout(async () => {
+		const timer = window.setTimeout(() => {
 			this._autoNotechainTimers?.delete(folderPath);
 			const pending = this._autoNotechainPending?.get(folderPath);
 			this._autoNotechainPending?.delete(folderPath);
 			if (pending) {
-				await this.auto_notechain(pending);
+				void this.auto_notechain(pending);
 			}
 		}, delayMs);
 		this._autoNotechainTimers.set(folderPath, timer);
@@ -241,7 +243,7 @@ export default class NoteChainPlugin extends Plugin {
 				this.chain.refresh_folder(file.parent);
 			}
 			if (changed) {
-				this.explorer?.sort();
+				await this.explorer?.sort();
 			}
 		} finally {
 			this._autoNotechainBusy.delete(folderPath);

@@ -214,7 +214,7 @@ export class WordCount{
             }
             if(info.file){
                 this.timerId = setTimeout(()=>{
-                    this.update_word_count((info as any).file);
+                    void this.update_word_count((info as any).file);
                 }, 3000);
             }
         });

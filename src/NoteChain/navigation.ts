@@ -100,7 +100,7 @@ export class NoteChainNavigation {
 			});
 			let view = leaf.view as NoteContentView;
 
-			view.setContent(content, sourcePath, webUrl);
+			await view.setContent(content, sourcePath, webUrl);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			new Notice(`Error opening note in modal: ${message}`);
@@ -130,9 +130,9 @@ export class NoteChainNavigation {
 		}
 	}
 
-	open_note(tfile: TFile, revealFolder = false, collapse = true) {
+	async open_note(tfile: TFile, revealFolder = false, collapse = true) {
 		if (tfile) {
-			this.app.workspace.getLeaf().openFile(tfile);
+			await this.app.workspace.getLeaf().openFile(tfile);
 
 			if (revealFolder) {
 				if (collapse) {
@@ -146,7 +146,7 @@ export class NoteChainNavigation {
 	async sugguster_open_note() {
 		try {
 			let note = await this.sugguster_note();
-			this.open_note(note);
+			await this.open_note(note);
 		} catch (error) {
 		}
 	}
@@ -388,7 +388,7 @@ export class NoteChainNavigation {
 
 	open_prev_notes(tfile = this.current_note) {
 		let note = this.get_prev_note(tfile, true);
-		this.open_note(note);
+		void this.open_note(note);
 	}
 
 	get_next_note(tfile = this.current_note, across = false) {
@@ -456,7 +456,7 @@ export class NoteChainNavigation {
 
 	open_next_notes(tfile = this.current_note) {
 		let note = this.get_next_note(tfile, true);
-		this.open_note(note);
+		void this.open_note(note);
 	}
 
 	get_chain(tfile = this.current_note, prev = 10, next = 10, with_self = true,across=false) {

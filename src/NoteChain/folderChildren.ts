@@ -376,9 +376,9 @@ export class NoteChainFolderChildren {
 			}
 			prevs = prevs.filter(x => x['prev'] && this.plugin.easyapi.file.get_tfile(x['prev']) == anchor).map(x => x['offset']);
 			if (prevs.length == 0) {
-				this.set_folder_pre_info(tfolder, anchor, 0.5);
+				await this.set_folder_pre_info(tfolder, anchor, 0.5);
 			} else {
-				this.set_folder_pre_info(tfolder, anchor, Math.min(...prevs) * 1.001)
+				await this.set_folder_pre_info(tfolder, anchor, Math.min(...prevs) * 1.001)
 			}
 		}
 		await this.reset_offset_of_folder(tfolder);

@@ -404,7 +404,9 @@ export class CalendarGalleryModal extends Modal {
 					counter: dayPart ? `${dayPart} · 总 ${globalPart}` : globalPart,
 				};
 			},
-			onContextAction: (action, entry) => this.handleLightboxContextAction(action, entry),
+			onContextAction: (action, entry) => {
+				void this.handleLightboxContextAction(action, entry);
+			},
 			onPlaybackStart: () => this.stopCardAudio(),
 			wrapNavigation: false,
 			closeOnEscape: true,

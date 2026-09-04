@@ -14,16 +14,16 @@ export const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 		curr = await plugin.chain.get_folder_note(curr.parent,false);
 		if(curr==null){return;}
 
-		plugin.app.fileManager.processFrontMatter(
+		await plugin.app.fileManager.processFrontMatter(
 			curr,
 			async (fm) =>{
 				async function set_confluence_level(scenes:any,level=0){
 					if(Array.isArray(scenes)){
 						for(let scene of scenes){
 							if(Array.isArray(scene)){
-								set_confluence_level(scene,level+1);
+								await set_confluence_level(scene,level+1);
 							}else{
-								set_confluence_level(scene,level);
+								await set_confluence_level(scene,level);
 							}
 						}
 					}else if(typeof scenes === 'string'){
@@ -63,7 +63,7 @@ export const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 				let tfiles = plugin.easyapi.file.get_tfiles_of_folder(curr.parent).filter((f:any)=>!notes.contains(f));
 				notes = plugin.utils.concat_array([tfiles,notes]);
 				await plugin.chain.chain_concat_tfiles(notes);
-				plugin.explorer.sort();
+				await plugin.explorer.sort();
 			}
 		)
 	}

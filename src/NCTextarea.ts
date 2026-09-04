@@ -205,7 +205,7 @@ export class NCTextarea {
 	constructor(plugin: NoteChainPlugin) {
 		this.plugin = plugin;
 		this.app = plugin.app;
-		this.registerMarkdownCodeBlockProcessor()
+		void this.registerMarkdownCodeBlockProcessor()
 	}
 
 	arrayBufferToBase64(buffer: ArrayBuffer) {
@@ -338,7 +338,7 @@ export class NCTextarea {
 									await applyBtnStyle(xbtn, btnStyle);
 								}
 								xbtn.addEventListener('click', () => {
-									ufunc(area, source, el, ctx)
+									void Promise.resolve(ufunc(area, source, el, ctx));
 								});
 								continue
 							}
@@ -360,7 +360,7 @@ export class NCTextarea {
 									await applyBtnStyle(xbtn, btnStyle);
 								}
 								xbtn.addEventListener('click', () => {
-									(nc.app as any).commands.executeCommandById(fname)
+									void (nc.app as any).commands.executeCommandById(fname);
 								});
 								continue
 							}
@@ -416,9 +416,9 @@ export class NCTextarea {
 												}
 											},
 										});
-										nc.easyapi.tpl.parse_templater(fname, true, tplExtra);
+										void nc.easyapi.tpl.parse_templater(fname, true, tplExtra);
 									}else{
-										nc.chain.open_note_in_modal(tfile.path)
+										void nc.chain.open_note_in_modal(tfile.path);
 									}
 								});
 								continue
@@ -444,7 +444,7 @@ export class NCTextarea {
 
 	copy_area(area: HTMLTextAreaElement) {
 		area.select();
-		navigator.clipboard.writeText(area.value);
+		void navigator.clipboard.writeText(area.value);
 	}
 
 	log_area(area: HTMLTextAreaElement) {
