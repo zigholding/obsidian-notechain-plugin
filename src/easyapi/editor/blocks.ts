@@ -14,29 +14,67 @@ export class EasyEditorBlocks {
         return line.replace(/^(?:>[ \t]*)+/, '');
     }
 
+    private escape_regexp(s: string): string {
+        return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    /**
+     * Build a matcher for the fenced-code info string (text after ``` / ~~~).
+     * `string` is an exact language name; `RegExp` / `/pattern/` strings match as regex.
+     */
+    private compile_fence_info_re(
+        btype: string | RegExp | Array<string | RegExp>,
+    ): RegExp | null {
+        const items = Array.isArray(btype) ? btype : [btype];
+        const parts: string[] = [];
+        let flags = '';
+        for (const x of items) {
+            if (x instanceof RegExp) {
+                parts.push(`(?:${x.source.replace(/^\^/, '').replace(/\$$/, '')})`);
+                if (x.ignoreCase) { flags = 'i'; }
+                continue;
+            }
+            const s = (x ?? '').trim();
+            if (!s) { continue; }
+            const wrapped = /^\/(.+)\/([gimsuy]*)$/.exec(s);
+            if (wrapped) {
+                parts.push(`(?:${wrapped[1].replace(/^\^/, '').replace(/\$$/, '')})`);
+                if (wrapped[2].includes('i')) { flags = 'i'; }
+            } else {
+                parts.push(
+                    this.escape_regexp(s).replace(/\\\*/g, '.*').replace(/\\\?/g, '.'),
+                );
+            }
+        }
+        if (parts.length === 0) { return null; }
+        const alt = parts.length === 1 ? parts[0] : `(?:${parts.join('|')})`;
+        return new RegExp(`^${alt}[ \\t]*$`, flags);
+    }
+
     /**
      * Walk markdown lines and collect fenced blocks whose info string matches `fenceInfo`.
      * Supports fences nested in `>` quotes / callouts (each line may be prefixed with `>`).
      */
     private scan_fenced_blocks(
         content: string,
-        fenceInfo: string,
+        fenceInfo: RegExp,
         marks: string[] = ['```', '~~~'],
-    ): { inner: string; start: number; end: number }[] {
-        const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    ): { inner: string; fenced: string; start: number; end: number }[] {
+        const infoRe = new RegExp(fenceInfo.source, fenceInfo.flags.replace('g', ''));
         const lines = content.split(/\r?\n/);
-        const found: { inner: string; start: number; end: number }[] = [];
+        const found: { inner: string; fenced: string; start: number; end: number }[] = [];
         let i = 0;
         while (i < lines.length) {
             let hit = false;
             for (const mark of marks) {
                 const openRe = new RegExp(
-                    `^(?:>[ \\t]*)*${escapeRegExp(mark)}${fenceInfo}[ \\t]*$`
+                    `^(?:>[ \\t]*)*${this.escape_regexp(mark)}(.*)$`
                 );
-                if (!openRe.test(lines[i])) {
+                const open = openRe.exec(lines[i]);
+                if (!open || !infoRe.test(open[1])) {
                     continue;
                 }
-                const closeRe = new RegExp(`^(?:>[ \\t]*)*${escapeRegExp(mark)}[ \\t]*$`);
+                const closeRe = new RegExp(`^(?:>[ \\t]*)*${this.escape_regexp(mark)}[ \\t]*$`);
                 const body: string[] = [];
                 const start = i;
                 i++;
@@ -45,8 +83,11 @@ export class EasyEditorBlocks {
                     i++;
                 }
                 if (i < lines.length) {
+                    const openLine = this.strip_blockquote_prefix(lines[start]);
+                    const closeLine = this.strip_blockquote_prefix(lines[i]);
                     found.push({
                         inner: body.join('\n').trim(),
+                        fenced: [openLine, ...body, closeLine].join('\n'),
                         start,
                         end: i,
                     });
@@ -62,24 +103,28 @@ export class EasyEditorBlocks {
         return found;
     }
 
-    async extract_code_block(tfile: TFile | string, btype: string | string[]) {
+    /**
+     * Extract fenced code bodies whose info string matches `btype`.
+     * Exact name (`css`), glob (`dataview*`), RegExp, or `/pattern/` strings.
+     * `keep_fence`: include opening/closing fence lines (default false).
+     */
+    async extract_code_block(
+        tfile: TFile | string,
+        btype: string | RegExp | Array<string | RegExp>,
+        keep_fence = false,
+    ) {
         let xfile = this.ea.file.get_tfile(tfile);
         if (xfile) {
             tfile = await this.app.vault.cachedRead(xfile);
         }
         if (typeof (tfile) != 'string') { return [] }
 
-        const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const types = (Array.isArray(btype) ? btype : [btype])
-            .map(x => (x ?? '').trim())
-            .filter(Boolean);
-        if (types.length === 0) { return [] }
+        const fenceInfo = this.compile_fence_info_re(btype);
+        if (!fenceInfo) { return [] }
 
-        const fenceInfo = types.length === 1
-            ? escapeRegExp(types[0])
-            : `(?:${types.map(escapeRegExp).join('|')})`;
-
-        return this.scan_fenced_blocks(tfile, fenceInfo).map(b => b.inner);
+        return this.scan_fenced_blocks(tfile, fenceInfo).map(b =>
+            keep_fence ? b.fenced : b.inner,
+        );
     }
 
     /** `[[note|alias]]` 或整段匹配的正则 */
@@ -171,9 +216,11 @@ export class EasyEditorBlocks {
 
     /** Inline ```js //templater``` (and sibling info strings) → `<%* … -%>`, matching {@link extract_templater_block} so full-text `parse_commands` runs fenced tpl. Also handles fences inside `>` quotes / callouts. */
     expand_fenced_templater_in_full_text(content: string): string {
-        const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const types = ['js //templater', 'js templater', 'js tpl', 'js //tpl'];
-        const fenceInfo = `(?:${types.map(escapeRegExp).join('|')})`;
+        const fenceInfo = this.compile_fence_info_re(types);
+        if (!fenceInfo) {
+            return content;
+        }
         const lines = content.split(/\r?\n/);
         const blocks = this.scan_fenced_blocks(content, fenceInfo);
         if (blocks.length === 0) {

@@ -20,6 +20,12 @@ export class NoteChainNavigation {
 			let file = this.plugin.easyapi.file.get_tfile(notePath);
 			if (file instanceof TFile) {
 				let content = await this.app.vault.read(file);
+				let items = await this.plugin.editor.extract_code_block(
+					content, ['datacore*', 'dataview*'],true
+				);
+				if(items.length > 0){
+					content = items.join('\n\n\n');
+				}
 				let modal = new NoteContentModal(this.app, content, this.plugin, file.path);
 				modal.open();
 				return modal;

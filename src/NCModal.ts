@@ -37,6 +37,7 @@ dv.span(\`![[${sourcePath}]]\`);
                 `.trim()
             }
         }
+        
         this.content = content;
         this.sourcePath = sourcePath;
     }
