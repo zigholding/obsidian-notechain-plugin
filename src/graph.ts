@@ -241,7 +241,7 @@ export class MermaidGraph{
 
 		let nc = this.plugin;
 
-		let msg = "\`\`\`mermaid\nflowchart TD\n";
+		let msg = "```mermaid\nflowchart TD\n";
 		let chain = nc.chain.get_chain(tfile,N,N)
 		msg = msg + this.subgraph_chain(node,chain,'笔记链');
 
@@ -263,7 +263,7 @@ export class MermaidGraph{
 			'class 出链 出链C',
 			''
 		].join('\n')
-		msg = msg+"\`\`\`";
+		msg = msg+"```";
 		msg = msg.replace(
 			`class ${node.get_id(tfile)} internal-link;`,
 			`class ${node.get_id(tfile)} Anchor;`
@@ -305,7 +305,7 @@ export class MermaidGraph{
 
 	flowchart_cross(anchor:TFile,tfiles:Array<TFile>,subgraph='',color='#F05454',c_anchor='#40A578'){
 		let node = new NoteNode(tfiles[0],this.plugin);
-		let msg = "\`\`\`mermaid\nflowchart TD\n";
+		let msg = "```mermaid\nflowchart TD\n";
 		msg = msg + this.subgraph_cross(node,tfiles,subgraph);
 		msg = msg + node.notes2class();
 		msg = msg + [
@@ -314,7 +314,7 @@ export class MermaidGraph{
 			`class ${subgraph} ${subgraph}C`,
 			''
 		].join('\n')
-		msg = msg+"\`\`\`";
+		msg = msg+"```";
 		msg = msg.replace(
 			`class ${node.get_id(anchor)} internal-link;`,
 			`class ${node.get_id(anchor)} Anchor;`
@@ -361,7 +361,7 @@ export class MermaidGraph{
 			let items = this.get_subgrah_names(g,tfiles,name);
 			let subs = new Set(Object.values(items))
 
-			let msg = `\`\`\`mermaid\n---\ntitle: ${g}\n---\nflowchart TD\n`;
+			let msg = "```mermaid\n---\ntitle: " + g + "\n---\nflowchart TD\n";
 			for(let sub of subs){
 				if(sub==''){
 					for(let idx in items){
@@ -382,7 +382,7 @@ export class MermaidGraph{
 			}
 			msg = msg+'\n'+this.subgraph_cross(node,Object.keys(items).map(x=>tfiles[x]));
 			msg = msg+'\n'+node.notes2class();
-			msg = msg+"\n\`\`\`";
+			msg = msg+"\n```";
 			res.push(msg);
 		}
 		return res;
