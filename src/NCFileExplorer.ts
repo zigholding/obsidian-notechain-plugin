@@ -174,8 +174,8 @@ export class NCFileExplorer{
 		for(let key in items){
 			let item = items[key]
 			await this._set_display_text_(item,this.get_origin_text(item.file))
-			item.el.style.background = null
-			item.el.style.border = null
+			item.el.style.removeProperty('background')
+			item.el.style.removeProperty('border')
 		}
 		this.explorerPatches.forEach(unpatch => unpatch());
 	}
@@ -348,8 +348,8 @@ export class NCFileExplorer{
 				}
 			}
 			if(style==null){
-				item.el.style.background = null
-				item.el.style.border = null
+				item.el.style.removeProperty('background')
+				item.el.style.removeProperty('border')
 			}else if (typeof(style)=='string'){
 				item.el.style.background = style
 			}else if(typeof(style)=='object'){

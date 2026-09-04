@@ -788,8 +788,7 @@ export class CardNavigatorModal extends Modal {
 
 	private getCardAudioEl(): HTMLAudioElement {
 		if (!this.cardAudioEl) {
-			this.cardAudioEl = this.modalEl.createEl("audio");
-			this.cardAudioEl.style.display = "none";
+			this.cardAudioEl = this.modalEl.createEl("audio", { cls: "nc-hidden-media" });
 		}
 		return this.cardAudioEl;
 	}

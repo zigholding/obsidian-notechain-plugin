@@ -229,10 +229,7 @@ dv.span(\`![[${sourcePath}]]\`);
 	private renderWebUrl(container: HTMLElement, url: string) {
 		container.empty();
 		this.webviewEl = null;
-		container.style.display = 'flex';
-		container.style.flexDirection = 'column';
-		container.style.height = '100%';
-		container.style.overflow = 'hidden';
+		container.addClass('nc-note-content-web-host');
 
 		const port = this.plugin.settings?.notechain?.httpServerPort ?? 3000;
 		const nc = this.plugin.settings?.notechain;
@@ -256,10 +253,6 @@ dv.span(\`![[${sourcePath}]]\`);
 			webview.setAttribute('src', loadUrl);
 			webview.setAttribute('partition', this.getWebViewerPartition());
 			webview.setAttribute('allowpopups', 'true');
-			webview.style.flex = '1';
-			webview.style.width = '100%';
-			webview.style.height = '100%';
-			webview.style.border = 'none';
 			container.appendChild(webview);
 			this.webviewEl = webview;
 			return;
@@ -272,9 +265,6 @@ dv.span(\`![[${sourcePath}]]\`);
 				sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox',
 			},
 		});
-		iframe.style.flex = '1';
-		iframe.style.width = '100%';
-		iframe.style.border = 'none';
 	}
 
 	private setupInternalLinks(div: HTMLElement, isDatacoreContent: boolean) {

@@ -3,6 +3,7 @@ import {
     TFile,
     TFolder,
 } from 'obsidian';
+import { applyAdoptedNoteCss } from './easyapi/css';
 
 export function array_prefix_id(items:Array<any>,offset=1){
     let res = new Array();
@@ -151,21 +152,6 @@ export async function toogle_note_css(app:App,document:any,name:string,refresh=f
         }
     }
 
-    let link = document.getElementById(tfile.basename);
-    if(link && !refresh){
-        link.remove()
-    }else{
-        let css = await nc.easyapi.editor.extract_code_block(tfile,'css')
-        let inner = css.join('\n')
-        if(link){
-            link.innerHTML = inner
-        }else{
-            if(inner!=''){
-                let styleElement = document.createElement('style')
-                styleElement.innerHTML=inner;
-                styleElement.id = tfile.basename;
-                document.head.appendChild(styleElement);
-            }
-        }
-    }
+    const css = await nc.easyapi.editor.extract_code_block(tfile,'css')
+    applyAdoptedNoteCss(document, tfile.basename, css.join('\n'), !refresh);
 }

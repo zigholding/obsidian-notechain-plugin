@@ -498,6 +498,150 @@ body {
     }
 }
 
+#status-dot.is-online {
+    background: green;
+}
+
+#status-dot.is-offline {
+    background: gray;
+}
+
+#reference-picker,
+#tag-picker {
+    display: none;
+}
+
+#reference-picker.is-open,
+#tag-picker.is-open {
+    display: block;
+}
+
+.ob-history-sentinel {
+    height: 1px;
+    width: 100%;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+
+.ob-msg-time-hidden {
+    display: none;
+}
+
+.ob-image-preview-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    cursor: zoom-out;
+    pointer-events: auto;
+}
+
+.ob-image-preview-overlay img {
+    max-width: 90vw;
+    max-height: 90vh;
+    border-radius: 8px;
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+}
+
+body.ob-preview-lock {
+    overflow: hidden;
+}
+
+.ob-quick-cmd-menu {
+    position: absolute;
+    top: 34px;
+    left: 10px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    display: none;
+    flex-direction: column;
+    z-index: 1002;
+    min-width: 140px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    padding: 6px;
+}
+
+.ob-quick-cmd-menu.is-open {
+    display: flex;
+}
+
+.ob-quick-cmd-menu button {
+    padding: 8px;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    width: 100%;
+}
+
+.ob-quick-cmd-menu button:hover {
+    background: #f5f5f5;
+}
+
+.ob-upload-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.ob-upload-label {
+    background: #fff;
+    padding: 10px 14px;
+    border-radius: 8px;
+    max-width: 80%;
+    text-align: center;
+}
+
+.ob-upload-text {
+    margin-top: 10px;
+    padding: 8px 12px;
+    width: 60%;
+    border-radius: 20px;
+}
+
+.ob-upload-btns {
+    margin-top: 10px;
+}
+
+.ob-upload-video {
+    max-width: 80%;
+    max-height: 40%;
+    margin-top: 10px;
+    border-radius: 8px;
+    background: #000;
+}
+
+.ob-upload-audio {
+    width: min(80%, 320px);
+    margin-top: 10px;
+}
+
+.ob-upload-preview-img {
+    max-width: 80%;
+    max-height: 50%;
+    border-radius: 8px;
+}
+
+.ob-hidden {
+    display: none !important;
+}
+
+
 /* 文件菜单 */
         #file-menu {
             position: fixed;
@@ -674,12 +818,14 @@ function connectWS() {
     ws = new WebSocket((location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/oldbuddy/ws");
 
     ws.onopen = () => {
-        document.getElementById('status-dot').style.backgroundColor = 'green';
+        document.getElementById('status-dot').classList.add('is-online');
+        document.getElementById('status-dot').classList.remove('is-offline');
         document.getElementById('status-text').textContent = '在线';
     };
 
     ws.onclose = () => {
-        document.getElementById('status-dot').style.backgroundColor = 'gray';
+        document.getElementById('status-dot').classList.remove('is-online');
+        document.getElementById('status-dot').classList.add('is-offline');
         document.getElementById('status-text').textContent = '离线';
         // 尝试重连
         setTimeout(connectWS, 3000);
@@ -896,6 +1042,10 @@ function connectWS() {
   }
 
   window.renderMarkdown = renderMarkdown;
+  window.appendTrustedHtml = function (el, html) {
+    const parsed = new DOMParser().parseFromString(String(html || ""), "text/html");
+    el.append(...Array.from(parsed.body.childNodes));
+  };
 })();
 
 
@@ -928,7 +1078,7 @@ function ensureHistoryLoadSentinel() {
         el = document.createElement('div');
         el.id = HISTORY_SENTINEL_ID;
         el.setAttribute('aria-hidden', 'true');
-        el.style.cssText = 'height:1px;width:100%;flex-shrink:0;pointer-events:none;';
+        el.className = 'ob-history-sentinel';
         root.insertBefore(el, root.firstChild);
     } else if (root.firstChild !== el) {
         root.insertBefore(el, root.firstChild);
@@ -993,7 +1143,8 @@ let targetToastTimer = null;
 function autosizeTextInput(input) {
     if (!input) input = document.getElementById('text-input');
     if (!input) return;
-    input.style.height = 'auto';
+    const autoHeight = 'auto';
+    input.style.height = autoHeight;
     const cs = getComputedStyle(input);
     const lineH = parseFloat(cs.lineHeight) || 22;
     const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
@@ -1187,7 +1338,7 @@ function applyMessageTargetFilter() {
             const msgTs = Date.parse(node.dataset.timestamp || '');
             visible = Number.isFinite(msgTs) ? msgTs >= sinceMs : true;
         }
-        node.style.display = visible ? '' : 'none';
+        node.classList.toggle('ob-hidden', !visible);
     }
     refreshTargetBadges();
 }
@@ -1535,8 +1686,8 @@ function appendExtraText(contentDiv, msg) {
     extra.className = 'message-extra-text';
     if (typeof window.renderMarkdown === 'function') {
         extra.classList.add('markdown');
-        if (useMarkdownCard(msg)) extra.classList.add('markdown-card');
-        extra.innerHTML = window.renderMarkdown(msg.extra_text);
+        if (useMarkdownCard(msg))         extra.classList.add('markdown-card');
+        window.appendTrustedHtml(extra, window.renderMarkdown(msg.extra_text));
     } else {
         extra.textContent = msg.extra_text;
     }
@@ -1678,7 +1829,7 @@ function appendMarkdownBody(contentDiv, text, msg) {
         contentDiv.classList.add('markdown');
         if (useMarkdownCard(msg)) contentDiv.classList.add('markdown-card');
         const body = document.createElement('div');
-        body.innerHTML = window.renderMarkdown(text);
+        window.appendTrustedHtml(body, window.renderMarkdown(text));
         contentDiv.appendChild(body);
     } else {
         const body = document.createElement('div');
@@ -1754,13 +1905,13 @@ function renderMessage(msg) {
             if (firstTime - tMs < FIVE_MIN) {
                 // 隐藏 firstElementChild 的时间
                 const oldTimeNode = first.querySelector('.message-time');
-                if (oldTimeNode) oldTimeNode.style.display = 'none';
+                if (oldTimeNode) oldTimeNode.classList.add('ob-msg-time-hidden');
             }
         } else if (tMs > lastTime) {
             // 向后插入（实时消息）
             if (tMs - lastTime < FIVE_MIN) {
                 // 隐藏当前消息的时间
-                timeDiv.style.display = 'none';
+                timeDiv.classList.add('ob-msg-time-hidden');
             }
         }
         // 中间插入（替换或乱序）保持默认时间显示
@@ -1805,18 +1956,18 @@ function refreshTargetBadges() {
     let prevTarget = null;
     const nodes = Array.from(getMessagesContainer().children);
     for (const node of nodes) {
-        if (node.style.display === 'none') continue;
+        if (node.classList.contains('ob-hidden')) continue;
         const badge = node.querySelector('.message-target');
         if (!badge) continue;
         const target = node.dataset.target || '';
         if (!target) {
-            badge.style.display = 'none';
+            badge.classList.add('ob-hidden');
             continue;
         }
         if (target === prevTarget) {
-            badge.style.display = 'none';
+            badge.classList.add('ob-hidden');
         } else {
-            badge.style.display = '';
+            badge.classList.remove('ob-hidden');
             prevTarget = target;
         }
     }
@@ -1838,30 +1989,11 @@ function showImagePreview(src) {
     // 创建遮罩层
     const overlay = document.createElement('div');
     overlay.id = 'image-preview-overlay';
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100vw';
-    overlay.style.height = '100vh';
-    overlay.style.background = 'rgba(0,0,0,0.8)';
-    overlay.style.display = 'flex';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.zIndex = '9999';
-    overlay.style.cursor = 'zoom-out';
-    overlay.style.pointerEvents = 'auto';  // 🔹 确保点击有效
+    overlay.className = 'ob-image-preview-overlay';
 
     // 创建放大图片
     const bigImg = document.createElement('img');
     bigImg.src = src;
-    bigImg.style.maxWidth = '90vw';
-    bigImg.style.maxHeight = '90vh';
-    bigImg.style.borderRadius = '8px';
-    bigImg.style.boxShadow = '0 0 12px rgba(255,255,255,0.4)';
-    bigImg.style.transition = 'transform 0.2s ease';
-    bigImg.style.cursor = 'zoom-out';
-    bigImg.style.userSelect = 'none';
-    bigImg.style.pointerEvents = 'auto';
 
     // 🔹 点击遮罩关闭
     overlay.addEventListener('click', (e) => {
@@ -1884,10 +2016,10 @@ function showImagePreview(src) {
     document.body.appendChild(overlay);
 
     // 🔹 禁止页面滚动（桌面端常见问题）
-    document.body.style.overflow = 'hidden';
+    document.body.classList.add('ob-preview-lock');
 
     overlay.addEventListener('remove', () => {
-        document.body.style.overflow = '';
+        document.body.classList.remove('ob-preview-lock');
     });
 }
 
@@ -2337,22 +2469,16 @@ async function loadQuickCommandsForTarget(target) {
 }
 
 function renderQuickCommandButtons(menu, cmds) {
-    menu.innerHTML = "";
+    menu.replaceChildren();
     cmds.forEach(cmd => {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.textContent = cmd.label;
         btn.dataset.cmdId = cmd.id;
         btn.dataset.cmdText = cmd.text;
-        btn.style.cssText = \`
-            padding:8px; border:none; background:transparent; text-align:left;
-            cursor:pointer; width:100%;
-        \`;
-        btn.onmouseover = () => btn.style.background = "#f5f5f5";
-        btn.onmouseout = () => btn.style.background = "transparent";
         btn.onclick = async (e) => {
             e.stopPropagation();
-            menu.style.display = "none";
+            menu.classList.remove("is-open");
             await sendQuickCommand(btn.dataset.cmdText, btn.dataset.cmdId);
         };
         menu.appendChild(btn);
@@ -2367,7 +2493,7 @@ async function refreshQuickCommandMenu(target) {
         renderQuickCommandButtons(quickCmdMenu, cmds);
     } catch (err) {
         console.error("[quick_commands] 刷新失败：", err);
-        quickCmdMenu.innerHTML = "";
+        quickCmdMenu.replaceChildren();
     }
 }
 
@@ -2387,11 +2513,7 @@ async function createQuickCommandUI() {
 
     const menu = document.createElement("div");
     menu.id = "quick-cmd-menu";
-    menu.style.cssText = \`
-        position:absolute; top:34px; left:10px; background:#fff; border:1px solid #ccc;
-        border-radius:6px; display:none; flex-direction:column; z-index:1002; min-width:140px;
-        box-shadow:0 6px 18px rgba(0,0,0,0.12); padding:6px 6px;
-    \`;
+    menu.className = "ob-quick-cmd-menu";
     document.body.appendChild(menu);
     quickCmdMenu = menu;
 
@@ -2399,12 +2521,12 @@ async function createQuickCommandUI() {
 
     quickBtn.onclick = (e) => {
         e.stopPropagation();
-        menu.style.display = menu.style.display === "none" ? "block" : "none";
+        menu.classList.toggle("is-open");
         const rect = quickBtn.getBoundingClientRect();
         menu.style.left = \`\${Math.max(8, rect.left)}px\`;
     };
 
-    document.addEventListener("click", () => { menu.style.display = "none"; });
+    document.addEventListener("click", () => { menu.classList.remove("is-open"); });
     menu.addEventListener("click", (e) => e.stopPropagation());
 }
 
@@ -2468,7 +2590,7 @@ function ensureReferencePicker() {
     const el = document.createElement('div');
     el.id = 'reference-picker';
     el.setAttribute('role', 'listbox');
-    el.style.display = 'none';
+    el.classList.remove('is-open');
     document.body.appendChild(el);
     referencePicker = el;
     return el;
@@ -2489,14 +2611,14 @@ function hideReferencePicker() {
     referenceMentionRange = null;
     referenceHighlight = 0;
     if (referencePicker) {
-        referencePicker.style.display = 'none';
-        referencePicker.innerHTML = '';
+        referencePicker.classList.remove('is-open');
+        referencePicker.replaceChildren();
     }
 }
 
 function renderReferencePicker(items) {
     const picker = ensureReferencePicker();
-    picker.innerHTML = '';
+    picker.replaceChildren();
     referenceItems = items;
     referenceHighlight = 0;
 
@@ -2511,7 +2633,16 @@ function renderReferencePicker(items) {
         row.className = 'reference-picker-item';
         row.setAttribute('role', 'option');
         row.dataset.index = String(idx);
-        row.innerHTML = formatPickerRowHtml(item.label, item.text);
+        const label = document.createElement('span');
+        label.className = 'reference-picker-label';
+        label.textContent = item.label;
+        row.appendChild(label);
+        if (item.text && !pickerTextsEquivalent(item.label, item.text)) {
+            const sub = document.createElement('span');
+            sub.className = 'reference-picker-sub';
+            sub.textContent = item.text;
+            row.appendChild(sub);
+        }
         row.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -2521,7 +2652,7 @@ function renderReferencePicker(items) {
     });
 
     updateReferenceHighlight();
-    picker.style.display = 'block';
+    picker.classList.add('is-open');
     referencePickerOpen = true;
 }
 
@@ -2724,7 +2855,7 @@ function ensureTagPicker() {
     const el = document.createElement('div');
     el.id = 'tag-picker';
     el.setAttribute('role', 'listbox');
-    el.style.display = 'none';
+    el.classList.remove('is-open');
     document.body.appendChild(el);
     tagPicker = el;
     return el;
@@ -2745,14 +2876,14 @@ function hideTagPicker() {
     tagMentionRange = null;
     tagHighlight = 0;
     if (tagPicker) {
-        tagPicker.style.display = 'none';
-        tagPicker.innerHTML = '';
+        tagPicker.classList.remove('is-open');
+        tagPicker.replaceChildren();
     }
 }
 
 function renderTagPicker(items) {
     const picker = ensureTagPicker();
-    picker.innerHTML = '';
+    picker.replaceChildren();
     tagItems = items;
     tagHighlight = 0;
 
@@ -2767,7 +2898,17 @@ function renderTagPicker(items) {
         row.className = 'reference-picker-item';
         row.setAttribute('role', 'option');
         row.dataset.index = String(idx);
-        row.innerHTML = formatPickerRowHtml(formatTagLabel(item), item.text, true);
+        const primary = formatTagLabel(item);
+        const label = document.createElement('span');
+        label.className = 'reference-picker-label';
+        label.textContent = primary;
+        row.appendChild(label);
+        if (item.text && !pickerTextsEquivalent(primary, item.text, true)) {
+            const sub = document.createElement('span');
+            sub.className = 'reference-picker-sub';
+            sub.textContent = item.text;
+            row.appendChild(sub);
+        }
         row.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -2777,8 +2918,18 @@ function renderTagPicker(items) {
     });
 
     updateTagHighlight();
-    picker.style.display = 'block';
+    picker.classList.add('is-open');
     tagPickerOpen = true;
+}
+
+function normalizePickerText(s, stripHash = false) {
+    let x = String(s || '').trim();
+    if (stripHash) x = x.replace(/^#+/, '');
+    return x;
+}
+
+function pickerTextsEquivalent(a, b, stripHash = false) {
+    return normalizePickerText(a, stripHash) === normalizePickerText(b, stripHash);
 }
 
 function formatTagLabel(item) {
@@ -2926,17 +3077,7 @@ function initTagPicker() {
 
 function createUploadOverlay() {
     const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.background = 'rgba(0,0,0,0.6)';
-    overlay.style.display = 'flex';
-    overlay.style.flexDirection = 'column';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.zIndex = '2000';
+    overlay.className = 'ob-upload-overlay';
     return overlay;
 }
 
@@ -2944,17 +3085,14 @@ function appendExtraTextRow(overlay, placeholder) {
     const textInput = document.createElement('input');
     textInput.type = 'text';
         textInput.placeholder = placeholder || '输入说明文字...';
-    textInput.style.marginTop = '10px';
-    textInput.style.padding = '8px 12px';
-    textInput.style.width = '60%';
-    textInput.style.borderRadius = '20px';
+    textInput.className = 'ob-upload-text';
     overlay.appendChild(textInput);
     return textInput;
 }
 
 function appendSendCancelButtons(overlay, onSend, onCancel, failLabel) {
     const btnWrapper = document.createElement('div');
-    btnWrapper.style.marginTop = '10px';
+    btnWrapper.className = 'ob-upload-btns';
     const sendBtn = document.createElement('button');
     sendBtn.textContent = '发送';
     const cancelBtn = document.createElement('button');
@@ -2994,11 +3132,7 @@ function handleMediaUpload(fileOrBlob, kind, opts = {}) {
     const overlay = createUploadOverlay();
     const label = document.createElement('div');
     label.textContent = isVideo ? \`视频: \${file.name}\` : \`录音: \${file.name}\`;
-    label.style.background = '#fff';
-    label.style.padding = '10px 14px';
-    label.style.borderRadius = '8px';
-    label.style.maxWidth = '80%';
-    label.style.textAlign = 'center';
+    label.className = 'ob-upload-label';
     overlay.appendChild(label);
 
     const objectUrl = URL.createObjectURL(file);
@@ -3007,18 +3141,13 @@ function handleMediaUpload(fileOrBlob, kind, opts = {}) {
         video.controls = true;
         video.playsInline = true;
         video.src = objectUrl;
-        video.style.maxWidth = '80%';
-        video.style.maxHeight = '40%';
-        video.style.marginTop = '10px';
-        video.style.borderRadius = '8px';
-        video.style.background = '#000';
+        video.className = 'ob-upload-video';
         overlay.appendChild(video);
     } else {
         const audio = document.createElement('audio');
         audio.controls = true;
         audio.src = objectUrl;
-        audio.style.width = 'min(80%, 320px)';
-        audio.style.marginTop = '10px';
+        audio.className = 'ob-upload-audio';
         overlay.appendChild(audio);
     }
 
@@ -3086,83 +3215,58 @@ function initPasteImageHandler() {
 
 async function handleImageFile(file) {
     if (!file) return;
-    const previewOverlay = document.createElement('div');
-    previewOverlay.style.position = 'fixed'; previewOverlay.style.top = '0'; previewOverlay.style.left = '0';
-    previewOverlay.style.width = '100%'; previewOverlay.style.height = '100%';
-    previewOverlay.style.background = 'rgba(0,0,0,0.6)'; previewOverlay.style.display = 'flex';
-    previewOverlay.style.flexDirection = 'column'; previewOverlay.style.alignItems = 'center';
-    previewOverlay.style.justifyContent = 'center'; previewOverlay.style.zIndex = '2000';
+    const previewOverlay = createUploadOverlay();
 
     const img = document.createElement('img'); img.src = URL.createObjectURL(file);
-    img.style.maxWidth = '80%'; img.style.maxHeight = '50%'; img.style.borderRadius = '8px';
+    img.className = 'ob-upload-preview-img';
     previewOverlay.appendChild(img);
 
-    const textInput = document.createElement('input'); textInput.type = 'text'; textInput.placeholder = '输入文字...';
-    textInput.style.marginTop = '10px'; textInput.style.padding = '8px 12px'; textInput.style.width = '60%'; textInput.style.borderRadius = '20px';
-    previewOverlay.appendChild(textInput);
-
-    const btnWrapper = document.createElement('div'); btnWrapper.style.marginTop = '10px';
-    const sendBtn = document.createElement('button'); sendBtn.textContent = '发送';
-    const cancelBtn = document.createElement('button'); cancelBtn.textContent = '取消';
-    btnWrapper.appendChild(sendBtn); btnWrapper.appendChild(cancelBtn);
-    previewOverlay.appendChild(btnWrapper);
+    const textInput = appendExtraTextRow(previewOverlay, '输入文字...');
     document.body.appendChild(previewOverlay);
-
-    cancelBtn.onclick = () => { document.body.removeChild(previewOverlay); }
-    sendBtn.onclick = async () => {
-        const formData = new FormData(); formData.append('file', file); formData.append('sender', 'user');
-        if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
-        const extra_text = textInput.value.trim(); if (extra_text) formData.append('extra_text', extra_text);
-        try { const res = await fetch('/oldbuddy/api/message/image', { method: 'POST', body: formData }); const data = await res.json(); if (data && data.message) appendMessage(data.message); }
-        catch (e) { console.error(e); alert('上传失败'); }
-        document.body.removeChild(previewOverlay);
-    };
+    appendSendCancelButtons(
+        previewOverlay,
+        async () => {
+            const formData = new FormData(); formData.append('file', file); formData.append('sender', 'user');
+            if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
+            const extra_text = textInput.value.trim(); if (extra_text) formData.append('extra_text', extra_text);
+            const res = await fetch('/oldbuddy/api/message/image', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data && data.message) appendMessage(data.message);
+        },
+        () => {},
+        '上传失败',
+    );
 }
 
 // ---------- 任意文件上传（弹窗 + 文字组合发送） ----------
 async function handleAnyFile(file, inputEl) {
     if (!file) return;
 
-    const previewOverlay = document.createElement('div');
-    previewOverlay.style.position = 'fixed'; previewOverlay.style.top = '0'; previewOverlay.style.left = '0';
-    previewOverlay.style.width = '100%'; previewOverlay.style.height = '100%';
-    previewOverlay.style.background = 'rgba(0,0,0,0.6)'; previewOverlay.style.display = 'flex';
-    previewOverlay.style.flexDirection = 'column'; previewOverlay.style.alignItems = 'center';
-    previewOverlay.style.justifyContent = 'center'; previewOverlay.style.zIndex = '2000';
+    const previewOverlay = createUploadOverlay();
 
     const fileInfo = document.createElement('div');
     fileInfo.textContent = \`文件: \${file.name}\`;
-    fileInfo.style.background = '#fff';
-    fileInfo.style.padding = '10px 14px';
-    fileInfo.style.borderRadius = '8px';
+    fileInfo.className = 'ob-upload-label';
     previewOverlay.appendChild(fileInfo);
 
-    const textInput = document.createElement('input'); textInput.type = 'text'; textInput.placeholder = '输入附加文字...';
-    textInput.style.marginTop = '10px'; textInput.style.padding = '8px 12px'; textInput.style.width = '60%'; textInput.style.borderRadius = '20px';
-    previewOverlay.appendChild(textInput);
-
-    const btnWrapper = document.createElement('div'); btnWrapper.style.marginTop = '10px';
-    const sendBtn = document.createElement('button'); sendBtn.textContent = '发送';
-    const cancelBtn = document.createElement('button'); cancelBtn.textContent = '取消';
-    btnWrapper.appendChild(sendBtn); btnWrapper.appendChild(cancelBtn);
-    previewOverlay.appendChild(btnWrapper);
+    const textInput = appendExtraTextRow(previewOverlay, '输入附加文字...');
     document.body.appendChild(previewOverlay);
-
-    cancelBtn.onclick = () => {
-        if (inputEl) inputEl.value = '';
-        document.body.removeChild(previewOverlay);
-    };
-    sendBtn.onclick = async () => {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('sender', 'user');
-        if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
-        const extra_text = textInput.value.trim(); if (extra_text) formData.append('extra_text', extra_text);
-        try { const res = await fetch('/oldbuddy/api/message/file', { method: 'POST', body: formData }); const data = await res.json(); if (data && data.message) appendMessage(data.message); }
-        catch (e) { console.error(e); alert('文件上传失败'); }
-        if (inputEl) inputEl.value = '';
-        document.body.removeChild(previewOverlay);
-    };
+    appendSendCancelButtons(
+        previewOverlay,
+        async () => {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('sender', 'user');
+            if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
+            const extra_text = textInput.value.trim(); if (extra_text) formData.append('extra_text', extra_text);
+            const res = await fetch('/oldbuddy/api/message/file', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data && data.message) appendMessage(data.message);
+            if (inputEl) inputEl.value = '';
+        },
+        () => { if (inputEl) inputEl.value = ''; },
+        '文件上传失败',
+    );
 }
 
 /** HTTPS 页面内 🎤→⏹；HTTP 走系统录音（file input） */
@@ -3202,7 +3306,7 @@ async function uploadVideoFile(file, inputEl) {
 function openSystemAudioRecorder() {
     const input = document.createElement('input');
     input.type = 'file';
-    input.style.display = 'none';
+    input.className = 'ob-hidden-input';
     // 勿含 .webm 等扩展名，Android 会当成视频而弹出拍照/录像
     input.accept = 'audio/*';
     // 引导系统录音机（非 environment，避免打开相机）

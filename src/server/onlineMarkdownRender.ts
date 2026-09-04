@@ -508,9 +508,7 @@ export class OnlineMarkdownRenderService {
             comp = new Component();
             comp.load();
             host = document.createElement('div');
-            // 勿移出视口：部分环境对「不可见」容器不做布局/绘制，Dataview 等异步块会间歇性空白
-            host.style.cssText =
-                'position:fixed;left:0;top:0;width:920px;max-width:100vw;opacity:0.01;pointer-events:none;z-index:-1;overflow:visible;';
+            host.className = 'nc-online-offscreen-host';
             document.body.appendChild(host);
             host.appendChild(el);
             res.writeHead(200, {

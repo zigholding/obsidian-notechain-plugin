@@ -249,8 +249,10 @@ export class MediaLightbox<T> {
 
 		menu.showAtPosition({ x: e.clientX, y: e.clientY });
 		window.setTimeout(() => {
+			const zIndex = "100001";
+			const priority = "important";
 			document.querySelectorAll("body > .menu, .menu").forEach((el) => {
-				(el as HTMLElement).style.setProperty("z-index", "100001", "important");
+				(el as HTMLElement).style.setProperty("z-index", zIndex, priority);
 			});
 		}, 0);
 	}
@@ -335,8 +337,7 @@ export class MediaLightbox<T> {
 		try {
 			const ta = document.createElement("textarea");
 			ta.value = path;
-			ta.style.position = "fixed";
-			ta.style.opacity = "0";
+			ta.className = "nc-offscreen-copy";
 			document.body.appendChild(ta);
 			ta.select();
 			const ok = document.execCommand("copy");

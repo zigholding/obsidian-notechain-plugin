@@ -100,7 +100,6 @@ export function installWebviewTlsTrust(partition: string, port: number, tlsDir: 
         });
 
         installedKeys.add(installKey);
-        console.log('[note-chain] webview TLS trust installed for', partition, 'port', port);
     } catch (e) {
         console.warn('[note-chain] webview TLS trust setup failed:', e);
     }

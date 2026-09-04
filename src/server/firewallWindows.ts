@@ -22,7 +22,6 @@ export function ensureWindowsFirewallPorts(ports: number[]): void {
                 `netsh advfirewall firewall add rule name="${name}" dir=in action=allow protocol=TCP localport=${port}`,
                 { stdio: 'ignore', windowsHide: true },
             );
-            console.log(`[note-chain] firewall inbound rule added: TCP ${port}`);
         } catch {
             failed.push(port);
         }

@@ -149,10 +149,5 @@ export async function ensureSelfSignedCert(tlsDir: string): Promise<{ key: strin
         JSON.stringify({ sansKey, generatedAt: new Date().toISOString() }, null, 2),
         'utf8',
     );
-    const dns = altNames.filter((a) => a.type === 2).map((a) => a.value);
-    const ips = altNames.filter((a) => a.type === 7).map((a) => a.ip);
-    console.log('[note-chain] generated self-signed TLS cert:', tlsDir);
-    console.log('[note-chain] TLS cert SAN DNS:', dns.join(', '));
-    console.log('[note-chain] TLS cert SAN IPs:', ips.join(', '));
     return { key: pems.private, cert: pems.cert };
 }

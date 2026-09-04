@@ -16,22 +16,16 @@ async function loadQuickCommandsForTarget(target) {
 }
 
 function renderQuickCommandButtons(menu, cmds) {
-    menu.innerHTML = "";
+    menu.replaceChildren();
     cmds.forEach(cmd => {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.textContent = cmd.label;
         btn.dataset.cmdId = cmd.id;
         btn.dataset.cmdText = cmd.text;
-        btn.style.cssText = `
-            padding:8px; border:none; background:transparent; text-align:left;
-            cursor:pointer; width:100%;
-        `;
-        btn.onmouseover = () => btn.style.background = "#f5f5f5";
-        btn.onmouseout = () => btn.style.background = "transparent";
         btn.onclick = async (e) => {
             e.stopPropagation();
-            menu.style.display = "none";
+            menu.classList.remove("is-open");
             await sendQuickCommand(btn.dataset.cmdText, btn.dataset.cmdId);
         };
         menu.appendChild(btn);
@@ -46,7 +40,7 @@ async function refreshQuickCommandMenu(target) {
         renderQuickCommandButtons(quickCmdMenu, cmds);
     } catch (err) {
         console.error("[quick_commands] 刷新失败：", err);
-        quickCmdMenu.innerHTML = "";
+        quickCmdMenu.replaceChildren();
     }
 }
 
@@ -66,11 +60,7 @@ async function createQuickCommandUI() {
 
     const menu = document.createElement("div");
     menu.id = "quick-cmd-menu";
-    menu.style.cssText = `
-        position:absolute; top:34px; left:10px; background:#fff; border:1px solid #ccc;
-        border-radius:6px; display:none; flex-direction:column; z-index:1002; min-width:140px;
-        box-shadow:0 6px 18px rgba(0,0,0,0.12); padding:6px 6px;
-    `;
+    menu.className = "ob-quick-cmd-menu";
     document.body.appendChild(menu);
     quickCmdMenu = menu;
 
@@ -78,12 +68,12 @@ async function createQuickCommandUI() {
 
     quickBtn.onclick = (e) => {
         e.stopPropagation();
-        menu.style.display = menu.style.display === "none" ? "block" : "none";
+        menu.classList.toggle("is-open");
         const rect = quickBtn.getBoundingClientRect();
         menu.style.left = `${Math.max(8, rect.left)}px`;
     };
 
-    document.addEventListener("click", () => { menu.style.display = "none"; });
+    document.addEventListener("click", () => { menu.classList.remove("is-open"); });
     menu.addEventListener("click", (e) => e.stopPropagation());
 }
 

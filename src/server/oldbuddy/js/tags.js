@@ -33,7 +33,7 @@ function ensureTagPicker() {
     const el = document.createElement('div');
     el.id = 'tag-picker';
     el.setAttribute('role', 'listbox');
-    el.style.display = 'none';
+    el.classList.remove('is-open');
     document.body.appendChild(el);
     tagPicker = el;
     return el;
@@ -54,14 +54,14 @@ function hideTagPicker() {
     tagMentionRange = null;
     tagHighlight = 0;
     if (tagPicker) {
-        tagPicker.style.display = 'none';
-        tagPicker.innerHTML = '';
+        tagPicker.classList.remove('is-open');
+        tagPicker.replaceChildren();
     }
 }
 
 function renderTagPicker(items) {
     const picker = ensureTagPicker();
-    picker.innerHTML = '';
+    picker.replaceChildren();
     tagItems = items;
     tagHighlight = 0;
 
@@ -76,7 +76,17 @@ function renderTagPicker(items) {
         row.className = 'reference-picker-item';
         row.setAttribute('role', 'option');
         row.dataset.index = String(idx);
-        row.innerHTML = formatPickerRowHtml(formatTagLabel(item), item.text, true);
+        const primary = formatTagLabel(item);
+        const label = document.createElement('span');
+        label.className = 'reference-picker-label';
+        label.textContent = primary;
+        row.appendChild(label);
+        if (item.text && !pickerTextsEquivalent(primary, item.text, true)) {
+            const sub = document.createElement('span');
+            sub.className = 'reference-picker-sub';
+            sub.textContent = item.text;
+            row.appendChild(sub);
+        }
         row.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -86,8 +96,18 @@ function renderTagPicker(items) {
     });
 
     updateTagHighlight();
-    picker.style.display = 'block';
+    picker.classList.add('is-open');
     tagPickerOpen = true;
+}
+
+function normalizePickerText(s, stripHash = false) {
+    let x = String(s || '').trim();
+    if (stripHash) x = x.replace(/^#+/, '');
+    return x;
+}
+
+function pickerTextsEquivalent(a, b, stripHash = false) {
+    return normalizePickerText(a, stripHash) === normalizePickerText(b, stripHash);
 }
 
 function formatTagLabel(item) {

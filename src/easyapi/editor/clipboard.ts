@@ -45,9 +45,7 @@ export class EasyEditorClipboard {
 		try {
 			const ta = document.createElement('textarea');
 			ta.value = text;
-			ta.style.position = 'fixed';
-			ta.style.opacity = '0';
-			ta.style.pointerEvents = 'none';
+			ta.className = 'nc-offscreen-copy';
 			document.body.appendChild(ta);
 			ta.focus();
 			ta.select();

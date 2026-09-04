@@ -3,12 +3,14 @@ function connectWS() {
     ws = new WebSocket((location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/oldbuddy/ws");
 
     ws.onopen = () => {
-        document.getElementById('status-dot').style.backgroundColor = 'green';
+        document.getElementById('status-dot').classList.add('is-online');
+        document.getElementById('status-dot').classList.remove('is-offline');
         document.getElementById('status-text').textContent = '在线';
     };
 
     ws.onclose = () => {
-        document.getElementById('status-dot').style.backgroundColor = 'gray';
+        document.getElementById('status-dot').classList.remove('is-online');
+        document.getElementById('status-dot').classList.add('is-offline');
         document.getElementById('status-text').textContent = '离线';
         // 尝试重连
         setTimeout(connectWS, 3000);

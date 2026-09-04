@@ -2,17 +2,7 @@
 
 function createUploadOverlay() {
     const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.background = 'rgba(0,0,0,0.6)';
-    overlay.style.display = 'flex';
-    overlay.style.flexDirection = 'column';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.zIndex = '2000';
+    overlay.className = 'ob-upload-overlay';
     return overlay;
 }
 
@@ -20,17 +10,14 @@ function appendExtraTextRow(overlay, placeholder) {
     const textInput = document.createElement('input');
     textInput.type = 'text';
         textInput.placeholder = placeholder || '输入说明文字...';
-    textInput.style.marginTop = '10px';
-    textInput.style.padding = '8px 12px';
-    textInput.style.width = '60%';
-    textInput.style.borderRadius = '20px';
+    textInput.className = 'ob-upload-text';
     overlay.appendChild(textInput);
     return textInput;
 }
 
 function appendSendCancelButtons(overlay, onSend, onCancel, failLabel) {
     const btnWrapper = document.createElement('div');
-    btnWrapper.style.marginTop = '10px';
+    btnWrapper.className = 'ob-upload-btns';
     const sendBtn = document.createElement('button');
     sendBtn.textContent = '发送';
     const cancelBtn = document.createElement('button');
@@ -70,11 +57,7 @@ function handleMediaUpload(fileOrBlob, kind, opts = {}) {
     const overlay = createUploadOverlay();
     const label = document.createElement('div');
     label.textContent = isVideo ? `视频: ${file.name}` : `录音: ${file.name}`;
-    label.style.background = '#fff';
-    label.style.padding = '10px 14px';
-    label.style.borderRadius = '8px';
-    label.style.maxWidth = '80%';
-    label.style.textAlign = 'center';
+    label.className = 'ob-upload-label';
     overlay.appendChild(label);
 
     const objectUrl = URL.createObjectURL(file);
@@ -83,18 +66,13 @@ function handleMediaUpload(fileOrBlob, kind, opts = {}) {
         video.controls = true;
         video.playsInline = true;
         video.src = objectUrl;
-        video.style.maxWidth = '80%';
-        video.style.maxHeight = '40%';
-        video.style.marginTop = '10px';
-        video.style.borderRadius = '8px';
-        video.style.background = '#000';
+        video.className = 'ob-upload-video';
         overlay.appendChild(video);
     } else {
         const audio = document.createElement('audio');
         audio.controls = true;
         audio.src = objectUrl;
-        audio.style.width = 'min(80%, 320px)';
-        audio.style.marginTop = '10px';
+        audio.className = 'ob-upload-audio';
         overlay.appendChild(audio);
     }
 
@@ -162,83 +140,58 @@ function initPasteImageHandler() {
 
 async function handleImageFile(file) {
     if (!file) return;
-    const previewOverlay = document.createElement('div');
-    previewOverlay.style.position = 'fixed'; previewOverlay.style.top = '0'; previewOverlay.style.left = '0';
-    previewOverlay.style.width = '100%'; previewOverlay.style.height = '100%';
-    previewOverlay.style.background = 'rgba(0,0,0,0.6)'; previewOverlay.style.display = 'flex';
-    previewOverlay.style.flexDirection = 'column'; previewOverlay.style.alignItems = 'center';
-    previewOverlay.style.justifyContent = 'center'; previewOverlay.style.zIndex = '2000';
+    const previewOverlay = createUploadOverlay();
 
     const img = document.createElement('img'); img.src = URL.createObjectURL(file);
-    img.style.maxWidth = '80%'; img.style.maxHeight = '50%'; img.style.borderRadius = '8px';
+    img.className = 'ob-upload-preview-img';
     previewOverlay.appendChild(img);
 
-    const textInput = document.createElement('input'); textInput.type = 'text'; textInput.placeholder = '输入文字...';
-    textInput.style.marginTop = '10px'; textInput.style.padding = '8px 12px'; textInput.style.width = '60%'; textInput.style.borderRadius = '20px';
-    previewOverlay.appendChild(textInput);
-
-    const btnWrapper = document.createElement('div'); btnWrapper.style.marginTop = '10px';
-    const sendBtn = document.createElement('button'); sendBtn.textContent = '发送';
-    const cancelBtn = document.createElement('button'); cancelBtn.textContent = '取消';
-    btnWrapper.appendChild(sendBtn); btnWrapper.appendChild(cancelBtn);
-    previewOverlay.appendChild(btnWrapper);
+    const textInput = appendExtraTextRow(previewOverlay, '输入文字...');
     document.body.appendChild(previewOverlay);
-
-    cancelBtn.onclick = () => { document.body.removeChild(previewOverlay); }
-    sendBtn.onclick = async () => {
-        const formData = new FormData(); formData.append('file', file); formData.append('sender', 'user');
-        if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
-        const extra_text = textInput.value.trim(); if (extra_text) formData.append('extra_text', extra_text);
-        try { const res = await fetch('/oldbuddy/api/message/image', { method: 'POST', body: formData }); const data = await res.json(); if (data && data.message) appendMessage(data.message); }
-        catch (e) { console.error(e); alert('上传失败'); }
-        document.body.removeChild(previewOverlay);
-    };
+    appendSendCancelButtons(
+        previewOverlay,
+        async () => {
+            const formData = new FormData(); formData.append('file', file); formData.append('sender', 'user');
+            if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
+            const extra_text = textInput.value.trim(); if (extra_text) formData.append('extra_text', extra_text);
+            const res = await fetch('/oldbuddy/api/message/image', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data && data.message) appendMessage(data.message);
+        },
+        () => {},
+        '上传失败',
+    );
 }
 
 // ---------- 任意文件上传（弹窗 + 文字组合发送） ----------
 async function handleAnyFile(file, inputEl) {
     if (!file) return;
 
-    const previewOverlay = document.createElement('div');
-    previewOverlay.style.position = 'fixed'; previewOverlay.style.top = '0'; previewOverlay.style.left = '0';
-    previewOverlay.style.width = '100%'; previewOverlay.style.height = '100%';
-    previewOverlay.style.background = 'rgba(0,0,0,0.6)'; previewOverlay.style.display = 'flex';
-    previewOverlay.style.flexDirection = 'column'; previewOverlay.style.alignItems = 'center';
-    previewOverlay.style.justifyContent = 'center'; previewOverlay.style.zIndex = '2000';
+    const previewOverlay = createUploadOverlay();
 
     const fileInfo = document.createElement('div');
     fileInfo.textContent = `文件: ${file.name}`;
-    fileInfo.style.background = '#fff';
-    fileInfo.style.padding = '10px 14px';
-    fileInfo.style.borderRadius = '8px';
+    fileInfo.className = 'ob-upload-label';
     previewOverlay.appendChild(fileInfo);
 
-    const textInput = document.createElement('input'); textInput.type = 'text'; textInput.placeholder = '输入附加文字...';
-    textInput.style.marginTop = '10px'; textInput.style.padding = '8px 12px'; textInput.style.width = '60%'; textInput.style.borderRadius = '20px';
-    previewOverlay.appendChild(textInput);
-
-    const btnWrapper = document.createElement('div'); btnWrapper.style.marginTop = '10px';
-    const sendBtn = document.createElement('button'); sendBtn.textContent = '发送';
-    const cancelBtn = document.createElement('button'); cancelBtn.textContent = '取消';
-    btnWrapper.appendChild(sendBtn); btnWrapper.appendChild(cancelBtn);
-    previewOverlay.appendChild(btnWrapper);
+    const textInput = appendExtraTextRow(previewOverlay, '输入附加文字...');
     document.body.appendChild(previewOverlay);
-
-    cancelBtn.onclick = () => {
-        if (inputEl) inputEl.value = '';
-        document.body.removeChild(previewOverlay);
-    };
-    sendBtn.onclick = async () => {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('sender', 'user');
-        if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
-        const extra_text = textInput.value.trim(); if (extra_text) formData.append('extra_text', extra_text);
-        try { const res = await fetch('/oldbuddy/api/message/file', { method: 'POST', body: formData }); const data = await res.json(); if (data && data.message) appendMessage(data.message); }
-        catch (e) { console.error(e); alert('文件上传失败'); }
-        if (inputEl) inputEl.value = '';
-        document.body.removeChild(previewOverlay);
-    };
+    appendSendCancelButtons(
+        previewOverlay,
+        async () => {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('sender', 'user');
+            if (typeof getCurrentChatTarget === 'function') formData.append('target', getCurrentChatTarget());
+            const extra_text = textInput.value.trim(); if (extra_text) formData.append('extra_text', extra_text);
+            const res = await fetch('/oldbuddy/api/message/file', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data && data.message) appendMessage(data.message);
+            if (inputEl) inputEl.value = '';
+        },
+        () => { if (inputEl) inputEl.value = ''; },
+        '文件上传失败',
+    );
 }
 
 /** HTTPS 页面内 🎤→⏹；HTTP 走系统录音（file input） */
@@ -278,7 +231,7 @@ async function uploadVideoFile(file, inputEl) {
 function openSystemAudioRecorder() {
     const input = document.createElement('input');
     input.type = 'file';
-    input.style.display = 'none';
+    input.className = 'ob-hidden-input';
     // 勿含 .webm 等扩展名，Android 会当成视频而弹出拍照/录像
     input.accept = 'audio/*';
     // 引导系统录音机（非 environment，避免打开相机）

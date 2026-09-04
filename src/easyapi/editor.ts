@@ -1,5 +1,5 @@
 
-import { App } from 'obsidian';
+import { App, parseYaml } from 'obsidian';
 import { EasyAPI } from 'src/easyapi/easyapi';
 
 import { EasyEditorFrontmatter } from './editor/frontmatter';
@@ -18,7 +18,7 @@ export interface EasyEditor extends
 	EasyEditorClipboard {}
 
 export class EasyEditor {
-    yamljs = require('js-yaml');
+    yamljs = { load: (src: string) => parseYaml(src) };
     app: App;
     ea: EasyAPI;
     /** set_frontmatter / set_multi_frontmatter 默认重试次数 */

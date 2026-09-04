@@ -418,13 +418,6 @@ export class CalendarGalleryModal extends Modal {
 		const isMobile = (this.app as any).isMobile === true;
 		if (isMobile) {
 			this.modalEl.addClass("is-mobile");
-			this.modalEl.style.width = "100vw";
-			this.modalEl.style.height = "100vh";
-			this.modalEl.style.height = "100dvh";
-			this.modalEl.style.maxWidth = "100vw";
-			this.modalEl.style.maxHeight = "100vh";
-			this.modalEl.style.maxHeight = "100dvh";
-			this.modalEl.style.borderRadius = "0";
 		} else {
 			this.modalEl.style.width = `${this.options.width}px`;
 			this.modalEl.style.height = `${this.options.height}px`;
@@ -1580,8 +1573,7 @@ export class CalendarGalleryModal extends Modal {
 
 	private getCardAudioEl(): HTMLAudioElement {
 		if (!this.cardAudioEl) {
-			this.cardAudioEl = this.modalEl.createEl("audio");
-			this.cardAudioEl.style.display = "none";
+			this.cardAudioEl = this.modalEl.createEl("audio", { cls: "nc-hidden-media" });
 		}
 		return this.cardAudioEl;
 	}

@@ -354,11 +354,17 @@ export class Time{
 		const dateStr = this.today.format('YYYY-MM-DD');
 
 		// 数字时间（与 parse_time 的 ^(\d{1,2}):?(\d{1,2})$ 一致，从文中截取）
-		const digRe = /(?<![0-9])(\d{1,2}):?(\d{1,2})(?![0-9])/g;
+		const digRe = /(\d{1,2}):?(\d{1,2})/g;
 		let dm: RegExpExecArray | null;
 		while ((dm = digRe.exec(text)) !== null) {
-			// 「20分钟」「20块钱」等会被误读为 2:0，紧跟时长/金额单位则跳过
+			if (dm.index > 0 && /[0-9]/.test(text.charAt(dm.index - 1))) {
+				continue;
+			}
 			const afterDig = text.slice(dm.index + dm[0].length);
+			if (/^[0-9]/.test(afterDig)) {
+				continue;
+			}
+			// 「20分钟」「20块钱」等会被误读为 2:0，紧跟时长/金额单位则跳过
 			if (/^(?:分钟|分|小时|时|块钱|元钱?|万元|角|毛|块)/.test(afterDig)) {
 				continue;
 			}

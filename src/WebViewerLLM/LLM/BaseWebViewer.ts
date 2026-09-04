@@ -284,7 +284,6 @@ export class BaseWebViewer {
             return ctx;
         } else {
             new Notice(`${this.name} 不说话`)
-            console.log(this.name, N1, N2)
             return null;
         }
     }

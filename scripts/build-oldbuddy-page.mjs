@@ -58,4 +58,3 @@ export const OLDBUDDY_PAGE_HTML = \`${escapeTsTemplate(html)}\`;
 `;
 
 writeFileSync(OUT, ts, 'utf8');
-console.log('[oldbuddy] wrote', OUT);

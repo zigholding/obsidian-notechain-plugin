@@ -27,7 +27,7 @@ function ensureHistoryLoadSentinel() {
         el = document.createElement('div');
         el.id = HISTORY_SENTINEL_ID;
         el.setAttribute('aria-hidden', 'true');
-        el.style.cssText = 'height:1px;width:100%;flex-shrink:0;pointer-events:none;';
+        el.className = 'ob-history-sentinel';
         root.insertBefore(el, root.firstChild);
     } else if (root.firstChild !== el) {
         root.insertBefore(el, root.firstChild);
@@ -92,7 +92,8 @@ let targetToastTimer = null;
 function autosizeTextInput(input) {
     if (!input) input = document.getElementById('text-input');
     if (!input) return;
-    input.style.height = 'auto';
+    const autoHeight = 'auto';
+    input.style.height = autoHeight;
     const cs = getComputedStyle(input);
     const lineH = parseFloat(cs.lineHeight) || 22;
     const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
@@ -286,7 +287,7 @@ function applyMessageTargetFilter() {
             const msgTs = Date.parse(node.dataset.timestamp || '');
             visible = Number.isFinite(msgTs) ? msgTs >= sinceMs : true;
         }
-        node.style.display = visible ? '' : 'none';
+        node.classList.toggle('ob-hidden', !visible);
     }
     refreshTargetBadges();
 }
@@ -634,8 +635,8 @@ function appendExtraText(contentDiv, msg) {
     extra.className = 'message-extra-text';
     if (typeof window.renderMarkdown === 'function') {
         extra.classList.add('markdown');
-        if (useMarkdownCard(msg)) extra.classList.add('markdown-card');
-        extra.innerHTML = window.renderMarkdown(msg.extra_text);
+        if (useMarkdownCard(msg))         extra.classList.add('markdown-card');
+        window.appendTrustedHtml(extra, window.renderMarkdown(msg.extra_text));
     } else {
         extra.textContent = msg.extra_text;
     }
@@ -777,7 +778,7 @@ function appendMarkdownBody(contentDiv, text, msg) {
         contentDiv.classList.add('markdown');
         if (useMarkdownCard(msg)) contentDiv.classList.add('markdown-card');
         const body = document.createElement('div');
-        body.innerHTML = window.renderMarkdown(text);
+        window.appendTrustedHtml(body, window.renderMarkdown(text));
         contentDiv.appendChild(body);
     } else {
         const body = document.createElement('div');
@@ -853,13 +854,13 @@ function renderMessage(msg) {
             if (firstTime - tMs < FIVE_MIN) {
                 // 隐藏 firstElementChild 的时间
                 const oldTimeNode = first.querySelector('.message-time');
-                if (oldTimeNode) oldTimeNode.style.display = 'none';
+                if (oldTimeNode) oldTimeNode.classList.add('ob-msg-time-hidden');
             }
         } else if (tMs > lastTime) {
             // 向后插入（实时消息）
             if (tMs - lastTime < FIVE_MIN) {
                 // 隐藏当前消息的时间
-                timeDiv.style.display = 'none';
+                timeDiv.classList.add('ob-msg-time-hidden');
             }
         }
         // 中间插入（替换或乱序）保持默认时间显示
@@ -904,18 +905,18 @@ function refreshTargetBadges() {
     let prevTarget = null;
     const nodes = Array.from(getMessagesContainer().children);
     for (const node of nodes) {
-        if (node.style.display === 'none') continue;
+        if (node.classList.contains('ob-hidden')) continue;
         const badge = node.querySelector('.message-target');
         if (!badge) continue;
         const target = node.dataset.target || '';
         if (!target) {
-            badge.style.display = 'none';
+            badge.classList.add('ob-hidden');
             continue;
         }
         if (target === prevTarget) {
-            badge.style.display = 'none';
+            badge.classList.add('ob-hidden');
         } else {
-            badge.style.display = '';
+            badge.classList.remove('ob-hidden');
             prevTarget = target;
         }
     }
@@ -937,30 +938,11 @@ function showImagePreview(src) {
     // 创建遮罩层
     const overlay = document.createElement('div');
     overlay.id = 'image-preview-overlay';
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100vw';
-    overlay.style.height = '100vh';
-    overlay.style.background = 'rgba(0,0,0,0.8)';
-    overlay.style.display = 'flex';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.zIndex = '9999';
-    overlay.style.cursor = 'zoom-out';
-    overlay.style.pointerEvents = 'auto';  // 🔹 确保点击有效
+    overlay.className = 'ob-image-preview-overlay';
 
     // 创建放大图片
     const bigImg = document.createElement('img');
     bigImg.src = src;
-    bigImg.style.maxWidth = '90vw';
-    bigImg.style.maxHeight = '90vh';
-    bigImg.style.borderRadius = '8px';
-    bigImg.style.boxShadow = '0 0 12px rgba(255,255,255,0.4)';
-    bigImg.style.transition = 'transform 0.2s ease';
-    bigImg.style.cursor = 'zoom-out';
-    bigImg.style.userSelect = 'none';
-    bigImg.style.pointerEvents = 'auto';
 
     // 🔹 点击遮罩关闭
     overlay.addEventListener('click', (e) => {
@@ -983,10 +965,10 @@ function showImagePreview(src) {
     document.body.appendChild(overlay);
 
     // 🔹 禁止页面滚动（桌面端常见问题）
-    document.body.style.overflow = 'hidden';
+    document.body.classList.add('ob-preview-lock');
 
     overlay.addEventListener('remove', () => {
-        document.body.style.overflow = '';
+        document.body.classList.remove('ob-preview-lock');
     });
 }
 

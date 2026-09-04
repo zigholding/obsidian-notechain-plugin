@@ -4,9 +4,9 @@ import {
 	TAbstractFile,
 	TFile, TFolder,
 	MarkdownPostProcessorContext,
-	MarkdownRenderChild
+	MarkdownRenderChild,
+	parseYaml,
 } from 'obsidian';
-import * as yaml from 'js-yaml';
 
 import NoteChainPlugin from "./plugin";
 
@@ -79,7 +79,7 @@ class TextareaWikiLinkSuggest extends MarkdownRenderChild {
 		if (!this.suggestionEl) return;
 		this.suggestionEl.empty();
 		this.suggestionEl.removeClass('is-open');
-		this.suggestionEl.style.display = 'none';
+		this.suggestionEl.removeClass('is-open');
 	};
 
 	private positionSuggestionList = () => {
@@ -112,7 +112,6 @@ class TextareaWikiLinkSuggest extends MarkdownRenderChild {
 			return;
 		}
 		this.suggestionEl.addClass('is-open');
-		this.suggestionEl.style.display = 'block';
 		this.positionSuggestionList();
 
 		this.linkSuggestions.forEach((name, index) => {
@@ -221,7 +220,7 @@ class TextareaWikiLinkSuggest extends MarkdownRenderChild {
 }
 
 export class NCTextarea {
-	yamljs = yaml;
+	yamljs = { load: (src: string) => parseYaml(src) };
 	plugin: NoteChainPlugin;
 	app: App;
 
@@ -271,8 +270,6 @@ export class NCTextarea {
 				attr: { readonly: 'readonly', tabindex: '-1', 'aria-hidden': 'true' },
 			});
 			metaSrc.value = source;
-			metaSrc.style.cssText =
-				'position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;opacity:0;pointer-events:none;';
 
 			let area: any = null;
 			if (config['textarea'] != false) {
@@ -281,8 +278,6 @@ export class NCTextarea {
 					cls = config['textarea']['cls']
 				}
 				area = container.createEl("textarea", { cls: cls });
-				area.style.width = '100%'
-				area.style.height = '200px'
 				let style = config.textarea?.style
 				if (style && typeof (style) == 'object') {
 					for (let name in style) {
@@ -306,9 +301,6 @@ export class NCTextarea {
 					if (btns && Array.isArray(btns)) {
 						// 创建一个按钮容器
 						let buttonContainer = container.createEl("div", { cls: 'code_block_textarea_btn_container' });
-						buttonContainer.style.display = 'flex'; // 设置按钮容器为flex布局，使按钮在同一行显示
-						buttonContainer.style.justifyContent = 'flex-start'; // 设置按钮之间的间距均匀分布
-						buttonContainer.style.marginTop = '10px'
 
 						const applyBtnStyle = async (xbtn: HTMLButtonElement, style: any) => {
 							if (!style || typeof (style) != 'object') { return }
@@ -322,9 +314,7 @@ export class NCTextarea {
 										let bs64 = `data:image/png;base64,${text}`;
 										let url = "url('" + bs64 + "')";
 										(xbtn as any).style.backgroundImage = url;
-										(xbtn as any).style.backgroundSize = 'cover';
-										(xbtn as any).style.backgroundRepeat = 'no-repeat';
-										(xbtn as any).style.backgroundPosition = 'center';
+										xbtn.addClass('nc-ta-btn-has-bg');
 										continue
 									}
 								}
@@ -480,8 +470,7 @@ export class NCTextarea {
 	}
 
 	log_area(area: HTMLTextAreaElement) {
-		console.log('当前Textarea为：')
-		console.log(area)
+		new Notice(area.value || '');
 	}
 }
 

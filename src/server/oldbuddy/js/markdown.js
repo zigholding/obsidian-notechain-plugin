@@ -197,4 +197,8 @@
   }
 
   window.renderMarkdown = renderMarkdown;
+  window.appendTrustedHtml = function (el, html) {
+    const parsed = new DOMParser().parseFromString(String(html || ""), "text/html");
+    el.append(...Array.from(parsed.body.childNodes));
+  };
 })();

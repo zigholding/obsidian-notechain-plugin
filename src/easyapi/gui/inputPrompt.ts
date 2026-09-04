@@ -106,7 +106,6 @@ export default class InputPrompt extends Modal {
 			"qa-input-field",
 			this.multiLine ? "qa-input-field-multiline" : "qa-input-field-singleline"
 		);
-		textComponent.inputEl.style.width = "100%";
 		textComponent
 			.setPlaceholder(placeholder ?? "")
 			.setValue(value ?? "")
@@ -137,7 +136,7 @@ export default class InputPrompt extends Modal {
 			buttonBarContainer,
 			"Ok",
 			this.submitClickCallback
-		).setCta().buttonEl.style.marginRight = "0";
+		).setCta();
 		this.createButton(
 			buttonBarContainer,
 			"Cancel",

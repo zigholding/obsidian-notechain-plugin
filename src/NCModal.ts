@@ -45,10 +45,6 @@ dv.span(\`![[${sourcePath}]]\`);
     onOpen() {
         const {contentEl} = this;
         contentEl.empty();
-        this.modalEl.style.display = 'flex';
-        this.modalEl.style.overflow = 'auto'; // 添加滚动条
-
-        // 根据 frontmatter 配置设置 modal 大小；读不到则用电脑/手机默认尺寸
         this.setModalSize();
 
         const container = contentEl.createDiv({ cls: 'note-content-container' });
@@ -69,12 +65,6 @@ dv.span(\`![[${sourcePath}]]\`);
                     ? cssClasses.filter((x) => typeof x === 'string' && x.trim().length > 0)
                     : [];
         normalizedCssClasses.forEach((c) => container.addClass(c));
-        // 让内容区域占满 modal 指定大小
-        container.style.display = 'block';
-        container.style.width = '100%';
-        container.style.height = '100%';
-        container.style.boxSizing = 'border-box';
-        container.style.padding = '0px';
 
         // 创建 Component 实例并手动管理生命周期
         this.renderComponent = new Component();

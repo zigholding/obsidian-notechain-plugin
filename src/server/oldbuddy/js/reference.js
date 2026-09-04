@@ -33,7 +33,7 @@ function ensureReferencePicker() {
     const el = document.createElement('div');
     el.id = 'reference-picker';
     el.setAttribute('role', 'listbox');
-    el.style.display = 'none';
+    el.classList.remove('is-open');
     document.body.appendChild(el);
     referencePicker = el;
     return el;
@@ -54,14 +54,14 @@ function hideReferencePicker() {
     referenceMentionRange = null;
     referenceHighlight = 0;
     if (referencePicker) {
-        referencePicker.style.display = 'none';
-        referencePicker.innerHTML = '';
+        referencePicker.classList.remove('is-open');
+        referencePicker.replaceChildren();
     }
 }
 
 function renderReferencePicker(items) {
     const picker = ensureReferencePicker();
-    picker.innerHTML = '';
+    picker.replaceChildren();
     referenceItems = items;
     referenceHighlight = 0;
 
@@ -76,7 +76,16 @@ function renderReferencePicker(items) {
         row.className = 'reference-picker-item';
         row.setAttribute('role', 'option');
         row.dataset.index = String(idx);
-        row.innerHTML = formatPickerRowHtml(item.label, item.text);
+        const label = document.createElement('span');
+        label.className = 'reference-picker-label';
+        label.textContent = item.label;
+        row.appendChild(label);
+        if (item.text && !pickerTextsEquivalent(item.label, item.text)) {
+            const sub = document.createElement('span');
+            sub.className = 'reference-picker-sub';
+            sub.textContent = item.text;
+            row.appendChild(sub);
+        }
         row.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -86,7 +95,7 @@ function renderReferencePicker(items) {
     });
 
     updateReferenceHighlight();
-    picker.style.display = 'block';
+    picker.classList.add('is-open');
     referencePickerOpen = true;
 }
 

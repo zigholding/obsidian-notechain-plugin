@@ -118,9 +118,8 @@ export const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
 
 		let flag = false;
 		let ctx2 = await plugin.easyapi.editor.get_current_section();
-		if(ctx2){
+			if(ctx2){
 			ctx2 = ctx2.replace('```js\n','```js tpl\n');
-			console.log(ctx2)
 			if (/```js\s*(\/\/)?(templater|tpl)\n/.test(ctx2)){
 				new Notice(`执行当前脚本块：${cfile.basename}`)
 				flag = true;
@@ -128,7 +127,6 @@ export const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
 				if(!rsp){
 					rsp = 'Success but no return';
 				}
-				console.log(rsp.join('\n'))
 				new Notice(rsp);
 				return;
 			}

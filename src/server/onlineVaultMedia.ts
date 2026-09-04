@@ -187,7 +187,7 @@ export class OnlineVaultMediaService {
             return html;
         }
         let wrap = document.createElement('div');
-        wrap.innerHTML = html;
+        wrap.append(...Array.from(new DOMParser().parseFromString(html, 'text/html').body.childNodes));
         let sel = 'img[src], video[src], audio[src], source[src]';
         wrap.querySelectorAll(sel).forEach((node) => {
             let src = node.getAttribute('src');

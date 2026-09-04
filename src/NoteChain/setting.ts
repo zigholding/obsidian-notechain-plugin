@@ -24,12 +24,6 @@ async function restartHttpServer(plugin: NoteChainPlugin): Promise<void> {
 				plugin.httpServer.getTlsDir(),
 			);
 		}
-		if (https) {
-			console.log(`Note-Chain HTTPS: ${plugin.httpServer.getBaseUrl()}/oldbuddy`);
-		}
-		if (http) {
-			console.log(`Note-Chain HTTP: ${plugin.httpServer.getHttpBaseUrl()}/oldbuddy`);
-		}
 	} catch (error: any) {
 		console.error('Failed to restart HTTP Server:', error);
 		new Notice(`${strings.setting_httpServer_restart_failed}: ${error?.message || error}`, 5000);

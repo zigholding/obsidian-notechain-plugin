@@ -59,9 +59,6 @@ export class OldBuddyStore {
         this.uploadsDir = path.join(this.dataDir, 'uploads');
         this.messagesFile = path.join(this.dataDir, 'messages.json');
         this.ws.onJiujiuOpen = (client) => {
-            console.log(
-                `[oldbuddy] jiujiu connected friendName=${client.friendName || '-'} friendId=${client.friendId || client.target} target=${client.target || 'local'}`,
-            );
             this.ws.sendTo(client, jiujiuWelcomePacket());
         };
         this.ws.onJiujiuMessage = (client, raw) => this.handleJiujiuIncoming(client, raw);
