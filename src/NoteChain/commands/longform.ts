@@ -69,10 +69,14 @@ export const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 			names.unshift(curr.basename);
 		}
 
-		const notes = names.map((f:string)=>plugin.easyapi.file.get_tfile(f)).filter((f): f is TFile => f instanceof TFile);
 		if(curr.parent==null){return};
-		let tfiles = plugin.easyapi.file.get_tfiles_of_folder(curr.parent).filter((f:TFile)=>!notes.contains(f));
-		await plugin.chain.chain_concat_tfiles(plugin.utils.concat_array<TFile>([tfiles,notes]));
+
+		let brothers = plugin.easyapi.file.get_tfiles_of_folder(curr.parent);
+		const byName = new Map(brothers.map((f:TFile) => [f.basename, f]));
+		let notes = names.map((n:string) => byName.get(n)).filter((f): f is TFile => f instanceof TFile);
+		let tfiles = brothers.filter((f:TFile)=>!names.contains(f.basename));
+		let chain = plugin.utils.concat_array<TFile>([notes,tfiles]);
+		await plugin.chain.chain_concat_tfiles(chain);
 		await plugin.explorer.sort();
 	}
 });

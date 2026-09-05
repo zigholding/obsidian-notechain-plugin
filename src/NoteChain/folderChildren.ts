@@ -178,10 +178,11 @@ export class NoteChainFolderChildren {
 			});
 
 		const remaining = new Set(notes);
+		const noteSet = new Set(notes);
 		const segments: TFile[][] = [];
 		for (const note of notes) {
 			if (!remaining.has(note)) { continue; }
-			const xchain = this.get_chain(note, -1, -1);
+			const xchain = this.get_chain_among(note, noteSet);
 			const segment: TFile[] = [];
 			for (const x of xchain) {
 				if (remaining.has(x)) {

@@ -80,33 +80,57 @@ export class File {
 			if (path instanceof TFile) {
 				return path;
 			}
-			path = path.replace('![[', '').replace('[[', '').replace(']]', '');
-			if(path.includes('|')){
-				path = path.split('|')[0]+'.md';
+			let link = path.replace(/^!?\[\[/, '').replace(/\]\]\s*$/, '');
+			const pipe = link.indexOf('|');
+			if (pipe >= 0) {
+				link = link.slice(0, pipe);
 			}
-			if(path.includes('#')){
-				path = path.split('#')[0]+'.md';
+			const hash = link.indexOf('#');
+			if (hash >= 0) {
+				link = link.slice(0, hash);
 			}
-			if(path.includes('^')){
-				path = path.split('^')[0]+'.md';
-			}
-			let tfile = this.app.vault.getFileByPath(path)
-			if (tfile) {
-				return tfile;
+			link = link.trim();
+			if (!link) {
+				return null;
 			}
 
-			const lookup = uniqueFileLookup(this.app);
-			let tfiles = lookup?.get(path.toLowerCase());
-			if (!tfiles) {
-				tfiles = lookup?.get(path.toLowerCase() + '.md');
-				if (!tfiles) {
-					return null;
-				} else {
-					path = path + '.md'
+			const byExactPath = this.app.vault.getFileByPath(link);
+			if (byExactPath) {
+				return byExactPath;
+			}
+			if (!/\.[A-Za-z0-9]+$/.test(link)) {
+				const withMd = this.app.vault.getFileByPath(link + '.md');
+				if (withMd) {
+					return withMd;
 				}
 			}
 
-			let ctfiles = tfiles.filter((x: TFile) => x.name == path)
+			const dest = this.app.metadataCache.getFirstLinkpathDest(link, '');
+			if (dest && only_first) {
+				return dest;
+			}
+
+			const lookup = uniqueFileLookup(this.app);
+			const base = link.includes('/') ? link.slice(link.lastIndexOf('/') + 1) : link;
+			let tfiles = lookup?.get(base.toLowerCase());
+			if (!tfiles) {
+				tfiles = lookup?.get(base.toLowerCase() + '.md');
+			}
+			if (!tfiles || tfiles.length === 0) {
+				return dest ?? null;
+			}
+
+			const normalized = link.replace(/\\/g, '/');
+			const pathMatches = tfiles.filter((x: TFile) =>
+				x.path === normalized
+				|| x.path === normalized + '.md'
+				|| x.path.slice(0, Math.max(0, x.path.length - x.extension.length - 1)) === normalized
+			);
+			if (pathMatches.length > 0) {
+				return only_first ? pathMatches[0] : pathMatches;
+			}
+
+			let ctfiles = tfiles.filter((x: TFile) => x.name == base || x.name == base + '.md' || x.basename == base)
 			if (ctfiles.length > 0) {
 				if (only_first) {
 					return ctfiles[0]
@@ -117,12 +141,12 @@ export class File {
 
 			if (tfiles.length > 0) {
 				if (only_first) {
-					return tfiles[0]
+					return dest ?? tfiles[0]
 				} else {
 					return tfiles
 				}
 			}
-			return null;
+			return dest ?? null;
 		} catch {
 			return null
 		}

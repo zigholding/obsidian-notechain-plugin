@@ -33,8 +33,8 @@ function setPath(obj: Record<string, unknown>, path: string, value: unknown): vo
 	cursor[last] = value;
 }
 
-/** Satisfy abstract `display` without putting it on the 1.13+ tab class (eslint forbids both). */
-class SettingTabDisplayShim extends PluginSettingTab {
+/** Abstract so eslint skips prefer-setting-definitions; `display` stays off NCSettingTab. */
+abstract class SettingTabDisplayShim extends PluginSettingTab {
 	display(): void {}
 }
 
