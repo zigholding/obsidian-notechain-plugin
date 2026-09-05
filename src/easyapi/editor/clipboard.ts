@@ -29,7 +29,7 @@ export class EasyEditorClipboard {
 			if (navigator?.clipboard?.readText) {
 				return (await navigator.clipboard.readText()) ?? '';
 			}
-		} catch (_e) {
+		} catch {
 			// Mobile WebView often denies read permission; ignore and continue.
 		}
 		return '';
@@ -41,20 +41,19 @@ export class EasyEditorClipboard {
 				await navigator.clipboard.writeText(text);
 				return true;
 			}
-		} catch (_e) {
+		} catch {
 			// Fallback below.
 		}
 		try {
-			const ta = document.createElement('textarea');
+			const ta = createEl("textarea", { cls: "nc-offscreen-copy" });
 			ta.value = text;
-			ta.className = 'nc-offscreen-copy';
 			document.body.appendChild(ta);
 			ta.focus();
 			ta.select();
 			const ok = legacyClipboardExecCopy();
 			document.body.removeChild(ta);
 			return ok;
-		} catch (_e) {
+		} catch {
 			return false;
 		}
 	}

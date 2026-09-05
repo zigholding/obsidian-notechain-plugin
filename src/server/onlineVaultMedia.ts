@@ -38,7 +38,7 @@ export class OnlineVaultMediaService {
 
     private getVaultRootAbsNorm(): string | null {
         let adapter = vaultAdapter(this.app);
-        let getFullPath = adapter.getFullPath as undefined | ((p: string) => string);
+        let getFullPath = adapter.getFullPath;
         if (typeof getFullPath !== 'function') {
             return null;
         }
@@ -189,7 +189,7 @@ export class OnlineVaultMediaService {
         if (!html.length) {
             return html;
         }
-        let wrap = document.createElement('div');
+        let wrap = createDiv();
         wrap.append(...Array.from(new DOMParser().parseFromString(html, 'text/html').body.childNodes));
         let sel = 'img[src], video[src], audio[src], source[src]';
         wrap.querySelectorAll(sel).forEach((node) => {

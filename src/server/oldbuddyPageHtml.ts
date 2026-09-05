@@ -637,8 +637,9 @@ body.ob-preview-lock {
     border-radius: 8px;
 }
 
+.ob-page .ob-hidden,
 .ob-hidden {
-    display: none !important;
+    display: none;
 }
 
 

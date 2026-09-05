@@ -106,14 +106,14 @@ export class OnlineMarkdownRenderService {
         await new Promise<void>((resolve) => {
             let settled = false;
             let lastMutation = Date.now();
-            let idleTimer: ReturnType<typeof setTimeout> | null = null;
-            let debouncePushTimer: ReturnType<typeof setTimeout> | null = null;
-            let dvPollTimer: ReturnType<typeof setInterval> | null = null;
-            let embedProbeTimer: ReturnType<typeof setInterval> | null = null;
+            let idleTimer: number | null = null;
+            let debouncePushTimer: number | null = null;
+            let dvPollTimer: number | null = null;
+            let embedProbeTimer: number | null = null;
             let lastDvHtmlSnap = el.innerHTML;
             let pollChangeLogs = 0;
             let finishReason: 'idle' | 'max' | 'unknown' = 'unknown';
-            let maxTimer: ReturnType<typeof setTimeout> | null = null;
+            let maxTimer: number | null = null;
 
             const applyDataviewTimingScale = () => {
                 if (!OnlineMarkdownRenderService.isDataviewDwellProfile(timing.profile)) {
@@ -140,9 +140,9 @@ export class OnlineMarkdownRenderService {
 
             const armMaxTimer = () => {
                 if (maxTimer !== null) {
-                    clearTimeout(maxTimer);
+                    window.clearTimeout(maxTimer);
                 }
-                maxTimer = setTimeout(() => finish('max'), timing.maxMs);
+                maxTimer = window.setTimeout(() => finish('max'), timing.maxMs);
             };
 
             const startDvPollIfNeeded = () => {
@@ -153,7 +153,7 @@ export class OnlineMarkdownRenderService {
                     return;
                 }
                 lastDvHtmlSnap = el.innerHTML;
-                dvPollTimer = setInterval(() => {
+                dvPollTimer = window.setInterval(() => {
                     if (settled) {
                         return;
                     }
@@ -191,7 +191,7 @@ export class OnlineMarkdownRenderService {
                 timing.idleMs = OnlineMarkdownRenderService.ONLINE_DV_IDLE_MS;
                 timing.maxMs = OnlineMarkdownRenderService.ONLINE_DV_MAX_MS;
                 if (embedProbeTimer) {
-                    clearInterval(embedProbeTimer);
+                    window.clearInterval(embedProbeTimer);
                     embedProbeTimer = null;
                 }
                 startDvPollIfNeeded();
@@ -207,23 +207,23 @@ export class OnlineMarkdownRenderService {
                 settled = true;
                 finishReason = reason;
                 if (idleTimer) {
-                    clearTimeout(idleTimer);
+                    window.clearTimeout(idleTimer);
                     idleTimer = null;
                 }
                 if (debouncePushTimer) {
-                    clearTimeout(debouncePushTimer);
+                    window.clearTimeout(debouncePushTimer);
                     debouncePushTimer = null;
                 }
                 if (dvPollTimer) {
-                    clearInterval(dvPollTimer);
+                    window.clearInterval(dvPollTimer);
                     dvPollTimer = null;
                 }
                 if (embedProbeTimer) {
-                    clearInterval(embedProbeTimer);
+                    window.clearInterval(embedProbeTimer);
                     embedProbeTimer = null;
                 }
                 if (maxTimer !== null) {
-                    clearTimeout(maxTimer);
+                    window.clearTimeout(maxTimer);
                     maxTimer = null;
                 }
 
@@ -250,14 +250,14 @@ export class OnlineMarkdownRenderService {
                 };
                 // Dataview 常在同一宏任务末尾再写 DOM；立刻读 innerHTML 会偶发截断
                 if (OnlineMarkdownRenderService.isDataviewDwellProfile(timing.profile)) {
-                    setTimeout(() => {
+                    window.setTimeout(() => {
                         if (
                             typeof document !== 'undefined' &&
                             document.visibilityState === 'visible'
                         ) {
-                            requestAnimationFrame(() => pushDone());
+                            window.requestAnimationFrame(() => pushDone());
                         } else {
-                            setTimeout(pushDone, 90);
+                            window.setTimeout(pushDone, 90);
                         }
                     }, 0);
                 } else {
@@ -267,9 +267,9 @@ export class OnlineMarkdownRenderService {
 
             const queuePush = () => {
                 if (debouncePushTimer) {
-                    clearTimeout(debouncePushTimer);
+                    window.clearTimeout(debouncePushTimer);
                 }
-                debouncePushTimer = setTimeout(() => {
+                debouncePushTimer = window.setTimeout(() => {
                     debouncePushTimer = null;
                     if (!settled) {
                         writeLine(el.innerHTML, false);
@@ -279,9 +279,9 @@ export class OnlineMarkdownRenderService {
 
             const schedule = () => {
                 if (idleTimer) {
-                    clearTimeout(idleTimer);
+                    window.clearTimeout(idleTimer);
                 }
-                idleTimer = setTimeout(() => {
+                idleTimer = window.setTimeout(() => {
                     idleTimer = null;
                     tryUpgradeEmbedIfDvVisible();
                     applyDataviewTimingScale();
@@ -338,7 +338,7 @@ export class OnlineMarkdownRenderService {
             startDvPollIfNeeded();
             applyDataviewTimingScale();
             if (timing.profile === 'embed') {
-                embedProbeTimer = setInterval(() => {
+                embedProbeTimer = window.setInterval(() => {
                     tryUpgradeEmbedIfDvVisible();
                     applyDataviewTimingScale();
                 }, 450);
@@ -505,12 +505,10 @@ export class OnlineMarkdownRenderService {
                 mdChars: markdown.length,
                 sinceReqMs: Date.now() - tReq,
             });
-            let el = document.createElement('div');
-            el.classList.add('markdown-rendered');
+            let el = createDiv({ cls: 'markdown-rendered' });
             comp = new Component();
             comp.load();
-            host = document.createElement('div');
-            host.className = 'nc-online-offscreen-host';
+            host = createDiv({ cls: 'nc-online-offscreen-host' });
             document.body.appendChild(host);
             host.appendChild(el);
             res.writeHead(200, {
@@ -557,7 +555,7 @@ export class OnlineMarkdownRenderService {
             });
             // 勿在此调用 dataview:dataview-force-refresh-views：会全局重跑视图，MarkdownRenderer 刚写入的块常被再执行一次，出现 dv.span 等输出重复（双链接）
             // 不要用双 requestAnimationFrame：窗口在后台时 rAF 会拖到下一次 vsync（可达数秒）
-            await new Promise<void>((r) => setTimeout(r, 0));
+            await new Promise<void>((r) => window.setTimeout(r, 0));
             const tYieldEnd = Date.now();
             let timing = this.getOnlineRenderWaitTiming(markdown, el);
             if (
@@ -565,9 +563,9 @@ export class OnlineMarkdownRenderService {
                 typeof document !== 'undefined'
             ) {
                 if (document.visibilityState === 'visible') {
-                    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+                    await new Promise<void>((r) => window.requestAnimationFrame(() => r()));
                 } else {
-                    await new Promise<void>((r) => setTimeout(r, 120));
+                    await new Promise<void>((r) => window.setTimeout(r, 120));
                 }
             }
             this.logOnlineRender('wait timing', {

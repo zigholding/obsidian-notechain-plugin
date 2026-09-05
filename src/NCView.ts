@@ -59,7 +59,7 @@ export class NoteContentView extends ItemView {
 		div.addClass('markdown-rendered');
 
 		// 链接点击处理
-		div.addEventListener('click', async (e) => {
+		div.addEventListener('click', (e) => {
 			const target = e.target as HTMLElement;
 			if (target.tagName === 'A' && target.hasClass('internal-link')) {
 				e.preventDefault();
@@ -169,7 +169,7 @@ dv.span(\`![[${sourcePath}]]\`);
 
 		
 		// 链接点击处理
-		div.addEventListener('click', async (e) => {
+		div.addEventListener('click', (e) => {
 			const target = e.target as HTMLElement;
 			if (target.tagName === 'A' && target.hasClass('internal-link')) {
 				e.preventDefault();
@@ -248,12 +248,14 @@ dv.span(\`![[${sourcePath}]]\`);
 		}
 
 		if (this.canUseWebViewerWebview()) {
-			const webview = document.createElement('webview');
-			webview.className = 'nc-note-content-webview';
-			webview.setAttribute('src', loadUrl);
-			webview.setAttribute('partition', this.getWebViewerPartition());
-			webview.setAttribute('allowpopups', 'true');
-			container.appendChild(webview);
+			const webview = container.createEl("webview" as keyof HTMLElementTagNameMap, {
+				cls: 'nc-note-content-webview',
+				attr: {
+					src: loadUrl,
+					partition: this.getWebViewerPartition(),
+					allowpopups: 'true',
+				},
+			});
 			this.webviewEl = webview;
 			return;
 		}
@@ -268,7 +270,7 @@ dv.span(\`![[${sourcePath}]]\`);
 	}
 
 	private setupInternalLinks(div: HTMLElement, isDatacoreContent: boolean) {
-		setTimeout(() => {
+		window.setTimeout(() => {
 			this.processInternalLinks(div);
 		}, 100);
 		const observer = new MutationObserver((mutations) => {
@@ -290,7 +292,7 @@ dv.span(\`![[${sourcePath}]]\`);
 			}
 			
 			if (shouldProcess) {
-				setTimeout(() => {
+				window.setTimeout(() => {
 					this.processInternalLinks(div);
 				}, 100);
 			}
@@ -301,18 +303,18 @@ dv.span(\`![[${sourcePath}]]\`);
 			subtree: true
 		});
 		
-		setTimeout(() => {
+		window.setTimeout(() => {
 			observer.disconnect();
 		}, 10000);
 		
 		let attempts = 0;
 		const maxAttempts = 10;
-		const pollInterval = setInterval(() => {
+		const pollInterval = window.setInterval(() => {
 			attempts++;
 			this.processInternalLinks(div);
 			
 			if (attempts >= maxAttempts) {
-				clearInterval(pollInterval);
+				window.clearInterval(pollInterval);
 			}
 		}, 1000);
 	}

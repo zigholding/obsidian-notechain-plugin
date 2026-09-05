@@ -1,10 +1,15 @@
+import { Platform } from 'obsidian';
+import { desktopNode, type NodeChildProcessModule } from '../obsidian-app';
+
 export interface TailscaleSelfInfo {
     dnsName: string;
     ipv4: string;
 }
 
 function runTailscaleStatusJson(): string | null {
-    const { execSync } = require('child_process');
+    if (!Platform.isDesktop) return null;
+    const cp = desktopNode<NodeChildProcessModule>('child_process');
+    if (!cp) return null;
     const candidates = ['tailscale'];
     if (process.platform === 'win32') {
         candidates.push(
@@ -14,12 +19,11 @@ function runTailscaleStatusJson(): string | null {
     }
     for (const cmd of candidates) {
         try {
-            return execSync(`"${cmd}" status --json`, {
+            return cp.execSync(`"${cmd}" status --json`, {
                 encoding: 'utf8',
                 timeout: 5000,
                 stdio: ['pipe', 'pipe', 'ignore'],
                 windowsHide: true,
-                shell: true,
             });
         } catch {
             /* try next */

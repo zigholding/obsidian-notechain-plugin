@@ -1,4 +1,4 @@
-import { App, Notice } from 'obsidian';
+import { App } from 'obsidian';
 
 import { chatGPTProfile } from './LLMProfiles';
 import { SelectorDrivenWebViewer } from './SelectorDrivenWebViewer';

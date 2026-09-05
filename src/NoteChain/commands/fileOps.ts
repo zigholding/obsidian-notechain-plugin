@@ -1,9 +1,9 @@
 import {
-	Notice, TFile, TFolder
+	Notice, TFile
 } from 'obsidian';
 
 import type NoteChainPlugin from '../../plugin';
-import { isMobileApp } from '../../obsidian-app';
+import { isMobileApp, desktopNode } from '../../obsidian-app';
 
 export const cmd_sort_file_explorer = (plugin:NoteChainPlugin) => ({
 	id: "sort_file_explorer",
@@ -12,7 +12,7 @@ export const cmd_sort_file_explorer = (plugin:NoteChainPlugin) => ({
 	callback: async () => {
 		await plugin.explorer.sort(0,true);
 		await plugin.explorer.set_fileitem_style();
-		await plugin.explorer.set_display_text();
+		plugin.explorer.set_display_text();
 	}
 });
 
@@ -58,8 +58,8 @@ export const replace_notes_with_regx = (plugin:NoteChainPlugin) => ({
 				for (let note of notes) {
 					await plugin.easyapi.editor.replace(note, reg, target);
 				}
-			} catch (error) {
-
+			} catch {
+				// replace cancelled or regex invalid
 			}
 
 		}
@@ -85,11 +85,13 @@ export const cmd_file_open_with_system_app = (plugin:NoteChainPlugin) => ({
 			
 			if(key){
 				let item = items[key];
-				let electron = require('electron')
+				const electron = desktopNode<{ remote?: { shell?: { openExternal: (u: string) => unknown; openPath: (p: string) => unknown } } }>('electron');
+				const shell = electron?.remote?.shell;
+				if (!shell) return;
 				if(item.startsWith('https://') || item.startsWith('http://')){
-					electron.remote.shell.openExternal(item);
+					void shell.openExternal(item);
 				}else{
-					electron.remote.shell.openPath(item);
+					void shell.openPath(item);
 				}
 				
 			}
@@ -115,11 +117,13 @@ export const cmd_file_show_in_system_explorer = (plugin:NoteChainPlugin) => ({
 			
 			if(key){
 				let item = items[key]
-				let electron = require('electron')
+				const electron = desktopNode<{ remote?: { shell?: { openExternal: (u: string) => unknown; showItemInFolder: (p: string) => unknown } } }>('electron');
+				const shell = electron?.remote?.shell;
+				if (!shell) return;
 				if(item.startsWith('https://') || item.startsWith('http://')){
-					await electron.remote.shell.openExternal(item);
+					await shell.openExternal(item);
 				}else{
-					await electron.remote.shell.showItemInFolder(item);
+					await shell.showItemInFolder(item);
 				}
 			}
 		}

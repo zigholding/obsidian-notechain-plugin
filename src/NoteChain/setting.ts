@@ -1,5 +1,5 @@
 import {
-	App, Notice, PluginSettingTab, Setting, ButtonComponent
+	Notice, Setting
 } from 'obsidian';
 
 import NoteChainPlugin from '../plugin';

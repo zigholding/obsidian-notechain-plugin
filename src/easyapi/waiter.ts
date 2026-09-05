@@ -1,4 +1,4 @@
-import { App, TFile,moment } from "obsidian";
+import { App, moment } from "obsidian";
 import { EasyAPI } from "./easyapi";
 
 
@@ -10,19 +10,19 @@ export class Waiter {
         this.ea = ea;
     }
 
-    async wait(condition:Function,timeout:number=0){
+    async wait(condition: () => boolean, timeout: number = 0){
         let start = moment();
         while (!condition()) {
             let end = moment();
             if ((start.valueOf()-end.valueOf())/1000 > timeout) {
                 return false;
             }
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => window.setTimeout(resolve, 100));
         }
         return true;
     }
 
-    async wait_for(vfunc:Function,timeout:number=30){
+    async wait_for<T>(vfunc: () => T | Promise<T>, timeout: number = 30): Promise<T | null> {
         let start = moment();
         let res = await vfunc();
         while (!res) {
@@ -30,7 +30,7 @@ export class Waiter {
             if ((start.valueOf()-end.valueOf())/1000 > timeout) {
                 return null;
             }
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => window.setTimeout(resolve, 100));
             res = await vfunc();
         }
         return res;

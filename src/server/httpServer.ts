@@ -8,25 +8,45 @@ import { OnlineHttpHandlers } from './onlineHttp';
 import { OldBuddyStore } from './oldbuddy/oldbuddyStore';
 import { OldBuddyHttpHandlers } from './oldbuddy/oldbuddyHttp';
 import type { HttpReq, HttpRes, ParsedReqUrl, SseConnection } from '../http-types';
-import type { Socket } from 'net';
-import type { Server as HttpServer } from 'http';
+import { parseRequestUrl } from '../http-types';
 import { errorMessage } from '../ts-helpers';
+import { desktopNodeOrThrow, type NodeNetSocket, type NodePathModule } from '../obsidian-app';
 
-type ClosableHttpServer = HttpServer & {
+type Socket = NodeNetSocket;
+
+interface NodeHttpServer {
+    keepAliveTimeout: number;
+    headersTimeout: number;
+    on(event: 'error', listener: (error: NodeJS.ErrnoException) => void): this;
+    on(event: 'upgrade', listener: (req: HttpReq, socket: Socket, head: Buffer) => void): this;
+    listen(port: number, host: string, cb: () => void): this;
+    close(cb?: (err?: Error) => void): this;
     closeAllConnections?: () => void;
     closeIdleConnections?: () => void;
-};
+}
 
-let https = require('https');
-let http = require('http');
-let url = require('url');
-let path = require('path');
+interface NodeHttpModule {
+    createServer(listener: (req: HttpReq, res: HttpRes) => void): NodeHttpServer;
+}
+
+interface NodeHttpsModule {
+    createServer(
+        options: { key: string | Buffer; cert: string | Buffer },
+        listener: (req: HttpReq, res: HttpRes) => void,
+    ): NodeHttpServer;
+}
+
+type RequestHandler = (req: HttpReq, res: HttpRes) => void | Promise<void>;
+
+const https = desktopNodeOrThrow<NodeHttpsModule>('https');
+const http = desktopNodeOrThrow<NodeHttpModule>('http');
+const path = desktopNodeOrThrow<NodePathModule>('path');
 
 export class HTTPServer {
     private templater: Templater;
-    private server: ClosableHttpServer | null = null;
+    private server: NodeHttpServer | null = null;
     /** 本机 HTTP（与 HTTPS 共用 setting 的 host） */
-    private localServer: ClosableHttpServer | null = null;
+    private localServer: NodeHttpServer | null = null;
     /** 合并并发 stop，且避免对同一 server 调用两次 close() */
     private stopPromise: Promise<void> | null = null;
     private port: number;
@@ -125,7 +145,7 @@ export class HTTPServer {
             }
 
             try {
-                let parsedUrl = url.parse(req.url || '', true);
+                let parsedUrl = parseRequestUrl(req.url || '');
 
                 if (parsedUrl.pathname === '/templater' && (req.method === 'GET' || req.method === 'POST')) {
                     await this.handleTemplaterRequest(req, res, parsedUrl);
@@ -202,40 +222,38 @@ export class HTTPServer {
         }
     }
 
-    private startHttpsServer(handler: (req: HttpReq, res: HttpRes) => void): Promise<void> {
-        return new Promise(async (resolve, reject) => {
-            try {
-                const { key, cert } = await ensureSelfSignedCert(this.tlsDir);
-                const httpsSrv = https.createServer({ key, cert }, handler) as ClosableHttpServer;
-                this.server = httpsSrv;
-                httpsSrv.keepAliveTimeout = 120000;
-                httpsSrv.headersTimeout = 120000;
+    private async startHttpsServer(handler: RequestHandler): Promise<void> {
+        const { key, cert } = await ensureSelfSignedCert(this.tlsDir);
+        return new Promise((resolve, reject) => {
+            const httpsSrv = https.createServer({ key, cert }, (req, res) => {
+                void handler(req, res);
+            });
+            this.server = httpsSrv;
+            httpsSrv.keepAliveTimeout = 120000;
+            httpsSrv.headersTimeout = 120000;
 
-                httpsSrv.on('error', (error: NodeJS.ErrnoException) => {
-                    this.server = null;
-                    if (error.code === 'EADDRINUSE') {
-                        console.error(`Port ${this.port} is already in use`);
-                        reject(error);
-                    } else {
-                        console.error('HTTPS Server error:', error);
-                        reject(error);
-                    }
-                });
+            httpsSrv.on('error', (error: NodeJS.ErrnoException) => {
+                this.server = null;
+                if (error.code === 'EADDRINUSE') {
+                    console.error(`Port ${this.port} is already in use`);
+                    reject(error);
+                } else {
+                    console.error('HTTPS Server error:', error);
+                    reject(error);
+                }
+            });
 
-                httpsSrv.on('upgrade', (req: HttpReq, socket: Socket, head: Buffer) => {
-                    this.handleServerUpgrade(req, socket, head);
-                });
+            httpsSrv.on('upgrade', (req: HttpReq, socket: Socket, head: Buffer) => {
+                this.handleServerUpgrade(req, socket, head);
+            });
 
-                httpsSrv.listen(this.port, this.host, () => resolve());
-            } catch (e) {
-                reject(e);
-            }
+            httpsSrv.listen(this.port, this.host, () => resolve());
         });
     }
 
     private handleServerUpgrade(req: HttpReq, socket: Socket, head: Buffer) {
         try {
-            const parsed = url.parse(req.url || '', true);
+            const parsed = parseRequestUrl(req.url || '');
             if (this.oldbuddy.isWebSocketPath(parsed.pathname)) {
                 this.oldbuddy.handleUpgrade(req, socket, head);
                 return;
@@ -246,10 +264,12 @@ export class HTTPServer {
         socket.destroy();
     }
 
-    private startLocalHttpServer(handler: (req: HttpReq, res: HttpRes) => void, localPort: number): Promise<void> {
+    private startLocalHttpServer(handler: RequestHandler, localPort: number): Promise<void> {
         if (this.localServer) return Promise.resolve();
 
-        const httpSrv = http.createServer(handler) as ClosableHttpServer;
+        const httpSrv = http.createServer((req, res) => {
+            void handler(req, res);
+        });
         this.localServer = httpSrv;
         httpSrv.keepAliveTimeout = 120000;
         httpSrv.headersTimeout = 120000;
@@ -371,12 +391,12 @@ export class HTTPServer {
             for (let [, conn] of this.sseConnections.entries()) {
                 try {
                     if (conn.heartbeatInterval) {
-                        clearInterval(conn.heartbeatInterval);
+                        window.clearInterval(conn.heartbeatInterval);
                         conn.heartbeatInterval = null;
                     }
                     conn.res.end();
-                    conn.res.socket?.destroy();
-                } catch (e) {
+                    conn.res.socket?.destroy?.();
+                } catch {
                     // ignore
                 }
             }

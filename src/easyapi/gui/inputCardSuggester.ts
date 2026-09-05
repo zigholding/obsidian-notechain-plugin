@@ -1,6 +1,7 @@
-import { App, Modal, Notice, setIcon, TFile } from "obsidian";
+import { App, Modal, Notice, setIcon, TFile, getLanguage } from "obsidian";
 import { MediaLightbox } from "./mediaLightbox";
 import type { AudioItem, ImageItem } from "./calendarGalleryModal";
+import { confirmAction } from "./confirmModal";
 import { isMobileApp, noteChainPlugin, vaultAdapter } from "../../obsidian-app";
 
 export type { AudioItem, ImageItem };
@@ -94,7 +95,7 @@ interface ResolvedCardMedia {
 }
 
 function isZhUi(): boolean {
-	return window.localStorage.getItem("language") === "zh";
+	return getLanguage() === "zh";
 }
 
 function formatDuration(sec?: number): string {
@@ -113,7 +114,7 @@ function isFilesystemPath(path: string): boolean {
 	if (/^file:\/\//i.test(p)) return true;
 	if (/^[a-zA-Z]:[\\/]/.test(p)) return true;
 	if (/^\\\\/.test(p)) return true;
-	if (/^[\/\\]/.test(p)) return true;
+	if (/^[/\\]/.test(p)) return true;
 	return false;
 }
 
@@ -152,7 +153,7 @@ function isMediaPath(path: string): boolean {
 }
 
 function isStyleMap(v: unknown): v is Record<string, string> {
-	return !!v && typeof v === "object" && !Array.isArray(v) && !("path" in (v as object));
+	return !!v && typeof v === "object" && !Array.isArray(v) && !("path" in v);
 }
 
 function isStyledTuple(v: unknown): v is [string, Record<string, string>] {
@@ -197,7 +198,7 @@ function parseImageField(imageVal: CardItem["image"]): ResolvedCardMedia {
 		const images: ImageItem[] = [];
 		const audios: AudioItem[] = [];
 		for (const entry of imageVal) {
-			const item = toImageItem(entry as string | ImageItem);
+			const item = toImageItem(entry);
 			const split = splitMediaItem(item);
 			if (split.audio) audios.push(split.audio);
 			else if (split.image) {
@@ -496,7 +497,7 @@ export class CardNavigatorModal extends Modal {
 				}
 				const targetIndex = pendingRevealIndex;
 				pendingRevealIndex = null;
-				requestAnimationFrame(() => {
+				window.requestAnimationFrame(() => {
 					if (session !== this.renderSession) return;
 					const cards = container.getElementsByClassName("nc-card-btn");
 					const targetEl = cards.item(targetIndex) as HTMLElement | null;
@@ -571,8 +572,7 @@ export class CardNavigatorModal extends Modal {
 		if (showAudio) classes.push("has-audio");
 		if (revealTarget && item === revealTarget) classes.push("nc-card-reveal");
 
-		const card = document.createElement("div");
-		card.className = classes.join(" ");
+		const card = createDiv({ cls: classes });
 
 		if (hasCover || showAudio) {
 			const mediaEl = card.createDiv({ cls: "nc-card-media" });
@@ -1182,7 +1182,8 @@ export class CardNavigatorModal extends Modal {
 			: kind === "video"
 				? (isZhUi() ? "视频" : "video")
 				: (isZhUi() ? "图片" : "image");
-		const ok = window.confirm(
+		const ok = await confirmAction(
+			this.app,
 			isZhUi()
 				? `确定删除此${kindLabel}？\n${mediaPath}`
 				: `Delete this ${kindLabel}?\n${mediaPath}`,
@@ -1220,7 +1221,7 @@ export class CardNavigatorModal extends Modal {
 		try {
 			const tfile = fileApi?.get_tfile?.(mediaPath) as TFile | null;
 			if (tfile) {
-				await this.app.vault.trash(tfile, true);
+				await this.app.fileManager.trashFile(tfile);
 				return true;
 			}
 			const abs = this.resolveLocalAbsPath(mediaPath);
@@ -1245,7 +1246,7 @@ export class CardNavigatorModal extends Modal {
 		if (index < 0) return;
 
 		view.ensureRenderedTo(index);
-		requestAnimationFrame(() => {
+		window.requestAnimationFrame(() => {
 			const cards = view.container.getElementsByClassName("nc-card-btn");
 			const targetEl = cards.item(index) as HTMLElement | null;
 			if (!targetEl) return;
@@ -1300,7 +1301,7 @@ export class CardNavigatorModal extends Modal {
             el.empty();
             lines.forEach((line, i) => {
                 el.appendText(line);
-                if (i < lines.length - 1) el.appendChild(document.createElement("br"));
+                if (i < lines.length - 1) el.createEl("br");
             });
             el.setAttr("title", normalized.replace(/\n/g, " "));
             if (Array.isArray(value) && value[1]) Object.assign(el.style, value[1]);
@@ -1350,7 +1351,7 @@ export class CardNavigatorModal extends Modal {
             // 将实际 action 延后到下一帧执行，让 Obsidian 先完成关闭 modal 的布局/绘制
             const action = item.action;
             if (action) {
-                requestAnimationFrame(() => {
+                window.requestAnimationFrame(() => {
                     void Promise.resolve(action(item));
                 });
             }

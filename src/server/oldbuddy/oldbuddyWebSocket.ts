@@ -1,6 +1,8 @@
-let crypto = require('crypto');
-import type { Socket } from 'net';
+import { desktopNodeOrThrow, type NodeCryptoModule, type NodeNetSocket } from '../../obsidian-app';
 import type { HttpReq } from '../../http-types';
+
+const crypto = desktopNodeOrThrow<NodeCryptoModule>('crypto');
+type Socket = NodeNetSocket;
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
@@ -180,14 +182,14 @@ export class OldBuddyWebSocketHub {
             const masked = (buf[1] & 0x80) !== 0;
             if (masked) offset += 4;
             if (buf.length < offset + payloadLen) return buf;
-            let payload = buf.slice(offset, offset + payloadLen);
+            let payload = buf.subarray(offset, offset + payloadLen);
             if (masked) {
-                const mask = buf.slice(offset - 4, offset);
+                const mask = buf.subarray(offset - 4, offset);
                 for (let i = 0; i < payload.length; i++) {
                     payload[i] ^= mask[i % 4];
                 }
             }
-            buf = buf.slice(offset + payloadLen);
+            buf = buf.subarray(offset + payloadLen);
             if (opcode === 0x8) {
                 try {
                     client.socket.end();

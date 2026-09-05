@@ -217,7 +217,6 @@ export class Templater {
                             if(idx==null){
                                 return '';
                             }
-                            idx = idx as number;
                         }else{
                             idx = await this.ea.dialog_multi_suggest(
                                 blocks.map(x=>x.split('\n').slice(1,-1).join('\n').trim().split('\n')[0]), 
@@ -228,7 +227,6 @@ export class Templater {
                             if(idx==null){
                                 return '';
                             }
-                            idx = idx as number[];
                         }
                     }
                     if(typeof idx === 'number'){

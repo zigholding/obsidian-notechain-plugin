@@ -1,7 +1,3 @@
-import {
-	Notice, TFile, TFolder
-} from 'obsidian';
-
 import type NoteChainPlugin from '../../plugin';
 
 export const cmd_mermaid_flowchart_link = (plugin: NoteChainPlugin) => ({

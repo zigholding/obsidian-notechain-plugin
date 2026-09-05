@@ -1,5 +1,5 @@
 import {
-	App, Notice, PluginSettingTab
+	App, Notice, PluginSettingTab, getLanguage
 } from 'obsidian';
 
 import NoteChainPlugin from './plugin';
@@ -102,7 +102,7 @@ export class NCSettingTab extends PluginSettingTab {
 	getSettingDefinitions() {
 		const s = ncStrings;
 		const w = wvStrings;
-		const isZh = window.localStorage.getItem('language') === 'zh';
+		const isZh = getLanguage() === 'zh';
 		const httpOff = () => !this.plugin.settings.notechain.httpServerEnabled;
 		const httpNoProto = () => {
 			const n = this.plugin.settings.notechain;

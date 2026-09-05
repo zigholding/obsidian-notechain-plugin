@@ -43,7 +43,7 @@ export function legacyClipboardExecCopy(doc: Document = document): boolean {
 	try {
 		const execCommand = Reflect.get(doc, 'execCommand');
 		if (typeof execCommand !== 'function') return false;
-		return Reflect.apply(execCommand as (this: Document, commandId: string) => boolean, doc, ['copy']);
+		return Boolean(Reflect.apply(execCommand, doc, ['copy']));
 	} catch {
 		return false;
 	}

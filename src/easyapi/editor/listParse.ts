@@ -53,7 +53,7 @@ export class EasyEditorListParse {
             }
             if (!processing_decimal) {
                 // 整数部分处理
-                if (cnNumbers.hasOwnProperty(c)) {
+                if (Object.prototype.hasOwnProperty.call(cnNumbers, c)) {
                     const num = cnNumbers[c];
 
                     if (num >= 10) {  // 处理单位
@@ -69,7 +69,7 @@ export class EasyEditorListParse {
                 }
             } else {
                 // 小数部分处理
-                if (cnNumbers.hasOwnProperty(c) && cnNumbers[c] < 10) {
+                if (Object.prototype.hasOwnProperty.call(cnNumbers, c) && cnNumbers[c] < 10) {
                     decimal_total += cnNumbers[c] * decimal_factor;
                     decimal_factor *= 0.1;
                 }

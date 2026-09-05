@@ -1,5 +1,6 @@
-import { App, Modal, Notice, setIcon, TFile } from "obsidian";
+import { App, Modal, Notice, setIcon, TFile, getLanguage } from "obsidian";
 import { MediaLightbox } from "./mediaLightbox";
+import { confirmAction } from "./confirmModal";
 import { isMobileApp, noteChainPlugin, vaultAdapter } from "../../obsidian-app";
 
 // ── Data types ──────────────────────────────────────────────────────────────
@@ -101,11 +102,11 @@ const CARD_HEIGHTS: Record<ResolvedOptions["cardSize"], number> = {
 };
 
 function isZhUi(): boolean {
-	return window.localStorage.getItem("language") === "zh";
+	return getLanguage() === "zh";
 }
 
 function getUiLocale(): string {
-	const lang = window.localStorage.getItem("language");
+	const lang = getLanguage();
 	if (lang === "zh" || lang === "zh-cn" || lang === "zh-tw") return "zh-CN";
 	if (lang) return lang;
 	return navigator.language || "en-US";
@@ -214,7 +215,7 @@ function isFilesystemPath(path: string): boolean {
 	if (/^file:\/\//i.test(p)) return true;
 	if (/^[a-zA-Z]:[\\/]/.test(p)) return true;
 	if (/^\\\\/.test(p)) return true;
-	if (/^[\/\\]/.test(p)) return true;
+	if (/^[/\\]/.test(p)) return true;
 	return false;
 }
 
@@ -501,8 +502,8 @@ export class CalendarGalleryModal extends Modal {
 			this.refreshMonth(date);
 			return;
 		}
-		const cell = this.gridEl?.querySelector(`[data-date="${key}"]`) as HTMLElement | null;
-		if (cell) {
+		const cell = this.gridEl?.querySelector(`[data-date="${key}"]`);
+		if (cell instanceof HTMLElement) {
 			const dayMap = this.buildDayMap(cached);
 			this.updateDayCard(cell, key, dayMap.get(key), y, m);
 		}
@@ -823,7 +824,8 @@ export class CalendarGalleryModal extends Modal {
 			: entry.kind === "video"
 				? (isZhUi() ? "视频" : "video")
 				: (isZhUi() ? "图片" : "image");
-		const ok = window.confirm(
+		const ok = await confirmAction(
+			this.app,
 			isZhUi()
 				? `确定删除此${kindLabel}？\n${mediaPath}`
 				: `Delete this ${kindLabel}?\n${mediaPath}`,
@@ -871,7 +873,7 @@ export class CalendarGalleryModal extends Modal {
 		try {
 			const tfile = fileApi?.get_tfile?.(mediaPath) as TFile | null;
 			if (tfile) {
-				await this.app.vault.trash(tfile, true);
+				await this.app.fileManager.trashFile(tfile);
 				return true;
 			}
 
@@ -1016,8 +1018,7 @@ export class CalendarGalleryModal extends Modal {
 				el.load();
 			} catch { /* ignore */ }
 		});
-		root.querySelectorAll("img").forEach((node) => {
-			const el = node as HTMLImageElement;
+		root.querySelectorAll("img").forEach((el) => {
 			el.onload = null;
 			el.onerror = null;
 			el.removeAttribute("src");
@@ -1171,8 +1172,7 @@ export class CalendarGalleryModal extends Modal {
 		todayKey: string,
 		index: number
 	): HTMLElement {
-		const card = document.createElement("div");
-		card.className = "nc-cal-day-card";
+		const card = createDiv({ cls: "nc-cal-day-card" });
 		card.dataset.date = cell.key;
 		card.dataset.index = String(index);
 		card.setAttr("tabindex", "0");
@@ -1478,7 +1478,7 @@ export class CalendarGalleryModal extends Modal {
 			const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height, 1));
 			const w = Math.max(1, Math.round(bitmap.width * scale));
 			const h = Math.max(1, Math.round(bitmap.height * scale));
-			const canvas = document.createElement("canvas");
+			const canvas = createEl("canvas");
 			canvas.width = w;
 			canvas.height = h;
 			const ctx = canvas.getContext("2d");
@@ -1547,18 +1547,18 @@ export class CalendarGalleryModal extends Modal {
 		const fileApi = nc?.easyapi?.file;
 		if (!fileApi) return null;
 
-		let tfile = fileApi.get_tfile(path) as TFile | null;
+		let tfile = fileApi.get_tfile(path);
 		if (tfile) return tfile;
 
 		const stripped = normalizeMediaPath(path);
 		if (stripped !== path) {
-			tfile = fileApi.get_tfile(stripped) as TFile | null;
+			tfile = fileApi.get_tfile(stripped);
 			if (tfile) return tfile;
 		}
 
 		if (!/\.[a-z0-9]+$/i.test(stripped)) {
 			for (const ext of [".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm", ".mov", ".m4a", ".mp3", ".wav"]) {
-				tfile = fileApi.get_tfile(stripped + ext) as TFile | null;
+				tfile = fileApi.get_tfile(stripped + ext);
 				if (tfile) return tfile;
 			}
 		}

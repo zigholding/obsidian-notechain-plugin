@@ -1,7 +1,4 @@
-let fs = require('fs');
-let path = require('path');
-let crypto = require('crypto');
-
+import { desktopNodeOrThrow, type NodeCryptoModule, type NodeFsModule, type NodePathModule } from '../../obsidian-app';
 import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem, OldBuddyAvatarMap, OldBuddyAttachment, isUserSender, normalizeAttachments, normalizeOldBuddyMessage, attachmentKindFromMime } from './types';
 import { OldBuddyWebSocketHub, OldBuddyWsClient } from './oldbuddyWebSocket';
 import {
@@ -24,6 +21,10 @@ import {
     type JiujiuPacket,
 } from './jiujiu';
 import { Templater } from '../../easyapi/templater';
+
+const fs = desktopNodeOrThrow<NodeFsModule>('fs');
+const path = desktopNodeOrThrow<NodePathModule>('path');
+const crypto = desktopNodeOrThrow<NodeCryptoModule>('crypto');
 
 const DEFAULT_TARGETS: OldBuddyLabelTextItem[] = [{ label: 'local', text: 'local' }];
 const DEFAULT_QUICK_COMMANDS: OldBuddyLabelTextItem[] = [{ label: '你是谁', text: '你是谁' }];
@@ -490,7 +491,7 @@ export class OldBuddyStore {
         return list.length ? list : null;
     }
 
-    private async invokeTemplaterOptional(templateName: string, extra: Record<string, unknown>): Promise<unknown | null> {
+    private async invokeTemplaterOptional(templateName: string, extra: Record<string, unknown>): Promise<unknown> {
         if (!this.templater.ea.file.get_tfile(templateName)) {
             return null;
         }

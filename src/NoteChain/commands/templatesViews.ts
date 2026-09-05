@@ -1,5 +1,5 @@
 import {
-	Notice, TFile, TFolder
+	Notice, TFile
 } from 'obsidian';
 
 import type NoteChainPlugin from '../../plugin';

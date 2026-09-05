@@ -1,4 +1,7 @@
 import type { HttpReq, HttpRes } from '../http-types';
+import { desktopNodeOrThrow, type NodeFsModule } from '../obsidian-app';
+
+const fs = desktopNodeOrThrow<NodeFsModule>('fs');
 
 /** 读取 HTTP 请求体（Node IncomingMessage） */
 export function readHttpBody(req: HttpReq): Promise<string> {
@@ -121,8 +124,6 @@ export function parseByteRange(
     return { start, end };
 }
 
-const fs = require('fs');
-
 /** 以流式响应本地文件，支持 Range（视频/音频分段加载） */
 export function sendLocalFile(
     req: HttpReq,
@@ -156,7 +157,7 @@ export function sendLocalFile(
             'Content-Length': chunkSize,
             'Content-Range': `bytes ${start}-${end}/${size}`,
         });
-        fs.createReadStream(absPath, { start, end }).pipe(res);
+        fs.createReadStream(absPath, { start, end }).pipe(res as unknown as NodeJS.WritableStream);
         return;
     }
 
@@ -164,5 +165,5 @@ export function sendLocalFile(
         ...baseHeaders,
         'Content-Length': size,
     });
-    fs.createReadStream(absPath).pipe(res);
+    fs.createReadStream(absPath).pipe(res as unknown as NodeJS.WritableStream);
 }

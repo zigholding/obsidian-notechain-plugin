@@ -1,5 +1,5 @@
 import {
-	Notice, TFile, TFolder, MarkdownView
+	MarkdownView
 } from 'obsidian';
 
 import type NoteChainPlugin from '../../plugin';
@@ -106,7 +106,7 @@ export const cmd_open_prev_note_of_right_leaf = (plugin:NoteChainPlugin) => ({
 			let prev = nc.chain.get_prev_note(file ?? undefined);
 			if(prev){
 				await leaf.openFile(prev,{active:false});
-				await nc.app.workspace.trigger('file-open', leaf);
+				nc.app.workspace.trigger('file-open', leaf);
 			}
 		}
 	}
@@ -124,7 +124,7 @@ export const cmd_open_next_note_of_right_leaf = (plugin:NoteChainPlugin) => ({
 			let next = nc.chain.get_next_note(file ?? undefined);
 			if(next){
 				await leaf.openFile(next,{active:false});
-				await nc.app.workspace.trigger('file-open', leaf);
+				nc.app.workspace.trigger('file-open', leaf);
 			}
 		}
 	}

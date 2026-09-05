@@ -1,5 +1,3 @@
-import { Notice, TFile } from 'obsidian';
-
 import type NoteChainPlugin from '../plugin';
 import { BaseWebViewer } from './LLM/BaseWebViewer';
 import { DeepSeek } from './LLM/DeepSeek';
@@ -29,14 +27,15 @@ export interface WebViewerTurndownStylesNormalized {
 }
 
 export interface WebViewerLLMModule extends
+	WebViewerLLMModuleClass,
 	WebViewerLLMRegistry,
 	WebViewerLLMChatCommands,
 	WebViewerLLMChatWithTarget,
 	WebViewerLLMUiCommands,
 	WebViewerLLMTurndown {}
 
-export class WebViewerLLMModule {
-	readonly plugin: NoteChainPlugin;
+class WebViewerLLMModuleClass {
+	plugin: NoteChainPlugin;
 
 	llms: Array<BaseWebViewer>;
 	basellms: Array<BaseWebViewer>;
@@ -56,14 +55,14 @@ export class WebViewerLLMModule {
 	constructor(plugin: NoteChainPlugin) {
 		this.plugin = plugin;
 		this.llms = [];
-		this.doubao = new Doubao(this.app);
-		this.kimi = new Kimi(this.app);
-		this.yuanbao = new Yuanbao(this.app);
-		this.chatgpt = new ChatGPT(this.app);
-		this.chatglm = new ChatGLM(this.app);
-		this.gemini = new Gemini(this.app);
-		this.claude = new Claude(this.app);
-		this.deepseek = new DeepSeek(this.app);
+		this.doubao = new Doubao(this.plugin.app);
+		this.kimi = new Kimi(this.plugin.app);
+		this.yuanbao = new Yuanbao(this.plugin.app);
+		this.chatgpt = new ChatGPT(this.plugin.app);
+		this.chatglm = new ChatGLM(this.plugin.app);
+		this.gemini = new Gemini(this.plugin.app);
+		this.claude = new Claude(this.plugin.app);
+		this.deepseek = new DeepSeek(this.plugin.app);
 		this.basellms = [
 			this.yuanbao,
 			this.chatgpt,
@@ -74,11 +73,15 @@ export class WebViewerLLMModule {
 			this.gemini,
 			this.claude,
 		];
-		this.basewv = new BaseWebViewer(this.app, '');
+		this.basewv = new BaseWebViewer(this.plugin.app, '');
 	}
 }
 
-applyMixins(WebViewerLLMModule, [
+export const WebViewerLLMModule = WebViewerLLMModuleClass as {
+	new (plugin: NoteChainPlugin): WebViewerLLMModule;
+};
+
+applyMixins(WebViewerLLMModuleClass, [
 	WebViewerLLMRegistry,
 	WebViewerLLMChatCommands,
 	WebViewerLLMChatWithTarget,

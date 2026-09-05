@@ -11,18 +11,13 @@ import { NoteChainChainOps } from './NoteChain/chainOps';
 import { NoteChainMisc } from './NoteChain/misc';
 import { applyMixins } from './ts-helpers';
 
-export interface NoteChain extends
-	NoteChainFolderChildren,
-	NoteChainNavigation,
-	NoteChainChainOps,
-	NoteChainMisc {}
-
-export class NoteChain {
+class NoteChainClass {
 	plugin: NoteChainPlugin;
 	app: App;
 	prev: string;
 	next: string;
 	children: Record<string, TAbstractFile[]>;
+	init_children!: () => void;
 
 	constructor(plugin: NoteChainPlugin,
 		prev = "PrevNote", next = "NextNote",
@@ -35,11 +30,25 @@ export class NoteChain {
 		this.next = next;
 		this.children = {};
 		this.init_children();
-
 	}
 }
 
-applyMixins(NoteChain, [
+export interface NoteChain extends
+	NoteChainClass,
+	NoteChainFolderChildren,
+	NoteChainNavigation,
+	NoteChainChainOps,
+	NoteChainMisc {}
+
+export const NoteChain = NoteChainClass as {
+	new (
+		plugin: NoteChainPlugin,
+		prev?: string,
+		next?: string,
+	): NoteChain;
+};
+
+applyMixins(NoteChainClass, [
 	NoteChainFolderChildren,
 	NoteChainNavigation,
 	NoteChainChainOps,

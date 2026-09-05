@@ -111,7 +111,7 @@ export default class SelectColor extends Modal {
 		this.previewEl = surface.createDiv({ cls: "nc-color-picker-preview" });
 
 		const meta = pickerWrap.createDiv({ cls: "nc-color-picker-meta" });
-		this.hexEl = meta.createEl("span", { cls: "nc-color-picker-hex" });
+		this.hexEl = meta.createSpan({ cls: "nc-color-picker-hex" });
 
 		this.colorInputEl.addEventListener("input", () => {
 			this.color = this.colorInputEl.value;

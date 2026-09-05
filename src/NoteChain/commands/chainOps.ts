@@ -1,5 +1,5 @@
 import {
-	Notice, TFile, TFolder
+	TFile
 } from 'obsidian';
 
 import type NoteChainPlugin from '../../plugin';
@@ -83,7 +83,7 @@ export const create_new_note = (plugin:NoteChainPlugin) => ({
 			let curr = plugin.chain.current_note;
 			if(curr && curr.parent){
 				let path = curr.parent.path+'/'+name+'.md';
-				let dst = await plugin.easyapi.file.get_tfile(path);
+				let dst = plugin.easyapi.file.get_tfile(path);
 				if(dst==null){
 					dst = await plugin.app.vault.create(
 						curr.parent.path+'/'+name+'.md',

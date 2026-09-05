@@ -1,13 +1,13 @@
 
 
-import { App, Plugin, View, WorkspaceLeaf, TFile } from 'obsidian';
+import { App, Plugin, getLanguage } from 'obsidian';
 
 import {dialog_suggest} from './gui/inputSuggester'
 import { dialog_multi_suggest } from './gui/inputMultiSuggester'
 import { dialog_prompt } from './gui/inputPrompt'
 import { dialog_markdown_prompt } from './gui/markdownPrompt'
 import {selectColor} from './gui/selectColor'
-import { openCardNavigator, type CardItem } from './gui/inputCardSuggester'
+import { openCardNavigator } from './gui/inputCardSuggester'
 import { openCalendarGallery } from './gui/calendarGalleryModal'
 import { exitLightbox } from './gui/mediaLightbox'
 import {EasyEditor } from './editor';
@@ -146,7 +146,7 @@ export class EasyAPI {
     }
 
     get isZh(){
-        return window.localStorage.getItem('language') == 'zh';
+        return getLanguage() == 'zh';
     }
 }
 

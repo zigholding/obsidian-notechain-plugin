@@ -1,9 +1,5 @@
-import { App } from 'obsidian';
-import type { IncomingMessage, RequestOptions } from 'http';
-
-const http = require('http');
-const https = require('https');
-const url = require('url');
+import { App, Platform } from 'obsidian';
+import { desktopNode } from '../obsidian-app';
 
 export interface WebRequestOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -14,9 +10,38 @@ export interface WebRequestOptions {
 
 export interface WebResponse {
     statusCode: number;
-    headers: IncomingMessage['headers'];
+    headers: Record<string, string | string[] | undefined>;
     body: unknown;
     text: string;
+}
+
+interface NodeHttpIncomingMessage {
+    statusCode?: number;
+    headers: Record<string, string | string[] | undefined>;
+    on(event: 'data', listener: (chunk: unknown) => void): this;
+    on(event: 'end', listener: () => void): this;
+}
+
+interface NodeClientRequest {
+    on(event: 'error', listener: (error: Error) => void): this;
+    on(event: 'timeout', listener: () => void): this;
+    write(chunk: string | Buffer): void;
+    end(): void;
+    destroy(): void;
+}
+
+interface NodeHttpClient {
+    request(
+        options: {
+            hostname?: string;
+            port?: number;
+            path?: string;
+            method?: string;
+            headers?: Record<string, string>;
+            timeout?: number;
+        },
+        callback: (res: NodeHttpIncomingMessage) => void,
+    ): NodeClientRequest;
 }
 
 export class Web {
@@ -33,37 +58,18 @@ export class Web {
      * @returns Promise<WebResponse>
      */
     async request(urlStr: string, options: WebRequestOptions = {}): Promise<WebResponse> {
-        // 解析 URL 并正确处理编码
-        const parsed = url.parse(urlStr);
+        if (!Platform.isDesktop) {
+            throw new Error('Node HTTP is only available on desktop');
+        }
+        const http = desktopNode<NodeHttpClient>('http');
+        const https = desktopNode<NodeHttpClient>('https');
+        if (!http || !https) {
+            throw new Error('Node HTTP is only available on desktop');
+        }
+        const parsed = new URL(urlStr);
         const isHttps = parsed.protocol === 'https:';
         const client = isHttps ? https : http;
-
-        // 处理路径和查询字符串的编码
-        let requestPath = parsed.pathname || '/';
-        
-        // 处理查询字符串，确保中文字符被正确编码
-        if (parsed.query || parsed.search) {
-            let queryString = '';
-            if (parsed.search) {
-                // 解析查询字符串并重新编码
-                const queryParams = new URLSearchParams(parsed.search.substring(1));
-                queryString = '?' + queryParams.toString();
-            } else if (parsed.query) {
-                // 手动处理查询字符串
-                const parts: string[] = [];
-                const queryPairs = parsed.query.split('&');
-                for (const pair of queryPairs) {
-                    const [key, ...valueParts] = pair.split('=');
-                    const value = valueParts.join('=');
-                    // 对键和值进行编码（如果还没有编码）
-                    const encodedKey = encodeURIComponent(decodeURIComponent(key || ''));
-                    const encodedValue = encodeURIComponent(decodeURIComponent(value || ''));
-                    parts.push(`${encodedKey}=${encodedValue}`);
-                }
-                queryString = '?' + parts.join('&');
-            }
-            requestPath = requestPath + queryString;
-        }
+        const requestPath = `${parsed.pathname || '/'}${parsed.search}`;
 
         const method = options.method || 'GET';
         const headers = options.headers || {};
@@ -81,9 +87,9 @@ export class Web {
             }
         }
 
-        const requestOptions: RequestOptions = {
+        const requestOptions = {
             hostname: parsed.hostname,
-            port: parsed.port || (isHttps ? 443 : 80),
+            port: parsed.port ? Number(parsed.port) : (isHttps ? 443 : 80),
             path: requestPath,
             method: method,
             headers: headers,
@@ -91,11 +97,11 @@ export class Web {
         };
 
         return new Promise((resolve, reject) => {
-            const req = client.request(requestOptions, (res: IncomingMessage) => {
+            const req = client.request(requestOptions, (res) => {
                 let data = '';
 
-                res.on('data', (chunk: Buffer) => {
-                    data += chunk.toString();
+                res.on('data', (chunk) => {
+                    data += String(chunk);
                 });
 
                 res.on('end', () => {
@@ -103,7 +109,7 @@ export class Web {
                     
                     // 尝试解析 JSON
                     const contentType = res.headers['content-type'] || '';
-                    if (contentType.includes('application/json')) {
+                    if (String(contentType).includes('application/json')) {
                         try {
                             body = JSON.parse(data);
                         } catch {

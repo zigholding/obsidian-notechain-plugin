@@ -1,18 +1,6 @@
-import { Notice, TFile } from 'obsidian';
+import { Notice } from 'obsidian';
 
-import type { CardItem } from '../easyapi/gui/inputCardSuggester';
 import type NoteChainPlugin from '../plugin';
-import { WebViewLLMSettings_DEFAULT } from './setting';
-import { strings } from './strings';
-import { BaseWebViewer } from './LLM/BaseWebViewer';
-import { DeepSeek } from './LLM/DeepSeek';
-import { Doubao } from './LLM/Doubao';
-import { Kimi } from './LLM/Kimi';
-import { Yuanbao } from './LLM/Yuanbao';
-import { ChatGPT } from './LLM/ChatGPT';
-import { ChatGLM } from './LLM/ChatGLM';
-import { Gemini } from './LLM/Gemini';
-import { Claude } from './LLM/Claude';
 import type { WebViewerLLMModule } from './WebViewerLLMModule';
 
 
@@ -75,7 +63,7 @@ export class WebViewerLLMUiCommands {
 		try {
 			await this.easyapi.editor.write_clipboard(snippet);
 			new Notice(`${llm.name}: profile snippet copied`);
-		} catch (e) {
+		} catch {
 			new Notice(`${llm.name}: copy failed, snippet in console`);
 		}
 	}
@@ -98,7 +86,7 @@ export class WebViewerLLMUiCommands {
 		if (llms.length > 1) {
 			xtx = `[${anyblock}|addClass(ab-col${llms.length})]\n`;
 		}
-		for (const i in rsps) {
+		for (let i = 0; i < rsps.length; i++) {
 			const name = llms[i].name;
 			xtx =
 				xtx +

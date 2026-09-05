@@ -6,6 +6,7 @@ import {
 	Notice,
 	TFile,
 	WorkspaceLeaf,
+	getLanguage,
 } from "obsidian";
 
 type MarkdownPromptOptions = {
@@ -40,7 +41,7 @@ class MarkdownInputPrompt extends Modal {
 
 	constructor(app: App, private readonly options: MarkdownPromptOptions) {
 		super(app);
-		this.isZh = window.localStorage.getItem("language") === "zh";
+		this.isZh = getLanguage() === "zh";
 		this.input = options.value ?? "";
 		this.promise = new Promise<string>((resolve, reject) => {
 			this.resolvePromise = resolve;

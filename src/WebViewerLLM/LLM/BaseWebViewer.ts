@@ -144,7 +144,7 @@ export class BaseWebViewer {
 
     async delay(ms: number) {
         return new Promise(resolve => {
-            setTimeout(resolve, ms);
+            window.setTimeout(resolve, ms);
         });
     }
 

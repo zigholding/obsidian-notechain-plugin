@@ -1,5 +1,5 @@
 import { App } from 'obsidian';
-import { obsidianApp } from '../obsidian-app';
+import { obsidianApp, desktopNode } from '../obsidian-app';
 import { certFingerprintsMatch, readNoteChainCertFingerprint } from './httpsCert';
 
 const installedKeys = new Set<string>();
@@ -61,10 +61,11 @@ interface ElectronCertVerifyRequest {
 
 function getElectronSession(partition: string): ElectronCertSession | null {
     try {
-        const electron = require('electron') as {
+        const electron = desktopNode<{
             session?: { fromPartition?: (p: string) => ElectronCertSession };
             remote?: { session?: { fromPartition?: (p: string) => ElectronCertSession } };
-        };
+        }>('electron');
+        if (!electron) return null;
         const fromPartition =
             electron.session?.fromPartition?.bind(electron.session) ||
             electron.remote?.session?.fromPartition?.bind(electron.remote?.session);

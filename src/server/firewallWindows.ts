@@ -1,14 +1,19 @@
+import { Platform } from 'obsidian';
+import { desktopNode, type NodeChildProcessModule } from '../obsidian-app';
+
 /** Windows 入站防火墙：Tailscale / 局域网访问端口 */
 export function ensureWindowsFirewallPorts(ports: number[]): void {
+    if (!Platform.isDesktop) return;
     if (process.platform !== 'win32' || !ports.length) return;
 
-    const { execSync } = require('child_process');
+    const cp = desktopNode<NodeChildProcessModule>('child_process');
+    if (!cp) return;
     const failed: number[] = [];
 
     for (const port of ports) {
         const name = `Note-Chain ${port}`;
         try {
-            execSync(`netsh advfirewall firewall show rule name="${name}"`, {
+            cp.execSync(`netsh advfirewall firewall show rule name="${name}"`, {
                 encoding: 'utf8',
                 stdio: ['pipe', 'pipe', 'ignore'],
                 windowsHide: true,
@@ -18,7 +23,7 @@ export function ensureWindowsFirewallPorts(ports: number[]): void {
             /* rule missing */
         }
         try {
-            execSync(
+            cp.execSync(
                 `netsh advfirewall firewall add rule name="${name}" dir=in action=allow protocol=TCP localport=${port}`,
                 { stdio: 'ignore', windowsHide: true },
             );

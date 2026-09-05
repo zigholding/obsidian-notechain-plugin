@@ -1,18 +1,6 @@
-import { Notice, TFile } from 'obsidian';
+import { TFile } from 'obsidian';
 
-import type { CardItem } from '../easyapi/gui/inputCardSuggester';
 import type NoteChainPlugin from '../plugin';
-import { WebViewLLMSettings_DEFAULT } from './setting';
-import { strings } from './strings';
-import { BaseWebViewer } from './LLM/BaseWebViewer';
-import { DeepSeek } from './LLM/DeepSeek';
-import { Doubao } from './LLM/Doubao';
-import { Kimi } from './LLM/Kimi';
-import { Yuanbao } from './LLM/Yuanbao';
-import { ChatGPT } from './LLM/ChatGPT';
-import { ChatGLM } from './LLM/ChatGLM';
-import { Gemini } from './LLM/Gemini';
-import { Claude } from './LLM/Claude';
 import type { WebViewerLLMModule } from './WebViewerLLMModule';
 
 
@@ -38,12 +26,12 @@ export class WebViewerLLMChatCommands {
 		const allItems = Array.from(allItemsSet);
 
 		for (const item of allItems) {
-			const code = await this.easyapi.editor.get_code_section(tfile, item as string, -1);
+			const code = await this.easyapi.editor.get_code_section(tfile, item, -1);
 			if (typeof code === 'string' && code) {
 				return code;
 			}
 
-			const heading = await this.easyapi.editor.get_heading_section(tfile, item as string, -1, false);
+			const heading = await this.easyapi.editor.get_heading_section(tfile, item, -1, false);
 			if (typeof heading === 'string' && heading) {
 				return heading;
 			}

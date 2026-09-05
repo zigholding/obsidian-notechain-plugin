@@ -10,6 +10,7 @@ import { EasyEditorClipboard } from './editor/clipboard';
 import { applyMixins } from '../ts-helpers';
 
 export interface EasyEditor extends
+	EasyEditorClass,
 	EasyEditorFrontmatter,
 	EasyEditorListParse,
 	EasyEditorBlocks,
@@ -17,7 +18,7 @@ export interface EasyEditor extends
 	EasyEditorObjPath,
 	EasyEditorClipboard {}
 
-export class EasyEditor {
+class EasyEditorClass {
     yamljs = { load: (src: string) => parseYaml(src) };
     app: App;
     ea: EasyAPI;
@@ -30,7 +31,11 @@ export class EasyEditor {
     }
 }
 
-applyMixins(EasyEditor, [
+export const EasyEditor = EasyEditorClass as {
+	new (app: App, api: EasyAPI): EasyEditor;
+};
+
+applyMixins(EasyEditorClass, [
 	EasyEditorFrontmatter,
 	EasyEditorListParse,
 	EasyEditorBlocks,

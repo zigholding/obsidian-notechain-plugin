@@ -1,11 +1,8 @@
 import {
-	App, Editor, MarkdownView, Modal, Notice,
-	CachedMetadata,
+	Notice,
 	Plugin,
 	Platform,
-	TAbstractFile,
-	moment,
-	TFile, TFolder
+	TFile
 } from 'obsidian';
 
 import { NoteChain } from './NoteChain';
@@ -27,7 +24,7 @@ import { getWebViewerPartition, installWebviewTlsTrust } from './server/tlsWebvi
 import { DailyJob } from './daily_job';
 import { WebViewerLLMModule } from './WebViewerLLM/WebViewerLLMModule';
 import { moveSelectedNotesAsNext } from './NoteChain/chainInsert';
-import { noteChainPlugin, obsidianApp, vaultBasePath } from './obsidian-app';
+import { noteChainPlugin, obsidianApp, vaultBasePath, desktopNode, type NodePathModule } from './obsidian-app';
 import * as ncUtils from './utils';
 import * as obsidianApi from 'obsidian';
 
@@ -77,14 +74,14 @@ export default class NoteChainPlugin extends Plugin {
 
 	async _after_loading_() {
 		while (!obsidianApp(this.app).plugins?.plugins['note-chain']) {
-			await new Promise(resolve => setTimeout(resolve, 100)); // 等待100ms再检查
+			await new Promise(resolve => window.setTimeout(resolve, 100)); // 等待100ms再检查
 		}
 
 		void obsidianApp(this.app).commands.executeCommandById(
 			"dataview:dataview-force-refresh-views"
 		);
 
-		let target = await obsidianApp(this.app).plugins.getPlugin("obsidian-tasks-plugin") as {
+		let target = obsidianApp(this.app).plugins.getPlugin("obsidian-tasks-plugin") as {
 			cache?: { notifySubscribers: () => unknown };
 		} | null;
 		target && void target.cache?.notifySubscribers();
@@ -115,7 +112,8 @@ export default class NoteChainPlugin extends Plugin {
 
 		// HTTP/HTTPS 仅桌面端（依赖 Node crypto / fs；selfsigned 在 mobile 会因 webcrypto 崩溃）
 		if (Platform.isDesktopApp) {
-			const nodePath = require("path") as typeof import("path");
+			const nodePath = desktopNode<NodePathModule>("path");
+			if (nodePath) {
 			const vaultRoot = vaultBasePath(this.app);
 			const configDirAbs = nodePath.join(vaultRoot, this.app.vault.configDir);
 			this.httpServer = new HTTPServer(
@@ -148,6 +146,7 @@ export default class NoteChainPlugin extends Plugin {
 							}
 						});
 				}
+			}
 			}
 		}
 
@@ -185,11 +184,11 @@ export default class NoteChainPlugin extends Plugin {
 				console.error('Note Chain: HTTP server stop failed', e);
 			}
 		}
-		await this.explorer.unregister();
+		this.explorer.unregister();
 		await this.explorer.sort();
 	}
 
-	async ufunc_on_file_open(file: TFile | null) {
+	ufunc_on_file_open(file: TFile | null) {
 		if (file?.basename == 'note-chain-templater-target') {
 			return;
 		}
@@ -199,7 +198,7 @@ export default class NoteChainPlugin extends Plugin {
 			);
 		}
 		if (this.settings.notechain.refreshTasks) {
-			let target = await obsidianApp(this.app).plugins.getPlugin("obsidian-tasks-plugin") as {
+			let target = obsidianApp(this.app).plugins.getPlugin("obsidian-tasks-plugin") as {
 				cache?: { notifySubscribers: () => unknown };
 			} | null;
 			target && void target.cache?.notifySubscribers();
@@ -326,7 +325,7 @@ export default class NoteChainPlugin extends Plugin {
 		let curr = this.chain.current_note;
 		if (curr == null) { return; }
 		const modeKey = this.settings.notechain.suggesterNotesMode as keyof Strings;
-		let smode = this.strings[modeKey] as unknown as string;
+		let smode = this.strings[modeKey];
 		let notes = await this.chain.suggester_notes(curr, false, smode);
 		if (!notes) { return }
 		notes = this.chain.sort_tfiles(notes, ['mtime', 'x']);
@@ -383,7 +382,7 @@ export default class NoteChainPlugin extends Plugin {
 	}
 
 	tfile_to_string(tfile: TFile, fields: Array<string>, seq: string) {
-		let items = new Array();
+		let items: unknown[] = [];
 		if (tfile == this.chain.current_note) {
 			items.push('🏠' + tfile.basename)
 		} else {
@@ -393,7 +392,7 @@ export default class NoteChainPlugin extends Plugin {
 		for (let field of fields) {
 			try {
 				items.push(this.editor.get_frontmatter(tfile, field));
-			} catch (error) {
+			} catch {
 				items.push("-");
 			}
 		}

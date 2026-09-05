@@ -10,7 +10,6 @@ import {
 
 import { NoteContentModal } from '../NCModal';
 import { NoteContentView } from '../NCView';
-import { strings } from './strings';
 import type NoteChainPlugin from '../plugin';
 import type { NoteChain } from '../NoteChain';
 import { obsidianApp, vaultFullPath } from '../obsidian-app';
@@ -133,7 +132,7 @@ export class NoteChainNavigation {
 			let msg = this.plugin.utils.array_prefix_id(items);
 			let note = await this.plugin.easyapi.dialog_suggest(msg, notes,'',new_value);
 			return note;
-		} catch (error) {
+		} catch {
 			return null;
 		}
 	}
@@ -156,7 +155,8 @@ export class NoteChainNavigation {
 		try {
 			let note = await this.sugguster_note();
 			await this.open_note(note);
-		} catch (error) {
+		} catch {
+			// user cancelled note picker
 		}
 	}
 
@@ -380,21 +380,20 @@ export class NoteChainNavigation {
 			let name = this.plugin.editor.get_frontmatter(tfile, this.prev);
 			let note = typeof name === 'string' ? this.plugin.easyapi.file.get_tfile(name) : null;
 			if (!note && across) {// 不存在时，获取文件列表中的下一个文件
-				let chain = this;
-				function _prev_(tfile: TAbstractFile): TFile | null {
-					if (tfile.parent) {
-						let tfiles = chain.children[tfile.parent.path];
-						let idx = tfiles.indexOf(tfile);
+				const _prev_ = (file: TAbstractFile): TFile | null => {
+					if (file.parent) {
+						let tfiles = this.children[file.parent.path];
+						let idx = tfiles.indexOf(file);
 						// 在当前目录下搜索
 						while (idx > 0) {
-							let cnote = chain.get_1st_note(tfiles[idx - 1], true);
+							let cnote = this.get_1st_note(tfiles[idx - 1], true);
 							if (cnote) {
 								return cnote;
 							} else {
 								idx = idx - 1
 							}
 						}
-						return _prev_(tfile.parent);
+						return _prev_(file.parent);
 					}
 					return null;
 				}
@@ -434,21 +433,20 @@ export class NoteChainNavigation {
 			// 根据元数据获取后置笔记
 			let note = typeof name === 'string' ? this.plugin.easyapi.file.get_tfile(name) : null;
 			if (!note && across) {// 不存在时，获取文件列表中的下一个文件
-				let chain = this;
-				function _next_(tfile: TAbstractFile): TFile | null {
-					if (tfile.parent) {
-						let tfiles = chain.children[tfile.parent.path];
-						let idx = tfiles.indexOf(tfile);
+				const _next_ = (file: TAbstractFile): TFile | null => {
+					if (file.parent) {
+						let tfiles = this.children[file.parent.path];
+						let idx = tfiles.indexOf(file);
 						// 在当前目录下搜索
 						while (idx < tfiles.length - 1) {
-							let cnote = chain.get_1st_note(tfiles[idx + 1], false);
+							let cnote = this.get_1st_note(tfiles[idx + 1], false);
 							if (cnote) {
 								return cnote;
 							} else {
 								idx = idx + 1
 							}
 						}
-						return _next_(tfile.parent);
+						return _next_(file.parent);
 					}
 					return null;
 				}
@@ -480,7 +478,7 @@ export class NoteChainNavigation {
 	get_chain(this: NoteChain, tfile = this.current_note, prev = 10, next = 10, with_self = true,across=false) {
 		if (tfile == null) { return []; }
 
-		let res = new Array();
+		let res: TFile[] = [];
 		if (with_self) {
 			res.push(tfile);
 		}
@@ -612,7 +610,7 @@ export class NoteChainNavigation {
 			}
 			tmp = this.plugin.editor.get_frontmatter(tfile, 'arxiv');
 			if (tmp && typeof tmp === 'object' && 'ID' in tmp && tmp.ID != null) {
-				items['🌐arxiv'] = `https://arxiv.org/abs/` + String((tmp as { ID: unknown }).ID);
+				items['🌐arxiv'] = `https://arxiv.org/abs/` + String(tmp.ID);
 			}
 
 

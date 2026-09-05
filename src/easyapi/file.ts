@@ -1,7 +1,7 @@
 
 
 
-import { App, View, WorkspaceLeaf, TFile, TFolder, TAbstractFile } from 'obsidian';
+import { App, TFile, TFolder, TAbstractFile } from 'obsidian';
 import { CardNavigatorOptions, type CardItem } from './gui/inputCardSuggester'
 
 import { EasyAPI } from 'src/easyapi/easyapi'
@@ -308,7 +308,7 @@ export class File {
 				structure += this.generate_structure(child, depth + 1, isRoot, only_folder, only_md);
 			} else if (!only_folder) {
 				// 文件节点：对齐符号与目录
-				if (only_md && (child as TFile).extension != 'md') { return }
+				if (only_md && (!(child instanceof TFile) || child.extension != 'md')) { return }
 				structure += `${indent}${prefix}${child.name}\n`;
 			}
 		});

@@ -1,8 +1,6 @@
 import {
-	App, Editor, MarkdownView, Modal, Notice,
-	Plugin, PluginSettingTab, Setting, moment, MarkdownRenderer, Component,
-	TAbstractFile,
-	TFile, TFolder,
+	App, Notice,
+	TFile,
 	MarkdownPostProcessorContext,
 	MarkdownRenderChild,
 	parseYaml,
@@ -237,7 +235,7 @@ export class NCTextarea {
 				}
 			}
 			
-			let container = el.createEl("div", { cls: 'textarea-container' });
+			let container = el.createDiv({ cls: 'textarea-container' });
 			// Online 预览：块内保存 source，按钮带 data-nc-online-fname，由浏览器端委托点击并调 /online/api/textarea-exec
 			let metaSrc = container.createEl('textarea', {
 				cls: 'nc-ta-block-meta',
@@ -275,7 +273,7 @@ export class NCTextarea {
 					let btns = config[k];
 					if (btns && Array.isArray(btns)) {
 						// 创建一个按钮容器
-						let buttonContainer = container.createEl("div", { cls: 'code_block_textarea_btn_container' });
+						let buttonContainer = container.createDiv({ cls: 'code_block_textarea_btn_container' });
 
 						const applyBtnStyle = async (xbtn: HTMLButtonElement, style: unknown) => {
 							if (!isRecord(style)) { return }
@@ -393,11 +391,11 @@ export class NCTextarea {
 											configurable: true,
 											enumerable: true,
 											get() {
-												return area ? String((area as HTMLTextAreaElement).value) : '';
+												return area ? String(area.value) : '';
 											},
 											set(v: string) {
 												if (area) {
-													(area as HTMLTextAreaElement).value = String(v);
+													area.value = String(v);
 												}
 											},
 										});
@@ -405,11 +403,11 @@ export class NCTextarea {
 											configurable: true,
 											enumerable: true,
 											get() {
-												return area ? String((area as HTMLTextAreaElement).value) : '';
+												return area ? String(area.value) : '';
 											},
 											set(v: string) {
 												if (area) {
-													(area as HTMLTextAreaElement).value = String(v);
+													area.value = String(v);
 												}
 											},
 										});

@@ -10,11 +10,12 @@ import { OLDBUDDY_PAGE_HTML } from '../oldbuddyPageHtml';
 import { OldBuddyStore, inferOldBuddyMessageType } from './oldbuddyStore';
 import { parseJiujiuPacket, JiujiuPushError } from './jiujiu';
 import { normalizeAttachments } from './types';
-import type { Buffer } from 'buffer';
 import type { HttpReq, HttpRes, ParsedReqUrl } from '../../http-types';
-import type { Socket } from 'net';
+import { parseRequestUrl } from '../../http-types';
 import { errorMessage } from '../../ts-helpers';
-let url = require('url');
+import type { OldBuddyWsClient } from './oldbuddyWebSocket';
+
+type Socket = OldBuddyWsClient['socket'];
 
 const BASE = '/oldbuddy';
 
@@ -45,7 +46,7 @@ export class OldBuddyHttpHandlers {
     }
 
     handleUpgrade(req: HttpReq, socket: Socket, head: Buffer) {
-        const parsed = url.parse(req.url || '', true);
+        const parsed = parseRequestUrl(req.url || '');
         const pathname = parsed.pathname || '';
         const kind = pathname === `${BASE}/ws` ? 'web' : 'jiujiu';
         const target = String(parsed.query?.target || '').trim();
@@ -109,7 +110,7 @@ export class OldBuddyHttpHandlers {
         }
         if (sub.startsWith('uploads/') && req.method === 'GET') {
             const fname = decodeURIComponent(sub.slice('uploads/'.length));
-            await this.serveUpload(req, res, fname);
+            this.serveUpload(req, res, fname);
             return true;
         }
 
@@ -285,7 +286,7 @@ export class OldBuddyHttpHandlers {
                     fields = fields.message as Record<string, unknown>;
                 }
             } else {
-                fields = parseUrlEncoded(body) as Record<string, unknown>;
+                fields = parseUrlEncoded(body);
             }
             const message = await this.store.pushExternalMessage({
                 content: String(fields.content || ''),

@@ -1,7 +1,7 @@
 import {
 	Notice,
 	TAbstractFile,
-	TFile, TFolder,
+	TFile,
 	App
 } from 'obsidian';
 import type NoteChainPlugin from '../plugin';
@@ -142,17 +142,18 @@ export class NoteChainChainOps {
 
 		// 移动文件，打断旧链
 		for (let tfile of xtfiles) {
+			if (!(tfile instanceof TFile)) { continue; }
 			if (anchor.parent) {
 				if (same_folder && tfile.parent?.path != anchor.parent?.path) {
 					let dst = anchor.parent.path + "/" + tfile.name;
 					try {
 						await this.app.fileManager.renameFile(tfile, dst);
-					} catch (error) {
-						// console.log(error)
+					} catch {
+						// rename can fail if destination exists
 					}
 
 				}
-				await this.chain_pop_node(tfile as TFile)
+				await this.chain_pop_node(tfile)
 			}
 		}
 

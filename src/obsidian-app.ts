@@ -49,8 +49,8 @@ export interface VaultAdapterPaths {
 	basePath?: string;
 	getBasePath?: () => string;
 	getFullPath?: (normalizedPath: string) => string;
-	fs?: typeof import('fs');
-	path?: typeof import('path');
+	fs?: NodeFsModule;
+	path?: NodePathModule;
 }
 
 export function vaultAdapter(app: App): VaultAdapterPaths {
@@ -126,6 +126,94 @@ export function vaultUserIgnoreFilters(app: App): string[] | undefined {
 	return (app.vault as App['vault'] & { userIgnoreFilters?: string[] }).userIgnoreFilters;
 }
 
+/** Duck-typed Node path module (no static Node type imports). */
+export interface NodePathModule {
+	sep: string;
+	join(...parts: string[]): string;
+	basename(p: string, ext?: string): string;
+	dirname(p: string): string;
+	extname(p: string): string;
+}
+
+export interface NodeFsStats {
+	size: number;
+	mtimeMs: number;
+	isFile(): boolean;
+	isDirectory(): boolean;
+}
+
+export interface NodeReadStream {
+	pipe(destination: unknown): unknown;
+}
+
+/** Duck-typed Node fs module (no static Node type imports). */
+export interface NodeFsModule {
+	existsSync(p: string): boolean;
+	readFileSync(p: string, encoding: BufferEncoding): string;
+	readFileSync(p: string): Buffer;
+	writeFileSync(p: string, data: string | Uint8Array, encoding?: BufferEncoding): void;
+	mkdirSync(p: string, opts?: { recursive?: boolean }): string | undefined;
+	statSync(p: string): NodeFsStats;
+	createReadStream(p: string, opts?: { start?: number; end?: number }): NodeReadStream;
+	readdirSync(p: string): string[];
+	unlinkSync(p: string): void;
+	rmdirSync(p: string): void;
+	copyFileSync(src: string, dest: string): void;
+	promises?: {
+		readFile(p: string): Promise<Buffer>;
+	};
+	readFile(
+		p: string,
+		encoding: BufferEncoding,
+		cb: (err: Error | null, data: string) => void,
+	): void;
+	writeFile(
+		p: string,
+		data: string | Uint8Array,
+		encoding: BufferEncoding,
+		cb: (err: Error | null) => void,
+	): void;
+}
+
+/** Duck-typed Node crypto module (no static Node type imports). */
+export interface NodeHash {
+	update(data: string | Uint8Array): NodeHash;
+	digest(encoding: 'hex' | 'base64'): string;
+}
+
+export interface NodeCryptoModule {
+	createHash(algorithm: string): NodeHash;
+	randomBytes(size: number): Buffer;
+	X509Certificate: new (pem: string) => { subjectAltName?: string };
+}
+
+/** Duck-typed Node TCP socket from HTTP upgrade (no static Node type imports). */
+export interface NodeNetSocket {
+	destroyed: boolean;
+	destroy(): void;
+	write(data: string | Uint8Array): boolean;
+	end(): unknown;
+	setTimeout(ms: number): unknown;
+	setNoDelay(noDelay?: boolean): unknown;
+	setKeepAlive(enable?: boolean): unknown;
+	on(event: 'data', listener: (chunk: Buffer) => void): this;
+	on(event: 'close' | 'error', listener: (err?: Error) => void): this;
+	removeListener(event: 'data', listener: (chunk: Buffer) => void): this;
+}
+
+/** Duck-typed Node child_process (no static Node type imports). */
+export interface NodeChildProcessModule {
+	execSync(
+		command: string,
+		options?: {
+			encoding?: BufferEncoding;
+			stdio?: 'ignore' | ReadonlyArray<'pipe' | 'ignore' | 'inherit'>;
+			windowsHide?: boolean;
+			timeout?: number;
+		},
+	): string;
+}
+
 export function desktopRequire(): NodeRequire | undefined {
 	if (typeof window !== 'undefined') {
 		const req = (window as Window & { require?: NodeRequire }).require;
@@ -136,6 +224,26 @@ export function desktopRequire(): NodeRequire | undefined {
 	} catch {
 		return undefined;
 	}
+}
+
+/** Lazy Node/Electron module load without a `require()` token (mobile-safe until called). */
+export function desktopNode<T = unknown>(moduleId: string): T | undefined {
+	const req = desktopRequire();
+	if (typeof req !== 'function') return undefined;
+	try {
+		return req(moduleId) as T;
+	} catch {
+		return undefined;
+	}
+}
+
+/** Same as desktopNode, but for desktop-only modules that must exist when used. */
+export function desktopNodeOrThrow<T>(moduleId: string): T {
+	const mod = desktopNode<T>(moduleId);
+	if (mod === undefined) {
+		throw new Error(`Node module "${moduleId}" is not available`);
+	}
+	return mod;
 }
 
 export function hasCommunityPlugin(app: App, id: string): boolean {

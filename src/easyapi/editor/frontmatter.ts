@@ -1,4 +1,4 @@
-import { TAbstractFile, TFile, TFolder, App, FrontMatterCache } from 'obsidian';
+import { TAbstractFile, TFile, TFolder, App } from 'obsidian';
 import type { EasyAPI } from '../easyapi';
 import type { EasyEditor } from '../editor';
 import { vaultBasePath } from '../../obsidian-app';
@@ -41,14 +41,14 @@ export class EasyEditorFrontmatter {
         if (this.check_frontmatter(tfile, kv)) return true;
 
         return new Promise((resolve) => {
-            const timer = setTimeout(() => {
+            const timer = window.setTimeout(() => {
                 this.app.metadataCache.offref(off);
                 resolve(false);
             }, timeout);
 
             const off = this.app.metadataCache.on('changed', (file: TFile) => {
                 if (file.path === tfile.path && this.check_frontmatter(tfile, kv)) {
-                    clearTimeout(timer);
+                    window.clearTimeout(timer);
                     this.app.metadataCache.offref(off);
                     resolve(true);
                 }
@@ -70,19 +70,23 @@ export class EasyEditorFrontmatter {
         }
 
         if (typeof tfile === 'string') {
-            tfile = this.ea.file.get_tfile(tfile) as TFile;
+            const resolved = this.ea.file.get_tfile(tfile);
+            if (!(resolved instanceof TFile)) {
+                return false;
+            }
+            tfile = resolved;
         }
 
-        if (!tfile || !(tfile instanceof TFile)) {
+        if (!(tfile instanceof TFile)) {
             return false;
         }
 
         if (this.check_frontmatter(tfile, kv)) return true;
 
         for (let attempt = 0; attempt < nretry; attempt++) {
-            await this.app.fileManager.processFrontMatter(tfile, (fm: FrontMatterCache) => {
+            await this.app.fileManager.processFrontMatter(tfile, (fm: Record<string, unknown>) => {
                 for (const k in kv) {
-                    this.set_obj_value(fm as unknown as Record<string, unknown>, k, kv[k]);
+                    this.set_obj_value(fm, k, kv[k]);
                 }
             });
 
@@ -97,7 +101,9 @@ export class EasyEditorFrontmatter {
         try {
             if (!tfile) { return default_value; }
             if (typeof tfile === 'string') {
-                tfile = this.ea.file.get_tfile(tfile) as TFile;
+                const resolved = this.ea.file.get_tfile(tfile);
+                if (!(resolved instanceof TFile)) { return default_value; }
+                tfile = resolved;
             }
             if (tfile instanceof TFile) {
                 const meta = this.app.metadataCache.getFileCache(tfile);

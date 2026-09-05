@@ -109,21 +109,21 @@ export class Random {
         return shuffled.slice(0, n); // 取前N个
     }
 
-	_get_tfiles_(filter:null|Function){
+	_get_tfiles_(filter: ((file: TFile) => boolean) | null){
 		let tfiles = this.ea.file.get_all_tfiles();
 		if(filter){
 			tfiles = tfiles.filter((x:TFile)=>filter(x))
 		}
 		return tfiles;
 	}
-	random_notes(n=3,filter=null){
+	random_notes(n=3, filter: ((file: TFile) => boolean) | null = null){
 		let tfiles = this._get_tfiles_(filter);
 		let idx = this.random_number(tfiles.length,n)
 		tfiles = idx.map(i=>tfiles[i])
 		return tfiles
 	}
 
-    random_daily_notes(n=3,before_today=true,filter=null){
+    random_daily_notes(n=3, before_today=true, filter: ((file: TFile) => boolean) | null = null){
 		let t = moment(moment().format('YYYY-MM-DD') )
 		let dnote = this.ea.nc?.chain.get_last_daily_note()
 		if(dnote){

@@ -33,7 +33,7 @@ export class DailyJob {
         this.START_TIME = this.plugin.easyapi.time.parse_time('06:45'); // 每天的起始时间
         this.buffer = 10; // 缓冲时间
         this.dv = this.plugin.easyapi.dv;
-        this.PATTERN = /\n\> \[\!note\]\+ 事项 Done\n/;
+        this.PATTERN = /\n> \[!note\]\+ 事项 Done\n/;
         this.milestones = ['睡觉'];
         this.groups = ['作息', '工作', '家庭', '个人'];
         this.default_group = '工作';
@@ -78,9 +78,9 @@ export class DailyJob {
             if (typeof (tfile) == 'string') {
                 tfile = this.plugin.easyapi.file.get_tfile(tfile);
             }
-            if (!tfile) { return null }
-            let ctx = await this.app.vault.read(tfile as TFile);
-            let meta = this.app.metadataCache.getFileCache(tfile as TFile);
+            if (!(tfile instanceof TFile)) { return null }
+            let ctx = await this.app.vault.read(tfile);
+            let meta = this.app.metadataCache.getFileCache(tfile);
 			if (!meta || !meta.listItems) {
 				return [];
 			}
@@ -174,7 +174,7 @@ export class DailyJob {
         }, {});
 
         return Object.entries(countMap).map(
-			([element, count]) => ({ element, count: count as number })
+			([element, count]) => ({ element, count })
 		);
     }
 

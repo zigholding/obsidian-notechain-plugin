@@ -1,8 +1,10 @@
-let fs = require('fs');
-let path = require('path');
-let os = require('os');
-let crypto = require('crypto');
 import { getTailscaleSelfInfo } from './tailscaleUtil';
+import { desktopNode, desktopNodeOrThrow, type NodeCryptoModule, type NodeFsModule, type NodePathModule } from '../obsidian-app';
+
+const fs = desktopNodeOrThrow<NodeFsModule>('fs');
+const path = desktopNodeOrThrow<NodePathModule>('path');
+const os = desktopNodeOrThrow<typeof import('os')>('os');
+const crypto = desktopNodeOrThrow<NodeCryptoModule>('crypto');
 
 /** Lazy-load: selfsigned touches nodeCrypto.webcrypto at require-time (breaks Obsidian mobile). */
 interface SelfsignedPems {
@@ -18,7 +20,9 @@ interface SelfsignedLib {
 }
 
 function getSelfsigned(): SelfsignedLib {
-	return require('selfsigned') as SelfsignedLib;
+	const lib = desktopNode<SelfsignedLib>('selfsigned');
+	if (!lib) throw new Error('selfsigned unavailable');
+	return lib;
 }
 
 function normalizeCertFingerprint(fp: string): string {
@@ -88,9 +92,7 @@ function buildAltNames(): SanEntry[] {
         altNames.push({ type: 7, ip: ts.ipv4 });
     }
 
-    for (const list of Object.values(os.networkInterfaces()) as Array<
-        Array<{ family?: string; internal?: boolean; address?: string }> | undefined
-    >) {
+    for (const list of Object.values(os.networkInterfaces())) {
         for (const iface of list || []) {
             const family = String(iface.family || '');
             const address = String(iface.address || '').trim();

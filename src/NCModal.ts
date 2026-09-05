@@ -1,7 +1,6 @@
 
 import { 
 	App, Modal, Notice,MarkdownRenderer,Component,
-    TFile
 } from 'obsidian';
 
 import NoteChainPlugin from "./plugin";
@@ -44,6 +43,7 @@ dv.span(\`![[${sourcePath}]]\`);
     }
 
     onOpen() {
+        this.containerEl.doc.body.addClass('nc-modal-open');
         const {contentEl} = this;
         contentEl.empty();
         this.setModalSize();
@@ -221,6 +221,7 @@ dv.span(\`![[${sourcePath}]]\`);
     }
 
     onClose() {
+        this.containerEl.doc.body.removeClass('nc-modal-open');
         let {contentEl} = this;
         contentEl.empty();
         // 清理 Component

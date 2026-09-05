@@ -170,7 +170,7 @@ export class NoteChainFolderChildren {
 			return idx >= 0 ? idx : Number.MAX_SAFE_INTEGER;
 		};
 
-		const notes = (tfiles.filter(f => f instanceof TFile) as TFile[])
+		const notes = tfiles.filter((f): f is TFile => f instanceof TFile)
 			.slice()
 			.sort((a, b) => {
 				const d = indexOfInBase(a) - indexOfInBase(b);
@@ -207,7 +207,7 @@ export class NoteChainFolderChildren {
 		let ctfiles: TFile[] = segments.flat();
 
 		res.push(...ctfiles);
-		let canvas = res.filter(f => (f instanceof TFile) && (['canvas','base'].contains(f.extension)))
+		let canvas = res.filter((f): f is TFile => (f instanceof TFile) && (['canvas','base'].contains(f.extension)))
 		res = res.filter(f => (f instanceof TFile) && (!['canvas','base'].contains(f.extension)))
 		let folders = tfiles.filter(f => f instanceof TFolder);
 		if (folders.length > 0) {
@@ -228,8 +228,8 @@ export class NoteChainFolderChildren {
 		}
 
 		for (let tfile of canvas) {
-			let rname = res.map(x => x instanceof TFolder ? x.name : (x as TFile).basename);
-			let cname = (tfile as TFile).basename;
+			let rname = res.map(x => x instanceof TFile ? x.basename : x.name);
+			let cname = tfile.basename;
 			let idx = rname.indexOf(cname);
 			if (idx < 0) {
 				idx = rname.indexOf(cname.split('.').slice(0, -1).join('.'));
@@ -262,7 +262,7 @@ export class NoteChainFolderChildren {
 					return av - bv;
 				}
 				if (typeof (av) == 'string' && typeof (bv) == 'string') {
-					let v = (av as string).localeCompare(bv as string)
+					let v = av.localeCompare(bv)
 					return v
 				}
 				return 0

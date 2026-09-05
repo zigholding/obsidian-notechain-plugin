@@ -1,9 +1,9 @@
 import {
-	Notice, TFile, TFolder
+	Notice
 } from 'obsidian';
 
 import type NoteChainPlugin from '../../plugin';
-import { isMobileApp, obsidianApp, type WebviewerInternalPlugin } from '../../obsidian-app';
+import { isMobileApp, obsidianApp, desktopNode, type WebviewerInternalPlugin, type NodeFsModule } from '../../obsidian-app';
 import { errorMessage } from '../../ts-helpers';
 
 export const cmd_open_oldbuddy = (plugin: NoteChainPlugin) => ({
@@ -42,7 +42,9 @@ export const cmd_generate_mcp_skill = (plugin: NoteChainPlugin) => ({
 		const baseUrl = plugin.httpServer.getBaseUrl(plugin.settings.notechain.httpServerHost);
 		const content = await plugin.httpServer.getMCPSkillMarkdownAsync(baseUrl);
 		try {
-			const { dialog } = require('electron').remote;
+			const electron = desktopNode<{ remote?: { dialog?: { showSaveDialog: (opts: Record<string, unknown>) => Promise<{ canceled?: boolean; filePath?: string }> } } }>('electron');
+			const dialog = electron?.remote?.dialog;
+			if (!dialog) throw new Error('electron dialog unavailable');
 			const result = await dialog.showSaveDialog({
 				title: 'Save MCP Agent Skill (SKILL.md)',
 				defaultPath: 'SKILL.md',
@@ -52,7 +54,8 @@ export const cmd_generate_mcp_skill = (plugin: NoteChainPlugin) => ({
 				]
 			});
 			if (result.canceled || !result.filePath) return;
-			const fs = require('fs');
+			const fs = desktopNode<NodeFsModule>('fs');
+			if (!fs) throw new Error('fs unavailable');
 			fs.writeFileSync(result.filePath, content, 'utf8');
 			new Notice(`SKILL.md saved to ${result.filePath}`);
 		} catch (e: unknown) {

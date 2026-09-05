@@ -1,4 +1,4 @@
-import { App, Menu, Notice, Scope, TFile, setIcon } from "obsidian";
+import { App, Menu, Notice, Scope, TFile, getLanguage, requestUrl, setIcon } from "obsidian";
 import type { EasyAPI } from "../easyapi";
 import { desktopRequire, isMobileApp, noteChainPlugin } from "../../obsidian-app";
 
@@ -58,7 +58,28 @@ export interface MediaLightboxOptions<T> {
 }
 
 function isZhUi(): boolean {
-	return window.localStorage.getItem("language") === "zh";
+	return getLanguage() === "zh";
+}
+
+function blobFromDataUrl(url: string): Blob | null {
+	if (!url.startsWith("data:")) return null;
+	const comma = url.indexOf(",");
+	if (comma < 0) return null;
+	const meta = url.slice("data:".length, comma);
+	const payload = url.slice(comma + 1);
+	const isBase64 = /;base64/i.test(meta);
+	const mime = meta.replace(/;base64/i, "").split(";")[0] || "application/octet-stream";
+	try {
+		if (isBase64) {
+			const binary = atob(payload);
+			const bytes = new Uint8Array(binary.length);
+			for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+			return new Blob([bytes], { type: mime });
+		}
+		return new Blob([decodeURIComponent(payload.replace(/\+/g, " "))], { type: mime });
+	} catch {
+		return null;
+	}
 }
 
 /** 当前处于打开状态的灯箱（卡片 / 日历共用） */
@@ -338,9 +359,8 @@ export class MediaLightbox<T> {
 			}
 		} catch { /* fallback */ }
 		try {
-			const ta = document.createElement("textarea");
+			const ta = createEl("textarea", { cls: "nc-offscreen-copy" });
 			ta.value = path;
-			ta.className = "nc-offscreen-copy";
 			document.body.appendChild(ta);
 			ta.select();
 			const ok = document.execCommand("copy");
@@ -406,7 +426,7 @@ export class MediaLightbox<T> {
 			this.imgEl.naturalWidth > 0
 		) {
 			try {
-				const canvas = document.createElement("canvas");
+				const canvas = createEl("canvas");
 				canvas.width = this.imgEl.naturalWidth;
 				canvas.height = this.imgEl.naturalHeight;
 				const ctx = canvas.getContext("2d");
@@ -425,16 +445,15 @@ export class MediaLightbox<T> {
 		if (!url) return null;
 
 		if (url.startsWith("data:")) {
-			const res = await fetch(url);
-			return await res.blob();
+			return blobFromDataUrl(url);
 		}
 
 		try {
-			const res = await fetch(url);
-			if (!res.ok) return null;
-			const blob = await res.blob();
+			const res = await requestUrl({ url });
+			if (res.status < 200 || res.status >= 300) return null;
+			const mime = res.headers["content-type"] || "";
+			const blob = new Blob([res.arrayBuffer], { type: mime });
 			if (blob.type.startsWith("image/") || !blob.type) return blob;
-			// 非 image mime 时仍尝试当作图片
 			return blob;
 		} catch {
 			return null;
@@ -469,6 +488,7 @@ export class MediaLightbox<T> {
 		this.isOpen = true;
 		openLightboxes.add(this as MediaLightbox<unknown>);
 		this.overlay.addClass("is-open");
+		this.overlay.doc.body.addClass("nc-lightbox-open");
 		this.overlay.show();
 		this.attachKeyScope();
 		void this.showCurrent();
@@ -484,6 +504,9 @@ export class MediaLightbox<T> {
 		this.stopPlayback();
 		this.overlay.hide();
 		this.detachKeyScope();
+		if (openLightboxes.size === 0) {
+			this.overlay.doc.body.removeClass("nc-lightbox-open");
+		}
 		if (!silent && current) this.options.onClosed?.(current);
 	}
 
@@ -572,7 +595,7 @@ export class MediaLightbox<T> {
 			const lines = value.split("\n");
 			lines.forEach((line, i) => {
 				el.appendText(line);
-				if (i < lines.length - 1) el.appendChild(document.createElement("br"));
+				if (i < lines.length - 1) el.createEl("br");
 			});
 		} else {
 			el.setText(value);

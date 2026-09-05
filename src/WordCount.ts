@@ -1,6 +1,6 @@
 import {
     App, FileView, MarkdownView, Notice,
-    TFile, TFolder, moment, EditorPosition, EventRef
+    TFile, moment, EditorPosition, EventRef
 } from 'obsidian';
 import { isRecord } from './ts-helpers';
 import NoteChainPlugin from "./plugin";
@@ -10,7 +10,7 @@ export class WordCount{
 	app:App;
     plugin:NoteChainPlugin;
 	nretry:number;
-    timerId:NodeJS.Timeout;
+    timerId: number | NodeJS.Timeout | null = null;
     curr_active_file:TFile;
     events: EventRef[];
 
@@ -18,7 +18,7 @@ export class WordCount{
         this.plugin = plugin;
 		this.app = app;
 		this.nretry=100;
-        this.events = new Array();
+        this.events = [];
         this.register();   
 	}
 
@@ -115,15 +115,15 @@ export class WordCount{
             if (editor) {
                 if (editorState.selection && editorState.sanchor && editorState.shead) {
                     try {
-                        await editor.setSelection(editorState.sanchor,editorState.shead);
+                        editor.setSelection(editorState.sanchor,editorState.shead);
                     } catch (error) {
                         new Notice(`Error setting selection:${error}`,3000);
                     }
                 }else if (editorState.cursor) {
-                    await editor.setCursor(editorState.cursor);
+                    editor.setCursor(editorState.cursor);
                 }
                 if (editorState.scrollInfo) {
-                    await editor.scrollTo(editorState.scrollInfo.left, editorState.scrollInfo.top);
+                    editor.scrollTo(editorState.scrollInfo.left, editorState.scrollInfo.top);
                 }
             }
         }
@@ -175,7 +175,7 @@ export class WordCount{
 				return true;
 			}
 			return false;
-		} catch (error) {
+		} catch {
 			return false;
 		}
 	}
@@ -216,11 +216,11 @@ export class WordCount{
                 return;
             }
             if(this.timerId!==null){
-                clearTimeout(this.timerId);
+                window.clearTimeout(this.timerId);
             }
             if(info.file){
                 const file = info.file;
-                this.timerId = setTimeout(()=>{
+                this.timerId = window.setTimeout(()=>{
                     void this.update_word_count(file);
                 }, 3000);
             }

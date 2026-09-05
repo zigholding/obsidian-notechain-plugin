@@ -35,7 +35,7 @@ export class EasyEditorObjPath {
                     } else {
                         if (Array.isArray(curr[k])) {
                             let arr = curr[k] as unknown[]
-                            let tmp = {}
+                            let tmp: Record<string, unknown> = {}
                             if (i < 0) {
                                 arr.splice(-i - 1, 0, tmp)
                             } else if (i < arr.length) {
@@ -43,7 +43,7 @@ export class EasyEditorObjPath {
                             } else {
                                 arr.push(tmp)
                             }
-                            curr = tmp as Record<string, unknown>
+                            curr = tmp
                         } else {
                             curr[k] = [{}]
                             curr = (curr[k] as unknown[])[0] as Record<string, unknown>
@@ -160,7 +160,7 @@ export class EasyEditorObjPath {
             } else {
                 return this.get_obj_value(data, right);
             }
-        } catch (error) {
+        } catch {
             return null;
         }
     }

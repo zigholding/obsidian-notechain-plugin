@@ -1,20 +1,20 @@
 
 import { App, TFile, TFolder } from 'obsidian';
 import {EasyAPI} from 'src/easyapi/easyapi'
-import { desktopRequire, isMobileApp, vaultAdapter, vaultBasePath } from '../obsidian-app'
+import { desktopRequire, isMobileApp, vaultAdapter, vaultBasePath, type NodeFsModule, type NodePathModule } from '../obsidian-app'
 
 export class FsEditor{
-    fs: typeof import('fs');
+    fs: NodeFsModule;
     app:App;
-    path: typeof import('path');
+    path: NodePathModule;
     easyapi: EasyAPI;
 
     constructor(app: App, easyapi:EasyAPI) {
         this.app = app;
         this.easyapi = easyapi;
         const adapter = vaultAdapter(app);
-        this.fs = adapter.fs as typeof import('fs');
-        this.path = adapter.path as typeof import('path');
+        this.fs = adapter.fs as NodeFsModule;
+        this.path = adapter.path as NodePathModule;
     }
 
 	get root(){
@@ -225,7 +225,8 @@ export class FsEditor{
         const sep = this.path?.sep || ((typeof process !== "undefined" && process.platform === "win32") ? "\\" : "/");
         const nativePath = abs.replace(/[\\/]/g, sep);
 
-        const req = desktopRequire() ?? require;
+        const req = desktopRequire();
+        if (!req) return false;
 
         // ① Electron shell.showItemInFolder
         try {

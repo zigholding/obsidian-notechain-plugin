@@ -2,20 +2,10 @@ import { Notice, TFile } from 'obsidian';
 
 import type { CardItem } from '../easyapi/gui/inputCardSuggester';
 import type NoteChainPlugin from '../plugin';
-import { WebViewLLMSettings_DEFAULT } from './setting';
-import { strings } from './strings';
 import { BaseWebViewer } from './LLM/BaseWebViewer';
-import { DeepSeek } from './LLM/DeepSeek';
-import { Doubao } from './LLM/Doubao';
-import { Kimi } from './LLM/Kimi';
-import { Yuanbao } from './LLM/Yuanbao';
-import { ChatGPT } from './LLM/ChatGPT';
-import { ChatGLM } from './LLM/ChatGLM';
-import { Gemini } from './LLM/Gemini';
-import { Claude } from './LLM/Claude';
 import type { WebViewerLLMModule } from './WebViewerLLMModule';
 import { isRecord } from '../ts-helpers';
-import { isMobileApp } from '../obsidian-app';
+import { isMobileApp, desktopNode } from '../obsidian-app';
 
 
 export class WebViewerLLMChatWithTarget {
@@ -330,13 +320,15 @@ export class WebViewerLLMChatWithTarget {
 
 		if (!isMobileApp(this.app)) {
 			try {
-				const { dialog } = require('electron').remote;
+				const electron = desktopNode<{ remote?: { dialog?: { showOpenDialog: (opts: Record<string, unknown>) => Promise<{ canceled?: boolean; filePaths?: string[] }> } } }>('electron');
+				const dialog = electron?.remote?.dialog;
+				if (!dialog) throw new Error('electron dialog unavailable');
 				const result = await dialog.showOpenDialog({
 					title,
 					properties: multi ? ['openFile', 'multiSelections'] : ['openFile'],
 				});
 				if (result?.canceled || !result?.filePaths?.length) return null;
-				return result.filePaths as string[];
+				return result.filePaths;
 			} catch (e) {
 				console.warn('[webviewllm] system file picker failed, fallback to vault', e);
 			}
@@ -352,11 +344,11 @@ export class WebViewerLLMChatWithTarget {
 				title
 			);
 			if (!sel?.length) return null;
-			return sel.map((f: TFile) => f.path);
+			return sel.filter((f): f is TFile => f instanceof TFile).map(f => f.path);
 		}
 		const sel = await this.easyapi.dialog_suggest(labels, files, title);
-		if (!sel) return null;
-		return [(sel as TFile).path];
+		if (!(sel instanceof TFile)) return null;
+		return [sel.path];
 	}
 
 	/**

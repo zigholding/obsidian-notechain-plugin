@@ -1,9 +1,8 @@
 import { App } from 'obsidian';
-import * as url from 'url';
 import { Templater } from '../easyapi/templater';
 import { readHttpBody } from './httpUtil';
 import type { HttpReq, HttpRes, SseConnection } from '../http-types';
-import { parseJsonRecord } from '../http-types';
+import { parseJsonRecord, parseRequestUrl } from '../http-types';
 import type { MCPToolsListService } from './mcpToolsList';
 import { errorMessage, errorStack, isRecord } from '../ts-helpers';
 
@@ -109,7 +108,7 @@ export class MCPSseAndJsonRpc {
             res: HttpRes;
             sessionId: string;
             connectedAt: Date;
-            heartbeatInterval: ReturnType<typeof setInterval> | null;
+            heartbeatInterval: number | null;
         } = {
             res,
             sessionId,
@@ -122,7 +121,7 @@ export class MCPSseAndJsonRpc {
         let cleanup = () => {
             this.sseConnections.delete(connectionId);
             if (connRecord.heartbeatInterval) {
-                clearInterval(connRecord.heartbeatInterval);
+                window.clearInterval(connRecord.heartbeatInterval);
                 connRecord.heartbeatInterval = null;
             }
         };
@@ -139,7 +138,7 @@ export class MCPSseAndJsonRpc {
         });
 
         // 发送心跳 ping（SSE 注释格式）
-        connRecord.heartbeatInterval = setInterval(() => {
+        connRecord.heartbeatInterval = window.setInterval(() => {
             try {
                 if (this.sseConnections.has(connectionId)) {
                     let now = new Date().toISOString();
@@ -150,7 +149,7 @@ export class MCPSseAndJsonRpc {
                 } else {
                     cleanup();
                 }
-            } catch (error) {
+            } catch {
                 cleanup();
             }
         }, 30000); // 30秒心跳
@@ -163,7 +162,7 @@ export class MCPSseAndJsonRpc {
     async handleMCPMessage(req: HttpReq, res: HttpRes) {
         try {
             // 从查询参数获取 session_id
-            let parsedUrl = url.parse(req.url || '', true);
+            let parsedUrl = parseRequestUrl(req.url || '');
             let sessionId = parsedUrl.query.session_id as string;
 
             let body = await readHttpBody(req);

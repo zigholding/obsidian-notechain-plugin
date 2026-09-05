@@ -14,9 +14,9 @@
   z-index: 100010;
 }
 
-body:has(.notechain-modal-container) > .menu,
-body:has(.notechain-modal-container) .menu {
-  z-index: 100011 !important;
+body.nc-modal-open > .menu,
+body.nc-modal-open .menu {
+  z-index: 100011;
 }
 
 .notechain-modal.is-mobile {
@@ -138,21 +138,21 @@ body:has(.notechain-modal-container) .menu {
   gap: 8px;
 }
 
-.nc-card-search-input {
+.modal input.nc-card-search-input {
   width: 100%;
   flex: 1 1 auto;
   height: 32px; /* 高度与按钮组对齐 */
-  background: var(--background-primary) !important;
-  border: 1px solid var(--background-modifier-border) !important;
-  border-radius: 6px !important;
-  padding: 0 12px !important;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 0 12px;
   font-size: 13px;
   color: var(--text-normal);
 }
 
-.nc-card-search-input:focus {
-  border-color: var(--interactive-accent) !important;
-  box-shadow: 0 0 0 2px var(--background-modifier-border-focus) !important;
+.modal input.nc-card-search-input:focus {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
 }
 
 .nc-card-search-input::placeholder {
@@ -160,9 +160,9 @@ body:has(.notechain-modal-container) .menu {
 }
 
 /* 正则语法暂不合法时的提示 */
-.nc-card-search-input.nc-search-invalid {
-  border-color: var(--text-error) !important;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-error) 25%, transparent) !important;
+.modal input.nc-card-search-input.nc-search-invalid {
+  border-color: var(--text-error);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-error) 25%, transparent);
 }
 
 /* 顶部卡片数量徽标（与搜索框同一行） */
@@ -429,8 +429,8 @@ body:has(.notechain-modal-container) .menu {
   pointer-events: none;
 }
 
-.nc-card-container[data-layout="gallery"] .nc-card-info:has(.nc-card-name:hover) .nc-card-detail,
-.nc-card-container[data-layout="gallery"] .nc-card-info:has(.nc-card-detail:hover) .nc-card-detail {
+.nc-card-container[data-layout="gallery"] .nc-card-name-has-detail:hover + .nc-card-detail,
+.nc-card-container[data-layout="gallery"] .nc-card-detail:hover {
   display: block;
   pointer-events: auto;
 }
@@ -824,7 +824,8 @@ body:has(.notechain-modal-container) .menu {
   user-select: all;
 }
 
-.ncSelectColorModal .button-bar {
+.ncSelectColorModal .button-bar,
+.ncConfirmModal .button-bar {
   margin-top: 4px;
   display: flex;
   justify-content: flex-end;
@@ -863,7 +864,10 @@ body:has(.notechain-modal-container) .menu {
 .nc-markdown-input-modal .nc-markdown-input-leaf .view-header-title-container,
 .nc-markdown-input-modal .nc-markdown-input-leaf .view-header-title,
 .nc-markdown-input-modal .nc-markdown-input-leaf .inline-title {
-  display: none !important;
+  display: none;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
 }
 
 .nc-markdown-input-modal .nc-markdown-input-leaf-host {
@@ -1561,9 +1565,9 @@ body:has(.notechain-modal-container) .menu {
 }
 
 /* 放大预览打开时，右键菜单必须高于 lightbox，否则看起来像“没反应” */
-body:has(.nc-cal-lightbox.is-open) > .menu,
-body:has(.nc-cal-lightbox.is-open) .menu {
-  z-index: 100001 !important;
+body.nc-lightbox-open > .menu,
+body.nc-lightbox-open .menu {
+  z-index: 100001;
 }
 
 .nc-cal-lightbox-backdrop {
@@ -1589,12 +1593,12 @@ body:has(.nc-cal-lightbox.is-open) .menu {
   pointer-events: auto;
 }
 
-.nc-cal-lightbox-close {
+.nc-cal-lightbox .nc-cal-lightbox-close.nc-icon-btn {
   position: absolute;
   top: -6px;
   right: -6px;
   z-index: 5;
-  background: var(--background-primary) !important;
+  background: var(--background-primary);
 }
 
 .nc-cal-lightbox-stage {
@@ -1762,17 +1766,17 @@ body:has(.nc-cal-lightbox.is-open) .menu {
 
 /* ── Calendar Gallery: mobile ─────────────────────────────────────────────── */
 
-.nc-calendar-gallery-modal.is-mobile {
-  width: 100vw !important;
-  height: 100vh !important;
-  max-width: 100vw !important;
-  max-height: 100vh !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  margin: 0 !important;
-  transform: none !important;
+.modal.nc-calendar-gallery-modal.is-mobile {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  transform: none;
   border-radius: 0;
   border-left: none;
   border-right: none;
@@ -1780,9 +1784,9 @@ body:has(.nc-cal-lightbox.is-open) .menu {
 }
 
 @supports (height: 100dvh) {
-  .nc-calendar-gallery-modal.is-mobile {
-    height: 100dvh !important;
-    max-height: 100dvh !important;
+  .modal.nc-calendar-gallery-modal.is-mobile {
+    height: 100dvh;
+    max-height: 100dvh;
   }
 }
 

@@ -1,4 +1,4 @@
-import { App, MarkdownView, TFile, HeadingCache, SectionCache } from 'obsidian';
+import { App, TFile, HeadingCache, SectionCache } from 'obsidian';
 import type { EasyAPI } from '../easyapi';
 import type { EasyEditor } from '../editor';
 import { activeFileView, asWebviewerView } from '../../obsidian-app';
@@ -43,7 +43,7 @@ export class EasyEditorSections {
             let sel = editor.getSelection();
             if (cancel_selection) {
                 let cursor = editor.getCursor();
-                await editor.setSelection(cursor, cursor);
+                editor.setSelection(cursor, cursor);
             }
             if (sel) {
                 return sel;

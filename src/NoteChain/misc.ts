@@ -33,8 +33,8 @@ export class NoteChainMisc {
 			// 移动笔记
 			let dst = folder.path + "/" + tfile.basename + "." + tfile.extension;
 			await this.app.fileManager.renameFile(tfile, dst);
-		} catch (error) {
-
+		} catch {
+			// user cancelled folder picker or rename failed
 		}
 	}
 

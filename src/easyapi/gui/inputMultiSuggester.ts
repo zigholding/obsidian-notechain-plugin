@@ -2,6 +2,7 @@ import type { App, SearchResult } from "obsidian";
 import {
 	ButtonComponent,
 	Modal,
+	getLanguage,
 	prepareSimpleSearch,
 	renderMatches,
 	setIcon,
@@ -59,10 +60,10 @@ export default class InputMultiSuggester<T = string> extends Modal {
 		private options: Options<T> = {},
 	) {
 		super(app);
-		this.isZh = window.localStorage.getItem('language') == 'zh';
+		this.isZh = getLanguage() == 'zh';
 		const n = Math.min(displayItems.length, items.length);
 		this.displayItems = displayItems.slice(0, n);
-		this.items = items.slice(0, n) as T[];
+		this.items = items.slice(0, n);
 		this.allIndices = Array.from({ length: n }, (_, i) => i);
 
 		this.promise = new Promise<T[]>((resolve, reject) => {

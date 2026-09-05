@@ -1,5 +1,3 @@
-import { Notice, TFile } from 'obsidian';
-
 import type NoteChainPlugin from '../plugin';
 import { WebViewLLMSettings_DEFAULT } from './setting';
 import type { WebViewerTurndownStylesNormalized } from './WebViewerLLMModule';
@@ -141,7 +139,7 @@ export class WebViewerLLMTurndown {
 								}
 							}
 						}
-					} catch (e) {
+					} catch {
 						// do nothing
 					}
 					try {
@@ -162,7 +160,7 @@ export class WebViewerLLMTurndown {
 								}
 							}
 						}
-					} catch (e) {
+					} catch {
 						// do nothing
 					}
 				}
@@ -174,7 +172,7 @@ export class WebViewerLLMTurndown {
 							return !!node.getAttribute(items[0])?.match(reg);
 						}
 					}
-				} catch (e) {
+				} catch {
 					// do nothing
 				}
 				return false;

@@ -1,4 +1,4 @@
-import { Setting } from 'obsidian';
+import { Setting, getLanguage } from 'obsidian';
 
 import type NoteChainPlugin from '../plugin';
 import { strings } from './strings';
@@ -37,7 +37,7 @@ key+value:
 
 export function renderWebViewerLLMSettings(plugin: NoteChainPlugin, containerEl: HTMLElement): void {
 	let settings = plugin.settings.webviewllm;
-	let is_zh = window.localStorage.getItem('language') == 'zh';
+	let is_zh = getLanguage() == 'zh';
 
 	new Setting(containerEl)
 		.setName(strings.setting_prompt_name)
