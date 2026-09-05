@@ -1,4 +1,4 @@
-import { desktopNode, desktopNodeOrThrow, type NodeCryptoModule, type NodeFsModule, type NodePathModule } from '../obsidian-app';
+import { desktopNodeOrThrow, type NodeCryptoModule, type NodeFsModule, type NodePathModule } from '../obsidian-app';
 import { isRecord } from '../ts-helpers';
 
 const fs = desktopNodeOrThrow<NodeFsModule>('fs');
@@ -18,9 +18,13 @@ interface SelfsignedLib {
 	): SelfsignedPems | Promise<SelfsignedPems>;
 }
 
+/** Bundled via static `require` (esbuild). Do not `desktopNode('selfsigned')` — that looks up plugin node_modules at runtime. Call only on desktop: package init uses Node webcrypto. */
 function getSelfsigned(): SelfsignedLib {
-	const lib = desktopNode<SelfsignedLib>('selfsigned');
-	if (!lib) throw new Error('selfsigned unavailable');
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- npm package must be bundled; desktopNode looks up missing plugin node_modules
+	const lib = require('selfsigned') as SelfsignedLib;
+	if (!lib || typeof lib.generate !== 'function') {
+		throw new Error('selfsigned unavailable');
+	}
 	return lib;
 }
 
