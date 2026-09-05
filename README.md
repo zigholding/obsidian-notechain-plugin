@@ -196,13 +196,31 @@ buttons:
 
 ## Privacy and network
 
-This plugin does **not** send your vault to a third-party backend of its own. Network use is limited to features you turn on:
+This plugin does **not** send your vault to a third-party backend of its own. There is no telemetry and no phone-home. Network use is limited to features you turn on; it does not run in the background after install.
 
-- **Web viewer AI** (optional commands): opens or drives pages you already use in Obsidian Web Viewer. Homepages include `yuanbao.tencent.com`, `chatgpt.com`, `www.kimi.com`, `www.doubao.com`, `chat.deepseek.com`, `chatglm.cn`, `gemini.google.com`, and `claude.ai`. Traffic stays in the Web Viewer session (your login/cookies).
-- **Local HTTP/HTTPS server** (desktop, off unless you enable it): listens on your machine (`127.0.0.1` / LAN IP you choose) for MCP, Online vault, and OldBuddy. It does not phone home.
-- **MCP test page** may load `js-yaml` from `cdn.jsdelivr.net` in the browser when you open `/mcp/test`.
-- **OldBuddy map links** (user-tapped): OpenStreetMap, Amap, Baidu Maps.
-- **Open note smarter** may offer GitHub / Hugging Face / arXiv links derived from note metadata; those open in a browser only if you choose them.
+### Network disclosure
+
+**External hosts** (only when you use the matching command or page; traffic is not sent to the plugin author):
+
+| Host | When |
+|------|------|
+| `https://yuanbao.tencent.com` (`https://yuanbao.tencent.com/chat`) | Web viewer AI → Yuanbao |
+| `https://chatgpt.com` | Web viewer AI → ChatGPT |
+| `https://www.kimi.com/` | Web viewer AI → Kimi |
+| `https://www.doubao.com` | Web viewer AI → Doubao |
+| `https://chat.deepseek.com` | Web viewer AI → DeepSeek |
+| `https://chatglm.cn/` | Web viewer AI → ChatGLM |
+| `https://gemini.google.com/` | Web viewer AI → Gemini |
+| `https://claude.ai/` | Web viewer AI → Claude |
+| `https://cdn.jsdelivr.net` | Optional MCP test page (`/mcp/test`) loads `js-yaml` |
+| `https://www.openstreetmap.org`, `https://uri.amap.com`, `https://api.map.baidu.com` | OldBuddy map links you tap |
+| `https://github.com`, `https://huggingface.co`, `https://arxiv.org` | Open-note-smarter links you choose |
+
+Web viewer AI opens those sites **inside Obsidian Web Viewer** (your login/cookies). The plugin does not proxy vault content to those domains.
+
+**`fetch()` call sites** in the plugin (Scorecard “network request calls”) are almost all **same-origin to the optional local HTTP server** you enable in settings (`/oldbuddy/api/*`, `/online/api/*`, `/mcp/*` on `127.0.0.1` / your LAN IP). Remaining uses: reading `data:` / vault media in the lightbox, and the MCP test page request to your local `/mcp/call_tool` plus the jsDelivr script above. They are not a hidden analytics channel.
+
+- **Local HTTP/HTTPS server** (desktop, off unless you enable it): listens on your machine for MCP, Online vault, and OldBuddy. It does not phone home.
 
 Binary vault files (covers, textarea backgrounds) are encoded locally for `data:` URLs. No API keys are stored that way.
 

@@ -37,13 +37,31 @@
 
 ## 隐私与网络
 
-本插件**不会**把整个库上传到作者自己的服务器。网络仅出现在你主动使用的功能里：
+本插件**不会**把整个库上传到作者自己的服务器。无遥测、不主动外联。网络只出现在你主动使用的功能里。
 
-- **Web viewer AI**（可选命令）：在 Obsidian Web Viewer 中打开/操作你已在用的站点，包括 `yuanbao.tencent.com`、`chatgpt.com`、`www.kimi.com`、`www.doubao.com`、`chat.deepseek.com`、`chatglm.cn`、`gemini.google.com`、`claude.ai`。流量走 Web Viewer（你自己的登录态）。
-- **本地 HTTP/HTTPS**（桌面，需在设置中开启）：只监听本机/你指定的局域网地址（MCP、Online、OldBuddy），不主动外联。
-- 打开 `/mcp/test` 时，测试页可能从 `cdn.jsdelivr.net` 加载 `js-yaml`。
-- OldBuddy 地图链接（需你点击）：OpenStreetMap、高德、百度。
-- 「智能打开笔记」可能根据元数据给出 GitHub / Hugging Face / arXiv 链接，只有你点选才会打开。
+### 网络披露
+
+**外部域名**（仅在你使用对应命令/页面时；不会发给插件作者）：
+
+| 主机 | 何时 |
+|------|------|
+| `https://yuanbao.tencent.com`（`https://yuanbao.tencent.com/chat`） | Web viewer AI → 腾讯元宝 |
+| `https://chatgpt.com` | Web viewer AI → ChatGPT |
+| `https://www.kimi.com/` | Web viewer AI → Kimi |
+| `https://www.doubao.com` | Web viewer AI → 豆包 |
+| `https://chat.deepseek.com` | Web viewer AI → DeepSeek |
+| `https://chatglm.cn/` | Web viewer AI → ChatGLM |
+| `https://gemini.google.com/` | Web viewer AI → Gemini |
+| `https://claude.ai/` | Web viewer AI → Claude |
+| `https://cdn.jsdelivr.net` | 可选 MCP 测试页 `/mcp/test` 加载 `js-yaml` |
+| `https://www.openstreetmap.org`、`https://uri.amap.com`、`https://api.map.baidu.com` | OldBuddy 地图链接（需点击） |
+| `https://github.com`、`https://huggingface.co`、`https://arxiv.org` | 「智能打开笔记」给出的链接（需点选） |
+
+Web viewer AI 在 **Obsidian Web Viewer** 里打开上述站点（你自己的登录态）。插件不会把库内容代理到这些域名。
+
+源码里的 **`fetch()`**（Scorecard 上的 network request calls）几乎都是可选本地 HTTP 服务的同源请求（`/oldbuddy/api/*`、`/online/api/*`、`/mcp/*`，`127.0.0.1` / 你指定的局域网 IP）。其余：灯箱读取 `data:` / 库内媒体，以及 MCP 测试页请求本机 `/mcp/call_tool` 和上面的 jsDelivr 脚本。不是隐藏统计通道。
+
+- **本地 HTTP/HTTPS**（桌面，需在设置中开启）：只监听本机/你指定的局域网地址（MCP、Online、OldBuddy）。
 
 封面图、textarea 背景等会在本地编码为 `data:` URL，不用于隐藏密钥。
 
