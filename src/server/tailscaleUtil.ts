@@ -1,57 +1,9 @@
-import { Platform } from 'obsidian';
-import { desktopNode, type NodeChildProcessModule } from '../obsidian-app';
-
 export interface TailscaleSelfInfo {
     dnsName: string;
     ipv4: string;
 }
 
-function runTailscaleStatusJson(): string | null {
-    if (!Platform.isDesktop) return null;
-    const cp = desktopNode<NodeChildProcessModule>('child_process');
-    if (!cp) return null;
-    const candidates = ['tailscale'];
-    if (process.platform === 'win32') {
-        candidates.push(
-            'C:\\Program Files\\Tailscale\\tailscale.exe',
-            `${process.env['ProgramFiles'] || 'C:\\Program Files'}\\Tailscale\\tailscale.exe`,
-        );
-    }
-    for (const cmd of candidates) {
-        try {
-            return cp.execSync(`"${cmd}" status --json`, {
-                encoding: 'utf8',
-                timeout: 5000,
-                stdio: ['pipe', 'pipe', 'ignore'],
-                windowsHide: true,
-            });
-        } catch {
-            /* try next */
-        }
-    }
-    return null;
-}
-
-/** 读取本机 Tailscale MagicDNS 与 IPv4（需 tailscale CLI） */
+/** 不再调用 Tailscale CLI（社区审核禁止 child_process / 环境变量指纹）。 */
 export function getTailscaleSelfInfo(): TailscaleSelfInfo | null {
-    try {
-        const raw = runTailscaleStatusJson();
-        if (!raw) return null;
-        const j = JSON.parse(raw);
-        const dnsName = String(j?.Self?.DNSName || '')
-            .replace(/\.$/, '')
-            .trim();
-        let ipv4 = '';
-        for (const ip of j?.Self?.TailscaleIPs || []) {
-            const s = String(ip);
-            if (!s.includes(':')) {
-                ipv4 = s;
-                break;
-            }
-        }
-        if (!dnsName && !ipv4) return null;
-        return { dnsName, ipv4 };
-    } catch {
-        return null;
-    }
+    return null;
 }

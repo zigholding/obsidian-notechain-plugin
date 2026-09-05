@@ -15,6 +15,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Use Node.js
         uses: actions/setup-node@v4
@@ -39,8 +41,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${GITHUB_REF#refs/tags/}"
+          notes_file="$(mktemp)"
+          git tag -l --format='%(contents)' "$tag" | tr -d '\r' > "$notes_file"
+          first="$(sed -n '1p' "$notes_file")"
+          rest="$(tail -n +2 "$notes_file" | sed '/^$/d')"
 
-          gh release create "$tag" \
-            --title="$tag" \
-            --draft \
-            main.js manifest.json styles.css
+          if [ ! -s "$notes_file" ] || { [ "$first" = "$tag" ] && [ -z "$rest" ]; }; then
+            gh release create "$tag" \
+              --title="$tag" \
+              --generate-notes \
+              --draft \
+              main.js manifest.json styles.css
+          else
+            gh release create "$tag" \
+              --title="$tag" \
+              --notes-file "$notes_file" \
+              --draft \
+              main.js manifest.json styles.css
+          fi

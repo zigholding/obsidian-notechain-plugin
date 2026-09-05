@@ -168,7 +168,7 @@ export default class NoteChainPlugin extends Plugin {
 	}
 
 
-	async onunload() {
+	onunload() {
 		if (this._autoNotechainTimers) {
 			for (const timer of this._autoNotechainTimers.values()) {
 				window.clearTimeout(timer);
@@ -176,16 +176,19 @@ export default class NoteChainPlugin extends Plugin {
 			this._autoNotechainTimers.clear();
 			this._autoNotechainPending?.clear();
 		}
-		// 先停 HTTP，避免 explorer 等耗时逻辑拖后导致退出时端口仍被占用
-		if (this.httpServer) {
-			try {
-				await this.httpServer.stop();
-			} catch (e) {
-				console.error('Note Chain: HTTP server stop failed', e);
-			}
-		}
 		this.explorer.unregister();
-		await this.explorer.sort();
+		// Plugin.onunload 必须同步返回；停 HTTP 后再 sort，避免退出时端口仍占用
+		const explorer = this.explorer;
+		const http = this.httpServer;
+		if (http) {
+			void http.stop()
+				.catch((e: unknown) => {
+					console.error('Note Chain: HTTP server stop failed', e);
+				})
+				.then(() => explorer.sort());
+		} else {
+			void explorer.sort();
+		}
 	}
 
 	ufunc_on_file_open(file: TFile | null) {

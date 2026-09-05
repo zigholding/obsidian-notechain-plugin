@@ -1783,7 +1783,7 @@ export class CalendarGalleryModal extends Modal {
 
 	private async openSelectedDay(): Promise<void> {
 		if (!this.selectedKey) return;
-		const { year, month, day } = parseDateKey(this.selectedKey);
+		const { year, month } = parseDateKey(this.selectedKey);
 		const data = await this.fetchMonth(year, month);
 		const dayData = this.buildDayMap(data).get(this.selectedKey);
 		this.options.onOpenDay?.(dayData ?? emptyDayData(this.selectedKey));

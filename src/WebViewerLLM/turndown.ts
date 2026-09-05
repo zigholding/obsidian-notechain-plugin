@@ -199,8 +199,9 @@ export class WebViewerLLMTurndown {
 			replacement: (_content: string, node: Element) => {
 				const codeNode = node.querySelector('code');
 				let lang = '';
-				if (codeNode && codeNode.className.match(/language-(\w+)/)) {
-					lang = RegExp.$1;
+				const langMatch = codeNode?.className.match(/language-(\w+)/);
+				if (langMatch) {
+					lang = langMatch[1];
 				}
 				const codeText = codeNode ? codeNode.textContent : node.textContent;
 

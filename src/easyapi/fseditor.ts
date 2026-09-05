@@ -3,6 +3,11 @@ import { App, TFile, TFolder } from 'obsidian';
 import {EasyAPI} from 'src/easyapi/easyapi'
 import { desktopRequire, isMobileApp, vaultAdapter, vaultBasePath, type NodeFsModule, type NodePathModule } from '../obsidian-app'
 
+interface ElectronShellApi {
+    showItemInFolder?: (p: string) => void;
+    openPath?: (p: string) => unknown;
+}
+
 export class FsEditor{
     fs: NodeFsModule;
     app:App;
@@ -230,55 +235,25 @@ export class FsEditor{
 
         // ① Electron shell.showItemInFolder
         try {
-            const electron = req("electron");
-            const shell = electron?.remote?.shell ?? electron?.shell;
+            const electron = req("electron") as {
+                remote?: { shell?: ElectronShellApi };
+                shell?: ElectronShellApi;
+            };
+            const shell = electron.remote?.shell ?? electron.shell;
             if (typeof shell?.showItemInFolder === "function") {
                 shell.showItemInFolder(nativePath);
                 return true;
             }
-            // 至少打开所在目录
             if (typeof shell?.openPath === "function") {
                 const target = isDir ? nativePath : this.path.dirname(nativePath);
                 void shell.openPath(target);
                 return true;
             }
-        } catch (e) {
-            console.warn("[note-chain] electron reveal failed", e);
+        } catch {
+            console.warn("[note-chain] electron reveal failed");
         }
 
-        // ② 系统命令回退（Windows 上对系统路径最可靠）
-        try {
-            const { execFile, exec } = req("child_process");
-            const platform = (typeof process !== "undefined" && process.platform) ? process.platform : "win32";
-            if (platform === "win32") {
-                if (isDir) {
-                    execFile("explorer.exe", [nativePath], () => {});
-                } else {
-                    // /select, 与路径之间不要空格；路径含空格时整体作为参数
-                    execFile("explorer.exe", ["/select,", nativePath], (err: Error | null) => {
-                        if (err) {
-                            // 部分环境 execFile 参数形式失败，再试 cmd
-                            exec(`cmd /c start "" explorer /select,"${nativePath.replace(/"/g, "")}"`);
-                        }
-                    });
-                }
-                return true;
-            }
-            if (platform === "darwin") {
-                if (isDir) {
-                    execFile("open", [nativePath]);
-                } else {
-                    execFile("open", ["-R", nativePath]);
-                }
-                return true;
-            }
-            const dir = isDir ? nativePath : this.path.dirname(nativePath);
-            execFile("xdg-open", [dir]);
-            return true;
-        } catch (e) {
-            console.error("[note-chain] show_in_system_explorer fallback failed", e);
-            return false;
-        }
+        return false;
     }
 
     get_outfiles(tfile= this.easyapi.cfile): string[] | null {

@@ -525,7 +525,6 @@ export class WebViewerLLMChatWithTarget {
 		tfile: TFile | null,
 		cfile: TFile | null
 	): Promise<{ response: string; llm: BaseWebViewer | undefined } | null> {
-		const ea = this.easyapi;
 		const mode = this.plugin.settings.webviewllm.write_clipboard;
 		let response = '';
 		let llm: BaseWebViewer | undefined;

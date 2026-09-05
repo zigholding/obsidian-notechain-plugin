@@ -1,6 +1,7 @@
 import { moment,App } from 'obsidian';
-import { Moment } from 'moment';
 import { EasyAPI } from "./easyapi";
+
+type Moment = moment.Moment;
 
 export class Time{
     app:App;
@@ -309,7 +310,9 @@ export class Time{
 		let match = st.match(cnTimeRegex);
 	
 		if (match) {
-			let [_, period, hourStr, minuteCnStr] = match;
+			let period = match[1];
+			let hourStr = match[2];
+			let minuteCnStr = match[3];
 			let hour = this.ea.editor.cn2num(hourStr);
 			
 			let minute = 0;
@@ -682,7 +685,7 @@ export class Time{
         st = _st;
         let timeList = [];
         let t = this.parse_time(moment().format('HH:mm'));
-        if (!is_today || true) {
+        if (!is_today) {
             t = this.parse_time(moment().format('23:59'));
         }
 		if(!t){return []}

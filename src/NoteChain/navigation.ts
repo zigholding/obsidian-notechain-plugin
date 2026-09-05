@@ -200,7 +200,7 @@ export class NoteChainNavigation {
 			}
 		}
 
-		let t = (moment as unknown as typeof import('moment'))();
+		let t = moment();
 		for (let i = 0; i < 20; i++) {
 			let xt = t.clone().add(-i, 'days')
 			// 库中所有文件
@@ -292,7 +292,6 @@ export class NoteChainNavigation {
 	}
 
 	async suggester_notes(this: NoteChain, tfile = this.current_note, curr_first = false, smode = ''): Promise<TFile[]> {
-		if (tfile) { tfile == this.current_note; }
 		let kv = [
 			this.plugin.strings.item_get_brothers,
 			this.plugin.strings.item_notechain,
@@ -412,8 +411,7 @@ export class NoteChainNavigation {
 		if (!tfile) { return null; }
 		if ('deleted' in tfile && (tfile as { deleted?: boolean }).deleted) {
 			let tfiles = this.app.vault.getMarkdownFiles();
-			let prev =
-				tfiles = tfiles.filter((f: TFile) => {
+			tfiles = tfiles.filter((f: TFile) => {
 					if (!f) {
 						return false
 					}
@@ -475,7 +473,7 @@ export class NoteChainNavigation {
 		void this.open_note(note ?? null);
 	}
 
-	get_chain(this: NoteChain, tfile = this.current_note, prev = 10, next = 10, with_self = true,across=false) {
+	get_chain(this: NoteChain, tfile = this.current_note, prev = 10, next = 10, with_self = true,across=false): TFile[] {
 		if (tfile == null) { return []; }
 
 		let res: TFile[] = [];
@@ -609,14 +607,17 @@ export class NoteChainNavigation {
 				}
 			}
 			tmp = this.plugin.editor.get_frontmatter(tfile, 'arxiv');
-			if (tmp && typeof tmp === 'object' && 'ID' in tmp && tmp.ID != null) {
-				items['🌐arxiv'] = `https://arxiv.org/abs/` + String(tmp.ID);
+			if (tmp && typeof tmp === 'object' && 'ID' in tmp) {
+				const arxivId = tmp.ID;
+				if (typeof arxivId === 'string' || typeof arxivId === 'number') {
+					items['🌐arxiv'] = `https://arxiv.org/abs/` + String(arxivId);
+				}
 			}
 
 
 			let text = await this.app.vault.cachedRead(tfile)
 			// 匹配外部链接
-			const regex = /\[[^(\[\])]*?\]\(.*?\)/g;
+			const regex = /\[[^[\]()]*?\]\(.*?\)/g;
 			const matches = text.match(regex);
 			if (matches) {
 				for (const match of matches) {

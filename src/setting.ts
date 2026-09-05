@@ -33,8 +33,13 @@ function setPath(obj: Record<string, unknown>, path: string, value: unknown): vo
 	cursor[last] = value;
 }
 
+/** Satisfy abstract `display` without putting it on the 1.13+ tab class (eslint forbids both). */
+class SettingTabDisplayShim extends PluginSettingTab {
+	display(): void {}
+}
+
 /** Obsidian 1.13.6+ declarative settings (search + UI). */
-export class NCSettingTab extends PluginSettingTab {
+export class NCSettingTab extends SettingTabDisplayShim {
 	plugin: NoteChainPlugin;
 
 	constructor(app: App, plugin: NoteChainPlugin) {
@@ -245,7 +250,4 @@ export class NCSettingTab extends PluginSettingTab {
 				return id;
 		}
 	}
-
-	/** Typings still mark SettingTab.display as abstract; 1.13.6+ UI uses getSettingDefinitions(). */
-	display(): void {}
 }

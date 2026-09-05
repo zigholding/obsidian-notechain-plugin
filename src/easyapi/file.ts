@@ -352,7 +352,7 @@ export class File {
 		if (!(tfile instanceof TFile)) { return []; }
 		let inlinks = getBacklinksForFile(this.app, tfile);
 		if (!inlinks?.data) { return []; }
-		for (let [k, v] of inlinks.data) {
+		for (let [k] of inlinks.data) {
 			let curr = this.app.vault.getFileByPath(k);
 			if (curr) {
 				res.push(curr)

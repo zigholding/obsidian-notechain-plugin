@@ -354,7 +354,7 @@ export class OnlineMarkdownRenderService {
         let nodes = el.querySelectorAll('.block-language-dataview, .block-language-dataviewjs');
         for (let i = 0; i < nodes.length; i++) {
             let n = nodes.item(i);
-            if (!(n instanceof HTMLElement)) {
+            if (!n.instanceOf(HTMLElement)) {
                 continue;
             }
             if (!n.closest('.internal-embed, .markdown-embed')) {
@@ -491,9 +491,8 @@ export class OnlineMarkdownRenderService {
                     let normNl = (s: string) => s.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
                     if (normNl(markdown) === normNl(rawOnDisk)) {
                         let nc = noteChainPlugin(this.app);
-                        let readEmb = nc?.easyapi?.file?.read_tfile_with_embeds;
-                        if (nc && typeof readEmb === 'function') {
-                            markdown = await readEmb.call(nc.easyapi.file, file, 10);
+                        if (nc?.easyapi?.file) {
+                            markdown = await nc.easyapi.file.read_tfile_with_embeds(file, 10);
                         }
                     }
                 } catch {

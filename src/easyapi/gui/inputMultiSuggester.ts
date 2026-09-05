@@ -8,7 +8,7 @@ import {
 	setIcon,
 } from "obsidian";
 
-type Options<T = string> = {
+type Options = {
 	placeholder?: string;
 	title?: string;
 	/** 已选区域为空时的提示 */
@@ -46,7 +46,7 @@ export default class InputMultiSuggester<T = string> extends Modal {
 		app: App,
 		displayItems: string[],
 		items: U[],
-		options: Options<U> = {},
+		options: Options = {},
 	): Promise<U[]> {
 		const modal = new InputMultiSuggester(app, displayItems, items, options);
 		modal.open();
@@ -57,7 +57,7 @@ export default class InputMultiSuggester<T = string> extends Modal {
 		app: App,
 		displayItems: string[],
 		items: T[],
-		private options: Options<T> = {},
+		private options: Options = {},
 	) {
 		super(app);
 		this.isZh = getLanguage() == 'zh';

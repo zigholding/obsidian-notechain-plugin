@@ -260,7 +260,7 @@ dv.span(\`![[${sourcePath}]]\`);
 			return;
 		}
 
-		const iframe = container.createEl('iframe', {
+		this.webviewEl = container.createEl('iframe', {
 			cls: 'nc-note-content-webview',
 			attr: {
 				src: loadUrl,

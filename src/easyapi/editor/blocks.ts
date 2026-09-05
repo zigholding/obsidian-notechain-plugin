@@ -1,11 +1,6 @@
 import { App, TFile } from 'obsidian';
 import type { EasyAPI } from '../easyapi';
 import type { EasyEditor } from '../editor';
-import {
-	codeFenceStartsWithLanguage,
-	fencedCodeInnerContent,
-	fencedCodeInnerLoose,
-} from './codeFence';
 
 export class EasyEditorBlocks {
 	app!: App;

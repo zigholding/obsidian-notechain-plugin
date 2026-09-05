@@ -198,6 +198,8 @@ buttons:
 
 This plugin does **not** send your vault to a third-party backend of its own. There is no telemetry and no phone-home. Network use is limited to features you turn on; it does not run in the background after install.
 
+The plugin lists notes in your vault (`getMarkdownFiles` / related APIs) to sort the File Explorer and walk note chains. Clipboard read/write is used only when you copy a path, copy a lightbox image, or enable Web viewer AI prompt copy.
+
 ### Network disclosure
 
 **External hosts** (only when you use the matching command or page; traffic is not sent to the plugin author):

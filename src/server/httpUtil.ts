@@ -157,7 +157,7 @@ export function sendLocalFile(
             'Content-Length': chunkSize,
             'Content-Range': `bytes ${start}-${end}/${size}`,
         });
-        fs.createReadStream(absPath, { start, end }).pipe(res as unknown as NodeJS.WritableStream);
+        fs.createReadStream(absPath, { start, end }).pipe(res);
         return;
     }
 
@@ -165,5 +165,5 @@ export function sendLocalFile(
         ...baseHeaders,
         'Content-Length': size,
     });
-    fs.createReadStream(absPath).pipe(res as unknown as NodeJS.WritableStream);
+    fs.createReadStream(absPath).pipe(res);
 }

@@ -358,19 +358,7 @@ export class MediaLightbox<T> {
 				return;
 			}
 		} catch { /* fallback */ }
-		try {
-			const ta = createEl("textarea", { cls: "nc-offscreen-copy" });
-			ta.value = path;
-			document.body.appendChild(ta);
-			ta.select();
-			const ok = document.execCommand("copy");
-			ta.remove();
-			new Notice(ok
-				? (zh ? "路径已复制" : "Path copied")
-				: (zh ? "复制路径失败" : "Failed to copy path"));
-		} catch {
-			new Notice(zh ? "复制路径失败" : "Failed to copy path");
-		}
+		new Notice(zh ? "复制路径失败" : "Failed to copy path");
 	}
 
 	/** 将当前图片写入系统剪贴板（PNG） */

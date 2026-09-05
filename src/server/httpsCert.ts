@@ -1,9 +1,8 @@
-import { getTailscaleSelfInfo } from './tailscaleUtil';
 import { desktopNode, desktopNodeOrThrow, type NodeCryptoModule, type NodeFsModule, type NodePathModule } from '../obsidian-app';
+import { isRecord } from '../ts-helpers';
 
 const fs = desktopNodeOrThrow<NodeFsModule>('fs');
 const path = desktopNodeOrThrow<NodePathModule>('path');
-const os = desktopNodeOrThrow<typeof import('os')>('os');
 const crypto = desktopNodeOrThrow<NodeCryptoModule>('crypto');
 
 /** Lazy-load: selfsigned touches nodeCrypto.webcrypto at require-time (breaks Obsidian mobile). */
@@ -50,10 +49,6 @@ export function certFingerprintsMatch(a: string, b: string): boolean {
     return normalizeCertFingerprint(a) === normalizeCertFingerprint(b);
 }
 
-function isLoopbackIPv4(ip: string): boolean {
-    return ip === '127.0.0.1' || ip.startsWith('127.');
-}
-
 type SanEntry = { type: number; value?: string; ip?: string };
 
 function certCoversAltNames(certPem: string, altNames: SanEntry[]): boolean {
@@ -75,36 +70,10 @@ function certCoversAltNames(certPem: string, altNames: SanEntry[]): boolean {
 }
 
 function buildAltNames(): SanEntry[] {
-    const altNames: SanEntry[] = [
+    return [
         { type: 2, value: 'localhost' },
         { type: 7, ip: '127.0.0.1' },
     ];
-    const seenDns = new Set<string>(['localhost']);
-    const seenIp = new Set<string>(['127.0.0.1']);
-
-    const ts = getTailscaleSelfInfo();
-    if (ts?.dnsName && !seenDns.has(ts.dnsName)) {
-        seenDns.add(ts.dnsName);
-        altNames.push({ type: 2, value: ts.dnsName });
-    }
-    if (ts?.ipv4 && !seenIp.has(ts.ipv4)) {
-        seenIp.add(ts.ipv4);
-        altNames.push({ type: 7, ip: ts.ipv4 });
-    }
-
-    for (const list of Object.values(os.networkInterfaces())) {
-        for (const iface of list || []) {
-            const family = String(iface.family || '');
-            const address = String(iface.address || '').trim();
-            if ((family !== 'IPv4' && family !== '4') || !address || isLoopbackIPv4(address)) {
-                continue;
-            }
-            if (seenIp.has(address)) continue;
-            seenIp.add(address);
-            altNames.push({ type: 7, ip: address });
-        }
-    }
-    return altNames;
 }
 
 function sansKeyFromAltNames(altNames: SanEntry[]): string {
@@ -114,7 +83,7 @@ function sansKeyFromAltNames(altNames: SanEntry[]): string {
         .join(',');
 }
 
-/** 自签 TLS 证书（localhost + 本机 IPv4 + Tailscale MagicDNS） */
+/** 自签 TLS 证书（仅 localhost / 127.0.0.1，避免采集网卡/主机身份） */
 export async function ensureSelfSignedCert(tlsDir: string): Promise<{ key: string; cert: string }> {
     const keyPath = path.join(tlsDir, 'key.pem');
     const certPath = path.join(tlsDir, 'cert.pem');
@@ -125,11 +94,12 @@ export async function ensureSelfSignedCert(tlsDir: string): Promise<{ key: strin
 
     if (fs.existsSync(keyPath) && fs.existsSync(certPath) && fs.existsSync(metaPath)) {
         try {
-            const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+            const metaRaw: unknown = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
             const key = fs.readFileSync(keyPath, 'utf8');
             const cert = fs.readFileSync(certPath, 'utf8');
             if (
-                meta.sansKey === sansKey &&
+                isRecord(metaRaw) &&
+                metaRaw.sansKey === sansKey &&
                 key.includes('BEGIN PRIVATE KEY') &&
                 cert.includes('BEGIN CERTIFICATE') &&
                 certCoversAltNames(cert, altNames)

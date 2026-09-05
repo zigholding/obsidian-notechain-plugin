@@ -93,7 +93,7 @@ export const cmd_move_next_level = (plugin: NoteChainPlugin) => ({
 		let tfiles = plugin.easyapi.file.get_selected_files()
 		for(let tfile of tfiles){
 			let level = plugin.editor.get_frontmatter(tfile,key)
-			if(!level){
+			if (typeof level !== 'string' || !level) {
 				await plugin.editor.set_frontmatter(tfile,key,"\t",1)
 			}else{
 				await plugin.editor.set_frontmatter(tfile,key,level+"\t",1)

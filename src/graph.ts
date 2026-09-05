@@ -108,7 +108,6 @@ export class MermaidGraph{
 	subgraph_chain(node:NoteNode,tfiles:Array<TFile>,subgraph='',line='<-->'){
 
 		let msg = '';
-		let items = tfiles.map(x=>x);
 		let stab = '\t';
 		if(subgraph!=''){
 			msg = msg + `\n\tsubgraph ${subgraph}\n`;
@@ -116,9 +115,9 @@ export class MermaidGraph{
 		}
 
 		let i = 0;
-		while(i<items.length-1){
-			let prev = node.get_node(items[i]);
-			let next = node.get_node(items[i+1]);
+		while(i<tfiles.length-1){
+			let prev = node.get_node(tfiles[i]);
+			let next = node.get_node(tfiles[i+1]);
 			msg = msg+`${stab}${prev}${line}${next}\n`;
 			i = i+1;
 		}
@@ -131,7 +130,6 @@ export class MermaidGraph{
 
 	subgraph_links(node:NoteNode,tfiles:Array<TFile>,subgraph='',line='-->',tfiles_first=false){
 		let msg = '';
-		let items = tfiles.map(x=>x);
 		let stab = '\t';
 		if(subgraph!=''){
 			msg = msg + `\n\tsubgraph ${subgraph}\n`;
@@ -140,8 +138,8 @@ export class MermaidGraph{
 		}
 		let i = 0;
 		let sid = node.get_node(node.tfile);
-		while(i<items.length){
-			let id = node.get_node(items[i]);
+		while(i<tfiles.length){
+			let id = node.get_node(tfiles[i]);
 			if(tfiles_first){
 				msg = msg+`${stab}${id}${line}${sid}\n`;
 
@@ -201,7 +199,6 @@ export class MermaidGraph{
 
 	subgraph_cross(node:NoteNode,tfiles:Array<TFile>,subgraph='',line='-->',tfiles_first=false){
 		let msg = '';
-		let items = tfiles.map(x=>x);
 		let stab = '\t';
 		if(subgraph!=''){
 			msg = msg + `\n\tsubgraph ${subgraph}\n`;

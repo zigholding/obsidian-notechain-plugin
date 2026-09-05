@@ -181,7 +181,7 @@ export class NoteChainFolderChildren {
 		const segments: TFile[][] = [];
 		for (const note of notes) {
 			if (!remaining.has(note)) { continue; }
-			const xchain = this.get_chain(note, -1, -1) as TFile[];
+			const xchain = this.get_chain(note, -1, -1);
 			const segment: TFile[] = [];
 			for (const x of xchain) {
 				if (remaining.has(x)) {
