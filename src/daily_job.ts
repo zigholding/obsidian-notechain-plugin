@@ -3,16 +3,23 @@
 import {
 	App, Notice, TFile, moment
 } from 'obsidian';
+import type { Moment } from 'moment';
 
 import NoteChainPlugin from "./plugin";
+
+export interface DailyJobItem {
+	st: Moment;
+	et: Moment;
+	xt: number;
+	do?: string;
+}
 
 export class DailyJob {
 	plugin: NoteChainPlugin;
 	app: App;
-	START_TIME: any;
+	START_TIME: Moment | null;
 	buffer: number;
-	dv: any;
-	nc: any;
+	dv: unknown;
 	PATTERN: RegExp;
 	milestones: string[];
 	groups: string[];
@@ -26,7 +33,6 @@ export class DailyJob {
         this.START_TIME = this.plugin.easyapi.time.parse_time('06:45'); // 每天的起始时间
         this.buffer = 10; // 缓冲时间
         this.dv = this.plugin.easyapi.dv;
-        this.nc = this.plugin;
         this.PATTERN = /\n\> \[\!note\]\+ 事项 Done\n/;
         this.milestones = ['睡觉'];
         this.groups = ['作息', '工作', '家庭', '个人'];
@@ -35,8 +41,8 @@ export class DailyJob {
         this.date = this.tfile ? this.tfile.basename : moment().format('YYYY-MM-DD');
     }
 
-    parse_fields(item: string): any | null {
-        let res: any = this.plugin.easyapi.editor.parse_list_dataview(item);
+    parse_fields(item: string): DailyJobItem | null {
+        const res = this.plugin.easyapi.editor.parse_list_dataview(item);
         if (!this.plugin.easyapi.editor.keys_in(['st', 'xt', 'do'], res)) {
 		    return null;
 	    }
@@ -45,18 +51,20 @@ export class DailyJob {
 		if (!st || Number.isNaN(xt.duration)) {
 			return null;
 		}
-        res['st'] = st;
-        res['xt'] = xt.duration;
-        res['et'] = st.clone().add(xt.duration, 'minutes');
-        return res;
+        return {
+			st,
+			xt: xt.duration,
+			et: st.clone().add(xt.duration, 'minutes'),
+			do: res['do'],
+		};
     }
 
-    async get_jobs(tfile: TFile | string | Array<TFile> | null): Promise<any[] | null> {
+    async get_jobs(tfile: TFile | string | Array<TFile> | null): Promise<DailyJobItem[] | null> {
         if (!tfile) {
             tfile = this.plugin.chain.get_last_daily_note();
         }
         if (Array.isArray(tfile)) {
-            let jobs: any[] = [];
+            let jobs: DailyJobItem[] = [];
             for (let c of tfile) {
                 let cjobs = await this.get_jobs(c);
                 if (cjobs) {
@@ -78,12 +86,12 @@ export class DailyJob {
 			}
             let items = meta.listItems.map(x => this.plugin.easyapi.editor.slice_by_position(ctx, x.position));
 	        // let regx = /^- ⏰ \(st::.*\) 🎯\(do::.*\) ⏳\(xt::.*\) $/;
-	        items = items.map(x=>this.parse_fields(x)).filter(x=>x);
-            return items as any[];
+	        const parsed = items.map(x=>this.parse_fields(x)).filter((x): x is DailyJobItem => x != null);
+            return parsed;
         }
     }
 
-    async select_start_time(jobs: any[], is_today: boolean = true): Promise<string | null> {
+    async select_start_time(jobs: DailyJobItem[], is_today: boolean = true): Promise<string | null> {
         let timeList = this.plugin.easyapi.time.generate_start_times(jobs, 5,is_today) as string[];
         if(is_today && timeList){
 	        let ct = moment().format("HH:mm");
@@ -93,7 +101,7 @@ export class DailyJob {
             new Notice('已记录！')
             return null;
         }
-        let st = await this.nc.dialog_suggest(timeList, timeList, '开始时间', true)
+        let st = await this.plugin.easyapi.dialog_suggest(timeList, timeList, '开始时间', true)
         if (!st) { return null }
         if (st.match(/^\d{4}$/)) {
             st = st.slice(0, 2) + ':' + st.slice(2, 4);
@@ -104,9 +112,9 @@ export class DailyJob {
         return null;
     }
 
-    async select_x_time(st: any = null): Promise<number | null> {
-	    let xt: any;
-	    const stMoment = this.plugin.easyapi.time.parse_time(st,this.date);
+    async select_x_time(st: string | Moment | null = null): Promise<number | null> {
+	    let xt: string | null;
+	    const stMoment = st == null ? null : this.plugin.easyapi.time.parse_time(st, this.date);
         let xitems: string[] = ['5min', '10min', '15min', '20min', '25min', '30min', '45min', '1hour', '2hour', '3hour'];
 		if(stMoment){
 			let ct = moment().add(5,'minutes');
@@ -135,7 +143,7 @@ export class DailyJob {
 				}
 			}
 			xitems = xitems.sort((a,b)=>this.plugin.easyapi.time.parse_minutes(a).duration-this.plugin.easyapi.time.parse_minutes(b).duration)
-			xt = await this.nc.dialog_suggest(
+			xt = await this.plugin.easyapi.dialog_suggest(
 				xitems.map(x=>{
 					let minutes = this.plugin.easyapi.time.parse_minutes(x).duration;
 					return x+'🕐'+stMoment.clone().add(minutes,'minutes').format('HH:mm')
@@ -145,7 +153,7 @@ export class DailyJob {
 				true
 			)
 		}else{
-	        xt = await this.nc.dialog_suggest(xitems, xitems, '持续时间', true)
+	        xt = await this.plugin.easyapi.dialog_suggest(xitems, xitems, '持续时间', true)
 		}
         if (!xt) { return null }
         let items = xt.match(/^(\d+\.?\d*)(min|hour|day|h|m)?$/)
@@ -158,12 +166,12 @@ export class DailyJob {
         return null;
     }
 
-    count_elements(arr: any[]): { element: string; count: number }[] {
-        const countMap = arr.reduce((acc: { [key: string]: number }, item: any) => {
+    count_elements(arr: unknown[]): { element: string; count: number }[] {
+        const countMap = arr.reduce<{ [key: string]: number }>((acc, item) => {
             const key = String(item);
             acc[key] = (acc[key] || 0) + 1;
             return acc;
-        }, {} as { [key: string]: number });
+        }, {});
 
         return Object.entries(countMap).map(
 			([element, count]) => ({ element, count: count as number })
@@ -174,7 +182,7 @@ export class DailyJob {
         let xitems: string[] = [];
         if (!this.tfile) { return null; }
         let tfiles = this.plugin.chain.get_chain(this.tfile, 7, 2, false);
-        let jobs: any[] | null = await this.get_jobs(tfiles);
+        let jobs: DailyJobItem[] | null = await this.get_jobs(tfiles);
 		if (!jobs) { return null; }
         const stMoment = this.plugin.easyapi.time.parse_time(st,this.date);
 		if (!stMoment) { return null; }
@@ -184,12 +192,12 @@ export class DailyJob {
             return (x.st <= t0 && x.et >= t0) || (x.st <= t1 && x.et >= t1)
         })
 
-        xitems = jobs.map(x => x.do);
+        xitems = jobs.map(x => x.do ?? '');
         let cels = this.count_elements(xitems);
         let ks = cels.map(x => `${x.element}(${x.count})`);
         let vs = cels.map(x => `${x.element}`);
         xitems = [...new Set(xitems)];
-        let job = await this.nc.dialog_suggest(ks, vs, '事项', true)
+        let job = await this.plugin.easyapi.dialog_suggest(ks, vs, '事项', true)
         return job;
     }
 
@@ -245,7 +253,7 @@ export class DailyJob {
 		let stMoment = this.plugin.easyapi.time.parse_time(items[0],this.date);
 		if (!stMoment) { return null; }
 		let job = items[1].trim();
-		let xt: any;
+		let xt: number | null;
 		if(items[2]){
 			xt = this.plugin.easyapi.time.parse_minutes(items[2]).duration;
 		}else{
@@ -264,7 +272,7 @@ export class DailyJob {
 	async prase_job_item_v4(): Promise<string | null> {
 		let tfile = this.plugin.chain.get_last_daily_note();
         if (!tfile) { return null; }
-        let jobs: any[] | null = await this.get_jobs(tfile);
+        let jobs: DailyJobItem[] | null = await this.get_jobs(tfile);
 		jobs = jobs || [];
         let is_today = tfile.basename == moment().format('YYYY-MM-DD')
         let st = await this.select_start_time(jobs, is_today);
@@ -297,7 +305,7 @@ export class DailyJob {
 			let tfile = this.plugin.chain.get_last_daily_note();
 			if (tfile) {
 				await this.insert_ctx(tfile, job, this.PATTERN);
-				let msg: any = this.plugin.easyapi.editor.parse_list_dataview(job);
+				const msg = this.plugin.easyapi.editor.parse_list_dataview(job);
 				let st = this.plugin.easyapi.time.parse_time(msg.st,this.date);
 				let xt = this.plugin.easyapi.time.parse_minutes(msg.xt);
 				if (area && st && !Number.isNaN(xt.duration)) {

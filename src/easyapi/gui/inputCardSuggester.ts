@@ -1,6 +1,7 @@
 import { App, Modal, Notice, setIcon, TFile } from "obsidian";
 import { MediaLightbox } from "./mediaLightbox";
 import type { AudioItem, ImageItem } from "./calendarGalleryModal";
+import { isMobileApp, noteChainPlugin, vaultAdapter } from "../../obsidian-app";
 
 export type { AudioItem, ImageItem };
 
@@ -19,7 +20,8 @@ export interface CardItem {
     /** 音频列表，结构与日历视图 `AudioItem[]` 相同 */
     audios?: AudioItem[];
     action?: CardItem[] | ((item: CardItem) => void | Promise<void>);
-    [key: string]: any;
+    file?: TFile | string;
+    [key: string]: unknown;
 }
 
 export interface CardNavigatorOptions {
@@ -690,7 +692,7 @@ export class CardNavigatorModal extends Modal {
 		};
 
 		if (images.length > 1) {
-			if (!(this.app as any).isMobile) {
+			if (!isMobileApp(this.app)) {
 				const prev = wrap.createDiv({ cls: "nc-cal-carousel-btn nc-cal-carousel-prev", attr: { "aria-label": "Previous" } });
 				setIcon(prev, "chevron-left");
 				const next = wrap.createDiv({ cls: "nc-cal-carousel-btn nc-cal-carousel-next", attr: { "aria-label": "Next" } });
@@ -741,7 +743,7 @@ export class CardNavigatorModal extends Modal {
 			const audio = audios[current];
 			const title = audio.title ?? (isZhUi() ? "录音" : "Voice");
 			const dur = formatDuration(audio.duration);
-			if ((this.app as any).isMobile) {
+			if (isMobileApp(this.app)) {
 				label.setText(audios.length > 1 ? `🎤${current + 1}/${audios.length}` : dur ? `🎤${dur}` : "🎤");
 			} else {
 				label.setText(dur ? `🎤 ${title} · ${dur}` : `🎤 ${title}`);
@@ -944,7 +946,7 @@ export class CardNavigatorModal extends Modal {
 		if (!path) return null;
 		if (isDirectMediaUrl(path)) return path;
 
-		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const nc = noteChainPlugin(this.app);
 		const fileApi = nc?.easyapi?.file;
 		const fsApi = nc?.easyapi?.fs;
 
@@ -1082,10 +1084,10 @@ export class CardNavigatorModal extends Modal {
 		const path = stripFileUrl(normalizeMediaPath(rawPath));
 		if (!path || isDirectMediaUrl(path)) return null;
 
-		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const nc = noteChainPlugin(this.app);
 		const fsApi = nc?.easyapi?.fs;
 		const fileApi = nc?.easyapi?.file;
-		const adapter = this.app.vault.adapter as any;
+		const adapter = vaultAdapter(this.app);
 
 		const tfile = fileApi?.get_tfile?.(path) as TFile | null;
 		if (tfile) {
@@ -1111,7 +1113,7 @@ export class CardNavigatorModal extends Modal {
 	}
 
 	private async revealCardMediaInExplorer(entry: CardMediaEntry): Promise<void> {
-		if ((this.app as any).isMobile) {
+		if (isMobileApp(this.app)) {
 			new Notice(isZhUi() ? "移动端不支持在文件浏览器中打开" : "Not supported on mobile");
 			return;
 		}
@@ -1124,7 +1126,7 @@ export class CardNavigatorModal extends Modal {
 			new Notice(isZhUi() ? "网络资源无法在文件浏览器中打开" : "Remote URL cannot be revealed in explorer");
 			return;
 		}
-		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const nc = noteChainPlugin(this.app);
 		const fsApi = nc?.easyapi?.fs;
 		if (!fsApi?.show_in_system_explorer) {
 			new Notice(isZhUi() ? "文件系统接口不可用" : "Filesystem API unavailable");
@@ -1212,7 +1214,7 @@ export class CardNavigatorModal extends Modal {
 
 	private async deleteLocalMediaFile(mediaPath: string): Promise<boolean> {
 		if (isDirectMediaUrl(mediaPath) && !/^file:/i.test(mediaPath)) return false;
-		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const nc = noteChainPlugin(this.app);
 		const fileApi = nc?.easyapi?.file;
 		const fsApi = nc?.easyapi?.fs;
 		try {

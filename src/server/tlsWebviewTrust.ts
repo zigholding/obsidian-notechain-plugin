@@ -1,11 +1,12 @@
 import { App } from 'obsidian';
+import { obsidianApp } from '../obsidian-app';
 import { certFingerprintsMatch, readNoteChainCertFingerprint } from './httpsCert';
 
 const installedKeys = new Set<string>();
 
 /** Obsidian WebViewer / NCView 使用的 Electron session partition */
 export function getWebViewerPartition(app: App): string {
-    return `persist:vault-${(app as any).appId}`;
+    return `persist:vault-${obsidianApp(app).appId ?? ''}`;
 }
 
 function isLocalNoteChainHost(hostname: string): boolean {
@@ -40,9 +41,30 @@ export function toWebViewerUrl(url: string, httpsPort: number, httpsAlsoOn = tru
     }
 }
 
-function getElectronSession(partition: string): any {
+interface ElectronCertSession {
+    setCertificateVerifyProc?: (
+        proc: (request: ElectronCertVerifyRequest, callback: (result: number) => void) => void,
+    ) => void;
+}
+
+interface ElectronCertVerifyRequest {
+    hostname?: string;
+    port?: string | number;
+    certificate?: {
+        fingerprint?: string;
+        subjectName?: string;
+        issuerName?: string;
+        subject?: { commonName?: string };
+        issuer?: { commonName?: string };
+    };
+}
+
+function getElectronSession(partition: string): ElectronCertSession | null {
     try {
-        const electron = require('electron');
+        const electron = require('electron') as {
+            session?: { fromPartition?: (p: string) => ElectronCertSession };
+            remote?: { session?: { fromPartition?: (p: string) => ElectronCertSession } };
+        };
         const fromPartition =
             electron.session?.fromPartition?.bind(electron.session) ||
             electron.remote?.session?.fromPartition?.bind(electron.remote?.session);
@@ -52,7 +74,7 @@ function getElectronSession(partition: string): any {
     }
 }
 
-function requestPort(request: any, defaultPort: number): number {
+function requestPort(request: ElectronCertVerifyRequest, defaultPort: number): number {
     const raw = request?.port;
     if (raw == null || raw === '') return defaultPort;
     const n = Number(raw);
@@ -73,7 +95,7 @@ export function installWebviewTlsTrust(partition: string, port: number, tlsDir: 
         const ses = getElectronSession(partition);
         if (!ses?.setCertificateVerifyProc) return;
 
-        ses.setCertificateVerifyProc((request: any, callback: (result: number) => void) => {
+        ses.setCertificateVerifyProc((request: ElectronCertVerifyRequest, callback: (result: number) => void) => {
             const hostname = String(request?.hostname || '');
             const reqPort = requestPort(request, port);
 

@@ -16,6 +16,7 @@ import { WebViewerLLMChatCommands } from './chatCommands';
 import { WebViewerLLMChatWithTarget } from './chatWithTarget';
 import { WebViewerLLMUiCommands } from './llmUiCommands';
 import { WebViewerLLMTurndown } from './turndown';
+import { applyMixins } from '../ts-helpers';
 
 /** YAML `turndown_styles` after defaults; list keys are string rule lines */
 export interface WebViewerTurndownStylesNormalized {
@@ -75,19 +76,6 @@ export class WebViewerLLMModule {
 		];
 		this.basewv = new BaseWebViewer(this.app, '');
 	}
-}
-
-function applyMixins(derivedCtor: any, constructors: any[]) {
-	constructors.forEach((baseCtor) => {
-		Object.getOwnPropertyNames(baseCtor.prototype).forEach((name) => {
-			if (name === 'constructor') return;
-			Object.defineProperty(
-				derivedCtor.prototype,
-				name,
-				Object.getOwnPropertyDescriptor(baseCtor.prototype, name) as PropertyDescriptor
-			);
-		});
-	});
 }
 
 applyMixins(WebViewerLLMModule, [

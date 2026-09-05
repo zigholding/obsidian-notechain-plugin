@@ -1,5 +1,6 @@
 import { App, Modal, Notice, setIcon, TFile } from "obsidian";
 import { MediaLightbox } from "./mediaLightbox";
+import { isMobileApp, noteChainPlugin, vaultAdapter } from "../../obsidian-app";
 
 // ── Data types ──────────────────────────────────────────────────────────────
 
@@ -417,7 +418,7 @@ export class CalendarGalleryModal extends Modal {
 		this.closed = false;
 		if (!this.mediaLightbox) this.mediaLightbox = this.createMediaLightbox();
 		this.modalEl.addClass("nc-calendar-gallery-modal");
-		const isMobile = (this.app as any).isMobile === true;
+		const isMobile = isMobileApp(this.app);
 		if (isMobile) {
 			this.modalEl.addClass("is-mobile");
 		} else {
@@ -521,7 +522,7 @@ export class CalendarGalleryModal extends Modal {
 		this.contentEl.createDiv({ cls: "nc-cal-week-header" });
 		const body = this.contentEl.createDiv({ cls: "nc-cal-body" });
 		this.gridEl = body.createDiv({ cls: "nc-cal-grid" });
-		if (!(this.app as any).isMobile) {
+		if (!isMobileApp(this.app)) {
 			this.gridEl.style.setProperty("--nc-cal-card-height", `${CARD_HEIGHTS[this.options.cardSize]}px`);
 		}
 		this.gridEl.setAttr("data-image-fit", this.options.imageFit);
@@ -746,10 +747,10 @@ export class CalendarGalleryModal extends Modal {
 		const path = stripFileUrl(normalizeMediaPath(rawPath));
 		if (!path || isDirectMediaUrl(path)) return null;
 
-		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const nc = noteChainPlugin(this.app);
 		const fsApi = nc?.easyapi?.fs;
 		const fileApi = nc?.easyapi?.file;
-		const adapter = this.app.vault.adapter as any;
+		const adapter = vaultAdapter(this.app);
 
 		const tfile = fileApi?.get_tfile?.(path) as TFile | null;
 		if (tfile) {
@@ -778,7 +779,7 @@ export class CalendarGalleryModal extends Modal {
 	}
 
 	private async revealMediaInExplorer(entry: FlatMediaEntry): Promise<void> {
-		if ((this.app as any).isMobile) {
+		if (isMobileApp(this.app)) {
 			new Notice(isZhUi() ? "移动端不支持在文件浏览器中打开" : "Not supported on mobile");
 			return;
 		}
@@ -792,7 +793,7 @@ export class CalendarGalleryModal extends Modal {
 			return;
 		}
 
-		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const nc = noteChainPlugin(this.app);
 		const fsApi = nc?.easyapi?.fs;
 		if (!fsApi?.show_in_system_explorer) {
 			new Notice(isZhUi() ? "文件系统接口不可用" : "Filesystem API unavailable");
@@ -863,7 +864,7 @@ export class CalendarGalleryModal extends Modal {
 	private async deleteLocalMediaFile(mediaPath: string): Promise<boolean> {
 		if (isDirectMediaUrl(mediaPath) && !/^file:/i.test(mediaPath)) return false;
 
-		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const nc = noteChainPlugin(this.app);
 		const fileApi = nc?.easyapi?.file;
 		const fsApi = nc?.easyapi?.fs;
 
@@ -1216,7 +1217,7 @@ export class CalendarGalleryModal extends Modal {
 			this.options.onOpenDay?.(dayData ?? emptyDayData(cell.key));
 		};
 
-		if (this.options.showTooltip && !(this.app as any).isMobile && dayData?.text) {
+		if (this.options.showTooltip && !isMobileApp(this.app) && dayData?.text) {
 			const plain = stripMarkdown(dayData.text).slice(0, 300);
 			if (plain) {
 				card.addEventListener("mouseenter", () => this.showTooltip(card, plain));
@@ -1319,7 +1320,7 @@ export class CalendarGalleryModal extends Modal {
 
 		if (images.length > 1) {
 			// 手机日历卡片空间小，不显示左右切换按钮；预览/lightbox 仍可切换
-			if (!(this.app as any).isMobile) {
+			if (!isMobileApp(this.app)) {
 				const prev = wrap.createDiv({ cls: "nc-cal-carousel-btn nc-cal-carousel-prev", attr: { "aria-label": "Previous" } });
 				setIcon(prev, "chevron-left");
 				const next = wrap.createDiv({ cls: "nc-cal-carousel-btn nc-cal-carousel-next", attr: { "aria-label": "Next" } });
@@ -1419,7 +1420,7 @@ export class CalendarGalleryModal extends Modal {
 		thumbnail = false,
 	): Promise<string | null> {
 		if (this.closed || session !== this.renderSession) return null;
-		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const nc = noteChainPlugin(this.app);
 		const fsApi = nc?.easyapi?.fs;
 		if (!fsApi) return null;
 
@@ -1542,7 +1543,7 @@ export class CalendarGalleryModal extends Modal {
 	}
 
 	private resolveMediaTFile(path: string): TFile | null {
-		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const nc = noteChainPlugin(this.app);
 		const fileApi = nc?.easyapi?.file;
 		if (!fileApi) return null;
 
@@ -1641,11 +1642,13 @@ export class CalendarGalleryModal extends Modal {
 
 	private async readVaultImageAsDataUrl(path: string): Promise<string | null> {
 		if (this.closed) return null;
-		const nc = (this.app as any).plugins?.plugins?.["note-chain"];
+		const nc = noteChainPlugin(this.app);
 		const fileApi = nc?.easyapi?.file;
 		if (!fileApi) return null;
 		try {
-			const dataUrl = await fileApi.read_binary_to_base64(path);
+			const tfile = fileApi.get_tfile(path);
+			if (!(tfile instanceof TFile)) return null;
+			const dataUrl = await fileApi.read_binary_to_base64(tfile);
 			if (!dataUrl) return null;
 			if (dataUrl.startsWith("data:image/")) return dataUrl;
 			return `data:${guessImageMimeType(path)};base64,${dataUrl.replace(/^data:[^;]+;base64,/, "")}`;
@@ -1668,7 +1671,7 @@ export class CalendarGalleryModal extends Modal {
 			const item = audios[current];
 			const title = item.title ?? "Voice";
 			const dur = formatDuration(item.duration);
-			if ((this.app as any).isMobile) {
+			if (isMobileApp(this.app)) {
 				label.setText(audios.length > 1 ? `🎤${current + 1}/${audios.length}` : dur ? `🎤${dur}` : "🎤");
 			} else {
 				label.setText(dur ? `🎤 ${title} · ${dur}` : `🎤 ${title}`);

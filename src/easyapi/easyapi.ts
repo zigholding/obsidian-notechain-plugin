@@ -1,6 +1,6 @@
 
 
-import { App, View, WorkspaceLeaf, TFile } from 'obsidian';
+import { App, Plugin, View, WorkspaceLeaf, TFile } from 'obsidian';
 
 import {dialog_suggest} from './gui/inputSuggester'
 import { dialog_multi_suggest } from './gui/inputMultiSuggester'
@@ -18,17 +18,19 @@ import { Templater } from './templater';
 import {Time} from './time'
 import { Web } from './web';
 import { FsEditor } from './fseditor';
+import { activeFileView, isMobileApp, noteChainPlugin, obsidianApp } from '../obsidian-app';
+import type NoteChainPlugin from '../plugin';
 
 export class EasyAPI {
     app: App;
-    dialog_suggest: Function
-	dialog_multi_suggest: Function
-	dialog_prompt: Function
-	dialog_markdown_prompt: Function
-    dialog_cards: Function
-    dialog_calendar: Function
-    dialog_color: Function
-    exit_lightbox: Function
+    dialog_suggest: typeof dialog_suggest
+	dialog_multi_suggest: typeof dialog_multi_suggest
+	dialog_prompt: typeof dialog_prompt
+	dialog_markdown_prompt: typeof dialog_markdown_prompt
+    dialog_cards: typeof openCardNavigator
+    dialog_calendar: typeof openCalendarGallery
+    dialog_color: typeof selectColor
+    exit_lightbox: typeof exitLightbox
     editor: EasyEditor
     file: File
     random: Random
@@ -56,15 +58,15 @@ export class EasyAPI {
         this.time = new Time(app,this);
         this.web = new Web(app);
         this.fs = new FsEditor(app,this);
-        (window as any).ea = this;
+        window.ea = this;
     }
 
-    get_plugin(name:string){
-        return (this.app as any).plugins?.plugins[name]
+    get_plugin<T extends Plugin = Plugin>(name: string): T | undefined {
+        return obsidianApp(this.app).plugins?.plugins[name] as T | undefined;
     }
     
-    get nc(){
-        return this.get_plugin('note-chain');
+    get nc(): NoteChainPlugin | undefined {
+        return noteChainPlugin(this.app);
     }
 
     get ns(){
@@ -76,15 +78,28 @@ export class EasyAPI {
     }
 
     get qa(){
-        return this.get_plugin('quickadd')?.api;
+        return (this.get_plugin('quickadd') as { api?: unknown } | undefined)?.api;
     }
 
     get dv(){
-        return this.get_plugin('dataview')?.api;
+        return (this.get_plugin('dataview') as { api?: unknown } | undefined)?.api;
     }
 
-    get dc(){
-        return this.get_plugin('datacore')?.api;
+    get dc(): { query: (q: string) => Array<{ $path?: string }> } | undefined {
+        const api = (this.get_plugin('datacore') as { api?: { query?: (q: string) => unknown } } | undefined)?.api;
+        if (!api) {
+            return undefined;
+        }
+        const queryFn = api.query;
+        if (typeof queryFn !== 'function') {
+            return undefined;
+        }
+        return {
+            query: (q: string) => {
+                const data = queryFn(q);
+                return Array.isArray(data) ? data as Array<{ $path?: string }> : [];
+            },
+        };
     }
 
     get cfile(){
@@ -117,7 +132,7 @@ export class EasyAPI {
     }
 
     get cview(){
-        let view = (this.app.workspace as any).getActiveFileView()
+        let view = activeFileView(this.app)
 		return view;
     }
 
@@ -127,7 +142,7 @@ export class EasyAPI {
     }
 
     get isMobile(){
-        return (this.app as any).isMobile === true;
+        return isMobileApp(this.app);
     }
 
     get isZh(){

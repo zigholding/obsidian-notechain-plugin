@@ -1,4 +1,5 @@
 import type NoteChainPlugin from '../plugin';
+import { isMobileApp } from '../obsidian-app';
 import { strings } from './strings';
 
 const cmd_chat_sequence = (plugin: NoteChainPlugin) => ({
@@ -118,7 +119,7 @@ export function addWebViewerLLMCommands(plugin: NoteChainPlugin) {
 	commandBuilders.forEach((c) => {
 		plugin.addCommand(c(plugin));
 	});
-	if ((plugin.app as any).isMobile == false) {
+	if (!isMobileApp(plugin.app)) {
 		commandBuildersDesktop.forEach((c) => {
 			plugin.addCommand(c(plugin));
 		});

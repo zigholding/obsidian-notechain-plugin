@@ -1,5 +1,6 @@
-import { TFile } from 'obsidian';
+import { App, TFile } from 'obsidian';
 import type { EasyAPI } from '../easyapi';
+import type { EasyEditor } from '../editor';
 import {
 	codeFenceStartsWithLanguage,
 	fencedCodeInnerContent,
@@ -7,14 +8,15 @@ import {
 } from './codeFence';
 
 export class EasyEditorBlocks {
-	/** Host EasyEditor fields/methods (filled by applyMixins). */
-	[key: string]: any;
+	app!: App;
+	ea!: EasyAPI;
+	nretry!: number;
 
-    private strip_blockquote_prefix(line: string): string {
+    private strip_blockquote_prefix(this: EasyEditor, line: string): string {
         return line.replace(/^(?:>[ \t]*)+/, '');
     }
 
-    private escape_regexp(s: string): string {
+    private escape_regexp(this: EasyEditor, s: string): string {
         return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
@@ -22,7 +24,7 @@ export class EasyEditorBlocks {
      * Build a matcher for the fenced-code info string (text after ``` / ~~~).
      * `string` is an exact language name; `RegExp` / `/pattern/` strings match as regex.
      */
-    private compile_fence_info_re(
+    private compile_fence_info_re(this: EasyEditor, 
         btype: string | RegExp | Array<string | RegExp>,
     ): RegExp | null {
         const items = Array.isArray(btype) ? btype : [btype];
@@ -55,7 +57,7 @@ export class EasyEditorBlocks {
      * Walk markdown lines and collect fenced blocks whose info string matches `fenceInfo`.
      * Supports fences nested in `>` quotes / callouts (each line may be prefixed with `>`).
      */
-    private scan_fenced_blocks(
+    private scan_fenced_blocks(this: EasyEditor, 
         content: string,
         fenceInfo: RegExp,
         marks: string[] = ['```', '~~~'],
@@ -108,7 +110,7 @@ export class EasyEditorBlocks {
      * Exact name (`css`), glob (`dataview*`), RegExp, or `/pattern/` strings.
      * `keep_fence`: include opening/closing fence lines (default false).
      */
-    async extract_code_block(
+    async extract_code_block(this: EasyEditor, 
         tfile: TFile | string,
         btype: string | RegExp | Array<string | RegExp>,
         keep_fence = false,
@@ -128,7 +130,7 @@ export class EasyEditorBlocks {
     }
 
     /** `[[note|alias]]` 或整段匹配的正则 */
-    regexp_link(tfile: TFile, mode: string): RegExp | undefined {
+    regexp_link(this: EasyEditor, tfile: TFile, mode: string): RegExp | undefined {
         if (mode === 'link') {
             return new RegExp(`\\[\\[${tfile.basename}\\|?.*\\]\\]`, 'g');
         }
@@ -137,7 +139,7 @@ export class EasyEditorBlocks {
         }
     }
 
-    async replace(tfile: TFile, regex: string | RegExp, target: string) {
+    async replace(this: EasyEditor, tfile: TFile, regex: string | RegExp, target: string) {
         if (typeof regex === 'string') {
             await this.app.vault.process(tfile, (data: string) => {
                 if (data.indexOf(regex) > -1) {
@@ -156,7 +158,7 @@ export class EasyEditorBlocks {
     }
 
     /** 去掉 YAML frontmatter，返回正文；`string` 视为已是全文内容（不按路径解析） */
-    async remove_metadata(tfile: TFile | string): Promise<string> {
+    async remove_metadata(this: EasyEditor, tfile: TFile | string): Promise<string> {
         if (tfile instanceof TFile) {
             tfile = await this.app.vault.cachedRead(tfile);
         }
@@ -171,7 +173,7 @@ export class EasyEditorBlocks {
         return tfile;
     }
 
-    async expand_wiki_embeds_in_string(
+    async expand_wiki_embeds_in_string(this: EasyEditor, 
         content: string,
         maxDepth: number,
         expanding: Set<string>,
@@ -215,7 +217,7 @@ export class EasyEditorBlocks {
     
 
     /** Inline ```js //templater``` (and sibling info strings) → `<%* … -%>`, matching {@link extract_templater_block} so full-text `parse_commands` runs fenced tpl. Also handles fences inside `>` quotes / callouts. */
-    expand_fenced_templater_in_full_text(content: string): string {
+    expand_fenced_templater_in_full_text(this: EasyEditor, content: string): string {
         const types = ['js //templater', 'js templater', 'js tpl', 'js //tpl'];
         const fenceInfo = this.compile_fence_info_re(types);
         if (!fenceInfo) {
@@ -243,7 +245,7 @@ export class EasyEditorBlocks {
         return out.join('\n');
     }
 
-    async extract_templater_block(tfile: TFile | string, reg = /<%\*\s*([\s\S]*?)\s*-?%>/g): Promise<string[]> {
+    async extract_templater_block(this: EasyEditor, tfile: TFile | string, reg = /<%\*\s*([\s\S]*?)\s*-?%>/g): Promise<string[]> {
         let xfile = this.ea.file.get_tfile(tfile);
         if (xfile) {
             tfile = await this.app.vault.cachedRead(xfile);
@@ -269,7 +271,7 @@ export class EasyEditorBlocks {
         return cssCodeBlocks;
     }
 
-    async extract_yaml_block(tfile: TFile | string): Promise<string> {
+    async extract_yaml_block(this: EasyEditor, tfile: TFile | string): Promise<string> {
         if (tfile instanceof TFile) {
             tfile = await this.app.vault.cachedRead(tfile);
         }
@@ -284,7 +286,7 @@ export class EasyEditorBlocks {
         return '';
     }
 
-    private extractBlockId(para: string): string {
+    private extractBlockId(this: EasyEditor, para: string): string {
         const reg = /\s+\^[a-zA-Z0-9]+\r?\n?$/;
         const match = reg.exec(para);
         if (match) {
@@ -293,7 +295,7 @@ export class EasyEditorBlocks {
         return '';
     }
 
-    private generateRandomString(length: number): string {
+    private generateRandomString(this: EasyEditor, length: number): string {
         const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
         let result = '';
         for (let i = 0; i < length; i++) {
@@ -303,7 +305,7 @@ export class EasyEditorBlocks {
         return result;
     }
 
-    async extract_all_blocks(tfile: TFile | string): Promise<any[]> {
+    async extract_all_blocks(this: EasyEditor, tfile: TFile | string): Promise<Array<[string, string, string?]>> {
         if (tfile instanceof TFile) {
             tfile = await this.app.vault.cachedRead(tfile);
         }
@@ -311,7 +313,7 @@ export class EasyEditorBlocks {
             return [];
         }
         let ctx = tfile;
-        const blocks: any[] = [];
+        const blocks: Array<[string, string, string?]> = [];
         const head = await this.extract_yaml_block(ctx);
         if (head != '') {
             blocks.push(['YAML', head]);
@@ -360,7 +362,7 @@ export class EasyEditorBlocks {
         return blocks;
     }
 
-    async append_block_ids(tfile: TFile): Promise<string> {
+    async append_block_ids(this: EasyEditor, tfile: TFile): Promise<string> {
         const blocks = await this.extract_all_blocks(tfile);
         const items: string[] = [];
         for (const block of blocks) {
@@ -386,7 +388,7 @@ export class EasyEditorBlocks {
         return res;
     }
 
-    async remove_block_ids(tfile: TFile): Promise<string> {
+    async remove_block_ids(this: EasyEditor, tfile: TFile): Promise<string> {
         const blocks = await this.extract_all_blocks(tfile);
         const items: string[] = [];
         for (const block of blocks) {

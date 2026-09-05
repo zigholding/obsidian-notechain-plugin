@@ -1,5 +1,7 @@
-import { MarkdownView, TFile } from 'obsidian';
+import { App, MarkdownView, TFile, HeadingCache, SectionCache } from 'obsidian';
 import type { EasyAPI } from '../easyapi';
+import type { EasyEditor } from '../editor';
+import { activeFileView, asWebviewerView } from '../../obsidian-app';
 import {
 	codeFenceStartsWithLanguage,
 	fencedCodeInnerContent,
@@ -7,11 +9,12 @@ import {
 } from './codeFence';
 
 export class EasyEditorSections {
-	/** Host EasyEditor fields/methods (filled by applyMixins). */
-	[key: string]: any;
+	app!: App;
+	ea!: EasyAPI;
+	nretry!: number;
 
-    async pickSectionFromActiveMarkdownView(): Promise<any> {
-        const view = (this.app.workspace as any).getActiveFileView();
+    async pickSectionFromActiveMarkdownView(this: EasyEditor): Promise<SectionCache | null | undefined> {
+        const view = activeFileView(this.app);
         const editor = view?.editor;
         const tfile = view?.file;
         if (!view || !editor || !tfile) { return null; }
@@ -25,7 +28,7 @@ export class EasyEditorSections {
                     ctx.slice(section.position.start.offset, section.position.end.offset)
             );
             if (!items) { return null; }
-            const section = await this.ea.dialog_suggest(items, cache.sections);
+            const section = await this.ea.dialog_suggest(items, cache.sections ?? []);
             return section;
         }
         return cache?.sections?.filter(
@@ -34,8 +37,8 @@ export class EasyEditorSections {
         )[0];
     }
 
-    async get_selection(cancel_selection = false) {
-        let editor = (this.app.workspace as any).getActiveFileView()?.editor;
+    async get_selection(this: EasyEditor, cancel_selection = false): Promise<string> {
+        let editor = activeFileView(this.app)?.editor;
         if (editor) {
             let sel = editor.getSelection();
             if (cancel_selection) {
@@ -49,7 +52,7 @@ export class EasyEditorSections {
 
         // WebViewer plugin selection lives inside its webview context.
         const wv = this.ea?.wv?.basewv;
-        const activeView = wv?.activeView as any;
+        const activeView = asWebviewerView(wv?.activeView);
         const webview = activeView?.webview ?? wv?.webview;
         if (webview?.executeJavaScript) {
             try {
@@ -72,7 +75,7 @@ export class EasyEditorSections {
                 })()
                 `
                 );
-                if (webSel) {
+                if (typeof webSel === 'string' && webSel) {
                     if (cancel_selection) {
                         await webview.executeJavaScript(
                             `
@@ -125,13 +128,15 @@ export class EasyEditorSections {
 
     }
 
-    async get_code_section(tfile: TFile, ctype = '', idx = 0, as_simple = true) {
+    async get_code_section(this: EasyEditor, tfile: TFile, ctype?: string, idx?: number, as_simple?: true): Promise<string | null | undefined>;
+    async get_code_section(this: EasyEditor, tfile: TFile, ctype: string, idx: number, as_simple: false): Promise<{ code: string; section: SectionCache; ctx: string } | null | undefined>;
+    async get_code_section(this: EasyEditor, tfile: TFile, ctype = '', idx = 0, as_simple = true): Promise<string | { code: string; section: SectionCache; ctx: string } | null | undefined> {
         let dvmeta = this.app.metadataCache.getFileCache(tfile);
         let ctx = await this.app.vault.cachedRead(tfile);
 
         let sections = dvmeta?.sections
-            ?.filter((x: any) => x.type == 'code')
-            .filter((x: any) => {
+            ?.filter((x) => x.type == 'code')
+            .filter((x) => {
                 let c = ctx.slice(x.position.start.offset, x.position.end.offset).trim();
                 return codeFenceStartsWithLanguage(c, ctype);
             });
@@ -140,7 +145,7 @@ export class EasyEditorSections {
             return null;
         }
 
-        let selected: any;
+        let selected: SectionCache | undefined;
 
         if(sections.length==1){
             selected = sections[0];
@@ -148,12 +153,13 @@ export class EasyEditorSections {
             selected = sections[idx];
         } else {
             let sel = await this.ea.dialog_suggest(
-                sections.map((x: any) => ctx.slice(x.position.start.offset, x.position.end.offset)),
+                sections.map((x) => ctx.slice(x.position.start.offset, x.position.end.offset)),
                 [...Array(sections.length).keys()]
             );
             if (sel == null) return;
             selected = sections[sel];
         }
+        if (!selected) return null;
 
         // Now safely use selected
         let c = ctx.slice(
@@ -180,7 +186,7 @@ export class EasyEditorSections {
         }
     }
 
-    get_heading_ctx(ctx: string, headings: any[], heading: any, with_heading = true) {
+    get_heading_ctx(this: EasyEditor, ctx: string, headings: HeadingCache[], heading: HeadingCache | undefined, with_heading = true) {
         // 找到 heading 在 headings 中的位置
         if(!heading){return ''}
         let idx = headings.indexOf(heading);
@@ -210,11 +216,12 @@ export class EasyEditorSections {
     }
 
 
-    async get_heading_section(tfile: TFile, heading: string, idx = 0, with_heading = true) {
-        tfile = this.ea.file.get_tfile(tfile);
-        if(!tfile){
+    async get_heading_section(this: EasyEditor, tfile: TFile | string | null, heading: string, idx = 0, with_heading = true): Promise<string> {
+        const file = this.ea.file.get_tfile(tfile);
+        if(!file){
             return '';
         }
+        tfile = file;
         let dvmeta = this.app.metadataCache.getFileCache(tfile);
         let ctx = await this.app.vault.cachedRead(tfile);
 
@@ -223,11 +230,11 @@ export class EasyEditorSections {
         }
 
         // 找到所有匹配开头的 headings
-        let sections = dvmeta.headings.filter((x: any) => x.heading==heading);
+        let sections = dvmeta.headings.filter((x) => x.heading==heading);
 
         if (sections.length === 0) return '';
 
-        let selected: any;
+        let selected: HeadingCache | undefined;
 
         // idx >= 0 时直接取
         if(sections.length==1){
@@ -236,21 +243,22 @@ export class EasyEditorSections {
             selected = sections[idx];
         } else {
             // 弹窗选择
-            const choices = sections.map((x: any) =>
+            const choices = sections.map((x) =>
                 this.get_heading_ctx(ctx,dvmeta?.headings??[],x,with_heading)
             );
 
             const nums = [...Array(sections.length).keys()];
             let sel = await this.ea.dialog_suggest(choices, nums);
 
-            if (sel == null) return;
+            if (sel == null) return '';
             selected = sections[sel];
         }
+        if (!selected) return '';
         return this.get_heading_ctx(ctx,dvmeta.headings??[],selected,with_heading).trim();
     }
 
 
-    async get_current_section(with_section = false) {
+    async get_current_section(this: EasyEditor, with_section = false) {
         let editor = this.ea.ceditor;
         let tfile = this.ea.cfile;
         if (!editor || !tfile) { return null }
@@ -259,7 +267,7 @@ export class EasyEditorSections {
         if (!cache || !cache?.sections) { return null }
         if (cursor) {
             let section = cache?.sections?.filter(
-                (x: any) => { return x.position.start.line <= cursor.line && x.position.end.line >= cursor.line }
+                (x) => { return x.position.start.line <= cursor.line && x.position.end.line >= cursor.line }
             )[0]
             if (!section && cursor.line > cache.sections[cache.sections.length - 1].position.end.line) {
                 section = cache.sections[cache.sections.length - 1]

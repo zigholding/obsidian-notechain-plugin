@@ -5,8 +5,20 @@ let crypto = require('crypto');
 import { getTailscaleSelfInfo } from './tailscaleUtil';
 
 /** Lazy-load: selfsigned touches nodeCrypto.webcrypto at require-time (breaks Obsidian mobile). */
-function getSelfsigned(): any {
-	return require('selfsigned');
+interface SelfsignedPems {
+	private: string;
+	cert: string;
+}
+
+interface SelfsignedLib {
+	generate(
+		attrs: Array<{ name: string; value: string }>,
+		options: Record<string, unknown>,
+	): SelfsignedPems | Promise<SelfsignedPems>;
+}
+
+function getSelfsigned(): SelfsignedLib {
+	return require('selfsigned') as SelfsignedLib;
 }
 
 function normalizeCertFingerprint(fp: string): string {

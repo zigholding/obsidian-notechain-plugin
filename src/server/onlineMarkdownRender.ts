@@ -1,6 +1,10 @@
 import { App, Component, MarkdownRenderer } from 'obsidian';
 import { readHttpBody } from './httpUtil';
 import type { OnlineVaultMediaService } from './onlineVaultMedia';
+import type { HttpReq, HttpRes } from '../http-types';
+import { parseJsonRecord } from '../http-types';
+import { noteChainPlugin, obsidianApp } from '../obsidian-app';
+import { errorMessage } from '../ts-helpers';
 
 export class OnlineMarkdownRenderService {
     /** Dataview 慢查询时可能长时间无 mutation 事件；过短会提前 done，浏览器只收到半截表格 */
@@ -54,7 +58,7 @@ export class OnlineMarkdownRenderService {
      * 每行一个 JSON：{ html, done? , error? }
      */
     private async streamOnlineRenderNdjson(
-        res: any,
+        res: HttpRes,
         el: HTMLElement,
         idleMs: number,
         maxMs: number,
@@ -80,7 +84,7 @@ export class OnlineMarkdownRenderService {
             res.write(JSON.stringify({ html: htmlOut, done }) + '\n');
             pushedFrames++;
             if (typeof res.flush === 'function') {
-                (res as any).flush();
+                res.flush();
             }
         };
 
@@ -459,28 +463,26 @@ export class OnlineMarkdownRenderService {
      * 使用 Obsidian MarkdownRenderer 将 Markdown 转为 HTML，供 /online 浏览器预览
      *（与库内预览一致：链接、callout、任务列表等由 Obsidian 解析）
      */
-    async handleOnlineRender(req: any, res: any) {
+    async handleOnlineRender(req: HttpReq, res: HttpRes) {
         let host: HTMLElement | null = null;
         let comp: Component | null = null;
         const tReq = Date.now();
         try {
             let body = await readHttpBody(req);
-            let data: any = {};
-            try {
-                data = JSON.parse(body);
-            } catch {
+            const data = parseJsonRecord(body);
+            if (!data) {
                 res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify({ error: 'Invalid JSON body' }));
                 return;
             }
-            let pathNorm = this.vault.normalizeOnlineVaultPath(data.path);
+            let pathNorm = this.vault.normalizeOnlineVaultPath(typeof data.path === 'string' ? data.path : undefined);
             if (!pathNorm) {
                 res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify({ error: 'Invalid path' }));
                 return;
             }
             let markdown = typeof data.markdown === 'string' ? data.markdown : '';
-            let file = this.vault.resolveOnlineMarkdownFile(data.path);
+            let file = this.vault.resolveOnlineMarkdownFile(typeof data.path === 'string' ? data.path : undefined);
             let sourcePath = file ? file.path : pathNorm;
             // 与磁盘一致时先展开 ![[…]] 多层嵌套再渲染，否则 MarkdownRenderer 对「A 嵌 B、B 嵌 C」常展不开 C（含内层 Dataview）
             if (file) {
@@ -488,9 +490,9 @@ export class OnlineMarkdownRenderService {
                     let rawOnDisk = await this.app.vault.read(file);
                     let normNl = (s: string) => s.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
                     if (normNl(markdown) === normNl(rawOnDisk)) {
-                        let nc = (this.app as any).plugins?.getPlugin?.('note-chain');
+                        let nc = noteChainPlugin(this.app);
                         let readEmb = nc?.easyapi?.file?.read_tfile_with_embeds;
-                        if (typeof readEmb === 'function') {
+                        if (nc && typeof readEmb === 'function') {
                             markdown = await readEmb.call(nc.easyapi.file, file, 10);
                         }
                     }
@@ -523,8 +525,8 @@ export class OnlineMarkdownRenderService {
                     done: false,
                 }) + '\n',
             );
-            if (typeof (res as any).flush === 'function') {
-                (res as any).flush();
+            if (typeof res.flush === 'function') {
+                res.flush();
             }
             this.logOnlineRender('placeholder flushed, MarkdownRenderer.render start', {
                 path: pathNorm,
@@ -544,7 +546,7 @@ export class OnlineMarkdownRenderService {
             let mdLikelyDataview =
                 /(^|\r?\n)```[\t ]*dataviewjs\b/i.test(mdProbe) ||
                 /(^|\r?\n)```[\t ]*dataview\b/i.test(mdProbe);
-            let dataviewPluginOn = !!(this.app as any).plugins?.plugins?.dataview;
+            let dataviewPluginOn = !!obsidianApp(this.app).plugins?.plugins?.['dataview'];
             this.logOnlineRender('post-render probe', {
                 path: pathNorm,
                 mdLikelyDataview,
@@ -599,16 +601,16 @@ export class OnlineMarkdownRenderService {
                 path: pathNorm,
                 totalMs: Date.now() - tReq,
             });
-        } catch (error: any) {
+        } catch (error: unknown) {
             this.logOnlineRender('handleOnlineRender error', {
-                message: error?.message || String(error),
+                message: errorMessage(error) || String(error),
                 sinceReqMs: Date.now() - tReq,
             });
             if (res.headersSent) {
                 try {
                     res.write(
                         JSON.stringify({
-                            error: error.message || 'render failed',
+                            error: errorMessage(error) || 'render failed',
                             done: true,
                         }) + '\n',
                     );
@@ -617,7 +619,7 @@ export class OnlineMarkdownRenderService {
                 }
             } else {
                 res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-                res.end(JSON.stringify({ error: error.message || 'render failed' }));
+                res.end(JSON.stringify({ error: errorMessage(error) || 'render failed' }));
             }
         } finally {
             if (host && host.parentNode) {

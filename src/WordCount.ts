@@ -1,7 +1,8 @@
 import {
-    App, MarkdownView, Notice,
-    TFile, TFolder, moment, EditorPosition
+    App, FileView, MarkdownView, Notice,
+    TFile, TFolder, moment, EditorPosition, EventRef
 } from 'obsidian';
+import { isRecord } from './ts-helpers';
 import NoteChainPlugin from "./plugin";
 
 
@@ -11,7 +12,7 @@ export class WordCount{
 	nretry:number;
     timerId:NodeJS.Timeout;
     curr_active_file:TFile;
-    events: Array<object>;
+    events: EventRef[];
 
 	constructor(plugin:NoteChainPlugin,app:App){
         this.plugin = plugin;
@@ -23,7 +24,7 @@ export class WordCount{
 
     filter(tfile:TFile){
         if(!tfile){return false;}
-        if((tfile as any).deleted){return false;}
+        if ((tfile as TFile & { deleted?: boolean }).deleted) { return false; }
         if(tfile.extension!='md'){return false;}
         if(tfile.basename==tfile.parent?.name){return true}
         
@@ -131,15 +132,20 @@ export class WordCount{
     get_new_words(tfile:TFile,day=moment().format('YYYY-MM-DD')){
         let meta = this.app.metadataCache.getFileCache(tfile);
         let values = meta?.frontmatter?.words;
-        if(values){
+        if(isRecord(values)){
             let keys = Object.keys(values).sort((a,b)=>a.localeCompare(b));
             let idx = keys.indexOf(day);
             if(idx<0){
                 return 0;
             }else if(idx==0){
-                return values[day];
+                const v = values[day];
+                return typeof v === 'number' ? v : Number(v) || 0;
             }else{
-                return values[day]-values[keys[idx-1]];
+                const cur = values[day];
+                const prev = values[keys[idx-1]];
+                const a = typeof cur === 'number' ? cur : Number(cur) || 0;
+                const b = typeof prev === 'number' ? prev : Number(prev) || 0;
+                return a - b;
             }
         }
 
@@ -156,7 +162,7 @@ export class WordCount{
         await this.set_mtime_value(tfile,'words',N);
     }
 
-	check_frontmatter(tfile:TFile,kv:{[key:string]:any}):boolean{
+	check_frontmatter(tfile:TFile,kv:Record<string, unknown>):boolean{
 		try {
 			if(!tfile){return false;}
 			let meta = this.app.metadataCache.getFileCache(tfile);
@@ -174,7 +180,7 @@ export class WordCount{
 		}
 	}
 
-	async wait_frontmatter(tfile:TFile,kv:{[key:string]:any},nretry=this.nretry):Promise<boolean>{
+	async wait_frontmatter(tfile:TFile,kv:Record<string, unknown>,nretry=this.nretry):Promise<boolean>{
 		let flag = this.check_frontmatter(tfile,kv);
 		
 		while(!flag && nretry>0){
@@ -213,8 +219,9 @@ export class WordCount{
                 clearTimeout(this.timerId);
             }
             if(info.file){
+                const file = info.file;
                 this.timerId = setTimeout(()=>{
-                    void this.update_word_count((info as any).file);
+                    void this.update_word_count(file);
                 }, 3000);
             }
         });
@@ -225,11 +232,12 @@ export class WordCount{
     regeister_active_leaf_change(){
         let e = this.app.workspace.on('active-leaf-change',async (leaf)=>{
 
-            let tfile = (leaf?.view as any).file;
-            if(!leaf?.view || tfile?.basename=='note-chain-templater-target'){
+            const view = leaf?.view;
+            const tfile = view instanceof FileView ? view.file : null;
+            if(!view || tfile?.basename=='note-chain-templater-target'){
                 return;
             }
-            if(!((leaf.view as any)?.file?.extension=='md')){
+            if(!(tfile?.extension=='md')){
                 return;
             }
             await this.update_word_count(tfile);
@@ -248,18 +256,18 @@ export class WordCount{
 
     unregister(){
         for(let e of this.events){
-            (e as any).e.offref(e)
+            this.app.workspace.offref(e);
         }
         this.events = this.events.slice(-1,0);
     }
 
-    get_words_of_tfiles(files:Array<TFile>|null=null){
+    get_words_of_tfiles(files:Array<TFile>|null=null): Record<string, unknown>[] {
         if(!files){
             files = this.plugin.easyapi.file.get_all_tfiles();
         }
         return files.map(
             x=>this.plugin.editor.get_frontmatter(x,'words')
-        ).filter(x=>x);
+        ).filter((x): x is Record<string, unknown> => isRecord(x));
     }
 
     /** 指定日期相对前一条记录字数有变化的 md 笔记（与 {@link get_new_words} 同一天参数） */
@@ -300,7 +308,7 @@ export class WordCount{
     }
 
     sum_words_of_tifles(files:Array<TFile>|null=null, begt:number|string=10, endt:number|string=0) {
-        files = this.get_words_of_tfiles(files)
+        const wordMaps = this.get_words_of_tfiles(files)
         if(typeof(begt)=='number'){
             begt = moment().add(-begt,'days').format('YYYY-MM-DD')
         }
@@ -310,7 +318,7 @@ export class WordCount{
         
         let startDate = new Date(begt);
         let endDate = new Date(endt);
-        let dailyWordCounts:{[key:string]:any} = {};
+        let dailyWordCounts:Record<string, number> = {};
     
         // Initialize dailyWordCounts with all dates in the range
         for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
@@ -319,19 +327,21 @@ export class WordCount{
         }
         
         // Sum up the word counts for each date
-        files.forEach((file:any) => {
+        wordMaps.forEach((file) => {
             let lastWordCount = 0;
             let earliestDate = new Date(Object.keys(file).sort()[0]);
     
             // Initialize lastWordCount with the earliest date's word count in the file
             if (earliestDate < startDate) {
-                lastWordCount = file[earliestDate.toISOString().split('T')[0]];
+                const v = file[earliestDate.toISOString().split('T')[0]];
+                lastWordCount = typeof v === 'number' ? v : Number(v) || 0;
             }
             
             for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
                 let dateStr = date.toISOString().split('T')[0];
-                if (file.hasOwnProperty(dateStr)) {
-                    lastWordCount = file[dateStr];
+                if (Object.prototype.hasOwnProperty.call(file, dateStr)) {
+                    const v = file[dateStr];
+                    lastWordCount = typeof v === 'number' ? v : Number(v) || 0;
                 }
                 dailyWordCounts[dateStr] += lastWordCount;
             }

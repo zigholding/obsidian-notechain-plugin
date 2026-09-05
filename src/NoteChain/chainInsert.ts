@@ -23,7 +23,7 @@ export async function moveSelectedNotesAsNext(
 	if (!anchor) { return false; }
 
 	for (let tfile of tfiles) {
-		if (tfile.parent && tfile.parent.path != anchor.parent.path) {
+		if (tfile.parent && anchor.parent && tfile.parent.path != anchor.parent.path) {
 			const dst = anchor.parent.path + '/' + tfile.name;
 			await plugin.app.fileManager.renameFile(tfile, dst);
 		}

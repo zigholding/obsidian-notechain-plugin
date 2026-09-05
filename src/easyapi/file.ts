@@ -6,6 +6,7 @@ import { CardNavigatorOptions, type CardItem } from './gui/inputCardSuggester'
 
 import { EasyAPI } from 'src/easyapi/easyapi'
 import { encodeOctets } from './octetText'
+import { getBacklinksForFile, obsidianApp, uniqueFileLookup, vaultAllFolders, vaultBasePath, vaultConfig } from '../obsidian-app'
 
 export class File {
 	app: App;
@@ -17,12 +18,11 @@ export class File {
 	}
 
 	get ROOT(){
-        let a = this.app.vault.adapter as any;
-        return a.basePath.replace(/\\/g,'/');
+        return vaultBasePath(this.app).replace(/\\/g,'/');
     }
 
 	get ATTACHMENTS(){
-		let apath = (this.app.vault as any).config?.attachmentFolderPath || '/';
+		let apath = vaultConfig(this.app)?.attachmentFolderPath || '/';
 		if(apath=='/'){
 			return this.ROOT;
 		}else{
@@ -55,7 +55,7 @@ export class File {
 	}
 
 	plugin_dir(id:string){
-		let pid = (this.app as any).plugins?.plugins[id];
+		let pid = obsidianApp(this.app).plugins?.plugins[id];
 		if(pid){
 			return this.ROOT+'/'+pid.manifest.dir;
 		}
@@ -70,7 +70,9 @@ export class File {
 		return this.ea.nc?.chain?.get_last_daily_note();
 	}
 
-	get_tfile(path: string | TFile | null, only_first = true) {
+	get_tfile(path: string | TFile | null, only_first?: true): TFile | null;
+	get_tfile(path: string | TFile | null, only_first: false): TFile[] | null;
+	get_tfile(path: string | TFile | null, only_first = true): TFile | TFile[] | null {
 		try {
 			if (!path) {
 				return null;
@@ -93,9 +95,10 @@ export class File {
 				return tfile;
 			}
 
-			let tfiles = (this.app.metadataCache as any).uniqueFileLookup.get(path.toLowerCase());
+			const lookup = uniqueFileLookup(this.app);
+			let tfiles = lookup?.get(path.toLowerCase());
 			if (!tfiles) {
-				tfiles = (this.app.metadataCache as any).uniqueFileLookup.get(path.toLowerCase() + '.md');
+				tfiles = lookup?.get(path.toLowerCase() + '.md');
 				if (!tfiles) {
 					return null;
 				} else {
@@ -227,9 +230,9 @@ export class File {
 		return this.ea.nc?.wordcount?.get_daily_edited_tfiles(day);
 	}
 
-	get_tfiles_of_folder(tfolder: TFolder | null, n = 0): any {
+	get_tfiles_of_folder(tfolder: TFolder | null, n = 0): TFile[] {
 		if (!tfolder) { return []; }
-		let notes = [];
+		let notes: TFile[] = [];
 		for (let c of tfolder.children) {
 			if (c instanceof TFile && c.extension === 'md') {
 				notes.push(c);
@@ -265,7 +268,7 @@ export class File {
 	get_link_of_file(tfile: TFile) {
 		if (!tfile) { return null }
 		let tfiles = this.get_tfile(tfile.name, false);
-		if (tfiles.length > 1) {
+		if (tfiles && tfiles.length > 1) {
 			if (tfile.extension == 'md') {
 				return `[[${tfile.path.slice(0, tfile.path.length - tfile.extension.length - 1)}]]`;
 			} else {
@@ -346,7 +349,9 @@ export class File {
 		if (tfile == null) { return []; }
 		let res: Array<TFile> = []
 
-		let inlinks = (this.app.metadataCache as any).getBacklinksForFile(tfile);
+		if (!(tfile instanceof TFile)) { return []; }
+		let inlinks = getBacklinksForFile(this.app, tfile);
+		if (!inlinks?.data) { return []; }
 		for (let [k, v] of inlinks.data) {
 			let curr = this.app.vault.getFileByPath(k);
 			if (curr) {
@@ -391,7 +396,7 @@ export class File {
 		return res;
 	}
 
-	get_links(tfile = this.ea.cfile, only_md = true) {
+	get_links(tfile = this.ea.cfile, only_md = true): TFile[] {
 		let inlinks = this.get_inlinks(tfile, only_md);
 		let outlinks = this.get_outlinks(tfile, only_md);
 		for (let link of inlinks) {
@@ -464,7 +469,7 @@ export class File {
 	}
 
 	get_all_folders() {
-		let folders = (this.app.vault as any).getAllFolders();
+		let folders = vaultAllFolders(this.app);
 		let folder = this.app.vault.getFolderByPath('/');
 		if (folder && !folders.contains(folder)) {
 			folders.push(folder);
@@ -535,30 +540,28 @@ export class File {
 		return tfiles;
 	}
 
-	get_selected_files(current_if_no_selected = true) {
+	get_selected_files(current_if_no_selected = true): TFile[] {
 		let selector = document.querySelectorAll(
 			".tree-item-self.is-selected"
 		);
-		let items = Object.values(selector).map((x: any) => {
-			var _a;
-			return (_a = x.dataset) == null ? void 0 : _a.path;
-		});
+		let items = Object.values(selector).map((x) => (x as HTMLElement).dataset?.path);
 		let tfiles = items.map(
-			(x: any) => this.get_tfile(x)).filter((x: any) => x.extension == "md"
+			(x) => this.get_tfile(x ?? null)).filter((x): x is TFile => x instanceof TFile && x.extension == "md"
 			)
 		if (tfiles.length > 0) {
 			return tfiles
-		} else if (current_if_no_selected && this.app.workspace.getActiveFile()) {
-			return [this.app.workspace.getActiveFile()]
-		} else {
-			return []
 		}
+		const active = this.app.workspace.getActiveFile();
+		if (current_if_no_selected && active) {
+			return [active]
+		}
+		return []
 	}
 
 	async read_binary_to_base64(tfile: TFile) {
-		tfile = this.get_tfile(tfile)
-		if (!tfile) { return null }
-		let buffer = await this.app.vault.readBinary(tfile)
+		const file = this.get_tfile(tfile)
+		if (!file) { return null }
+		let buffer = await this.app.vault.readBinary(file)
 		let text = encodeOctets(buffer);
 		let bs64 = `data:image/png;base64,${text}`;
 		return bs64
@@ -572,11 +575,12 @@ export class File {
 		let data = tfiles.map(file => ({
 			name: file.basename,
 			detail: file.path,
-			image: this.ea.editor.get_frontmatter(file, 'cover') || "file",
+			image: ((): CardItem['image'] => {
+				const cover = this.ea.editor.get_frontmatter(file, 'cover');
+				return typeof cover === 'string' ? cover : 'file';
+			})(),
 			file: file, // 👈 自定义挂载，方便后面用
-			async action(item: CardItem) {
-				// 这里直接返回，不做打开动作
-				return item;
+			async action(_item: CardItem): Promise<void> {
 			}
 		}))
 
@@ -604,17 +608,21 @@ export class File {
 		// 3️⃣ 转成 CardItem 结构
 		const data = Object.entries(groups).map(([folder, files]: [string, TFile[]]) => {
 			return {
-				name: folder.split('/').pop(), // 只显示最后一级目录名
+				name: folder.split('/').pop() ?? folder, // 只显示最后一级目录名
 				detail: `${files.length} 个笔记`,
-				image: this.ea.editor.get_frontmatter(folder, 'cover') || "folder",
+				image: ((): CardItem['image'] => {
+					const cover = this.ea.editor.get_frontmatter(folder, 'cover');
+					return typeof cover === 'string' ? cover : 'folder';
+				})(),
 				action: files.map((file: TFile) => ({
 					name: file.basename,
 					detail: file.path,
-					image: this.ea.editor.get_frontmatter(file, 'cover') || "file",
+					image: ((): CardItem['image'] => {
+						const cover = this.ea.editor.get_frontmatter(file, 'cover');
+						return typeof cover === 'string' ? cover : 'file';
+					})(),
 					file: file, // 👈 自定义挂载，方便后面用
-					async action(item: CardItem) {
-						// 这里直接返回，不做打开动作
-						return item;
+					async action(_item: CardItem): Promise<void> {
 					}
 				}))
 			};
@@ -639,7 +647,7 @@ export class File {
 		if (!data) {
 			return [];
 		}
-		let tfiles = data.map((x: any) => this.get_tfile(x.$path));
-		return tfiles.filter((x: any) => x !== null);
+		let tfiles = data.map((x) => this.get_tfile(x.$path ?? null));
+		return tfiles.filter((x): x is TFile => x instanceof TFile);
 	}
 }

@@ -91,7 +91,7 @@ class MarkdownInputPrompt extends Modal {
 			throw new Error("Failed to create WorkspaceLeaf.");
 		}
 		// Prevent workspace split jitter while the leaf is being prepared.
-		(this.modalLeafRef as any).containerEl.addClass("nc-markdown-leaf-preparing");
+		(this.modalLeafRef as WorkspaceLeaf & { containerEl: HTMLElement }).containerEl.addClass("nc-markdown-leaf-preparing");
 
 		this.tempFile = await this.ensureTempFile();
 		await this.modalLeafRef.openFile(this.tempFile, { state: { mode: "source" } });

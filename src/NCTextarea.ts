@@ -10,6 +10,8 @@ import {
 
 import NoteChainPlugin from "./plugin";
 import { encodeOctets } from "./easyapi/octetText";
+import { obsidianApp } from "./obsidian-app";
+import { isRecord } from "./ts-helpers";
 
 /** textarea 内 `[[` 笔记待选浮窗 */
 class TextareaWikiLinkSuggest extends MarkdownRenderChild {
@@ -220,15 +222,14 @@ export class NCTextarea {
 			ctx: MarkdownPostProcessorContext
 		) => {
 			source = source.trim()
-			let config: any;
-			if (source == '') {
-				config = {}
-			} else {
-				config = nc.textarea.yamljs.load(source);
+			let config: Record<string, unknown> = {};
+			if (source != '') {
+				const loaded = nc.textarea.yamljs.load(source);
+				if (isRecord(loaded)) config = loaded;
 			}
 			let tfile = nc.easyapi.file.get_tfile(ctx.sourcePath);
 			if(tfile && config['frontmatter'] != false){
-				let frontmatter = (nc.app as any).metadataCache.getFileCache(tfile)['frontmatter'];
+				let frontmatter = nc.app.metadataCache.getFileCache(tfile)?.frontmatter;
 				if(frontmatter){
 					for(let key in frontmatter){
 						config[key] = frontmatter[key];
@@ -244,27 +245,28 @@ export class NCTextarea {
 			});
 			metaSrc.value = source;
 
-			let area: any = null;
+			let area: HTMLTextAreaElement | null = null;
 			if (config['textarea'] != false) {
 				let cls = 'code_block_textarea'
-				if (config.textarea?.cls) {
-					cls = config['textarea']['cls']
+				const taCfg = isRecord(config.textarea) ? config.textarea : undefined;
+				if (typeof taCfg?.cls === 'string') {
+					cls = taCfg.cls
 				}
 				area = container.createEl("textarea", { cls: cls });
-				let style = config.textarea?.style
-				if (style && typeof (style) == 'object') {
-					for (let name in style) {
+				let style = taCfg?.style
+				if (isRecord(style)) {
+					for (let name of Object.keys(style)) {
 						if (name == 'backgroundImage') {
-							let img = nc.easyapi.file.get_tfile(style[name])
+							let img = nc.easyapi.file.get_tfile(typeof style[name] === 'string' ? style[name] : null)
 							if (img) {
 								let data = await nc.app.vault.readBinary(img)
 								let text = this.arrayBufferToBase64(data);
 								let bs64 = `data:image/png;base64,${text}`;
-								(area as any).style[name] = `url('${bs64}')`
+								(area.style as unknown as Record<string, string>)[name] = `url('${bs64}')`
 								continue
 							}
 						}
-						(area as any).style[name] = style[name];
+						(area.style as unknown as Record<string, string>)[name] = String(style[name] ?? '');
 					}
 				}
 			}
@@ -275,50 +277,50 @@ export class NCTextarea {
 						// 创建一个按钮容器
 						let buttonContainer = container.createEl("div", { cls: 'code_block_textarea_btn_container' });
 
-						const applyBtnStyle = async (xbtn: HTMLButtonElement, style: any) => {
-							if (!style || typeof (style) != 'object') { return }
-							for (let name in style) {
+						const applyBtnStyle = async (xbtn: HTMLButtonElement, style: unknown) => {
+							if (!isRecord(style)) { return }
+							for (let name of Object.keys(style)) {
 								if (name == 'cls') { continue }
 								if (name == 'backgroundImage') {
-									let img = nc.easyapi.file.get_tfile(style[name])
+									let img = nc.easyapi.file.get_tfile(typeof style[name] === 'string' ? style[name] : null)
 									if (img) {
 										let data = await nc.app.vault.readBinary(img)
 										let text = this.arrayBufferToBase64(data);
 										let bs64 = `data:image/png;base64,${text}`;
 										let url = "url('" + bs64 + "')";
-										(xbtn as any).style.backgroundImage = url;
+										xbtn.style.backgroundImage = url;
 										xbtn.addClass('nc-ta-btn-has-bg');
 										continue
 									}
 								}
-								(xbtn as any).style[name] = style[name];
+								(xbtn.style as unknown as Record<string, string>)[name] = String(style[name] ?? '');
 							}
 						}
 
 						for (let btn of btns) {
-							let name = btn[0]
-							let fname = btn[1]
+							if (!Array.isArray(btn) || btn.length < 2) { continue }
+							let name = String(btn[0] ?? '')
+							let fname = String(btn[1] ?? '')
 							if (!name || !fname) { continue }
 
 							let cls = 'code_block_textarea_btn'
-							let btnStyle: any = null;
+							let btnStyle: unknown = null;
 							if (btn[2]) {
 								if (typeof (btn[2]) == 'string') {
 									cls = btn[2]
-								} else if (typeof (btn[2]) == 'object') {
-									if (btn[2].cls) {
+								} else if (isRecord(btn[2])) {
+									if (typeof btn[2].cls === 'string') {
 										cls = btn[2].cls
 									}
 									btnStyle = btn[2]
 								}
 							}
 							// 库自带函数
-							let ufunc = (nc.textarea as any)[fname];
-							if (!ufunc) {
-								// customJS/templater函数
+							let ufunc: unknown = (nc.textarea as unknown as Record<string, unknown>)[fname];
+							if (typeof ufunc !== 'function') {
 								ufunc = await nc.utils.get_str_func(nc.app, fname);
 							}
-							if (ufunc) {
+							if (typeof ufunc === 'function') {
 								let xbtn = buttonContainer.createEl('button', { text: name, cls: cls });
 								xbtn.type = 'button';
 								xbtn.setAttribute('data-nc-online-fname', String(fname));
@@ -339,7 +341,7 @@ export class NCTextarea {
 							}
 
 							// 命令
-							let c = (nc.app as any).commands?.findCommand(fname);
+							let c = obsidianApp(nc.app).commands?.findCommand?.(fname);
 							if (c) {
 								let xbtn = buttonContainer.createEl('button', { text: name, cls: cls });
 								xbtn.type = 'button';
@@ -355,7 +357,7 @@ export class NCTextarea {
 									await applyBtnStyle(xbtn, btnStyle);
 								}
 								xbtn.addEventListener('click', () => {
-									void (nc.app as any).commands.executeCommandById(fname);
+									void obsidianApp(nc.app).commands.executeCommandById(fname);
 								});
 								continue
 							}
@@ -380,7 +382,7 @@ export class NCTextarea {
 										x=>nc.settings.notechain.tpl_tags_folder.contains(x)
 									);
 									if(tags.length>0){
-										let tplExtra: any = {
+										let tplExtra: Record<string, unknown> = {
 											area: area,
 											source: source,
 											el: el,

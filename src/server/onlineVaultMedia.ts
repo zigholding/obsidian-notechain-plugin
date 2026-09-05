@@ -1,4 +1,7 @@
 import { App, TFile, normalizePath } from 'obsidian';
+import type { HttpReq, HttpRes, ParsedReqUrl } from '../http-types';
+import { vaultAdapter } from '../obsidian-app';
+import { errorMessage } from '../ts-helpers';
 
 export class OnlineVaultMediaService {
     constructor(private app: App) {}
@@ -34,7 +37,7 @@ export class OnlineVaultMediaService {
     }
 
     private getVaultRootAbsNorm(): string | null {
-        let adapter = this.app.vault.adapter as any;
+        let adapter = vaultAdapter(this.app);
         let getFullPath = adapter.getFullPath as undefined | ((p: string) => string);
         if (typeof getFullPath !== 'function') {
             return null;
@@ -237,7 +240,7 @@ export class OnlineVaultMediaService {
         return map[ext] || 'application/octet-stream';
     }
 
-    async handleOnlineMedia(req: any, res: any, parsedUrl: any) {
+    async handleOnlineMedia(req: HttpReq, res: HttpRes, parsedUrl: ParsedReqUrl) {
         try {
             let pathParam = parsedUrl.query && (parsedUrl.query.path as string | undefined);
             let p = this.normalizeOnlineVaultPath(pathParam);
@@ -265,9 +268,9 @@ export class OnlineVaultMediaService {
                 'Cache-Control': 'public, max-age=3600',
             });
             res.end(body);
-        } catch (error: any) {
+        } catch (error: unknown) {
             res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-            res.end(error.message || 'read failed');
+            res.end(errorMessage(error) || 'read failed');
         }
     }
 }

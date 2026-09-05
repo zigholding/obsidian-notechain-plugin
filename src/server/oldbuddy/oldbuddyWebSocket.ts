@@ -1,11 +1,13 @@
 let crypto = require('crypto');
+import type { Socket } from 'net';
+import type { HttpReq } from '../../http-types';
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
 export type OldBuddyWsKind = 'web' | 'jiujiu';
 
 export interface OldBuddyWsClient {
-    socket: any;
+    socket: Socket;
     buffer: Buffer;
     kind: OldBuddyWsKind;
     target: string;
@@ -28,7 +30,7 @@ export class OldBuddyWebSocketHub {
     onJiujiuMessage: ((client: OldBuddyWsClient, raw: string) => void | Promise<void>) | null = null;
     onJiujiuOpen: ((client: OldBuddyWsClient) => void | Promise<void>) | null = null;
 
-    handleUpgrade(req: any, socket: any, head: Buffer, opts?: OldBuddyWsUpgradeOpts) {
+    handleUpgrade(req: HttpReq, socket: Socket, head: Buffer, opts?: OldBuddyWsUpgradeOpts) {
         const key = req.headers['sec-websocket-key'];
         if (!key) {
             socket.destroy();

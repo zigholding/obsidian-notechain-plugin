@@ -1,24 +1,24 @@
 
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder } from 'obsidian';
-import { on } from 'node:events';
+import { App, TFile, TFolder } from 'obsidian';
 import {EasyAPI} from 'src/easyapi/easyapi'
+import { desktopRequire, isMobileApp, vaultAdapter, vaultBasePath } from '../obsidian-app'
 
 export class FsEditor{
-    fs;
+    fs: typeof import('fs');
     app:App;
-    path;
+    path: typeof import('path');
     easyapi: EasyAPI;
 
     constructor(app: App, easyapi:EasyAPI) {
         this.app = app;
         this.easyapi = easyapi;
-        this.fs = (app.vault.adapter as any).fs;
-        this.path = (app.vault.adapter as any).path;
+        const adapter = vaultAdapter(app);
+        this.fs = adapter.fs as typeof import('fs');
+        this.path = adapter.path as typeof import('path');
     }
 
-    get root(){
-        let a = this.app.vault.adapter as any;
-        return a.basePath.replace(/\\/g,'/');
+	get root(){
+        return vaultBasePath(this.app).replace(/\\/g,'/');
     }
 
 	/**
@@ -191,7 +191,7 @@ export class FsEditor{
      * 在系统文件浏览器中定位并选中文件（支持 vault 路径与系统绝对路径）。
      */
     show_in_system_explorer(filePath: string): boolean {
-        if ((this.app as any).isMobile) return false;
+        if (isMobileApp(this.app)) return false;
 
         const input = (filePath ?? "").trim();
         if (!input) return false;
@@ -211,8 +211,8 @@ export class FsEditor{
             abs = this.abspath(input, true) || (this.isfile(input) ? input : null);
         }
         if (!abs) {
-            const adapter = this.app.vault.adapter as any;
-            if (typeof adapter?.getFullPath === "function" && !this.is_system_abs_path(input)) {
+            const adapter = vaultAdapter(this.app);
+            if (typeof adapter.getFullPath === "function" && !this.is_system_abs_path(input)) {
                 const full = adapter.getFullPath(input);
                 if (full && (this.isfile(full) || this.isdir(full))) abs = full;
             }
@@ -225,9 +225,7 @@ export class FsEditor{
         const sep = this.path?.sep || ((typeof process !== "undefined" && process.platform === "win32") ? "\\" : "/");
         const nativePath = abs.replace(/[\\/]/g, sep);
 
-        const req = (typeof window !== "undefined" && (window as any).require)
-            ? (window as any).require
-            : require;
+        const req = desktopRequire() ?? require;
 
         // ① Electron shell.showItemInFolder
         try {
@@ -456,7 +454,7 @@ export class FsEditor{
         }
         if(!path && prompt_if_null){
             path = await this.easyapi.dialog_prompt("Root of vault");
-            if(!this.isdir(path)){
+            if(!path || !this.isdir(path)){
                 path = null
             }
         }
@@ -642,16 +640,16 @@ export class FsEditor{
         }
     }
 
-    modify(path:string,callback:Function,encoding='utf8'){
+    modify(path:string,callback:(p: string, data: string) => string,encoding: BufferEncoding ='utf8'){
         let fs = this.fs;
         if(!fs.existsSync(path)){return};
 
-        fs.readFile(path, encoding, (err:Error, data:string) => {
+        fs.readFile(path, encoding, (err, data) => {
 			if(err){
                 return;
             }
             let rs = callback(path,data);
-			fs.writeFile(path, rs, encoding, (err:Error) => {
+			fs.writeFile(path, rs, encoding, (_err) => {
                 return;
 			});
 		  }

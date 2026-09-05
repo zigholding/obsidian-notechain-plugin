@@ -1,24 +1,26 @@
+import type { HttpReq, HttpRes } from '../http-types';
+
 /** 读取 HTTP 请求体（Node IncomingMessage） */
-export function readHttpBody(req: any): Promise<string> {
+export function readHttpBody(req: HttpReq): Promise<string> {
     return new Promise((resolve, reject) => {
         let body = '';
-        req.on('data', (chunk: any) => {
+        req.on('data', (chunk: Buffer | string) => {
             body += chunk.toString();
         });
         req.on('end', () => {
             resolve(body);
         });
-        req.on('error', (error: any) => {
+        req.on('error', (error: Error) => {
             reject(error);
         });
     });
 }
 
 /** 读取 HTTP 请求体为 Buffer */
-export function readHttpBodyBuffer(req: any): Promise<Buffer> {
+export function readHttpBodyBuffer(req: HttpReq): Promise<Buffer> {
     return new Promise((resolve, reject) => {
         const chunks: Buffer[] = [];
-        req.on('data', (chunk: any) => {
+        req.on('data', (chunk: Buffer | string) => {
             chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
         });
         req.on('end', () => resolve(Buffer.concat(chunks)));
@@ -88,7 +90,7 @@ export function parseMultipartForm(body: Buffer, contentType: string): {
     return { fields, files };
 }
 
-export function jsonResponse(res: any, status: number, data: unknown) {
+export function jsonResponse(res: HttpRes, status: number, data: unknown) {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(data));
 }
@@ -123,8 +125,8 @@ const fs = require('fs');
 
 /** 以流式响应本地文件，支持 Range（视频/音频分段加载） */
 export function sendLocalFile(
-    req: any,
-    res: any,
+    req: HttpReq,
+    res: HttpRes,
     absPath: string,
     opts: { mime: string; size: number; mtime?: number; cacheControl?: string },
 ) {
@@ -139,7 +141,7 @@ export function sendLocalFile(
     };
     if (etag) baseHeaders['ETag'] = etag;
 
-    const rangeHeader = req?.headers?.range;
+    const rangeHeader = req.headers?.range;
     if (rangeHeader) {
         const range = parseByteRange(String(rangeHeader), size);
         if (!range) {

@@ -7,6 +7,15 @@ import { MCPHttpHandlers } from './mcpHttp';
 import { OnlineHttpHandlers } from './onlineHttp';
 import { OldBuddyStore } from './oldbuddy/oldbuddyStore';
 import { OldBuddyHttpHandlers } from './oldbuddy/oldbuddyHttp';
+import type { HttpReq, HttpRes, ParsedReqUrl, SseConnection } from '../http-types';
+import type { Socket } from 'net';
+import type { Server as HttpServer } from 'http';
+import { errorMessage } from '../ts-helpers';
+
+type ClosableHttpServer = HttpServer & {
+    closeAllConnections?: () => void;
+    closeIdleConnections?: () => void;
+};
 
 let https = require('https');
 let http = require('http');
@@ -15,9 +24,9 @@ let path = require('path');
 
 export class HTTPServer {
     private templater: Templater;
-    private server: any = null;
+    private server: ClosableHttpServer | null = null;
     /** 本机 HTTP（与 HTTPS 共用 setting 的 host） */
-    private localServer: any = null;
+    private localServer: ClosableHttpServer | null = null;
     /** 合并并发 stop，且避免对同一 server 调用两次 close() */
     private stopPromise: Promise<void> | null = null;
     private port: number;
@@ -27,7 +36,7 @@ export class HTTPServer {
     private httpEnabled = true;
     /** 本机 HTTP 实际监听端口（start 时确定，避免与 HTTPS 并行启动竞态） */
     private localHttpPort = 0;
-    private sseConnections: Map<string, any> = new Map();
+    private sseConnections: Map<string, SseConnection> = new Map();
     private mcp: MCPHttpHandlers;
     private online: OnlineHttpHandlers;
     private oldbuddyStore: OldBuddyStore;
@@ -104,7 +113,7 @@ export class HTTPServer {
     }
 
     private createRequestHandler() {
-        return async (req: any, res: any) => {
+        return async (req: HttpReq, res: HttpRes) => {
             res.setHeader('Access-Control-Allow-Origin', '*');
             res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
             res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Api-Key, X-Sender-Id');
@@ -160,10 +169,10 @@ export class HTTPServer {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: 'Not Found', path: parsedUrl.pathname }));
                 }
-            } catch (error: any) {
+            } catch (error: unknown) {
                 console.error('Server error:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: error.message || 'Internal Server Error' }));
+                res.end(JSON.stringify({ error: errorMessage(error) || 'Internal Server Error' }));
             }
         };
     }
@@ -193,15 +202,16 @@ export class HTTPServer {
         }
     }
 
-    private startHttpsServer(handler: (req: any, res: any) => void): Promise<void> {
+    private startHttpsServer(handler: (req: HttpReq, res: HttpRes) => void): Promise<void> {
         return new Promise(async (resolve, reject) => {
             try {
                 const { key, cert } = await ensureSelfSignedCert(this.tlsDir);
-                this.server = https.createServer({ key, cert }, handler);
-                this.server.keepAliveTimeout = 120000;
-                this.server.headersTimeout = 120000;
+                const httpsSrv = https.createServer({ key, cert }, handler) as ClosableHttpServer;
+                this.server = httpsSrv;
+                httpsSrv.keepAliveTimeout = 120000;
+                httpsSrv.headersTimeout = 120000;
 
-                this.server.on('error', (error: any) => {
+                httpsSrv.on('error', (error: NodeJS.ErrnoException) => {
                     this.server = null;
                     if (error.code === 'EADDRINUSE') {
                         console.error(`Port ${this.port} is already in use`);
@@ -212,18 +222,18 @@ export class HTTPServer {
                     }
                 });
 
-                this.server.on('upgrade', (req: any, socket: any, head: Buffer) => {
+                httpsSrv.on('upgrade', (req: HttpReq, socket: Socket, head: Buffer) => {
                     this.handleServerUpgrade(req, socket, head);
                 });
 
-                this.server.listen(this.port, this.host, () => resolve());
+                httpsSrv.listen(this.port, this.host, () => resolve());
             } catch (e) {
                 reject(e);
             }
         });
     }
 
-    private handleServerUpgrade(req: any, socket: any, head: Buffer) {
+    private handleServerUpgrade(req: HttpReq, socket: Socket, head: Buffer) {
         try {
             const parsed = url.parse(req.url || '', true);
             if (this.oldbuddy.isWebSocketPath(parsed.pathname)) {
@@ -236,31 +246,32 @@ export class HTTPServer {
         socket.destroy();
     }
 
-    private startLocalHttpServer(handler: (req: any, res: any) => void, localPort: number): Promise<void> {
+    private startLocalHttpServer(handler: (req: HttpReq, res: HttpRes) => void, localPort: number): Promise<void> {
         if (this.localServer) return Promise.resolve();
 
-        this.localServer = http.createServer(handler);
-        this.localServer.keepAliveTimeout = 120000;
-        this.localServer.headersTimeout = 120000;
+        const httpSrv = http.createServer(handler) as ClosableHttpServer;
+        this.localServer = httpSrv;
+        httpSrv.keepAliveTimeout = 120000;
+        httpSrv.headersTimeout = 120000;
 
         return new Promise((resolve, reject) => {
-            this.localServer.on('error', (error: any) => {
+            httpSrv.on('error', (error: NodeJS.ErrnoException) => {
                 console.error(`[note-chain] HTTP on ${this.host}:${localPort} failed:`, error?.message || error);
                 this.localServer = null;
                 reject(error);
             });
 
-            this.localServer.on('upgrade', (req: any, socket: any, head: Buffer) => {
+            httpSrv.on('upgrade', (req: HttpReq, socket: Socket, head: Buffer) => {
                 this.handleServerUpgrade(req, socket, head);
             });
 
-            this.localServer.listen(localPort, this.host, () => {
+            httpSrv.listen(localPort, this.host, () => {
                 resolve();
             });
         });
     }
 
-    private async handleTemplaterRequest(req: any, res: any, parsedUrl: any) {
+    private async handleTemplaterRequest(req: HttpReq, res: HttpRes, parsedUrl: ParsedReqUrl) {
         try {
             let query = parsedUrl.query;
             let filename = query.filename as string | undefined;
@@ -269,7 +280,7 @@ export class HTTPServer {
             let idxStr = query.idx as string | undefined;
             let target = query.target as string | undefined;
 
-            let extra: any = null;
+            let extra: unknown = null;
             if (req.method === 'POST') {
                 let body = await readHttpBody(req);
                 try {
@@ -313,19 +324,19 @@ export class HTTPServer {
 
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify({ success: true, result: result }, null, 2));
-        } catch (error: any) {
+        } catch (error: unknown) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(
                 JSON.stringify({
                     success: false,
-                    error: error.message || 'Unknown error',
-                    stack: error.stack,
+                    error: errorMessage(error) || 'Unknown error',
+                    stack: error instanceof Error ? error.stack : undefined,
                 }),
             );
         }
     }
 
-    getMCPSkillMarkdown(baseUrl: string, tools?: any[]): string {
+    getMCPSkillMarkdown(baseUrl: string, tools?: unknown[]): string {
         return this.mcp.getMCPSkillMarkdown(baseUrl, tools);
     }
 

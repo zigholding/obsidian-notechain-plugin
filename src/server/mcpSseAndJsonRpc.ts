@@ -2,31 +2,31 @@ import { App } from 'obsidian';
 import * as url from 'url';
 import { Templater } from '../easyapi/templater';
 import { readHttpBody } from './httpUtil';
+import type { HttpReq, HttpRes, SseConnection } from '../http-types';
+import { parseJsonRecord } from '../http-types';
 import type { MCPToolsListService } from './mcpToolsList';
+import { errorMessage, errorStack, isRecord } from '../ts-helpers';
 
 export class MCPSseAndJsonRpc {
     constructor(
         private app: App,
         private templater: Templater,
-        private sseConnections: Map<string, any>,
+        private sseConnections: Map<string, SseConnection>,
         private tools: MCPToolsListService,
     ) {}
 
-    async handleMCPCallTool(req: any, res: any) {
+    async handleMCPCallTool(req: HttpReq, res: HttpRes) {
         try {
             let body = await readHttpBody(req);
-            let requestData: any = {};
-            
-            try {
-                requestData = JSON.parse(body);
-            } catch {
+            const requestData = parseJsonRecord(body);
+            if (!requestData) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Invalid JSON in request body' }));
                 return;
             }
 
-            let toolName = requestData.name;
-            let toolArguments = requestData.arguments || {};
+            let toolName = typeof requestData.name === 'string' ? requestData.name : '';
+            let toolArguments = isRecord(requestData.arguments) ? requestData.arguments : {};
 
             if (!toolName) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -47,7 +47,8 @@ export class MCPSseAndJsonRpc {
                 ''
             );
 
-            let content = result.map((item: any) => {
+            const items = Array.isArray(result) ? result : [result];
+            let content = items.map((item: unknown) => {
                 if (typeof item === 'object' && item !== null) {
                     return item;
                 }
@@ -63,12 +64,12 @@ export class MCPSseAndJsonRpc {
 
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify(response, null, 2));
-        } catch (error: any) {
+        } catch (error: unknown) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ 
                 error: 'Failed to call tool',
-                message: error.message || 'Unknown error',
-                stack: error.stack 
+                message: errorMessage(error) || 'Unknown error',
+                stack: errorStack(error) 
             }));
         }
     }
@@ -77,7 +78,7 @@ export class MCPSseAndJsonRpc {
      * 处理 SSE 连接
      * 🔥 关键修复：fastmcp Python 客户端需要在 SSE 连接建立后立即发送 endpoint 事件
      */
-    async handleSSEConnection(req: any, res: any) {
+    async handleSSEConnection(req: HttpReq, res: HttpRes) {
         // 1. 立即设置响应头
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
@@ -105,7 +106,7 @@ export class MCPSseAndJsonRpc {
         let connectionId = sessionId;
         
         let connRecord: {
-            res: any;
+            res: HttpRes;
             sessionId: string;
             connectedAt: Date;
             heartbeatInterval: ReturnType<typeof setInterval> | null;
@@ -128,11 +129,11 @@ export class MCPSseAndJsonRpc {
 
         // 监听连接事件
         req.on('close', cleanup);
-        req.on('error', (error: any) => {
+        req.on('error', (error: Error) => {
             console.error('✗ Request error:', error.message);
             cleanup();
         });
-        res.on('error', (error: any) => {
+        res.on('error', (error: Error) => {
             console.error('✗ Response error:', error.message);
             cleanup();
         });
@@ -159,18 +160,15 @@ export class MCPSseAndJsonRpc {
      * 处理 MCP 消息
      * 通过 SSE 连接发送响应
      */
-    async handleMCPMessage(req: any, res: any) {
+    async handleMCPMessage(req: HttpReq, res: HttpRes) {
         try {
             // 从查询参数获取 session_id
             let parsedUrl = url.parse(req.url || '', true);
             let sessionId = parsedUrl.query.session_id as string;
 
             let body = await readHttpBody(req);
-            let request: any = {};
-            
-            try {
-                request = JSON.parse(body);
-            } catch (error: any) {
+            const request = parseJsonRecord(body);
+            if (!request) {
                 console.error('✗ Parse error');
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ 
@@ -181,7 +179,7 @@ export class MCPSseAndJsonRpc {
                 return;
             }
 
-            if (!request.jsonrpc || request.jsonrpc !== '2.0') {
+            if (request.jsonrpc !== '2.0') {
                 console.warn('✗ Invalid JSON-RPC');
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
@@ -192,12 +190,17 @@ export class MCPSseAndJsonRpc {
                 return;
             }
 
-            let method = request.method;
-            let params = request.params || {};
+            let method = typeof request.method === 'string' ? request.method : '';
+            let params = isRecord(request.params) ? request.params : {};
             let id = request.id;
 
             // 构建响应
-            let response: any = {
+            let response: {
+                jsonrpc: string;
+                id: unknown;
+                result?: unknown;
+                error?: { code: number; message: string; data?: unknown };
+            } = {
                 jsonrpc: '2.0',
                 id: id
             };
@@ -205,7 +208,7 @@ export class MCPSseAndJsonRpc {
             // 处理不同的方法
             if (method === 'initialize') {
                 response.result = {
-                    protocolVersion: params.protocolVersion || '2024-11-05',
+                    protocolVersion: typeof params.protocolVersion === 'string' ? params.protocolVersion : '2024-11-05',
                     capabilities: {
                         tools: {
                             listChanged: false
@@ -221,18 +224,18 @@ export class MCPSseAndJsonRpc {
                 try {
                     let tools = await this.tools.getMCPToolsList();
                     response.result = { tools };
-                } catch (error: any) {
+                } catch (error: unknown) {
                     console.error('✗ Error listing tools:', error);
                     response.error = {
                         code: -32603,
                         message: 'Internal error',
-                        data: error.message
+                        data: errorMessage(error)
                     };
                 }
                 
             } else if (method === 'tools/call') {
-                let toolName = params.name;
-                let toolArguments = params.arguments || {};
+                let toolName = typeof params.name === 'string' ? params.name : '';
+                let toolArguments = isRecord(params.arguments) ? params.arguments : {};
 
                 if (!toolName) {
                     response.error = {
@@ -254,7 +257,8 @@ export class MCPSseAndJsonRpc {
                             ''
                         );
 
-                        let content = result.map((item: any) => {
+                        const items = Array.isArray(result) ? result : [result];
+                        let content = items.map((item: unknown) => {
                             if (typeof item === 'object' && item !== null) {
                                 return item;
                             }
@@ -266,12 +270,12 @@ export class MCPSseAndJsonRpc {
 
                         response.result = { content: content };
                         
-                    } catch (error: any) {
+                    } catch (error: unknown) {
                         console.error('✗ Error calling tool:', error);
                         response.error = {
                             code: -32603,
                             message: 'Internal error',
-                            data: error.message
+                            data: errorMessage(error)
                         };
                     }
                 }
@@ -296,8 +300,8 @@ export class MCPSseAndJsonRpc {
             let sentViaSSE = false;
             
             // 如果有 session_id，查找对应的 SSE 连接
-            if (sessionId && this.sseConnections.has(sessionId)) {
-                let conn = this.sseConnections.get(sessionId);
+            const conn = sessionId ? this.sseConnections.get(sessionId) : undefined;
+            if (conn) {
                 let sseRes = conn.res;
                 
                 try {
@@ -379,7 +383,7 @@ export class MCPSseAndJsonRpc {
                 }));
             }
             
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('✗ Error:', error);
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
@@ -388,7 +392,7 @@ export class MCPSseAndJsonRpc {
                 error: {
                     code: -32603,
                     message: 'Internal error',
-                    data: error.message
+                    data: errorMessage(error)
                 }
             }));
         }

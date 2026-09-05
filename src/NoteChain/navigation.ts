@@ -1,21 +1,28 @@
 import {
+	App,
 	MarkdownView,
 	Notice,
 	TAbstractFile,
 	TFile, TFolder,
+	WorkspaceLeaf,
 	moment
 } from 'obsidian';
 
 import { NoteContentModal } from '../NCModal';
 import { NoteContentView } from '../NCView';
 import { strings } from './strings';
+import type NoteChainPlugin from '../plugin';
+import type { NoteChain } from '../NoteChain';
+import { obsidianApp, vaultFullPath } from '../obsidian-app';
 
 export class NoteChainNavigation {
-	/** Host NoteChain fields/methods (filled by applyMixins). */
-	[key: string]: any;
+	plugin!: NoteChainPlugin;
+	app!: App;
+	prev!: string;
+	next!: string;
+	children!: Record<string, TAbstractFile[]>;
 
-
-	async open_note_in_modal(notePath: string) {
+	async open_note_in_modal(this: NoteChain, notePath: string) {
 		try {
 			let file = this.plugin.easyapi.file.get_tfile(notePath);
 			if (file instanceof TFile) {
@@ -40,7 +47,7 @@ export class NoteChainNavigation {
 		}
 	}
 
-	async open_note_in_view(notePath: string) {
+	async open_note_in_view(this: NoteChain, notePath: string) {
 		try {
 
 			let content = '';
@@ -107,7 +114,7 @@ export class NoteChainNavigation {
 		}
 	}
 
-	async sugguster_note(notes: null | Array<TFile> = null, slice = 0, onlyname = false,new_value=false) {
+	async sugguster_note(this: NoteChain, notes: null | Array<TFile> = null, slice = 0, onlyname = false,new_value=false) {
 		// 从库中选择一个笔记
 		if (notes == null) {
 			notes = this.sort_tfiles(
@@ -115,12 +122,13 @@ export class NoteChainNavigation {
 				['mtime', 'x']
 			).filter((f: TFile) => this.filter_user_ignore(f));
 		}
+		if (!notes) { return null; }
 		try {
 			let items;
 			if (onlyname) {
-				items = (notes as any).map((f: TFile) => f.basename)
+				items = notes.map((f: TFile) => f.basename)
 			} else {
-				items = (notes as any).map((f: TFile) => f.path.slice(slice))
+				items = notes.map((f: TFile) => f.path.slice(slice))
 			}
 			let msg = this.plugin.utils.array_prefix_id(items);
 			let note = await this.plugin.easyapi.dialog_suggest(msg, notes,'',new_value);
@@ -130,20 +138,21 @@ export class NoteChainNavigation {
 		}
 	}
 
-	async open_note(tfile: TFile, revealFolder = false, collapse = true) {
+	async open_note(this: NoteChain, tfile: TFile | null, revealFolder = false, collapse = true) {
+		if (!tfile) { return; }
 		if (tfile) {
 			await this.app.workspace.getLeaf().openFile(tfile);
 
 			if (revealFolder) {
 				if (collapse) {
-					(this.plugin.explorer.file_explorer as any).tree.setCollapseAll(true);
+					this.plugin.explorer.file_explorer?.tree?.setCollapseAll(true);
 				}
-				(this.plugin.explorer.file_explorer as any).revealInFolder(tfile);
+				this.plugin.explorer.file_explorer?.revealInFolder?.(tfile);
 			}
 		}
 	}
 
-	async sugguster_open_note() {
+	async sugguster_open_note(this: NoteChain) {
 		try {
 			let note = await this.sugguster_note();
 			await this.open_note(note);
@@ -151,18 +160,22 @@ export class NoteChainNavigation {
 		}
 	}
 
-	get_recent_tfiles(only_md = true): Array<TFile> {
-		let recent = (this.app as any).plugins.getPlugin('recent-files-obsidian');
-		if (recent) {
-			let files = recent.data.recentFiles.map(
-				(x: any) => this.plugin.easyapi.file.get_tfile(x.path)
-			).filter((x: any) => x)
-			return files
+	get_recent_tfiles(this: NoteChain, only_md = true): Array<TFile> {
+		const recentPlugin = obsidianApp(this.app).plugins.getPlugin('recent-files-obsidian') as
+			| { data?: { recentFiles?: Array<{ path?: string }> } }
+			| null;
+		if (recentPlugin) {
+			const files = (recentPlugin.data?.recentFiles ?? [])
+				.map((x) => this.plugin.easyapi.file.get_tfile(x.path ?? null))
+				.filter((x): x is TFile => x instanceof TFile);
+			return files;
 		} else {
-			let recent = []
-			let files = (this.app.workspace as any).recentFileTracker?.lastOpenFiles
+			let recent: TFile[] = [];
+			const files = (this.app.workspace as typeof this.app.workspace & {
+				recentFileTracker?: { lastOpenFiles?: string[] };
+			}).recentFileTracker?.lastOpenFiles;
 			if (files && files.length > 0) {
-				recent = files.map((x: string) => this.plugin.easyapi.file.get_tfile(x)).filter((x: TFile) => x)
+				recent = files.map((x) => this.plugin.easyapi.file.get_tfile(x)).filter((x): x is TFile => x instanceof TFile)
 			}
 			let tfile = this.app.workspace.getActiveFile()
 			if (tfile) {
@@ -175,7 +188,7 @@ export class NoteChainNavigation {
 		}
 	}
 
-	get_last_daily_note(recent_first = true) {
+	get_last_daily_note(this: NoteChain, recent_first = true) {
 		let pattern = /^\d{4}-\d{2}-\d{2}$/;
 
 		if (recent_first) {
@@ -208,12 +221,12 @@ export class NoteChainNavigation {
 		return null;
 	}
 
-	get_neighbor_leaf(offset = 1) {
+	get_neighbor_leaf(this: NoteChain, offset = 1) {
 		let app = this.plugin.app
 		let leaves = app.workspace.getLeavesOfType('markdown');
 		let activeLeaf = app.workspace.getActiveViewOfType(MarkdownView);
 		if (activeLeaf) {
-			let idx = leaves.map((x: any) => x.view == activeLeaf).indexOf(true);
+			let idx = leaves.map((x) => x.view == activeLeaf).indexOf(true);
 			idx = idx + offset;
 			if (idx < 0 || idx > leaves.length - 1) {
 				return null;
@@ -222,7 +235,7 @@ export class NoteChainNavigation {
 		}
 	}
 
-	get_last_activate_file(only_md = true, skip_conote = true) {
+	get_last_activate_file(this: NoteChain, only_md = true, skip_conote = true) {
 		let tfiles = this.get_recent_tfiles(only_md);
 		for (let tfile of tfiles) {
 			if (skip_conote && this.plugin.easyapi.file.get_tags(tfile).contains('#conote')) {
@@ -233,14 +246,16 @@ export class NoteChainNavigation {
 		return null;
 	}
 
-	get_last_activate_leaf(skip_conote = true) {
-		let leaves: Array<any> = this.app.workspace.getLeavesOfType('markdown');
-		leaves = leaves.filter((x: any) => x.getViewState().state.file);
-		leaves = leaves.sort((a, b) => b.activeTime - a.activeTime);
+	get_last_activate_leaf(this: NoteChain, skip_conote = true) {
+		let leaves = this.app.workspace.getLeavesOfType('markdown') as Array<WorkspaceLeaf & { activeTime?: number }>;
+		leaves = leaves.filter((x) => typeof x.getViewState().state?.file === 'string');
+		leaves = leaves.sort((a, b) => (b.activeTime ?? 0) - (a.activeTime ?? 0));
 
 		for (let leaf of leaves) {
-			let file = leaf.getViewState().state.file;
-			if (skip_conote && this.plugin.easyapi.file.get_tags(file).contains('#conote')) {
+			let filePath = leaf.getViewState().state?.file;
+			if (typeof filePath !== 'string') continue;
+			const file = this.plugin.easyapi.file.get_tfile(filePath);
+			if (skip_conote && file && this.plugin.easyapi.file.get_tags(file).contains('#conote')) {
 				continue;
 			}
 			return leaf;
@@ -260,7 +275,7 @@ export class NoteChainNavigation {
 		return this.app.workspace.getActiveFile();
 	}
 
-	tfile_to_string(tfile: TFile) {
+	tfile_to_string(this: NoteChain, tfile: TFile) {
 		let curr = this.current_note;
 		let msg = '';
 		if (tfile.parent == curr?.parent) {
@@ -276,7 +291,7 @@ export class NoteChainNavigation {
 
 	}
 
-	async suggester_notes(tfile = this.current_note, curr_first = false, smode = '') {
+	async suggester_notes(this: NoteChain, tfile = this.current_note, curr_first = false, smode = ''): Promise<TFile[]> {
 		if (tfile) { tfile == this.current_note; }
 		let kv = [
 			this.plugin.strings.item_get_brothers,
@@ -300,16 +315,17 @@ export class NoteChainNavigation {
 		if (kv.contains(smode)) {
 			mode = smode;
 		} else {
-			mode = await this.plugin.easyapi.dialog_suggest(this.plugin.utils.array_prefix_id(kv), kv);
+			mode = await this.plugin.easyapi.dialog_suggest(this.plugin.utils.array_prefix_id(kv), kv) ?? '';
 		}
 		if (mode === this.plugin.strings.item_currentnote) {
-			return [tfile];
+			return tfile instanceof TFile ? [tfile] : [];
 		} else if (mode === this.plugin.strings.item_get_brothers) {
-			return this.plugin.easyapi.file.get_brothers(tfile);
+			return this.plugin.easyapi.file.get_brothers(tfile) ?? [];
 		} else if (mode === this.plugin.strings.item_same_folder) {
 			if (tfile?.parent) {
 				return this.plugin.easyapi.file.get_tfiles_of_folder(tfile.parent, -1);
 			}
+			return [];
 		} else if (mode === this.plugin.strings.item_inlinks_outlinks) {
 			return this.plugin.easyapi.file.get_links(tfile);
 		} else if (mode === this.plugin.strings.item_inlins) {
@@ -319,17 +335,19 @@ export class NoteChainNavigation {
 		} else if (mode === this.plugin.strings.item_all_noes) {
 			return this.plugin.easyapi.file.get_all_tfiles();
 		} else if (mode === this.plugin.strings.item_recent) {
-			return this.get_recent_tfiles()
+			return this.get_recent_tfiles() ?? [];
 		} else if (mode === this.plugin.strings.item_uncle_notes) {
 			if (tfile) {
 				return this.plugin.easyapi.file.get_uncles(tfile);
 			}
+			return [];
 		} else if (mode === this.plugin.strings.item_notechain) {
-			return this.get_chain(
+			const chain = this.get_chain(
 				tfile,
-				Number(this.plugin.settings.PrevChain),
-				Number(this.plugin.settings.NextChain)
+				Number(this.plugin.settings.notechain.PrevChain),
+				Number(this.plugin.settings.notechain.NextChain)
 			);
+			return (chain ?? []).filter((f): f is TFile => f instanceof TFile);
 		} else {
 			return [];
 		}
@@ -337,9 +355,9 @@ export class NoteChainNavigation {
 
 
 	// Chain
-	get_prev_note(tfile = this.current_note, across = false) {
+	get_prev_note(this: NoteChain, tfile = this.current_note, across = false) {
 		if (!tfile) { return; }
-		if ((tfile as any).deleted) {
+		if ('deleted' in tfile && (tfile as { deleted?: boolean }).deleted) {
 			let tfiles = this.app.vault.getMarkdownFiles();
 
 			tfiles = tfiles.filter((f: TFile) => {
@@ -360,10 +378,10 @@ export class NoteChainNavigation {
 			}
 		} else {
 			let name = this.plugin.editor.get_frontmatter(tfile, this.prev);
-			let note = this.plugin.easyapi.file.get_tfile(name);
+			let note = typeof name === 'string' ? this.plugin.easyapi.file.get_tfile(name) : null;
 			if (!note && across) {// 不存在时，获取文件列表中的下一个文件
 				let chain = this;
-				function _prev_(tfile: TAbstractFile):(TAbstractFile|any) {
+				function _prev_(tfile: TAbstractFile): TFile | null {
 					if (tfile.parent) {
 						let tfiles = chain.children[tfile.parent.path];
 						let idx = tfiles.indexOf(tfile);
@@ -386,14 +404,14 @@ export class NoteChainNavigation {
 		}
 	}
 
-	open_prev_notes(tfile = this.current_note) {
+	open_prev_notes(this: NoteChain, tfile = this.current_note) {
 		let note = this.get_prev_note(tfile, true);
-		void this.open_note(note);
+		void this.open_note(note ?? null);
 	}
 
-	get_next_note(tfile = this.current_note, across = false) {
+	get_next_note(this: NoteChain, tfile = this.current_note, across = false) {
 		if (!tfile) { return null; }
-		if ((tfile as any).deleted) {
+		if ('deleted' in tfile && (tfile as { deleted?: boolean }).deleted) {
 			let tfiles = this.app.vault.getMarkdownFiles();
 			let prev =
 				tfiles = tfiles.filter((f: TFile) => {
@@ -414,10 +432,10 @@ export class NoteChainNavigation {
 		} else {
 			let name = this.plugin.editor.get_frontmatter(tfile, this.next);
 			// 根据元数据获取后置笔记
-			let note = this.plugin.easyapi.file.get_tfile(name);
+			let note = typeof name === 'string' ? this.plugin.easyapi.file.get_tfile(name) : null;
 			if (!note && across) {// 不存在时，获取文件列表中的下一个文件
 				let chain = this;
-				function _next_(tfile: TAbstractFile):(TAbstractFile|any) {
+				function _next_(tfile: TAbstractFile): TFile | null {
 					if (tfile.parent) {
 						let tfiles = chain.children[tfile.parent.path];
 						let idx = tfiles.indexOf(tfile);
@@ -440,7 +458,7 @@ export class NoteChainNavigation {
 		}
 	}
 
-	get_1st_note(tfile: TAbstractFile, last = false): TFile | undefined {
+	get_1st_note(this: NoteChain, tfile: TAbstractFile, last = false): TFile | undefined {
 		if (tfile instanceof TFile) {
 			return tfile;
 		} else if (tfile instanceof TFolder) {
@@ -454,12 +472,12 @@ export class NoteChainNavigation {
 		}
 	}
 
-	open_next_notes(tfile = this.current_note) {
+	open_next_notes(this: NoteChain, tfile = this.current_note) {
 		let note = this.get_next_note(tfile, true);
-		void this.open_note(note);
+		void this.open_note(note ?? null);
 	}
 
-	get_chain(tfile = this.current_note, prev = 10, next = 10, with_self = true,across=false) {
+	get_chain(this: NoteChain, tfile = this.current_note, prev = 10, next = 10, with_self = true,across=false) {
 		if (tfile == null) { return []; }
 
 		let res = new Array();
@@ -496,7 +514,7 @@ export class NoteChainNavigation {
 	}
 
 	/** Walk Prev/Next only among `files` (ignore links that leave the set). */
-	get_chain_among(tfile: TFile, files: Set<TFile> | TFile[]): TFile[] {
+	get_chain_among(this: NoteChain, tfile: TFile, files: Set<TFile> | TFile[]): TFile[] {
 		const set = files instanceof Set ? files : new Set(files);
 		if (!tfile || !set.has(tfile)) { return []; }
 
@@ -518,7 +536,7 @@ export class NoteChainNavigation {
 		return res;
 	}
 
-	get_first_note(tfile = this.current_note) {
+	get_first_note(this: NoteChain, tfile = this.current_note) {
 		let notes = this.get_chain(tfile, -1, 0, false);
 		if (notes.length > 0) {
 			return notes[0];
@@ -527,7 +545,7 @@ export class NoteChainNavigation {
 		}
 	}
 
-	get_last_note(tfile = this.current_note) {
+	get_last_note(this: NoteChain, tfile = this.current_note) {
 		let notes = this.get_chain(tfile, 0, -1, false);
 		if (notes.length > 0) {
 			return notes[notes.length - 1];
@@ -536,14 +554,14 @@ export class NoteChainNavigation {
 		}
 	}
 
-	get_neighbors(tfile = this.current_note) {
+	get_neighbors(this: NoteChain, tfile = this.current_note) {
 		return [
 			this.get_prev_note(tfile),
 			this.get_next_note(tfile),
 		]
 	}
 
-	async suggester_sort(tfiles: Array<TFile>) {
+	async suggester_sort(this: NoteChain, tfiles: Array<TFile>) {
 		if (!tfiles) { return []; }
 		if (tfiles.length == 0) { return [] };
 		let kv = {
@@ -566,18 +584,18 @@ export class NoteChainNavigation {
 		return this.sort_tfiles(tfiles, field);
 	}
 
-	async get_file_links(tfile: TFile, xlinks = true, inlinks = true, outlinks = true, onlymd = false) {
-		let items: { [key: string]: any } = {}
+	async get_file_links(this: NoteChain, tfile: TFile, xlinks = true, inlinks = true, outlinks = true, onlymd = false) {
+		let items: { [key: string]: string } = {}
 
 		if (!tfile) {
 			return items;
 		}
 
-		items['🏠 ' + tfile.basename] = (this.app.vault.adapter as any).getFullPath(tfile.path)
+		items['🏠 ' + tfile.basename] = vaultFullPath(this.app, tfile.path)
 		if (xlinks) {
 			let tmp;
 			tmp = this.plugin.editor.get_frontmatter(tfile, 'github');
-			if (tmp) {
+			if (typeof tmp === 'string') {
 				if (tmp.contains('github.com')) {
 					items['🌐github'] = tmp;
 				} else {
@@ -585,7 +603,7 @@ export class NoteChainNavigation {
 				}
 			}
 			tmp = this.plugin.editor.get_frontmatter(tfile, 'huggingface');
-			if (tmp) {
+			if (typeof tmp === 'string') {
 				if (tmp.contains('huggingface.co')) {
 					items['🌐huggingface🤗'] = tmp;
 				} else {
@@ -593,8 +611,8 @@ export class NoteChainNavigation {
 				}
 			}
 			tmp = this.plugin.editor.get_frontmatter(tfile, 'arxiv');
-			if (tmp?.ID) {
-				items['🌐arxiv'] = `https://arxiv.org/abs/` + tmp?.ID;
+			if (tmp && typeof tmp === 'object' && 'ID' in tmp && tmp.ID != null) {
+				items['🌐arxiv'] = `https://arxiv.org/abs/` + String((tmp as { ID: unknown }).ID);
 			}
 
 
@@ -628,9 +646,9 @@ export class NoteChainNavigation {
 			for (let i of links) {
 				if (onlymd && !(i.extension === 'md')) { continue; }
 				if (i.extension === 'md') {
-					items['ℹ️ ' + i.basename] = (this.app.vault.adapter as any).getFullPath(i.path);
+					items['ℹ️ ' + i.basename] = vaultFullPath(this.app, i.path);
 				} else {
-					items['ℹ️ ' + i.name] = (this.app.vault.adapter as any).getFullPath(i.path);
+					items['ℹ️ ' + i.name] = vaultFullPath(this.app, i.path);
 				}
 			}
 		}
@@ -639,13 +657,13 @@ export class NoteChainNavigation {
 			for (let i of links) {
 				if (onlymd && !(i.extension === 'md')) { continue; }
 				if (i.extension === 'md') {
-					items['🅾️ ' + i.basename] = (this.app.vault.adapter as any).getFullPath(i.path);
+					items['🅾️ ' + i.basename] = vaultFullPath(this.app, i.path);
 				} else {
-					items['🅾️ ' + i.name] = (this.app.vault.adapter as any).getFullPath(i.path);
+					items['🅾️ ' + i.name] = vaultFullPath(this.app, i.path);
 				}
 			}
 		}
-		items['💒 vault'] = (this.app.vault.adapter as any).getFullPath('.');
+		items['💒 vault'] = vaultFullPath(this.app, '.');
 		return items;
 	}
 

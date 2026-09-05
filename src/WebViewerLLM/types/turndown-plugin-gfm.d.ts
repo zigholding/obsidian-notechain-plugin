@@ -1,3 +1,3 @@
 declare module 'turndown-plugin-gfm' {
-    export const gfm: any;
+    export const gfm: (turndown: unknown) => unknown;
 } 

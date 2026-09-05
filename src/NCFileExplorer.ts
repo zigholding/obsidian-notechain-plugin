@@ -1,10 +1,19 @@
 import { 
-	App,TAbstractFile,TFile,TFolder,Vault,CachedMetadata
+	App,TAbstractFile,TFile,TFolder
 } from 'obsidian';
 
 import NoteChainPlugin from "./plugin";
 import {NoteChain} from "./NoteChain";
 import { around } from 'monkey-around';
+import {
+	appDragManager,
+	asFileExplorerView,
+	noteChainPlugin,
+	type AppDragManager,
+	type FileExplorerTreeItem,
+	type FileExplorerView,
+} from './obsidian-app';
+import { isRecord } from './ts-helpers';
 
 
 export class NCFileExplorer{
@@ -15,7 +24,7 @@ export class NCFileExplorer{
 	getSortedFolderItems_new:Function;
 	getTitle:Function;
 	getTitle_new:Function;
-	_FolderDom_:any;
+	_FolderDom_: unknown;
 	private explorerPatches: Function[] = [];
 
 	constructor(plugin:NoteChainPlugin){
@@ -42,15 +51,16 @@ export class NCFileExplorer{
 
 		// 目录拖动排序
 		let explorerView = this.file_explorer;
+		const dragManagerProto = appDragManager(this.plugin.app);
+		if (dragManagerProto) {
 		this.explorerPatches.push(
-			around(Object.getPrototypeOf((this.plugin.app as any).dragManager), {
-				onDragEnd:(original) => function(...args:any[]) {
+			around(Object.getPrototypeOf(dragManagerProto), {
+				onDragEnd:(original) => function(this: AppDragManager, ...args: unknown[]) {
 					let dragManager = this;
-					let nc = dragManager.app.plugins.plugins['note-chain'];
-					async function move_file(dragManager:any){
+					let nc = noteChainPlugin(dragManager.app);
+					async function move_file(dragManager: AppDragManager){
 						try {
 							let hoverEl = dragManager.hoverEl;
-							// console.log('hoverEl:',hoverEl);
 							if (hoverEl && (
 									(hoverEl.classList.contains("tree-item") && hoverEl.classList.contains("nav-folder")) ||
 									(hoverEl.classList.contains("nav-files-container"))
@@ -70,10 +80,11 @@ export class NCFileExplorer{
 								}
 								
 								path = element.getAttribute("data-path");
+								if (!path) { return; }
 
 								let target = dragManager.app.vault.getAbstractFileByPath(path);
 								
-								if(target instanceof TFolder||target.extension!='md'){
+								if(!(target instanceof TFile) || target.extension!='md'){
 									return;
 								}
 								let sourceEls = dragManager.sourceEls;
@@ -81,22 +92,20 @@ export class NCFileExplorer{
 								if(!sourceEls || sourceEls.length==0){return;}
 								let tfiles: TFile[];
 								if(sourceEls.length==1){
-									tfiles = sourceEls.map((x:any)=>dragManager.app.vault.getAbstractFileByPath(x?.dataset?.path));
+									tfiles = sourceEls.map((x)=>dragManager.app.vault.getAbstractFileByPath(x?.dataset?.path ?? '')).filter((f): f is TFile => f instanceof TFile);
 								}else{
-									tfiles = nc.chain.get_selected_files(false);
+									tfiles = nc?.easyapi.file.get_selected_files(false) ?? [];
 								}
-								// 需要先执行original.call(this,...args);
 								setTimeout(() => {
-									void nc.chain.chain_set_next_files(tfiles,target,true);
+									void nc?.chain.chain_set_next_files(tfiles,target,true);
 								}, 100);
 								
 							}
 							
 						} catch (error) {
-							// console.log(error)
 						}
 					}
-					if(nc.settings.isdraged){
+					if(nc?.settings.notechain.isdraged){
 						void move_file(dragManager);
 					}
 					
@@ -105,17 +114,18 @@ export class NCFileExplorer{
 
 			})
 		);
+		}
 		
 		this.explorerPatches.push(
 			around(Object.getPrototypeOf(explorerView), {
-				getSortedFolderItems:(original) => function(e:any) {
-					let plugin = (this.app as any).plugins.getPlugin('note-chain');
+				getSortedFolderItems:(original) => function(this: { app: App }, e: TFolder) {
+					let plugin = noteChainPlugin(this.app);
 					if (plugin) {
 						try {
-							let res = original.call(this, e);
+							let res = original.call(this, e) as FileExplorerTreeItem[];
 							let tfiles = plugin.chain.children[e.path];
 							if (tfiles) {
-								res = res.sort((a:any, b:any) => {
+								res = res.sort((a, b) => {
 									let ia = tfiles.indexOf(a.file);
 									let ib = tfiles.indexOf(b.file);
 									if (ia < 0) { ia = tfiles.length; }
@@ -145,13 +155,13 @@ export class NCFileExplorer{
 
 
 		// 文件名称
-		let item = Object.values((this.file_explorer as any).fileItems)[0];
+		let item = Object.values(this.file_explorer?.fileItems ?? {})[0];
 		
 		if(item){
 			around(Object.getPrototypeOf(item), {
-				getTtitle:(original) => function(e:any) {
-					let plugin = (this.app as any).plugins.getPlugin('note-chain');
-					return function(e:any){
+				getTtitle:(original) => function(this: FileExplorerTreeItem & { app?: App }, e: unknown) {
+					let plugin = this.app ? noteChainPlugin(this.app) : undefined;
+					return function(this: FileExplorerTreeItem){
 						if(plugin){
 							try{
 								let res = plugin.explorer.get_display_text(this.file)
@@ -170,7 +180,7 @@ export class NCFileExplorer{
 
 
 	async unregister(){
-		let items = (this.file_explorer as any).fileItems
+		let items = this.file_explorer?.fileItems
 		for(let key in items){
 			let item = items[key]
 			await this._set_display_text_(item,this.get_origin_text(item.file))
@@ -181,22 +191,21 @@ export class NCFileExplorer{
 	}
 
 	async waitForFileExplorer() {
-		while (!(this.file_explorer as any).fileItems) {
+		while (!this.file_explorer?.fileItems) {
 			await new Promise(resolve => setTimeout(resolve, 100)); // 等待100ms再检查
 		}
-		return (this.file_explorer as any).fileItems
+		return this.file_explorer.fileItems
 	}
 
-	get file_explorer(){
+	get file_explorer(): FileExplorerView | undefined {
 		let a = this.app.workspace.getLeavesOfType(
 			"file-explorer"
 		)
-		let view = a[0]?.view;
-		return view;
+		return asFileExplorerView(a[0]?.view);
 	}
 	
 	async sort(nsleep=0,init=false){
-		if((this.file_explorer as any)?.sort){
+		if(this.file_explorer?.sort){
 			if(nsleep>0){
 				await sleep(nsleep);
 			}
@@ -209,7 +218,7 @@ export class NCFileExplorer{
 					void this.sort(nsleep,true);
 				}, 3000);
 			}else{
-				(this.file_explorer as any).sort();
+				this.file_explorer.sort();
 			}
 		}	
 	}
@@ -244,7 +253,7 @@ export class NCFileExplorer{
 	get_item(tfile:TAbstractFile,field:string){
 		if(!field){return ''}
 		let fields = field.split('|')
-		let item:any = ''
+		let item = ''
 		for(let f of fields){
 			if(f=='$0'){
 				return this.get_origin_text(tfile)
@@ -256,11 +265,11 @@ export class NCFileExplorer{
 				let s = this.plugin.editor.get_frontmatter(tfile,f)
 				if(typeof s === 'number'){
 					item = `${s}`
-				}else if(typeof(s)!='string' || s==''){
-					continue
+					break
+				}else if(typeof s === 'string' && s!=''){
+					item = s
+					break
 				}
-				item = s
-				break
 			}
 		}
 		if(fields.last()?.startsWith('?') && item){
@@ -283,10 +292,9 @@ export class NCFileExplorer{
 			return this.get_origin_text(tfile)
 		}
 	  
-		let mstr = str.replace(/\<(.+?)?\>/g, (match:string, field:string) => {
+		const mstr = str.replace(/\<(.+?)?\>/g, (_match:string, field:string) => {
 			return this.get_item(tfile,field)
 		})
-		mstr = mstr
 		if(mstr==''){
 			return this.get_origin_text(tfile)
 		}else{
@@ -294,7 +302,7 @@ export class NCFileExplorer{
 		}
 	}
 
-	_set_display_text_(item:any,txt:any){
+	_set_display_text_(item: FileExplorerTreeItem | undefined, txt: unknown){
 		if(item && txt){
 			if(typeof(txt)=='string'){
 				item.innerEl.setText(txt)
@@ -302,7 +310,7 @@ export class NCFileExplorer{
 		}
 	}
 	set_display_text(){
-		let items = (this.file_explorer as any).fileItems
+		let items = this.file_explorer?.fileItems
 		for(let key in items){
 			let item = items[key]
 			let txt = this.get_display_text(item.file)
@@ -325,7 +333,7 @@ export class NCFileExplorer{
 	}
 
 	async set_fileitem_style(){
-		let items = (this.file_explorer as any).fileItems
+		let items = this.file_explorer?.fileItems
 		for(let key in items){
 			let item = items[key]
 			let style = await this.get_fileitem_style(item.file)
@@ -333,16 +341,16 @@ export class NCFileExplorer{
 		}
 	}
 
-	async set_fileitem_style_of_file(tfile:TAbstractFile,style=null){
+	async set_fileitem_style_of_file(tfile:TAbstractFile, style: unknown = null){
 		if(!tfile){return}
 		if(!style){
 			style = await this.get_fileitem_style(tfile)
 		}
-		let items = (this.file_explorer as any).fileItems
-		let item = items[tfile.path]
+		let items = this.file_explorer?.fileItems
+		let item = items?.[tfile.path]
 		if(item){
 			if(typeof(style)=='function'){
-				style = await (style as any)(tfile)
+				style = await (style as (file: TAbstractFile) => unknown | Promise<unknown>)(tfile)
 				if(!style){
 					return
 				}
@@ -352,12 +360,12 @@ export class NCFileExplorer{
 				item.el.style.removeProperty('border')
 			}else if (typeof(style)=='string'){
 				item.el.style.background = style
-			}else if(typeof(style)=='object'){
-				for(let k in (style as any)){
-					(item as any).el.style[k] = (style as any)[k]
+			}else if(isRecord(style)){
+				for(const k of Object.keys(style)){
+					item.el.style.setProperty(k, String(style[k] ?? ''))
 				}
 			}else if(typeof(style)=='function'){
-				await (style as any)(tfile)
+				await (style as (file: TAbstractFile) => unknown | Promise<unknown>)(tfile)
 			}
 		}
 	}

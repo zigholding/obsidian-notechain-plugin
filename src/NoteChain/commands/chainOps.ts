@@ -90,7 +90,10 @@ export const create_new_note = (plugin:NoteChainPlugin) => ({
 						''
 					)
 					if(!(target==='null')){
-						await (plugin.chain as any)[target](dst,curr);
+						const insert = (plugin.chain as unknown as Record<string, unknown>)[target];
+						if (typeof insert === 'function') {
+							await (insert as (dst: TFile, curr: TFile) => Promise<unknown>)(dst, curr);
+						}
 						if(target=='chain_insert_node_after'||target=='chain_insert_node_before'){
 							await plugin.editor.set_frontmatter_align_file(
 								curr,dst,plugin.settings.notechain.field_of_confluence_tab_format

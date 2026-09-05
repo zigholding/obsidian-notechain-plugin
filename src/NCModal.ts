@@ -5,6 +5,7 @@ import {
 } from 'obsidian';
 
 import NoteChainPlugin from "./plugin";
+import { hasCommunityPlugin } from './obsidian-app';
 
 export class NoteContentModal extends Modal {
     content: string;
@@ -19,7 +20,7 @@ export class NoteContentModal extends Modal {
         this.modalEl.addClass('notechain-modal');
         this.containerEl.addClass('notechain-modal-container');
         if(sourcePath && (sourcePath.endsWith('.canvas') || sourcePath.endsWith('.base'))){
-            if('datacore' in (this.plugin.app as any).plugins.plugins){
+            if(hasCommunityPlugin(this.plugin.app, 'datacore')){
                 content = `
 \`\`\`datacorejsx
 return (
@@ -29,7 +30,7 @@ return (
 );
 \`\`\`
                 `.trim()
-            }else if('dataview' in (this.plugin.app as any).plugins.plugins){
+            }else if(hasCommunityPlugin(this.plugin.app, 'dataview')){
                 content = `
 \`\`\`dataviewjs
 dv.span(\`![[${sourcePath}]]\`);

@@ -13,12 +13,13 @@ import { ChatGPT } from './LLM/ChatGPT';
 import { ChatGLM } from './LLM/ChatGLM';
 import { Gemini } from './LLM/Gemini';
 import { Claude } from './LLM/Claude';
+import type { WebViewerLLMModule } from './WebViewerLLMModule';
+
 
 export class WebViewerLLMUiCommands {
-	/** Host WebViewerLLMModule fields/methods (filled by applyMixins). */
-	[key: string]: any;
+	plugin!: NoteChainPlugin;
 
-	async cmd_paste_last_active_llm() {
+	async cmd_paste_last_active_llm(this: WebViewerLLMModule) {
 		const llm = await this.get_last_active_llm();
 		if (!llm) {
 			return;
@@ -27,10 +28,10 @@ export class WebViewerLLMUiCommands {
 		if (!rsp) {
 			return;
 		}
-		this.easyapi.ceditor.replaceSelection(rsp);
+		this.easyapi.ceditor?.replaceSelection(rsp);
 	}
 
-	async cmd_probe_active_llm_elements() {
+	async cmd_probe_active_llm_elements(this: WebViewerLLMModule) {
 		const llm = await this.get_last_active_llm();
 		if (!llm) {
 			new Notice('No active LLM webview found');
@@ -45,7 +46,7 @@ export class WebViewerLLMUiCommands {
 		new Notice(`${llm.name}: probe ${okCount}/3 (see console)`);
 	}
 
-	async cmd_copy_active_llm_profile_snippet() {
+	async cmd_copy_active_llm_profile_snippet(this: WebViewerLLMModule) {
 		const llm = await this.get_last_active_llm();
 		if (!llm) {
 			new Notice('No active LLM webview found');
@@ -79,7 +80,7 @@ export class WebViewerLLMUiCommands {
 		}
 	}
 
-	async cmd_paste_to_markdown(anyblock = 'list2tab') {
+	async cmd_paste_to_markdown(this: WebViewerLLMModule, anyblock = 'list2tab') {
 		const tfile = this.easyapi.cfile;
 		if (!tfile) {
 			return;
@@ -92,7 +93,7 @@ export class WebViewerLLMUiCommands {
 			return;
 		}
 
-		const rsps = await Promise.all(llms.map((x: any) => x.get_last_content()));
+		const rsps = await Promise.all(llms.map((x) => x.get_last_content()));
 		let xtx = '';
 		if (llms.length > 1) {
 			xtx = `[${anyblock}|addClass(ab-col${llms.length})]\n`;
@@ -114,7 +115,7 @@ dv.span(
 					.replace(/\n/g, '\n\t');
 		}
 		xtx = '\n\n' + xtx.trim() + '\n\n';
-		this.easyapi.ceditor.replaceSelection(xtx);
+		this.easyapi.ceditor?.replaceSelection(xtx);
 	}
 
 }

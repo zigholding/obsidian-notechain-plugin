@@ -1,6 +1,7 @@
 
 import {
 	App,
+	MarkdownView,
 	TAbstractFile,
 	TFile,TFolder
 } from 'obsidian';
@@ -12,7 +13,7 @@ import { EasyEditor } from './easyapi/editor';
 
 class NoteNode {
 	tfile : TFile;
-	note2id : {[key:string]:any};
+	note2id : {[key:string]:string};
 	id : number;
 	plugin:NoteChainPlugin;
 
@@ -54,10 +55,10 @@ class NoteNode {
 		let tfile = this.plugin.easyapi.file.get_tfile(node);
 		if(tfile){
 			if(avata ==''){
-				avata = this.plugin.settings.avata
+				avata = this.plugin.settings.notechain.avata
 			}
 			let meta = this.plugin.editor.get_frontmatter(tfile,avata);
-			if(meta){
+			if(typeof meta === 'string'){
 				if(meta.startsWith('#')){
 					node = `![[${tfile.basename}${meta}|no-head]]`
 				}else{
@@ -164,7 +165,7 @@ export class MermaidGraph{
 			inlinks[tfiles.indexOf(tfile)] = this.plugin.easyapi.file.get_inlinks(tfile,true);
 		}
 		
-		let edges = [];
+		let edges: Array<[TFile, TFile, boolean]> = [];
 		for(let tfile of tfiles){
 			let i = tfiles.indexOf(tfile);
 			for(let outlink of outlinks[i]){
@@ -210,8 +211,8 @@ export class MermaidGraph{
 		
 		let edges = this.edges_of_tfiles(tfiles);
 		for(let edge of edges){
-			let sid = node.get_node(edge[0] as any);
-			let did = node.get_node(edge[1] as any);
+			let sid = node.get_node(edge[0]);
+			let did = node.get_node(edge[1]);
 			if(edge[2]){
 				msg = msg + `${stab}${sid}<-.->${did}\n`;
 			}else{
@@ -229,7 +230,9 @@ export class MermaidGraph{
 		if(!tfile){
 			let leaf = this.plugin.chain.get_last_activate_leaf();
 			if(leaf){
-				tfile = leaf.view.file;
+				if (leaf.view instanceof MarkdownView && leaf.view.file) {
+					tfile = leaf.view.file;
+				}
 			}
 		}
 
@@ -275,7 +278,9 @@ export class MermaidGraph{
 		if(!tfile){
 			let leaf = this.plugin.chain.get_last_activate_leaf();
 			if(leaf){
-				tfile = leaf.view.file;
+				if (leaf.view instanceof MarkdownView && leaf.view.file) {
+					tfile = leaf.view.file;
+				}
 			}
 		}
 
@@ -291,7 +296,9 @@ export class MermaidGraph{
 		if(!tfile){
 			let leaf = this.plugin.chain.get_last_activate_leaf();
 			if(leaf){
-				tfile = leaf.view.file;
+				if (leaf.view instanceof MarkdownView && leaf.view.file) {
+					tfile = leaf.view.file;
+				}
 			}
 		}
 
@@ -366,21 +373,21 @@ export class MermaidGraph{
 				if(sub==''){
 					for(let idx in items){
 						if(items[idx]==sub){
-							msg = msg+'\n'+node.get_node(tfiles[idx]);
+							msg = msg+'\n'+node.get_node(tfiles[Number(idx)]);
 						}
 					}
 				}else{
 					msg = msg+'\nsubgraph '+sub+'\n'
 					for(let idx in items){
 						if(items[idx]==sub){
-							msg = msg+'\n\t'+node.get_node(tfiles[idx]);
+							msg = msg+'\n\t'+node.get_node(tfiles[Number(idx)]);
 						}
 					}
 
 					msg = msg+'\nend'
 				}
 			}
-			msg = msg+'\n'+this.subgraph_cross(node,Object.keys(items).map(x=>tfiles[x]));
+			msg = msg+'\n'+this.subgraph_cross(node,Object.keys(items).map(x=>tfiles[Number(x)]));
 			msg = msg+'\n'+node.notes2class();
 			msg = msg+"\n```";
 			res.push(msg);
@@ -444,7 +451,9 @@ export class MermaidGraph{
 		if(!tfile){
 			let leaf = this.plugin.chain.get_last_activate_leaf();
 			if(leaf){
-				tfile = leaf.view.file;
+				if (leaf.view instanceof MarkdownView && leaf.view.file) {
+					tfile = leaf.view.file;
+				}
 			}
 		}
 
@@ -553,25 +562,36 @@ export class CanvasGraph{
 	}
 
 	gen_node(NN:NoteNode,tfile:TAbstractFile|string,x=0,y=0,width=400,height=400){
-		let rsp:{[key:string]:any} = {};
+		const rsp: {
+			type: 'text' | 'file';
+			text?: string;
+			file?: string;
+			id: string;
+			x: number;
+			y: number;
+			height: number;
+			width: number;
+		} = {
+			type: 'text',
+			id: '',
+			x,
+			y,
+			height,
+			width,
+		};
 		if(typeof(tfile) == 'string'){
-			rsp['type'] = 'text';
-			rsp['text'] = tfile;
-			rsp['id'] = NN.get_canvas_node(rsp['text']);
+			rsp.type = 'text';
+			rsp.text = tfile;
+			rsp.id = NN.get_canvas_node(rsp.text);
 		}else{
-			rsp['type'] = 'file';
+			rsp.type = 'file';
 			if(tfile instanceof TFolder){
-				rsp['file'] = tfile.path+'/'+tfile.name+'.md';
+				rsp.file = tfile.path+'/'+tfile.name+'.md';
 			}else{
-				rsp['file'] = tfile.path;
+				rsp.file = tfile.path;
 			}
-			rsp['id'] = NN.get_canvas_node(rsp['file']);
+			rsp.id = NN.get_canvas_node(rsp.file ?? '');
 		}
-
-		rsp['x'] = x;
-		rsp['y'] = y;
-		rsp['height'] = height;
-		rsp['width'] = width;
 
 		return rsp;
 	}
@@ -601,12 +621,12 @@ export class CanvasGraph{
 			let title = `![[${tfile.basename}#${match[2]}]]`;
 			let pos = this.rc_of_sequence(i, nrow, ncol);
 			let node = this.gen_node(
-				NN=NN,
+				NN,
 				title,
 				pos[1]*(width+wmarin),
 				pos[0]*(height+hmargin),
-				width=width,
-				height=height
+				width,
+				height
 			)
 			nodes.push(node);
 		}
@@ -621,13 +641,12 @@ export class CanvasGraph{
 		return res;
 	}
 
-	async write_canvas_file(canvas:{},path:string){
+	async write_canvas_file(canvas: { nodes: unknown[]; edges: unknown[] }, path: string){
 		let msg = JSON.stringify(canvas);
 		let canvasFile = this.plugin.app.vault.getAbstractFileByPath(path);
-		if (canvasFile) {
-			await this.plugin.app.vault.modify(canvasFile as TFile, msg);
-		} else {
-			// 如果画布文件不存在，创建新文件并写入内容
+		if (canvasFile instanceof TFile) {
+			await this.plugin.app.vault.modify(canvasFile, msg);
+		} else if (!canvasFile) {
 			await this.plugin.app.vault.create(path, msg);
 		}
 	}

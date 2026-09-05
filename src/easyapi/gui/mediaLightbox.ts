@@ -1,4 +1,6 @@
 import { App, Menu, Notice, Scope, TFile, setIcon } from "obsidian";
+import type { EasyAPI } from "../easyapi";
+import { desktopRequire, isMobileApp, noteChainPlugin } from "../../obsidian-app";
 
 export type MediaKind = "image" | "video" | "audio";
 
@@ -259,14 +261,14 @@ export class MediaLightbox<T> {
 
 	/** 查找 `#lightbox` 脚本笔记；手机端还需同时带 `#mobile` */
 	private getLightboxScriptNotes(): TFile[] {
-		const nc = (this.options.app as any).plugins?.plugins?.["note-chain"];
-		const ea = nc?.easyapi ?? (window as any).ea;
+		const nc = noteChainPlugin(this.options.app);
+		const ea: EasyAPI | undefined = nc?.easyapi ?? (window as Window & { ea?: EasyAPI }).ea;
 		if (!ea?.file?.get_all_tfiles_tags) return [];
 
 		const tag = (this.options.scriptTag ?? "lightbox").replace(/^#/, "");
 		let files: TFile[] = ea.file.get_all_tfiles_tags(tag) ?? [];
 
-		const isMobile = (this.options.app as any).isMobile === true;
+		const isMobile = isMobileApp(this.options.app);
 		if (isMobile && ea.file.get_tags) {
 			files = files.filter((f) => {
 				const tags: string[] = ea.file.get_tags(f) ?? [];
@@ -275,15 +277,16 @@ export class MediaLightbox<T> {
 		}
 
 		if (nc?.chain?.sort_tfiles_by_chain) {
-			files = nc.chain.sort_tfiles_by_chain(files);
+			files = nc.chain.sort_tfiles_by_chain(files).filter((f): f is TFile => f instanceof TFile);
 		}
 		return files;
 	}
 
 	private getScriptMenuTitle(tfile: TFile): string {
-		const nc = (this.options.app as any).plugins?.plugins?.["note-chain"];
-		const ea = nc?.easyapi ?? (window as any).ea;
-		const title = ea?.editor?.get_frontmatter?.(tfile, "lightbox",'').trim();
+		const nc = noteChainPlugin(this.options.app);
+		const ea: EasyAPI | undefined = nc?.easyapi ?? (window as Window & { ea?: EasyAPI }).ea;
+		const titleRaw = ea?.editor?.get_frontmatter?.(tfile, "lightbox",'');
+		const title = typeof titleRaw === 'string' ? titleRaw.trim() : '';
 		if (title) {
 			return title;
 		}
@@ -298,8 +301,8 @@ export class MediaLightbox<T> {
 		info: MediaLightboxItemInfo,
 	): Promise<void> {
 		const zh = isZhUi();
-		const nc = (this.options.app as any).plugins?.plugins?.["note-chain"];
-		const ea = nc?.easyapi ?? (window as any).ea;
+		const nc = noteChainPlugin(this.options.app);
+		const ea: EasyAPI | undefined = nc?.easyapi ?? (window as Window & { ea?: EasyAPI }).ea;
 		if (!ea?.tpl?.parse_templater) {
 			new Notice(zh ? "无法执行脚本笔记" : "Cannot run script note");
 			return;
@@ -370,9 +373,7 @@ export class MediaLightbox<T> {
 			}
 
 			// ② Electron nativeImage
-			const req = (typeof window !== "undefined" && (window as any).require)
-				? (window as any).require
-				: null;
+			const req = desktopRequire();
 			if (req) {
 				const electron = req("electron");
 				const clipboard = electron?.clipboard ?? electron?.remote?.clipboard;

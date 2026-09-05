@@ -3,6 +3,7 @@ import {
 } from 'obsidian';
 
 import type NoteChainPlugin from '../../plugin';
+import { isMobileApp } from '../../obsidian-app';
 
 export const cmd_sort_file_explorer = (plugin:NoteChainPlugin) => ({
 	id: "sort_file_explorer",
@@ -71,7 +72,7 @@ export const cmd_file_open_with_system_app = (plugin:NoteChainPlugin) => ({
 	icon:'book-open',
 	callback: async () => {
 		let nc = plugin;
-		if((nc.app as any).isMobile){return;}
+		if(isMobileApp(nc.app)){return;}
 		let tfile = nc.chain.current_note;
 		if(tfile){
 			let items = await nc.chain.get_file_links(tfile);
@@ -102,7 +103,7 @@ export const cmd_file_show_in_system_explorer = (plugin:NoteChainPlugin) => ({
 	icon:'book-open-text',
 	callback: async () => {
 		let nc = plugin;
-		if((nc.app as any).isMobile){return;}
+		if(isMobileApp(nc.app)){return;}
 		let tfile = nc.chain.current_note;
 		if(tfile){
 			let items = await nc.chain.get_file_links(tfile);
@@ -131,11 +132,11 @@ export const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 	icon: 'pen-line',
 	callback: async () => {
 		let nc = plugin;
-		if((nc.app as any).isMobile){return;}
+		if(isMobileApp(nc.app)){return;}
 		let tfile = nc.chain.current_note;
 
 		if(tfile){
-			let items:{[key:string]:any} = {}
+			let items:{[key:string]:TFile} = {}
 			let links = nc.easyapi.file.get_inlinks(tfile,false);
 			for(let i of links){
 				if(i.extension==='md'){
@@ -164,6 +165,7 @@ export const cmd_file_rename = (plugin:NoteChainPlugin) => ({
 				let note = items[key];
 				let res = await nc.easyapi.dialog_prompt('New Name','',note.basename);
 				if(res && !(res===note.basename) && !(res==='')){
+					if (!note.parent) { return; }
 					let npath = note.parent.path+'/'+res+'.'+note.extension;
 					let dst = plugin.easyapi.file.get_tfile(res+'.'+note.extension);
 					if(dst){

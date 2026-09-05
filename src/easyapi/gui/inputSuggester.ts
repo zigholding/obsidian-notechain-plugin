@@ -41,7 +41,7 @@ export default class InputSuggester extends FuzzySuggestModal<string> {
 	public promise: Promise<string>;
 	private resolved: boolean;
 	public new_value: boolean;
-	inputEl: any;
+	inputEl: HTMLInputElement;
 	/** item → 展示文本；与 items 相同时为 null，getItemText 直接返回 item */
 	private readonly itemDisplay: Map<string, string> | null;
 	private readonly searchEntries: SearchEntry[];
@@ -184,20 +184,31 @@ export default class InputSuggester extends FuzzySuggestModal<string> {
 	}
 }
 
-export async function dialog_suggest(displayItems:Array<string>,items:Array<any>,placeholder='',new_value=false) {
-	try{
-		return await InputSuggester.Suggest(
+export async function dialog_suggest<T>(
+	displayItems: Array<string>,
+	items: Array<T>,
+	placeholder: string | boolean = '',
+	new_value: boolean | string = false,
+): Promise<T | null> {
+	try {
+		let ph = '';
+		let nv = false;
+		if (typeof placeholder === 'boolean') {
+			nv = placeholder;
+			if (typeof new_value === 'string') ph = new_value;
+		} else {
+			ph = placeholder;
+			nv = new_value === true;
+		}
+		const result = await InputSuggester.Suggest(
 			this.app,
 			displayItems,
-			items,
-			{
-				placeholder: placeholder,
-			},
-			new_value
-		)
-	}catch(error){
-		
-		return null
+			items as unknown as string[],
+			{ placeholder: ph },
+			nv,
+		);
+		return result as unknown as T;
+	} catch {
+		return null;
 	}
-	
 }

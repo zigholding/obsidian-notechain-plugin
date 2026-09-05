@@ -3,6 +3,8 @@ import {
 } from 'obsidian';
 
 import type NoteChainPlugin from '../../plugin';
+import { isMobileApp, obsidianApp, type WebviewerInternalPlugin } from '../../obsidian-app';
+import { errorMessage } from '../../ts-helpers';
 
 export const cmd_open_oldbuddy = (plugin: NoteChainPlugin) => ({
 	id: 'open-oldbuddy-webviewer',
@@ -14,7 +16,8 @@ export const cmd_open_oldbuddy = (plugin: NoteChainPlugin) => ({
 			return;
 		}
 		const url = plugin.httpServer.getObsidianOldBuddyUrl();
-		const wv = (plugin.app as any).internalPlugins?.getEnabledPluginById?.('webviewer');
+		const wv = obsidianApp(plugin.app).internalPlugins?.getEnabledPluginById?.('webviewer') as
+			WebviewerInternalPlugin | undefined;
 		if (wv?.openUrl) {
 			await wv.openUrl(url, true);
 			return;
@@ -32,7 +35,7 @@ export const cmd_generate_mcp_skill = (plugin: NoteChainPlugin) => ({
 			new Notice('HTTP Server not initialized');
 			return;
 		}
-		if ((plugin.app as any).isMobile) {
+		if (isMobileApp(plugin.app)) {
 			new Notice('Save to computer is only available on desktop');
 			return;
 		}
@@ -52,8 +55,8 @@ export const cmd_generate_mcp_skill = (plugin: NoteChainPlugin) => ({
 			const fs = require('fs');
 			fs.writeFileSync(result.filePath, content, 'utf8');
 			new Notice(`SKILL.md saved to ${result.filePath}`);
-		} catch (e: any) {
-			new Notice('Failed to save SKILL.md: ' + (e?.message ?? e));
+		} catch (e: unknown) {
+			new Notice('Failed to save SKILL.md: ' + errorMessage(e));
 		}
 	}
 });

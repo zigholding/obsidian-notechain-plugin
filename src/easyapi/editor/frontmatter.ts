@@ -1,22 +1,25 @@
-import { App, TAbstractFile, TFile, TFolder } from 'obsidian';
+import { TAbstractFile, TFile, TFolder, App, FrontMatterCache } from 'obsidian';
 import type { EasyAPI } from '../easyapi';
+import type { EasyEditor } from '../editor';
+import { vaultBasePath } from '../../obsidian-app';
 
 export class EasyEditorFrontmatter {
-	/** Host EasyEditor fields/methods (filled by applyMixins). */
-	[key: string]: any;
+	app!: App;
+	ea!: EasyAPI;
+	nretry!: number;
 
-    async set_frontmatter(
+    async set_frontmatter(this: EasyEditor, 
         tfile: TFile | string | Array<TFile | string>,
         key: string,
-        value: any,
+        value: unknown,
         nretry = this.nretry
     ): Promise<boolean> {
-        const kv: { [key: string]: string } = {};
+        const kv: Record<string, unknown> = {};
         kv[key] = value;
         return this.set_multi_frontmatter(tfile, kv, nretry);
     }
 
-    check_frontmatter(tfile: TFile, kv: { [key: string]: any }): boolean {
+    check_frontmatter(this: EasyEditor, tfile: TFile, kv: Record<string, unknown>): boolean {
         try {
             if (!tfile) { return false; }
             const meta = this.app.metadataCache.getFileCache(tfile);
@@ -34,7 +37,7 @@ export class EasyEditorFrontmatter {
         }
     }
 
-    async wait_frontmatter(tfile: TFile, kv: { [key: string]: any }, timeout = 3000): Promise<boolean> {
+    async wait_frontmatter(this: EasyEditor, tfile: TFile, kv: Record<string, unknown>, timeout = 3000): Promise<boolean> {
         if (this.check_frontmatter(tfile, kv)) return true;
 
         return new Promise((resolve) => {
@@ -43,7 +46,7 @@ export class EasyEditorFrontmatter {
                 resolve(false);
             }, timeout);
 
-            const off = this.app.metadataCache.on('changed', (file: any) => {
+            const off = this.app.metadataCache.on('changed', (file: TFile) => {
                 if (file.path === tfile.path && this.check_frontmatter(tfile, kv)) {
                     clearTimeout(timer);
                     this.app.metadataCache.offref(off);
@@ -53,9 +56,9 @@ export class EasyEditorFrontmatter {
         });
     }
 
-    async set_multi_frontmatter(
+    async set_multi_frontmatter(this: EasyEditor, 
         tfile: TFile | string | Array<TFile | string>,
-        kv: { [key: string]: any },
+        kv: Record<string, unknown>,
         nretry = this.nretry
     ): Promise<boolean> {
         if (Array.isArray(tfile)) {
@@ -77,9 +80,9 @@ export class EasyEditorFrontmatter {
         if (this.check_frontmatter(tfile, kv)) return true;
 
         for (let attempt = 0; attempt < nretry; attempt++) {
-            await this.app.fileManager.processFrontMatter(tfile, (fm: any) => {
+            await this.app.fileManager.processFrontMatter(tfile, (fm: FrontMatterCache) => {
                 for (const k in kv) {
-                    this.set_obj_value(fm, k, kv[k]);
+                    this.set_obj_value(fm as unknown as Record<string, unknown>, k, kv[k]);
                 }
             });
 
@@ -90,7 +93,7 @@ export class EasyEditorFrontmatter {
         return false;
     }
 
-    get_frontmatter(tfile: TAbstractFile|string, key: string, default_value: any = null): any {
+    get_frontmatter(this: EasyEditor, tfile: TAbstractFile|string, key: string, default_value: unknown = null): unknown {
         try {
             if (!tfile) { return default_value; }
             if (typeof tfile === 'string') {
@@ -103,12 +106,13 @@ export class EasyEditorFrontmatter {
                         return meta.frontmatter[key] ?? default_value;
                     }
                     const keys = key.split('.');
-                    let cfm: any = meta.frontmatter;
+                    let cfm: unknown = meta.frontmatter;
                     for (const k of keys) {
                         const items = k.match(/^(.*?)(\[-?\d+\])?$/);
                         if (!items) { return default_value; }
                         if (items[1]) {
-                            cfm = cfm[items[1]];
+                            if (!cfm || typeof cfm !== 'object') { return default_value; }
+                            cfm = (cfm as Record<string, unknown>)[items[1]];
                         }
                         if (cfm == null) { return default_value; }
                         if (Array.isArray(cfm) && items[2]) {
@@ -126,7 +130,10 @@ export class EasyEditorFrontmatter {
                 return default_value;
             }else if (tfile instanceof TFolder) {
                 let sfile = this.ea.file.get_tfile(tfile.path+'/'+tfile.name+'.md');
-                return this.get_frontmatter(sfile,key,default_value)
+                if (sfile) {
+                    return this.get_frontmatter(sfile,key,default_value)
+                }
+                return default_value;
             }
             return default_value;
         } catch {
@@ -134,13 +141,13 @@ export class EasyEditorFrontmatter {
         }
     }
 
-    get_vault_name(): string {
-        let items = (this.app.vault.adapter as any).basePath.split('\\');
+    get_vault_name(this: EasyEditor): string {
+        let items = vaultBasePath(this.app).split('\\');
         items = items[items.length - 1].split('/');
         return items[items.length - 1];
     }
 
-    get_frontmatter_config(tfile: TAbstractFile, key: string): any {
+    get_frontmatter_config(this: EasyEditor, tfile: TAbstractFile, key: string): unknown {
         if (tfile instanceof TFile) {
             if (tfile.extension == 'md') {
                 const config = this.get_frontmatter(tfile, key);
@@ -179,7 +186,7 @@ export class EasyEditorFrontmatter {
         return null;
     }
 
-    async set_frontmatter_align_file(src: TFile, dst: TFile, field: string) {
+    async set_frontmatter_align_file(this: EasyEditor, src: TFile, dst: TFile, field: string) {
         if (field) {
             const value = this.get_frontmatter(src, field);
             if (value) {

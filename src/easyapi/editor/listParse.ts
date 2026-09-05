@@ -1,10 +1,13 @@
 import type { EasyAPI } from '../easyapi';
+import type { EasyEditor } from '../editor';
+import { App } from 'obsidian';
 
 export class EasyEditorListParse {
-	/** Host EasyEditor fields/methods (filled by applyMixins). */
-	[key: string]: any;
+	app!: App;
+	ea!: EasyAPI;
+	nretry!: number;
 
-    cn2num(chinese: string): number {
+    cn2num(this: EasyEditor, chinese: string): number {
         let v = parseFloat(chinese);
         if (!Number.isNaN(v)) { return v }
 
@@ -79,14 +82,21 @@ export class EasyEditorListParse {
         return sign * (integer_total + decimal_total);
     }
 
-    slice_by_position(ctx: string, pos: any) {
-        if (pos.position) {
-            pos = pos.position
+    slice_by_position(
+        this: EasyEditor,
+        ctx: string,
+        pos: { position?: { start: { offset: number }; end: { offset: number } }; start?: { offset: number }; end?: { offset: number } },
+    ) {
+        const range = pos.position ?? pos;
+        const start = range.start?.offset;
+        const end = range.end?.offset;
+        if (typeof start !== 'number' || typeof end !== 'number') {
+            return '';
         }
-        return ctx.slice(pos.start.offset, pos.end.offset);
+        return ctx.slice(start, end);
     }
 
-    parse_list_regx(aline: string, regx: RegExp, field: { [key: string]: number } = {}) {
+    parse_list_regx(this: EasyEditor, aline: string, regx: RegExp, field: { [key: string]: number } = {}) {
         let match = aline.match(regx);
         if (!match) { return null }
         let res: { [key: string]: string } = { src: aline }
@@ -96,7 +106,7 @@ export class EasyEditorListParse {
         return res
     }
 
-    parse_list_dataview(aline: string, src = '_src_') {
+    parse_list_dataview(this: EasyEditor, aline: string, src = '_src_') {
         let res: { [key: string]: string } = {};
         if (src) {
             res[src] = aline;
@@ -111,7 +121,7 @@ export class EasyEditorListParse {
         return res;
     }
 
-    keys_in(keys: Array<string>, obj: object) {
+    keys_in(this: EasyEditor, keys: Array<string>, obj: object) {
         for (let k of keys) {
             if (!(k in obj)) {
                 return false
@@ -120,7 +130,7 @@ export class EasyEditorListParse {
         return true;
     }
 
-    range(end: number = 0,start: number = 0): number[] {
+    range(this: EasyEditor, end: number = 0,start: number = 0): number[] {
         return Array.from({ length: end - start }, (_, index) => start + index);
     }
 }

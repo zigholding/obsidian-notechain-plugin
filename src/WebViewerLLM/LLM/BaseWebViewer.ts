@@ -1,9 +1,16 @@
 
 import { App, View, WorkspaceLeaf, Notice } from 'obsidian';
+import {
+	asWebviewerView,
+	noteChainPlugin,
+	obsidianApp,
+	type ElectronWebview,
+	type WebviewerInternalPlugin,
+} from '../../obsidian-app';
 
 export class BaseWebViewer {
     app: App;
-    homepage: any;
+    homepage: string;
     view: View | null; // Declare the type of view
     name: string;
 
@@ -31,7 +38,7 @@ export class BaseWebViewer {
     // 所有 webview 标签
     get leaves() {
         let leaves = this.allLeaves.filter(
-            x => (x.view as any).webview
+            x => !!asWebviewerView(x.view)?.webview
         );
         return leaves;
     }
@@ -45,7 +52,7 @@ export class BaseWebViewer {
 
     get activeLeaf() {
         let leaves = this.leaves.filter(
-            x => (x as any).containerEl.className.contains('mod-active')
+            x => (x as WorkspaceLeaf & { containerEl?: HTMLElement }).containerEl?.className.contains('mod-active')
         );
         if (leaves.length != 1) {
             return null;
@@ -67,9 +74,9 @@ export class BaseWebViewer {
         return this.get_webviews('about:blank');
     }
 
-    get webview() {
+    get webview(): ElectronWebview | null | undefined {
         if (this.view) {
-            return (this.view as any).webview;
+            return asWebviewerView(this.view)?.webview;
         } else {
             return null;
         }
@@ -78,7 +85,7 @@ export class BaseWebViewer {
     // 获取指定标签
     get_webviews(prefix: string) {
         return this.views.filter(
-            (x: any) => x?.url?.startsWith(prefix)
+            (x) => asWebviewerView(x)?.url?.startsWith(prefix)
         )
     }
 
@@ -89,7 +96,7 @@ export class BaseWebViewer {
         }
         let n = views.length;
         while (n < idx + 1) {
-            let plugin = (this.app as any).internalPlugins.getEnabledPluginById("webviewer");
+            let plugin = obsidianApp(this.app).internalPlugins.getEnabledPluginById("webviewer") as WebviewerInternalPlugin | undefined;
             if(plugin){
                 await plugin.openUrl(url,true);
                 n = n + 1;
@@ -111,9 +118,10 @@ export class BaseWebViewer {
     }
 
     async source(view = this.view) {
-        if (!view || !(view as any).webview) { return ''; }
-        let html = await (view as any).webview.executeJavaScript(`document.documentElement.outerHTML`);
-        return html;
+        const wv = asWebviewerView(view)?.webview;
+        if (!view || !wv) { return ''; }
+        let html = await wv.executeJavaScript(`document.documentElement.outerHTML`);
+        return typeof html === 'string' ? html : '';
     }
 
     async document(view = this.view) {
@@ -129,7 +137,7 @@ export class BaseWebViewer {
     }
     
     async html_to_markdown(html: string): Promise<string> {
-        const nc = (this.app as any).plugins.plugins['note-chain'];
+        const nc = noteChainPlugin(this.app);
         const md = nc?.webviewerllm ? await nc.webviewerllm.html_to_markdown(html) : '';
         return md;
     }
@@ -153,15 +161,15 @@ export class BaseWebViewer {
     }
 
 
-    async paste_msg(ctx: string) {
-
+    async paste_msg(_ctx: string): Promise<unknown> {
+        return;
     }
 
-    async click_btn_of_send() {
-
+    async click_btn_of_send(): Promise<unknown> {
+        return;
     }
 
-    async number_of_receive_msg() {
+    async number_of_receive_msg(): Promise<unknown> {
         return 0;
     }
 
@@ -169,15 +177,20 @@ export class BaseWebViewer {
         return '';
     }
 
-    async copy_last_content() {
+    async copy_last_content(): Promise<unknown> {
         return false;
     }
 
-    async probe_action_elements() {
+    async probe_action_elements(): Promise<{
+        url?: string;
+        input?: { selector?: string } | null;
+        send?: { selector?: string } | null;
+        copy?: { selector?: string } | null;
+    } | null> {
         if (!this.webview) {
             return null;
         }
-        const result = await this.webview.executeJavaScript(
+        const result: unknown = await this.webview.executeJavaScript(
             `
             (() => {
                 const toBrief = (el) => {
@@ -235,20 +248,25 @@ export class BaseWebViewer {
             })()
             `
         );
-        return result;
+        return result as {
+            url?: string;
+            input?: { selector?: string } | null;
+            send?: { selector?: string } | null;
+            copy?: { selector?: string } | null;
+        };
     }
 
     async request(ctx: string, timeout = 120) {
 
-        let N1 = await this.number_of_receive_msg();
+        let N1 = Number(await this.number_of_receive_msg()) || 0;
         await this.paste_msg(ctx);
         await this.delay(1000);
         await this.click_btn_of_send();
-        let N2 = await this.number_of_receive_msg();
+        let N2 = Number(await this.number_of_receive_msg()) || 0;
 
         while (N2 < N1 + 1) {
             await this.delay(1000);
-            N2 = await this.number_of_receive_msg();
+            N2 = Number(await this.number_of_receive_msg()) || 0;
             timeout = timeout - 1;
             if (timeout < 0) {
                 break;
@@ -288,4 +306,4 @@ export class BaseWebViewer {
         }
     }
 
-} 
+}

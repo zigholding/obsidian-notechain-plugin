@@ -1,8 +1,9 @@
 import {
-	Notice, TFile, TFolder
+	Notice, TFile, TFolder, MarkdownView
 } from 'obsidian';
 
 import type NoteChainPlugin from '../../plugin';
+import { obsidianApp } from '../../obsidian-app';
 
 export const cmd_open_notes_smarter = (plugin:NoteChainPlugin) => ({
 	id: 'open_notes_smarter',
@@ -48,16 +49,18 @@ export const cmd_reveal_note = (plugin:NoteChainPlugin) => ({
 		let nc = plugin;
 		let note = nc.chain.current_note;
 		if(note){
-			await (plugin.app as any).commands.executeCommandById('file-explorer:open')
-			await (nc.explorer.file_explorer as any).tree.setCollapseAll(true);
-			await (nc.explorer.file_explorer as any).revealInFolder(note);
+			const explorer = nc.explorer.file_explorer;
+			if (!explorer) return;
+			await obsidianApp(plugin.app).commands.executeCommandById('file-explorer:open')
+			explorer.tree?.setCollapseAll(true);
+			explorer.revealInFolder?.(note);
 			await sleep(100);
 			
-			let containerEl = nc.explorer.file_explorer.containerEl;
+			let containerEl = explorer.containerEl;
 			let panel = containerEl.querySelector('.nav-files-container');
 			let itemEl=containerEl.querySelector(`[data-path="${note.path}"]`);
-			if(panel && itemEl && (itemEl as any).offsetTop){
-				let xtop = panel.scrollTop+((itemEl as any).offsetTop-(panel.scrollTop+panel.clientHeight/2))
+			if(panel && itemEl instanceof HTMLElement && itemEl.offsetTop){
+				let xtop = panel.scrollTop+(itemEl.offsetTop-(panel.scrollTop+panel.clientHeight/2))
 				panel.scrollTo({ top: xtop, behavior: 'smooth' });
 			}
 		}
@@ -74,15 +77,17 @@ export const cmd_open_and_reveal_note = (plugin:NoteChainPlugin) => ({
 		let note = await nc.chain.sugguster_note();
 		if(note){
 			await nc.chain.open_note(note);
-			await (nc.explorer.file_explorer as any).tree.setCollapseAll(true);
-			await (nc.explorer.file_explorer as any).revealInFolder(note);
+			const explorer = nc.explorer.file_explorer;
+			if (!explorer) return;
+			explorer.tree?.setCollapseAll(true);
+			explorer.revealInFolder?.(note);
 			await sleep(100);
 			
-			let containerEl = nc.explorer.file_explorer.containerEl;
+			let containerEl = explorer.containerEl;
 			let panel = containerEl.querySelector('.nav-files-container');
 			let itemEl=containerEl.querySelector(`[data-path="${note.path}"]`);
-			if(panel && itemEl && (itemEl as any).offsetTop){
-				let xtop = panel.scrollTop+((itemEl as any).offsetTop-(panel.scrollTop+panel.clientHeight/2))
+			if(panel && itemEl instanceof HTMLElement && itemEl.offsetTop){
+				let xtop = panel.scrollTop+(itemEl.offsetTop-(panel.scrollTop+panel.clientHeight/2))
 				panel.scrollTo({ top: xtop, behavior: 'smooth' });
 			}
 		}
@@ -97,7 +102,8 @@ export const cmd_open_prev_note_of_right_leaf = (plugin:NoteChainPlugin) => ({
 		let nc = plugin;
 		let leaf = nc.chain.get_last_activate_leaf();
 		if(leaf){
-			let prev = nc.chain.get_prev_note((leaf.view as any).file);
+			const file = leaf.view instanceof MarkdownView ? leaf.view.file : null;
+			let prev = nc.chain.get_prev_note(file ?? undefined);
 			if(prev){
 				await leaf.openFile(prev,{active:false});
 				await nc.app.workspace.trigger('file-open', leaf);
@@ -114,7 +120,8 @@ export const cmd_open_next_note_of_right_leaf = (plugin:NoteChainPlugin) => ({
 		let nc = plugin;
 		let leaf = nc.chain.get_last_activate_leaf();
 		if(leaf){
-			let next = nc.chain.get_next_note((leaf.view as any).file);
+			const file = leaf.view instanceof MarkdownView ? leaf.view.file : null;
+			let next = nc.chain.get_next_note(file ?? undefined);
 			if(next){
 				await leaf.openFile(next,{active:false});
 				await nc.app.workspace.trigger('file-open', leaf);

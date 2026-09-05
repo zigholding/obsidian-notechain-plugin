@@ -1,5 +1,8 @@
 import { App } from 'obsidian';
 import { Templater } from '../easyapi/templater';
+import { noteChainPlugin } from '../obsidian-app';
+import type { HttpReq, HttpRes } from '../http-types';
+import { errorMessage, errorStack, isRecord } from '../ts-helpers';
 
 export class MCPToolsListService {
     constructor(
@@ -7,10 +10,10 @@ export class MCPToolsListService {
         private templater: Templater,
     ) {}
 
-    async getMCPToolsList(): Promise<any[]> {
+    async getMCPToolsList(): Promise<unknown[]> {
         
         let listToolsFileName = 'obsidian_mcp_list_tools.md';
-        let listToolsFile = (this.app as any).plugins.getPlugin('note-chain').easyapi.file.get_tfile(listToolsFileName);
+        let listToolsFile = noteChainPlugin(this.app)?.easyapi.file.get_tfile(listToolsFileName);
 
         if (listToolsFile) {
             try {
@@ -21,8 +24,8 @@ export class MCPToolsListService {
                     null,
                     ''
                 );
-                if (result && result.length > 0) {
-                    let resultStr = result.join('\n').trim();
+                if (Array.isArray(result) && result.length > 0) {
+                    let resultStr = result.map(String).join('\n').trim();
                     try {
                         let parsed = JSON.parse(resultStr);
                         if (Array.isArray(parsed)) return parsed;
@@ -38,7 +41,7 @@ export class MCPToolsListService {
         }
 
         // 回退：从 vault 中扫描 mcp_tool frontmatter 或 mcp_ 前缀文件
-        let tools: any[] = [];
+        let tools: Array<{ name: string; description: unknown; inputSchema: unknown }> = [];
         let tfiles = this.app.vault.getMarkdownFiles();
 
         for (let file of tfiles) {
@@ -53,8 +56,8 @@ export class MCPToolsListService {
                     properties: {},
                     required: []
                 };
-                if (cache.frontmatter.mcp_tool && (cache.frontmatter.mcp_tool as any).name) {
-                    toolName = (cache.frontmatter.mcp_tool as any).name;
+                if (isRecord(cache.frontmatter.mcp_tool) && typeof cache.frontmatter.mcp_tool.name === 'string') {
+                    toolName = cache.frontmatter.mcp_tool.name;
                 }
                 tools.push({ name: toolName, description, inputSchema });
             }
@@ -71,17 +74,17 @@ export class MCPToolsListService {
         return tools;
     }
 
-    async handleMCPListTools(req: any, res: any) {
+    async handleMCPListTools(req: HttpReq, res: HttpRes) {
         try {
             let tools = await this.getMCPToolsList();
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify({ tools }, null, 2));
-        } catch (error: any) {
+        } catch (error: unknown) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 error: 'Failed to list tools',
-                message: error.message || 'Unknown error',
-                stack: error.stack
+                message: errorMessage(error) || 'Unknown error',
+                stack: errorStack(error)
             }));
         }
     }

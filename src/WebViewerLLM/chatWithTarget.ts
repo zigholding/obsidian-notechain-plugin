@@ -13,12 +13,15 @@ import { ChatGPT } from './LLM/ChatGPT';
 import { ChatGLM } from './LLM/ChatGLM';
 import { Gemini } from './LLM/Gemini';
 import { Claude } from './LLM/Claude';
+import type { WebViewerLLMModule } from './WebViewerLLMModule';
+import { isRecord } from '../ts-helpers';
+import { isMobileApp } from '../obsidian-app';
+
 
 export class WebViewerLLMChatWithTarget {
-	/** Host WebViewerLLMModule fields/methods (filled by applyMixins). */
-	[key: string]: any;
+	plugin!: NoteChainPlugin;
 
-	async cmd_chat_with_target_tfile(tfile: TFile | null = null, target: any = null) {
+	async cmd_chat_with_target_tfile(this: WebViewerLLMModule, tfile: TFile | null = null, target: unknown = null) {
 		const ea = this.easyapi;
 		const cfile = ea.file.get_last_activate_file();
 		const selection = await ea.editor.get_selection();
@@ -27,7 +30,7 @@ export class WebViewerLLMChatWithTarget {
 		let source: TFile | string | null = tfile;
 		let xrefiles: Array<TFile> = [];
 		if (!source) {
-			const selected = await this.select_chat_source(cfile, selection);
+			const selected = await this.select_chat_source(cfile ?? null, selection);
 			if (!selected) return;
 			source = selected.source;
 			xrefiles = selected.xrefiles;
@@ -44,7 +47,7 @@ export class WebViewerLLMChatWithTarget {
 			tfile = source;
 		} else {
 			prompt = source;
-			tfile = cfile as TFile;
+			tfile = cfile ?? null;
 		}
 		prompt = prompt.replace(/^\s*%%[\s\S]*?%%/, '').trim();
 
@@ -54,7 +57,7 @@ export class WebViewerLLMChatWithTarget {
 			this.is_templater_parse_enabled(cfile);
 
 		// 3. 展开内置占位符：${selection}、${tfile.*}、${[[wiki]]} 等
-		const expanded = await this.expand_prompt_placeholders(prompt, cfile, allowTemplater);
+		const expanded = await this.expand_prompt_placeholders(prompt, cfile ?? null, allowTemplater);
 		if (expanded == null) return;
 		prompt = expanded;
 
@@ -66,24 +69,27 @@ export class WebViewerLLMChatWithTarget {
 		// 5. 应用调用方传入的 target 替换
 		prompt = this.apply_target_replacements(prompt, target);
 
+		const noteFile = tfile ?? null;
+		const currentFile = cfile ?? null;
+
 		// 6. Templater 解析（可由 parse_templater: false 关闭）
-		prompt = await this.run_prompt_templater(prompt, tfile, cfile, allowTemplater);
+		prompt = await this.run_prompt_templater(prompt, noteFile, currentFile, allowTemplater);
 
 		// 7. 选择并追加参考笔记
-		prompt = await this.append_selected_references(prompt, tfile, cfile, xrefiles);
+		prompt = await this.append_selected_references(prompt, noteFile, currentFile, xrefiles);
 
 		// 8. 全局预处理脚本
-		prompt = await this.run_webviewllm_preprocess(prompt, tfile, cfile);
+		prompt = await this.run_webviewllm_preprocess(prompt, noteFile, currentFile);
 
 		// 9. 按设置复制剪贴板 / 发送给 LLM
-		const dispatched = await this.dispatch_chat_prompt(prompt, tfile, cfile);
+		const dispatched = await this.dispatch_chat_prompt(prompt, noteFile, currentFile);
 		if (!dispatched) return;
 
 		// 10. 全局后处理脚本
 		await this.run_webviewllm_postprocess(
 			prompt,
-			tfile,
-			cfile,
+			noteFile,
+			currentFile,
 			dispatched.response,
 			dispatched.llm
 		);
@@ -93,7 +99,7 @@ export class WebViewerLLMChatWithTarget {
 	 * frontmatter `parse_templater`：默认 true；显式 false / "false" / 0 时关闭二次解析。
 	 * 可写在提示词笔记或当前激活笔记（${tfile.*} 来源）上。
 	 */
-	private is_templater_parse_enabled(file: TFile | null | undefined): boolean {
+	private is_templater_parse_enabled(this: WebViewerLLMModule, file: TFile | null | undefined): boolean {
 		if (!(file instanceof TFile)) return true;
 		const v = this.easyapi.editor.get_frontmatter(file, 'parse_templater', true);
 		if (v === false || v === 0) return false;
@@ -104,7 +110,7 @@ export class WebViewerLLMChatWithTarget {
 	}
 
 	/** 将文本中解析出的笔记去重追加到列表 */
-	private push_unique_tfiles(text: string, dest: TFile[]) {
+	private push_unique_tfiles(this: WebViewerLLMModule, text: string, dest: TFile[]) {
 		const curr = this.easyapi.file.get_tfiles(text);
 		for (const c of curr) {
 			if (!dest.includes(c)) dest.push(c);
@@ -115,7 +121,7 @@ export class WebViewerLLMChatWithTarget {
 	 * 弹出卡片选择器，让用户选择提示词来源。
 	 * @returns source 为 TFile 或纯文本；xrefiles 为源文本中提到的相关笔记
 	 */
-	private async select_chat_source(
+	private async select_chat_source(this: WebViewerLLMModule, 
 		cfile: TFile | null,
 		selection: string
 	): Promise<{ source: TFile | string; xrefiles: TFile[] } | null> {
@@ -134,7 +140,10 @@ export class WebViewerLLMChatWithTarget {
 		const data: CardItem[] = tfiles.map((file: TFile) => ({
 			name: file.basename,
 			detail: file.path,
-			image: this.easyapi.editor.get_frontmatter(file, 'cover'),
+			image: ((): CardItem['image'] => {
+				const cover = this.easyapi.editor.get_frontmatter(file, 'cover');
+				return typeof cover === 'string' ? cover : undefined;
+			})(),
 			file,
 			async action(_item: CardItem): Promise<void> {},
 		}));
@@ -194,7 +203,7 @@ export class WebViewerLLMChatWithTarget {
 	 * @param allowTemplater false 时 `${[[wiki]]}` 只摘录正文，不跑 Templater
 	 * @returns 展开后的 prompt；缺 selection / 取消选文件时返回 null
 	 */
-	private async expand_prompt_placeholders(
+	private async expand_prompt_placeholders(this: WebViewerLLMModule, 
 		prompt: string,
 		cfile: TFile | null,
 		allowTemplater = true
@@ -227,7 +236,7 @@ export class WebViewerLLMChatWithTarget {
 			replacements.set('${tfile.path}', cfile.path);
 
 			if (prompt.includes('${tfile.content}')) {
-				const ctx = await ea.nc.editor.remove_metadata(cfile);
+				const ctx = await this.plugin.editor.remove_metadata(cfile);
 				replacements.set('${tfile.content}', ctx);
 			}
 
@@ -283,7 +292,7 @@ export class WebViewerLLMChatWithTarget {
 				let actx = '';
 				if (allowTemplater) {
 					const ctx = await ea.tpl.parse_templater(xfile, true, { cfile: cfile });
-					actx = ctx.join('\n');
+					actx = Array.isArray(ctx) ? ctx.map(String).join('\n') : String(ctx ?? '');
 				}
 				if (actx.length > 0) {
 					replacements.set(`\${[[${am}]]}`, actx);
@@ -310,7 +319,7 @@ export class WebViewerLLMChatWithTarget {
 	 * 从系统选择文件（桌面 Electron 对话框；移动端回退为库内文件选择）。
 	 * @returns 绝对路径或库内 path 列表；取消时 null
 	 */
-	private async pick_system_files(multi: boolean): Promise<string[] | null> {
+	private async pick_system_files(this: WebViewerLLMModule, multi: boolean): Promise<string[] | null> {
 		const title = multi
 			? this.easyapi.isZh
 				? '选择多个文件'
@@ -319,7 +328,7 @@ export class WebViewerLLMChatWithTarget {
 				? '选择文件'
 				: 'Select a file';
 
-		if (!(this.app as any).isMobile) {
+		if (!isMobileApp(this.app)) {
 			try {
 				const { dialog } = require('electron').remote;
 				const result = await dialog.showOpenDialog({
@@ -354,7 +363,7 @@ export class WebViewerLLMChatWithTarget {
 	 * 弹出对话框填充 `${prompt.xxx}` 占位符。
 	 * @returns 填充后的 prompt；用户取消时返回 null
 	 */
-	private async fill_interactive_prompt_vars(
+	private async fill_interactive_prompt_vars(this: WebViewerLLMModule, 
 		prompt: string,
 		selection: string
 	): Promise<string | null> {
@@ -383,19 +392,19 @@ export class WebViewerLLMChatWithTarget {
 	}
 
 	/** 按 target 类型替换剩余 `${...}` 占位符 */
-	private apply_target_replacements(prompt: string, target: any): string {
+	private apply_target_replacements(this: WebViewerLLMModule, prompt: string, target: unknown): string {
 		if (typeof target === 'string' && target.trim() !== '') {
 			return prompt.replace(/\$\{.*?\}/g, target.trim());
 		}
 		if (Array.isArray(target)) {
 			for (const i of target) {
-				prompt = prompt.replace(/\$\{.*?\}/, i);
+				prompt = prompt.replace(/\$\{.*?\}/, String(i));
 			}
 			return prompt;
 		}
-		if (typeof target === 'object' && target) {
-			for (const k in target) {
-				prompt = prompt.replace(`\${${k}}`, target[k]);
+		if (isRecord(target)) {
+			for (const k of Object.keys(target)) {
+				prompt = prompt.replace(`\${${k}}`, String(target[k]));
 			}
 		}
 		return prompt;
@@ -406,9 +415,9 @@ export class WebViewerLLMChatWithTarget {
 	 * 提示词笔记或当前激活笔记 frontmatter `parse_templater: false` 时跳过，
 	 * 避免 `${tfile.content}` 展开后正文里的 tpl 代码块被二次执行（默认 true）。
 	 */
-	private async run_prompt_templater(
+	private async run_prompt_templater(this: WebViewerLLMModule, 
 		prompt: string,
-		tfile: TFile,
+		tfile: TFile | null,
 		cfile: TFile | null,
 		allowTemplater = true
 	): Promise<string> {
@@ -432,9 +441,9 @@ export class WebViewerLLMChatWithTarget {
 	 * 按 frontmatter `reference` 收集候选笔记，供用户多选后追加到 prompt。
 	 * reference=false 时跳过；默认含当前笔记、选区相关笔记、激活文件链接与附件。
 	 */
-	private async append_selected_references(
+	private async append_selected_references(this: WebViewerLLMModule, 
 		prompt: string,
-		tfile: TFile,
+		tfile: TFile | null,
 		cfile: TFile | null,
 		xrefiles: TFile[]
 	): Promise<string> {
@@ -469,9 +478,15 @@ export class WebViewerLLMChatWithTarget {
 		} else if (ref == 'all') {
 			refFiles = ea.file.get_all_tfiles();
 		} else if (ref == 'folder') {
-			refFiles = ea.file.get_tfiles_of_folder(tfile.parent);
-			refFiles = ea.nc.chain.sort_tfiles_by_chain(refFiles);
-		} else if (ref) {
+			if (!tfile?.parent) {
+				refFiles = [];
+			} else {
+				const folderFiles = ea.file.get_tfiles_of_folder(tfile.parent);
+				refFiles = (ea.nc?.chain.sort_tfiles_by_chain(folderFiles) ?? folderFiles).filter(
+					(f): f is TFile => f instanceof TFile
+				);
+			}
+		} else if (typeof ref === 'string') {
 			refFiles = ea.file.get_group(ref);
 		}
 
@@ -490,9 +505,9 @@ export class WebViewerLLMChatWithTarget {
 	}
 
 	/** 执行设置中的 preprocess 笔记脚本，依次改写 prompt */
-	private async run_webviewllm_preprocess(
+	private async run_webviewllm_preprocess(this: WebViewerLLMModule, 
 		prompt: string,
-		tfile: TFile,
+		tfile: TFile | null,
 		cfile: TFile | null
 	): Promise<string> {
 		const ea = this.easyapi;
@@ -500,7 +515,7 @@ export class WebViewerLLMChatWithTarget {
 			const xfile = ea.file.get_tfile(line);
 			if (xfile) {
 				const ctx = await ea.tpl.parse_templater(xfile, true, { tfile, cfile, prompt });
-				prompt = ctx.join('\n');
+				prompt = Array.isArray(ctx) ? ctx.map(String).join('\n') : String(ctx ?? '');
 			}
 		}
 		return prompt;
@@ -513,9 +528,9 @@ export class WebViewerLLMChatWithTarget {
 	 * - '3' 仅发送 LLM
 	 * @returns null 表示提前中止（无 LLM 等）
 	 */
-	private async dispatch_chat_prompt(
+	private async dispatch_chat_prompt(this: WebViewerLLMModule, 
 		prompt: string,
-		tfile: TFile,
+		tfile: TFile | null,
 		cfile: TFile | null
 	): Promise<{ response: string; llm: BaseWebViewer | undefined } | null> {
 		const ea = this.easyapi;
@@ -570,13 +585,14 @@ export class WebViewerLLMChatWithTarget {
 	}
 
 	/** 执行提示词笔记中「后处理 / Postprocess」标题下的 Templater 代码块 */
-	private async run_note_postprocess_section(
-		tfile: TFile,
+	private async run_note_postprocess_section(this: WebViewerLLMModule, 
+		tfile: TFile | null,
 		cfile: TFile | null,
 		prompt: string,
 		response: string,
 		llm: BaseWebViewer
 	) {
+		if (!tfile) return;
 		const ea = this.easyapi;
 		let postprocess = await ea.editor.get_heading_section(tfile, '后处理');
 		if (postprocess?.length == 0) {
@@ -600,9 +616,9 @@ export class WebViewerLLMChatWithTarget {
 	}
 
 	/** 执行设置中的 postprocess 笔记脚本 */
-	private async run_webviewllm_postprocess(
+	private async run_webviewllm_postprocess(this: WebViewerLLMModule, 
 		prompt: string,
-		tfile: TFile,
+		tfile: TFile | null,
 		cfile: TFile | null,
 		response: string,
 		llm: BaseWebViewer | undefined
@@ -616,7 +632,7 @@ export class WebViewerLLMChatWithTarget {
 		}
 	}
 
-	async append_reference(refFiles: (TFile|string)[],with_refPreamble=true){
+	async append_reference(this: WebViewerLLMModule, refFiles: (TFile|string)[],with_refPreamble=true){
 		// v2: 不用 Markdown # 标题，避免与摘录正文里的标题层级混淆；魔串尽量长以降低撞车概率。
 		const B = '<<NC_REF|BEGIN>>';
 		const E = '<<NC_REF|END>>';
@@ -631,11 +647,11 @@ export class WebViewerLLMChatWithTarget {
 		].join('\n');
 		const refBlocks: string[] = [];
 		for (const link of refFiles) {
-			const body = link instanceof TFile ? await this.easyapi.nc.editor.remove_metadata(link) : await this.easyapi.fs.read_file(link);
+			const body = link instanceof TFile ? await this.plugin.editor.remove_metadata(link) : await this.easyapi.fs.read_file(link);
 			refBlocks.push(
 				[
 					D0,
-					`name: ${link instanceof TFile ? link.basename : this.easyapi.fs.path.basename(link)}`,
+					`name: ${link instanceof TFile ? link.basename : (this.easyapi.fs.path?.basename(link) ?? String(link))}`,
 					`path: ${link instanceof TFile ? link.path : link}`,
 					'',
 					body,

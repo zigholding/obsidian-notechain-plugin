@@ -1074,10 +1074,13 @@ function normalizeLabelTextList(result: unknown): OldBuddyLabelTextItem[] {
         return [];
     }
     return value
-        .map((row: any) => ({
-            label: String(row?.label ?? '').trim(),
-            text: String(row?.text ?? row?.label ?? '').trim(),
-        }))
+        .map((row: unknown) => {
+            const rec = row && typeof row === 'object' ? row as Record<string, unknown> : {};
+            return {
+                label: String(rec.label ?? '').trim(),
+                text: String(rec.text ?? rec.label ?? '').trim(),
+            };
+        })
         .filter((row) => row.label || row.text);
 }
 

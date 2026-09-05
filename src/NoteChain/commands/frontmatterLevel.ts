@@ -23,21 +23,20 @@ export const cmd_set_frontmatter = (plugin: NoteChainPlugin) => ({
 		let field = await plugin.easyapi.dialog_prompt('Frontmatter name')
 		if(!field){return}
 		let prev = plugin.editor.get_frontmatter(files[0],field)
+		let prevText = '';
 		if(prev){
 			if(Array.isArray(prev)){
-				prev = prev.map(x=>x.toString()).join('\n')
+				prevText = prev.map(x=>x.toString()).join('\n')
 			}else{
-				prev = prev.toString()
+				prevText = String(prev)
 			}
-		}else{
-			prev = ''
 		}
-		let value = await plugin.easyapi.dialog_prompt('Frontmatter value','',prev)
-		value = value.trim()
-		if(!value){return}
-		value = value.replace(/\\n/g,'\n').replace(/\\t/g,'\t')
-		value = value.split('\n')
-		value = value.map((x:string)=>{
+		let valueRaw = await plugin.easyapi.dialog_prompt('Frontmatter value','',prevText)
+		if (valueRaw == null) { return }
+		valueRaw = valueRaw.trim()
+		if(!valueRaw){return}
+		valueRaw = valueRaw.replace(/\\n/g,'\n').replace(/\\t/g,'\t')
+		const parts = valueRaw.split('\n').map((x:string)=>{
 			if(x.match(/^-?\d+$/)){
 				return parseInt(x)
 			}else if(x.match(/^-?\d+(\.\d*)?$/)){
@@ -46,9 +45,7 @@ export const cmd_set_frontmatter = (plugin: NoteChainPlugin) => ({
 				return x
 			}
 		})
-		if(value.length==1){
-			value = value[0]
-		}
+		const value = parts.length==1 ? parts[0] : parts
 		for(let tfile of files){
 			await plugin.editor.set_frontmatter(tfile,field,value,1)
 		}
@@ -134,7 +131,7 @@ export const cmd_move_prev_level = (plugin: NoteChainPlugin) => ({
 		let tfiles = plugin.easyapi.file.get_selected_files()
 		for(let tfile of tfiles){
 			let level = plugin.editor.get_frontmatter(tfile,key)
-			if(level){
+			if(typeof level === 'string'){
 				await plugin.editor.set_frontmatter(tfile,key,level.slice(1),1)
 			}
 		}

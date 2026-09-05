@@ -13,10 +13,17 @@ import { ChatGPT } from './LLM/ChatGPT';
 import { ChatGLM } from './LLM/ChatGLM';
 import { Gemini } from './LLM/Gemini';
 import { Claude } from './LLM/Claude';
+import type { WebViewerLLMModule } from './WebViewerLLMModule';
+import { isRecord } from '../ts-helpers';
+
+function webviewUrl(view: unknown): string {
+	if (!isRecord(view) || typeof view.url !== 'string') return '';
+	return view.url;
+}
+
 
 export class WebViewerLLMRegistry {
-	/** Host WebViewerLLMModule fields/methods (filled by applyMixins). */
-	[key: string]: any;
+	plugin!: NoteChainPlugin;
 
 	get app() {
 		return this.plugin.app;
@@ -26,50 +33,50 @@ export class WebViewerLLMRegistry {
 		return this.plugin.easyapi;
 	}
 
-	async init() {
+	async init(this: WebViewerLLMModule) {
 		this.auto_chat = true;
 	}
 
-	async cmd_refresh_llms() {
+	async cmd_refresh_llms(this: WebViewerLLMModule) {
 		const views = this.basewv.views;
 		this.llms = this.llms.slice(0, 0);
 		for (const view of views) {
-			if ((view as any).url.startsWith(this.deepseek.homepage)) {
+			if (webviewUrl(view).startsWith(this.deepseek.homepage)) {
 				const llm = new DeepSeek(this.app);
 				llm.view = view;
 				this.deepseek.view = view;
 				this.llms.push(llm);
-			} else if ((view as any).url.startsWith(this.doubao.homepage)) {
+			} else if (webviewUrl(view).startsWith(this.doubao.homepage)) {
 				const llm = new Doubao(this.app);
 				llm.view = view;
 				this.doubao.view = view;
 				this.llms.push(llm);
-			} else if ((view as any).url.startsWith(this.kimi.homepage)) {
+			} else if (webviewUrl(view).startsWith(this.kimi.homepage)) {
 				const llm = new Kimi(this.app);
 				llm.view = view;
 				this.kimi.view = view;
 				this.llms.push(llm);
-			} else if ((view as any).url.startsWith(this.chatgpt.homepage)) {
+			} else if (webviewUrl(view).startsWith(this.chatgpt.homepage)) {
 				const llm = new ChatGPT(this.app);
 				llm.view = view;
 				this.chatgpt.view = view;
 				this.llms.push(llm);
-			} else if ((view as any).url.startsWith(this.yuanbao.homepage)) {
+			} else if (webviewUrl(view).startsWith(this.yuanbao.homepage)) {
 				const llm = new Yuanbao(this.app);
 				llm.view = view;
 				this.yuanbao.view = view;
 				this.llms.push(llm);
-			} else if ((view as any).url.startsWith(this.chatglm.homepage)) {
+			} else if (webviewUrl(view).startsWith(this.chatglm.homepage)) {
 				const llm = new ChatGLM(this.app);
 				llm.view = view;
 				this.chatglm.view = view;
 				this.llms.push(llm);
-			} else if ((view as any).url.startsWith(this.gemini.homepage)) {
+			} else if (webviewUrl(view).startsWith(this.gemini.homepage)) {
 				const llm = new Gemini(this.app);
 				llm.view = view;
 				this.gemini.view = view;
 				this.llms.push(llm);
-			} else if ((view as any).url.startsWith(this.claude.homepage)) {
+			} else if (webviewUrl(view).startsWith(this.claude.homepage)) {
 				const llm = new Claude(this.app);
 				llm.view = view;
 				this.claude.view = view;
@@ -78,7 +85,7 @@ export class WebViewerLLMRegistry {
 		}
 	}
 
-	async cmd_chat_sequence() {
+	async cmd_chat_sequence(this: WebViewerLLMModule) {
 		await this.cmd_refresh_llms();
 		if (this.llms.length == 0) {
 			return;
@@ -114,10 +121,14 @@ export class WebViewerLLMRegistry {
 		this.auto_chat = false;
 	}
 
-	async get_last_active_llm() {
+	async get_last_active_llm(this: WebViewerLLMModule) {
 		await this.cmd_refresh_llms();
 		const llm = this.llms.sort(
-			(a: any, b: any) => b.view.leaf.activeTime - a.view.leaf.activeTime
+			(a, b) => {
+				const ta = (a.view?.leaf as { activeTime?: number } | undefined)?.activeTime ?? 0;
+				const tb = (b.view?.leaf as { activeTime?: number } | undefined)?.activeTime ?? 0;
+				return tb - ta;
+			}
 		)[0];
 		return llm;
 	}

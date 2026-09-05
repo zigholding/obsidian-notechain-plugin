@@ -1,5 +1,6 @@
 import {
 	App,
+	TAbstractFile,
 } from 'obsidian';
 
 import NoteChainPlugin from "./plugin";
@@ -8,6 +9,7 @@ import { NoteChainFolderChildren } from './NoteChain/folderChildren';
 import { NoteChainNavigation } from './NoteChain/navigation';
 import { NoteChainChainOps } from './NoteChain/chainOps';
 import { NoteChainMisc } from './NoteChain/misc';
+import { applyMixins } from './ts-helpers';
 
 export interface NoteChain extends
 	NoteChainFolderChildren,
@@ -20,14 +22,14 @@ export class NoteChain {
 	app: App;
 	prev: string;
 	next: string;
-	children: { [key: string]: any };
+	children: Record<string, TAbstractFile[]>;
 
 	constructor(plugin: NoteChainPlugin,
 		prev = "PrevNote", next = "NextNote",
 	) {
 		this.plugin = plugin;
 		this.app = plugin.app;
-		(window as any).nc = this.plugin;
+		window.nc = this.plugin;
 
 		this.prev = prev;
 		this.next = next;
@@ -35,19 +37,6 @@ export class NoteChain {
 		this.init_children();
 
 	}
-}
-
-function applyMixins(derivedCtor: any, constructors: any[]) {
-	constructors.forEach((baseCtor) => {
-		Object.getOwnPropertyNames(baseCtor.prototype).forEach((name) => {
-			if (name === 'constructor') return;
-			Object.defineProperty(
-				derivedCtor.prototype,
-				name,
-				Object.getOwnPropertyDescriptor(baseCtor.prototype, name) as PropertyDescriptor
-			);
-		});
-	});
 }
 
 applyMixins(NoteChain, [

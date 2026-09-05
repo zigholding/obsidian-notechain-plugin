@@ -43,7 +43,7 @@ export class NCSettingTab extends PluginSettingTab {
 	}
 
 	getControlValue(key: string): unknown {
-		return getPath(this.plugin.settings, key);
+		return getPath(this.plugin.settings as unknown as Record<string, unknown>, key);
 	}
 
 	async setControlValue(key: string, value: unknown): Promise<void> {
@@ -57,7 +57,7 @@ export class NCSettingTab extends PluginSettingTab {
 			return;
 		}
 
-		setPath(this.plugin.settings, key, value);
+		setPath(this.plugin.settings as unknown as Record<string, unknown>, key, value);
 		await this.plugin.saveSettings();
 
 		if (

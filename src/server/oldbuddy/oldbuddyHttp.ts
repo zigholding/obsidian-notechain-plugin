@@ -9,14 +9,17 @@ import {
 import { OLDBUDDY_PAGE_HTML } from '../oldbuddyPageHtml';
 import { OldBuddyStore, inferOldBuddyMessageType } from './oldbuddyStore';
 import { parseJiujiuPacket, JiujiuPushError } from './jiujiu';
+import { normalizeAttachments } from './types';
 import type { Buffer } from 'buffer';
-
+import type { HttpReq, HttpRes, ParsedReqUrl } from '../../http-types';
+import type { Socket } from 'net';
+import { errorMessage } from '../../ts-helpers';
 let url = require('url');
 
 const BASE = '/oldbuddy';
 
-function headerVal(req: any, name: string): string {
-    const v = req?.headers?.[name] ?? req?.headers?.[name.toLowerCase()];
+function headerVal(req: HttpReq, name: string): string {
+    const v = req.headers?.[name] ?? req.headers?.[name.toLowerCase()];
     return Array.isArray(v) ? String(v[0] || '') : String(v || '');
 }
 
@@ -41,7 +44,7 @@ export class OldBuddyHttpHandlers {
         return pathname === BASE || pathname.startsWith(`${BASE}/`);
     }
 
-    handleUpgrade(req: any, socket: any, head: Buffer) {
+    handleUpgrade(req: HttpReq, socket: Socket, head: Buffer) {
         const parsed = url.parse(req.url || '', true);
         const pathname = parsed.pathname || '';
         const kind = pathname === `${BASE}/ws` ? 'web' : 'jiujiu';
@@ -63,7 +66,7 @@ export class OldBuddyHttpHandlers {
         return pathname === `${BASE}/ws` || isJiujiuWsPath(pathname);
     }
 
-    async handle(req: any, res: any, parsedUrl: any): Promise<boolean> {
+    async handle(req: HttpReq, res: HttpRes, parsedUrl: ParsedReqUrl): Promise<boolean> {
         const pathname = parsedUrl.pathname || '';
         if (!this.matches(pathname)) return false;
 
@@ -181,7 +184,7 @@ export class OldBuddyHttpHandlers {
         return true;
     }
 
-    private async handleJiujiuPush(req: any, res: any) {
+    private async handleJiujiuPush(req: HttpReq, res: HttpRes) {
         try {
             const body = await readHttpBody(req);
             const ct = String(req.headers['content-type'] || '');
@@ -194,7 +197,7 @@ export class OldBuddyHttpHandlers {
             const packet = parseJiujiuPacket(JSON.stringify(fields)) || { content: String(fields.content || '') };
             const result = await this.store.handleJiujiuHttpPush(packet);
             jsonResponse(res, 200, result);
-        } catch (e: any) {
+        } catch (e: unknown) {
             if (e instanceof JiujiuPushError) {
                 jsonResponse(res, e.status, {
                     ok: false,
@@ -203,18 +206,18 @@ export class OldBuddyHttpHandlers {
                 });
                 return;
             }
-            const msg = e?.message || 'push failed';
+            const msg = errorMessage(e) || 'push failed';
             const status = msg === 'content required' || msg === 'attachment too large' ? 400 : 500;
             jsonResponse(res, status, { ok: false, error: msg });
         }
     }
 
-    handleOldBuddyPage(_req: any, res: any) {
+    handleOldBuddyPage(_req: HttpReq, res: HttpRes) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(OLDBUDDY_PAGE_HTML);
     }
 
-    private async handleTextMessage(req: any, res: any) {
+    private async handleTextMessage(req: HttpReq, res: HttpRes) {
         try {
             const body = await readHttpBody(req);
             const ct = String(req.headers['content-type'] || '');
@@ -234,12 +237,12 @@ export class OldBuddyHttpHandlers {
                 quick_cmd_id: fields.quick_cmd_id,
             });
             jsonResponse(res, 200, { message });
-        } catch (e: any) {
-            jsonResponse(res, 500, { error: e.message || 'send failed' });
+        } catch (e: unknown) {
+            jsonResponse(res, 500, { error: errorMessage(e) || 'send failed' });
         }
     }
 
-    private async handleUploadMessage(req: any, res: any, type: 'image' | 'audio' | 'video' | 'file') {
+    private async handleUploadMessage(req: HttpReq, res: HttpRes, type: 'image' | 'audio' | 'video' | 'file') {
         try {
             const ct = String(req.headers['content-type'] || '');
             if (!ct.includes('multipart/form-data')) {
@@ -266,12 +269,12 @@ export class OldBuddyHttpHandlers {
                 mime: file.mime || undefined,
             });
             jsonResponse(res, 200, { message });
-        } catch (e: any) {
-            jsonResponse(res, 500, { error: e.message || 'upload failed' });
+        } catch (e: unknown) {
+            jsonResponse(res, 500, { error: errorMessage(e) || 'upload failed' });
         }
     }
 
-    private async handlePushMessage(req: any, res: any) {
+    private async handlePushMessage(req: HttpReq, res: HttpRes) {
         try {
             const body = await readHttpBody(req);
             const ct = String(req.headers['content-type'] || '');
@@ -298,17 +301,19 @@ export class OldBuddyHttpHandlers {
                 skip_reply: fields.skip_reply as boolean | string | undefined,
                 quick_cmd_id: fields.quick_cmd_id != null ? String(fields.quick_cmd_id) : undefined,
                 senderName: fields.senderName != null ? String(fields.senderName) : undefined,
-                attachments: Array.isArray(fields.attachments) ? (fields.attachments as any) : undefined,
+                attachments: Array.isArray(fields.attachments)
+                    ? normalizeAttachments(fields.attachments)
+                    : undefined,
             });
             jsonResponse(res, 200, { ok: true, message });
-        } catch (e: any) {
-            const msg = e?.message || 'push failed';
+        } catch (e: unknown) {
+            const msg = errorMessage(e) || 'push failed';
             const status = msg === 'content required' || msg === 'invalid type' ? 400 : 500;
             jsonResponse(res, status, { ok: false, error: msg });
         }
     }
 
-    private async serveVaultAsset(res: any, relPath: string) {
+    private async serveVaultAsset(res: HttpRes, relPath: string) {
         const file = await this.store.readVaultAsset(relPath);
         if (!file) {
             res.writeHead(404);
@@ -319,7 +324,7 @@ export class OldBuddyHttpHandlers {
         res.end(file.data);
     }
 
-    private serveUpload(req: any, res: any, fname: string) {
+    private serveUpload(req: HttpReq, res: HttpRes, fname: string) {
         const meta = this.store.serveUploadMeta(fname);
         if (!meta) {
             res.writeHead(404);

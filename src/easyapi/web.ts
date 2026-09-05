@@ -1,4 +1,5 @@
 import { App } from 'obsidian';
+import type { IncomingMessage, RequestOptions } from 'http';
 
 const http = require('http');
 const https = require('https');
@@ -7,14 +8,14 @@ const url = require('url');
 export interface WebRequestOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
     headers?: { [key: string]: string };
-    body?: any;
+    body?: unknown;
     timeout?: number;
 }
 
 export interface WebResponse {
     statusCode: number;
-    headers: { [key: string]: string };
-    body: any;
+    headers: IncomingMessage['headers'];
+    body: unknown;
     text: string;
 }
 
@@ -80,7 +81,7 @@ export class Web {
             }
         }
 
-        const requestOptions: any = {
+        const requestOptions: RequestOptions = {
             hostname: parsed.hostname,
             port: parsed.port || (isHttps ? 443 : 80),
             path: requestPath,
@@ -90,7 +91,7 @@ export class Web {
         };
 
         return new Promise((resolve, reject) => {
-            const req = client.request(requestOptions, (res: any) => {
+            const req = client.request(requestOptions, (res: IncomingMessage) => {
                 let data = '';
 
                 res.on('data', (chunk: Buffer) => {
@@ -98,7 +99,7 @@ export class Web {
                 });
 
                 res.on('end', () => {
-                    let body: any = data;
+                    let body: unknown = data;
                     
                     // 尝试解析 JSON
                     const contentType = res.headers['content-type'] || '';
@@ -160,7 +161,7 @@ export class Web {
      * @param options 请求选项（可选）
      * @returns Promise<WebResponse>
      */
-    async post(urlStr: string, body?: any, options: Omit<WebRequestOptions, 'method' | 'body'> = {}): Promise<WebResponse> {
+    async post(urlStr: string, body?: unknown, options: Omit<WebRequestOptions, 'method' | 'body'> = {}): Promise<WebResponse> {
         return this.request(urlStr, { ...options, method: 'POST', body: body });
     }
 
@@ -171,7 +172,7 @@ export class Web {
      * @param options 请求选项（可选）
      * @returns Promise<WebResponse>
      */
-    async put(urlStr: string, body?: any, options: Omit<WebRequestOptions, 'method' | 'body'> = {}): Promise<WebResponse> {
+    async put(urlStr: string, body?: unknown, options: Omit<WebRequestOptions, 'method' | 'body'> = {}): Promise<WebResponse> {
         return this.request(urlStr, { ...options, method: 'PUT', body: body });
     }
 
@@ -192,7 +193,7 @@ export class Web {
      * @param options 请求选项（可选）
      * @returns Promise<WebResponse>
      */
-    async patch(urlStr: string, body?: any, options: Omit<WebRequestOptions, 'method' | 'body'> = {}): Promise<WebResponse> {
+    async patch(urlStr: string, body?: unknown, options: Omit<WebRequestOptions, 'method' | 'body'> = {}): Promise<WebResponse> {
         return this.request(urlStr, { ...options, method: 'PATCH', body: body });
     }
 }

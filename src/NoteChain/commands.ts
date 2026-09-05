@@ -1,4 +1,5 @@
 import type NoteChainPlugin from '../plugin';
+import { isMobileApp } from '../obsidian-app';
 
 import { cmd_longform2notechain, cmd_longform4notechain } from './commands/longform';
 import { cmd_open_notes_smarter, cmd_open_note, cmd_open_prev_note, cmd_open_next_note, cmd_reveal_note, cmd_open_and_reveal_note, cmd_open_prev_note_of_right_leaf, cmd_open_next_note_of_right_leaf } from './commands/navigation';
@@ -57,7 +58,7 @@ export function addNoteChainCommands(plugin:NoteChainPlugin) {
     commandBuilders.forEach((c) => {
         plugin.addCommand(c(plugin));
     });
-	if((plugin.app as any).isMobile==false){
+	if(!isMobileApp(plugin.app)){
 		commandBuildersDesktop.forEach((c) => {
 			plugin.addCommand(c(plugin));
 		});

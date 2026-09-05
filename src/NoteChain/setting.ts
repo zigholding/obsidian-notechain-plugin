@@ -5,6 +5,7 @@ import {
 import NoteChainPlugin from '../plugin';
 import { strings } from './strings';
 import { getWebViewerPartition, installWebviewTlsTrust } from '../server/tlsWebviewTrust';
+import { errorMessage } from '../ts-helpers';
 
 export async function restartHttpServer(plugin: NoteChainPlugin): Promise<void> {
 	const settings = plugin.settings.notechain;
@@ -24,9 +25,9 @@ export async function restartHttpServer(plugin: NoteChainPlugin): Promise<void> 
 				plugin.httpServer.getTlsDir(),
 			);
 		}
-	} catch (error: any) {
+	} catch (error: unknown) {
 		console.error('Failed to restart HTTP Server:', error);
-		new Notice(`${strings.setting_httpServer_restart_failed}: ${error?.message || error}`, 5000);
+		new Notice(`${strings.setting_httpServer_restart_failed}: ${errorMessage(error)}`, 5000);
 	}
 }
 

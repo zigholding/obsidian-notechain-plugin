@@ -1,12 +1,14 @@
-import { TFile } from 'obsidian';
+import { App, TFile } from 'obsidian';
 import type { EasyAPI } from '../easyapi';
+import type { EasyEditor } from '../editor';
 import { legacyClipboardExecCopy } from './codeFence';
 
 export class EasyEditorClipboard {
-	/** Host EasyEditor fields/methods (filled by applyMixins). */
-	[key: string]: any;
+	app!: App;
+	ea!: EasyAPI;
+	nretry!: number;
 
-    async insert_after_line(tfile: TFile, aline: string, LINE: string, tail = true, suffix = '\n\n') {
+    async insert_after_line(this: EasyEditor, tfile: TFile, aline: string, LINE: string, tail = true, suffix = '\n\n') {
         if (!tfile) { return false }
         let ctx = await this.ea.app.vault.cachedRead(tfile)
 
@@ -22,7 +24,7 @@ export class EasyEditorClipboard {
     }
 
 
-    async read_clipboard(): Promise<string> {
+    async read_clipboard(this: EasyEditor): Promise<string> {
 		try {
 			if (navigator?.clipboard?.readText) {
 				return (await navigator.clipboard.readText()) ?? '';
@@ -33,7 +35,7 @@ export class EasyEditorClipboard {
 		return '';
 	}
 
-	async write_clipboard(text: string): Promise<boolean> {
+	async write_clipboard(this: EasyEditor, text: string): Promise<boolean> {
 		try {
 			if (navigator?.clipboard?.writeText) {
 				await navigator.clipboard.writeText(text);

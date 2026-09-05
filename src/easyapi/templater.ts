@@ -1,6 +1,38 @@
-import { App, TFile } from "obsidian";
+import { App, Plugin, TFile } from "obsidian";
 import { EasyAPI } from "./easyapi";
+import { isRecord } from "../ts-helpers";
 
+interface TemplaterModule {
+    name: string;
+    static_functions: Map<string, unknown>;
+}
+
+interface TemplaterFunctionsGenerator {
+    internal_functions: {
+        modules_array: TemplaterModule[];
+        generate_object: (config: unknown) => Promise<Record<string, unknown> & { user?: Record<string, unknown> }>;
+    };
+    user_functions: {
+        user_script_functions: {
+            generate_user_script_functions: (config?: unknown) => Promise<Map<string, unknown>>;
+        };
+        user_system_functions: {
+            generate_system_functions: (config: unknown) => Promise<Map<string, unknown>>;
+        };
+    };
+}
+
+interface TemplaterObsidianPlugin extends Plugin {
+    templater: {
+        functions_generator: TemplaterFunctionsGenerator;
+        overwrite_file_commands?: unknown;
+        create_new_note_from_template?: unknown;
+        current_user_templates?: unknown;
+        parser: {
+            parse_commands: (command: string, functions: unknown) => Promise<unknown>;
+        };
+    };
+}
 
 export class Templater {
     app:App;
@@ -11,18 +43,19 @@ export class Templater {
         this.ea = ea;
     }
 
-    get tpl(){
-        return this.ea.get_plugin('templater-obsidian');
+    get tpl(): TemplaterObsidianPlugin | undefined {
+        return this.ea.get_plugin<TemplaterObsidianPlugin>('templater-obsidian');
     }
 
     get_tp_func(target:string) {
 
         let items = target.split(".");
         if(items[0].localeCompare("tp")!=0 || items.length!=3){return undefined;}
+        if (!this.tpl) { return undefined; }
         
         let modules = this.tpl.templater.functions_generator.
             internal_functions.modules_array.filter(
-                (item:any)=>(item.name.localeCompare(items[1])==0)
+                (item)=>(item.name.localeCompare(items[1])==0)
             );
         if(modules.length==0){return undefined}
         return modules[0].static_functions.get(items[2]);
@@ -35,6 +68,7 @@ export class Templater {
     
         let items = target.split(".");
         if(items[0].localeCompare("tp")!=0 || items[1].localeCompare("user")!=0 || items.length!=3){return undefined;}
+        if (!this.tpl) { return undefined; }
         
         let funcs  = await this.tpl.templater.
             functions_generator.
@@ -44,7 +78,7 @@ export class Templater {
         return funcs.get(items[2])
     }
 
-    async templater$1(template:string|TFile|null, active_file:TFile|null, target_file:any,extra=null) {
+    async templater$1(template:string|TFile|null, active_file:TFile|null, target_file: TFile | null, extra: unknown = null) {
         let config = {
             template_file: template,
             active_file: active_file,
@@ -53,22 +87,24 @@ export class Templater {
             run_mode: "DynamicProcessor",
         };
 
-        let {templater} = this.tpl;
+        const tplPlugin = this.tpl;
+        if (!tplPlugin) { return; }
+        let {templater} = tplPlugin;
         let functions = await templater.functions_generator.internal_functions.generate_object(config);
         functions.user = {};
         let userScriptFunctions = await templater.functions_generator.user_functions.user_script_functions.generate_user_script_functions(config);
-        userScriptFunctions.forEach((value:any,key:any)=>{
-                functions.user[key] = value;
+        userScriptFunctions.forEach((value, key)=>{
+                functions.user![key] = value;
             }
         );
         if (template) {
             let userSystemFunctions = await templater.functions_generator.user_functions.user_system_functions.generate_system_functions(config);
-            userSystemFunctions.forEach((value:any,key:any)=>{
-                functions.user[key] = value;
+            userSystemFunctions.forEach((value, key)=>{
+                functions.user![key] = value;
             }
             );
         }
-        return async(command:any)=>{
+        return async(command: string)=>{
             return await templater.parser.parse_commands(command, functions);
         };
     }
@@ -106,7 +142,7 @@ export class Templater {
     }
 
     // target_file：target>activate>template
-    async parse_templater(template:string|TFile,extract=true,extra:any=null,idx:number[]|null|number=null,target='') {
+    async parse_templater(template:string|TFile,extract=true,extra: unknown =null,idx:number[]|null|number=null,target='') {
         let file = this.ea.file.get_tfile(template)
         if(file){
             template = file
@@ -130,10 +166,12 @@ export class Templater {
         }
         
         let active_file = this.ea.cfile;
-        let target_file:any = this.ea.file.get_tfile(target);
-        if(!target_file && extra){
-            // Allow passing target context in extra for headless scenarios.
-            target_file = this.ea.file.get_tfile(extra.target_file || extra.tfile || extra.cfile);
+        let target_file: TFile | null = this.ea.file.get_tfile(target);
+        if(!target_file && isRecord(extra)){
+            const ref = extra.target_file || extra.tfile || extra.cfile;
+            if (typeof ref === 'string' || ref instanceof TFile) {
+                target_file = this.ea.file.get_tfile(ref);
+            }
         }
         if(!target_file){
             if(active_file){

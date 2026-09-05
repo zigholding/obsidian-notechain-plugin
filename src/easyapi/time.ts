@@ -90,8 +90,8 @@ export class Time{
      * parse_date("下个月5号评审") // {date: "2025-07-05", text: "评审"}
      * parse_date("上个月15号账单") // {date: "2025-05-15", text: "账单"}
      */
-    extract_chinese_date(msg:string, base = this.today) {
-	    let result:{[key:string]:any} = { date: base.format('YYYY-MM-DD'), text: msg };
+    extract_chinese_date(msg:string, base = this.today): { date: string | null; text: string } {
+	    let result: { date: string | null; text: string } = { date: base.format('YYYY-MM-DD'), text: msg };
 	
 	    // 1. 处理相对天数（今天/昨天/明天等）
 	    let dayKeywords = [
@@ -131,19 +131,20 @@ export class Time{
 	    let weekMatch = msg.match(/^([上下]([一二三四五六七八九十两]|\d+)周周|上上周|上上星期|上周|上星期|周|星期|下周|下星期|下下周|下下星期)([一二三四五六七日]|[1-7])/);
 	    if (weekMatch) {
 	        let [fullMatch,weekStr, weekCount,dayChar] = weekMatch;
-	        let dayMap:{[key:string]:any} = { '一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '日':7, '七':7};
+	        const dayMap: Record<string, number> = { '一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '日':7, '七':7};
+	        let weekCountNum = 0;
 	        if(weekCount){
-			    let nmap:{[key:string]:any} = { '一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '日':7, '七':7,'八':8,'九':9,'两':2};
-			    weekCount = nmap[weekCount] || parseInt(weekCount);
+			    const nmap: Record<string, number> = { '一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '日':7, '七':7,'八':8,'九':9,'两':2};
+			    weekCountNum = nmap[weekCount] || parseInt(weekCount, 10);
 	        }
-	        let targetDay = dayMap[dayChar] || parseInt(dayChar);
+	        let targetDay = dayMap[dayChar] || parseInt(dayChar, 10);
 			let weekOffset = ['周','星期'].contains(weekStr)? 0 : 
 				['下周','下星期'].contains(weekStr)? 1 : 
 				['下下周','下下星期'].contains(weekStr)? 2 : 
 				['上周','上星期'].contains(weekStr)? -1 : 
 				['上上周','上上星期'].contains(weekStr)? -2 : 
-				(msg.slice(0,1)=='上' ? -weekCount : weekCount);
-	        let date = this.relative_week_day(targetDay,weekOffset as number,base);
+				(msg.slice(0,1)=='上' ? -weekCountNum : weekCountNum);
+	        let date = this.relative_week_day(targetDay,weekOffset,base);
 	        
 	        if (date.isBefore(base, 'day')) {
 	            date.add(1, 'week');
@@ -674,7 +675,7 @@ export class Time{
 		return t.clone().add(n.duration, 'minutes');
 	}
 	
-	generate_start_times(jobs:Array<any>,delta=10, is_today = true,st:string|Moment='06:45',compress=true) {
+	generate_start_times(jobs:Array<{st: Moment; et: Moment}>,delta=10, is_today = true,st:string|Moment='06:45',compress=true) {
         // 从 st 到当前时间
 		let _st = this.parse_time(st)
 		if(!_st){return []}
@@ -717,12 +718,12 @@ export class Time{
         
     }
 
-	get_max_endt(jobs:Array<any>,st='06:45') {
+	get_max_endt(jobs:Array<{et: Moment}>,st='06:45') {
         if (jobs.length == 0) {
             return this.parse_time(st)
         } else {
             return moment.unix(
-                Math.max(...jobs.map(x => x.et)) / 1000
+                Math.max(...jobs.map(x => x.et.valueOf())) / 1000
             )
         }
     }

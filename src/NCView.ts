@@ -1,6 +1,7 @@
 import { ItemView, WorkspaceLeaf, MarkdownRenderer, TFile,ViewStateResult,EventRef, Menu} from 'obsidian';
 import NoteChainPlugin from "./plugin";
 import { getWebViewerPartition, installWebviewTlsTrust, isNoteChainServerUrl, toWebViewerUrl } from './server/tlsWebviewTrust';
+import { hasCommunityPlugin, isMobileApp, obsidianApp } from './obsidian-app';
 
 export class NoteContentView extends ItemView {
 	content: string;
@@ -27,7 +28,7 @@ export class NoteContentView extends ItemView {
 		return this.displayText; 
 	}
 
-	getState(): any {
+	getState(): Record<string, unknown> {
 		return {
 			content: this.content,
 			sourcePath: this.sourcePath,
@@ -37,12 +38,12 @@ export class NoteContentView extends ItemView {
 		};
 	}
 	
-	async setState(state: any, result: ViewStateResult): Promise<void> {
-		this.content = state.content;
-		this.sourcePath = state.sourcePath;
-		this.webUrl = state.webUrl || '';
-		this.noteIcon = state.noteIcon || '';
-		this.displayText = state.displayText || 'Note Preview';
+	async setState(state: Record<string, unknown>, result: ViewStateResult): Promise<void> {
+		this.content = typeof state.content === 'string' ? state.content : this.content;
+		this.sourcePath = typeof state.sourcePath === 'string' ? state.sourcePath : this.sourcePath;
+		this.webUrl = typeof state.webUrl === 'string' ? state.webUrl : '';
+		this.noteIcon = typeof state.noteIcon === 'string' ? state.noteIcon : '';
+		this.displayText = typeof state.displayText === 'string' ? state.displayText : 'Note Preview';
 	
 		await this.setContent(this.content, this.sourcePath, this.webUrl);
 	}
@@ -125,10 +126,10 @@ export class NoteContentView extends ItemView {
 		}
 
 		const isDatacoreContent = Boolean(sourcePath && (sourcePath.endsWith('.canvas') || sourcePath.endsWith('.base')) && 
-			('datacore' in (this.plugin.app as any).plugins.plugins));
+			hasCommunityPlugin(this.plugin.app, 'datacore'));
 
 		if(sourcePath && (sourcePath.endsWith('.canvas') || sourcePath.endsWith('.base'))){
-            if('datacore' in (this.plugin.app as any).plugins.plugins){
+            if(hasCommunityPlugin(this.plugin.app, 'datacore')){
                 content = `
 \`\`\`datacorejsx
 return (
@@ -138,7 +139,7 @@ return (
 );
 \`\`\`
                 `.trim()
-            }else if('dataview' in (this.plugin.app as any).plugins.plugins){
+            }else if(hasCommunityPlugin(this.plugin.app, 'dataview')){
                 content = `
 \`\`\`dataviewjs
 dv.span(\`![[${sourcePath}]]\`);
@@ -218,11 +219,11 @@ dv.span(\`![[${sourcePath}]]\`);
 	}
 
 	private isWebViewerPluginEnabled(): boolean {
-		return !!(this.app as any).internalPlugins?.getEnabledPluginById?.('webviewer');
+		return !!obsidianApp(this.app).internalPlugins?.getEnabledPluginById?.('webviewer');
 	}
 
 	private canUseWebViewerWebview(): boolean {
-		return !(this.app as any).isMobile && this.isWebViewerPluginEnabled();
+		return !isMobileApp(this.app) && this.isWebViewerPluginEnabled();
 	}
 
 	private renderWebUrl(container: HTMLElement, url: string) {

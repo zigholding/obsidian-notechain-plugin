@@ -1,4 +1,3 @@
-
 import { App, parseYaml } from 'obsidian';
 import { EasyAPI } from 'src/easyapi/easyapi';
 
@@ -8,6 +7,7 @@ import { EasyEditorBlocks } from './editor/blocks';
 import { EasyEditorSections } from './editor/sections';
 import { EasyEditorObjPath } from './editor/objPath';
 import { EasyEditorClipboard } from './editor/clipboard';
+import { applyMixins } from '../ts-helpers';
 
 export interface EasyEditor extends
 	EasyEditorFrontmatter,
@@ -28,19 +28,6 @@ export class EasyEditor {
         this.app = app;
         this.ea = api;
     }
-}
-
-function applyMixins(derivedCtor: any, constructors: any[]) {
-	constructors.forEach((baseCtor) => {
-		Object.getOwnPropertyNames(baseCtor.prototype).forEach((name) => {
-			if (name === 'constructor') return;
-			Object.defineProperty(
-				derivedCtor.prototype,
-				name,
-				Object.getOwnPropertyDescriptor(baseCtor.prototype, name) as PropertyDescriptor
-			);
-		});
-	});
 }
 
 applyMixins(EasyEditor, [

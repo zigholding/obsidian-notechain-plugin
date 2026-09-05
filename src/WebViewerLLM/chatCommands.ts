@@ -13,16 +13,16 @@ import { ChatGPT } from './LLM/ChatGPT';
 import { ChatGLM } from './LLM/ChatGLM';
 import { Gemini } from './LLM/Gemini';
 import { Claude } from './LLM/Claude';
+import type { WebViewerLLMModule } from './WebViewerLLMModule';
+
 
 export class WebViewerLLMChatCommands {
-	/** Host WebViewerLLMModule fields/methods (filled by applyMixins). */
-	[key: string]: any;
+	plugin!: NoteChainPlugin;
 
-	async get_prompt(tfile: TFile | null, idx = -1, selection = false) {
+	async get_prompt(this: WebViewerLLMModule, tfile: TFile | null, idx = -1, selection = false): Promise<string> {
 		if (!tfile) {
 			return '';
 		}
-		let prompt: any = '';
 		const items = this.plugin.settings.webviewllm.prompt_name.trim().split('\n');
 		if (items.length == 0) {
 			return '';
@@ -38,33 +38,33 @@ export class WebViewerLLMChatCommands {
 		const allItems = Array.from(allItemsSet);
 
 		for (const item of allItems) {
-			prompt = await this.easyapi.editor.get_code_section(tfile, item as string, -1);
-			if (prompt) {
-				return prompt;
+			const code = await this.easyapi.editor.get_code_section(tfile, item as string, -1);
+			if (typeof code === 'string' && code) {
+				return code;
 			}
 
-			prompt = await this.easyapi.editor.get_heading_section(tfile, item as string, -1, false);
-			if (prompt) {
-				return prompt;
+			const heading = await this.easyapi.editor.get_heading_section(tfile, item as string, -1, false);
+			if (typeof heading === 'string' && heading) {
+				return heading;
 			}
 		}
 
-		if (selection && !prompt) {
-			prompt = await this.easyapi.editor.get_selection();
+		if (selection) {
+			const sel = await this.easyapi.editor.get_selection();
+			if (sel) {
+				return sel;
+			}
 		}
 
-		if (!prompt) {
-			prompt = await this.easyapi.nc.editor.remove_metadata(tfile);
-		}
-
-		if (prompt) {
-			return prompt;
+		const body = await this.plugin.editor.remove_metadata(tfile);
+		if (body) {
+			return body;
 		}
 
 		return '';
 	}
 
-	async cmd_chat_every_llms(prompt = '') {
+	async cmd_chat_every_llms(this: WebViewerLLMModule, prompt = '') {
 		await this.cmd_refresh_llms();
 		if (prompt == '') {
 			prompt = await this.get_prompt(this.easyapi.cfile, 0, true);
@@ -81,7 +81,7 @@ export class WebViewerLLMChatCommands {
 		return responses;
 	}
 
-	async cmd_chat_first_llms() {
+	async cmd_chat_first_llms(this: WebViewerLLMModule) {
 		const llm = await this.get_last_active_llm();
 		if (!llm) {
 			return;

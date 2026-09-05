@@ -3,28 +3,31 @@ import {
 } from 'obsidian';
 
 import type NoteChainPlugin from '../../plugin';
+import { activeFileView, obsidianApp, vaultJson } from '../../obsidian-app';
+import { isRecord } from '../../ts-helpers';
 
 export const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
     id: 'cmd_execute_template_modal',
     name: plugin.strings.cmd_execute_template_modal,
 	icon:'file-terminal',
     callback: async () => {
-		let tpl = (plugin.app as any).plugins.plugins['templater-obsidian']
+		let tpl = plugin.easyapi.get_plugin('templater-obsidian') as
+			{ settings?: { templates_folder?: string } } | undefined;
 		if(!tpl){return}
 
 		
 		let tfiles:Array<TFile>=[];
-		let folder = plugin.app.vault.getFolderByPath(tpl.settings.templates_folder);
+		let folder = plugin.app.vault.getFolderByPath(tpl.settings?.templates_folder ?? '');
 		if(folder){
 			let xfiles = plugin.easyapi.file.get_tfiles_of_folder(folder,-1)
 			let tfile = plugin.easyapi.file.get_tfile(folder.path+'/'+folder.name+'.md');
-			let infiles = plugin.easyapi.file.get_links(tfile);
+			let infiles = tfile ? plugin.easyapi.file.get_links(tfile) : [];
 			for(let f of infiles){
 				if(!xfiles.contains(f)){
 					xfiles.push(f)
 				}
 			}
-			xfiles = plugin.chain.sort_tfiles_by_chain(xfiles);
+			xfiles = plugin.chain.sort_tfiles_by_chain(xfiles).filter((f): f is TFile => f instanceof TFile);
 			for(let f of xfiles){
 				tfiles.push(f);
 			}
@@ -42,11 +45,11 @@ export const cmd_execute_template_modal = (plugin: NoteChainPlugin) => ({
 		}
 		
 
-		let tfile = await plugin.chain.sugguster_note(tfiles as any,0,true)
+		let tfile = await plugin.chain.sugguster_note(tfiles,0,true)
 		if(tfile){
 			let res = await plugin.easyapi.tpl.parse_templater(tfile.basename);
-			let txt = res.join('\n').trim()
-			let view = (plugin.app.workspace as any).getActiveFileView()
+			let txt = Array.isArray(res) ? res.map(String).join('\n').trim() : String(res ?? '');
+			let view = activeFileView(plugin.app);
 			if(view){
 				view.editor.replaceSelection(txt);
 			}
@@ -60,14 +63,13 @@ export const cmd_insert_command_id = (plugin: NoteChainPlugin) => ({
 	icon:'terminal',
     callback: async () => {
 		
-		let editor = (plugin.app as any).workspace.getActiveFileView()?.editor;
+		let editor = activeFileView(plugin.app)?.editor;
 		if(!editor){return;}
 
 		let ids :{[key:string]:string} = {}
-		Object.keys(
-			(plugin.app as any).commands.commands
-		).forEach((x)=>{
-			ids[(plugin.app as any).commands.commands[x].name]=x;}
+		const commands = obsidianApp(plugin.app).commands.commands;
+		Object.keys(commands).forEach((x)=>{
+			ids[commands[x].name]=x;}
 		)
 
 		let names = Object.keys(ids)
@@ -99,6 +101,7 @@ export const cmd_open_note_in_view = (plugin: NoteChainPlugin) => ({
 	icon:'Panels Top Left',
     callback: async () => {
 		let note = await plugin.chain.sugguster_note(null,0,false,true);
+		if(!note){return}
 		if(typeof note === 'string'){
 			await plugin.chain.open_note_in_view(note);
 		}else{
@@ -118,7 +121,7 @@ export const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
 
 		let flag = false;
 		let ctx2 = await plugin.easyapi.editor.get_current_section();
-			if(ctx2){
+			if(typeof ctx2 === 'string'){
 			ctx2 = ctx2.replace('```js\n','```js tpl\n');
 			if (/```js\s*(\/\/)?(templater|tpl)\n/.test(ctx2)){
 				new Notice(`执行当前脚本块：${cfile.basename}`)
@@ -127,7 +130,7 @@ export const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
 				if(!rsp){
 					rsp = 'Success but no return';
 				}
-				new Notice(rsp);
+				new Notice(typeof rsp === 'string' ? rsp : Array.isArray(rsp) ? rsp.map(String).join('\n') : String(rsp));
 				return;
 			}
 		}
@@ -152,10 +155,17 @@ export const cmd_execut_current_note  = (plugin: NoteChainPlugin) => ({
 				await plugin.app.vault.adapter.write(cpath,css);
 				
 				// 在配置文件中添加 css
-				let config = await (plugin.app.vault as any).readJson(plugin.app.vault.configDir+'/'+'appearance.json');
-				if(!config['enabledCssSnippets'].contains(cfile.basename)){
-					config['enabledCssSnippets'].push(cfile.basename);
-					await (plugin.app.vault as any).writeJson(plugin.app.vault.configDir+'/'+'appearance.json',config);
+				const appearancePath = plugin.app.vault.configDir+'/'+'appearance.json';
+				const vj = vaultJson(plugin.app);
+				const config = vj.readJson ? await vj.readJson(appearancePath) : undefined;
+				if (isRecord(config) && Array.isArray(config['enabledCssSnippets'])) {
+					const snippets = config['enabledCssSnippets'];
+					if (!snippets.includes(cfile.basename)) {
+						snippets.push(cfile.basename);
+						if (vj.writeJson) {
+							await vj.writeJson(appearancePath, config);
+						}
+					}
 				}
 				void plugin.utils.toogle_note_css(plugin.app,document,cfile.basename,false)
 			}

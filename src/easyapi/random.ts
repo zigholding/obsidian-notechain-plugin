@@ -99,7 +99,7 @@ export class Random {
     }
 
     // 从数组中随机获取 N 个元素
-    random_elements(arr:any[], n:number ) {
+    random_elements<T>(arr: T[], n: number): T[] {
         // 复制数组避免修改原数组
         const shuffled = [...arr];
         for (let i = shuffled.length - 1; i > 0; i--) {
@@ -125,7 +125,7 @@ export class Random {
 
     random_daily_notes(n=3,before_today=true,filter=null){
 		let t = moment(moment().format('YYYY-MM-DD') )
-		let dnote = this.ea.nc.chain.get_last_daily_note()
+		let dnote = this.ea.nc?.chain.get_last_daily_note()
 		if(dnote){
 			t = moment(dnote.basename)
 		}

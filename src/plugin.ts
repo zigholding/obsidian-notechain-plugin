@@ -16,8 +16,8 @@ import { Strings } from './NoteChain/strings';
 import { WordCount } from './WordCount';
 import { MermaidGraph, CanvasGraph } from './graph';
 import { NCSettingTab } from './setting';
-import { NCSettings_DEFAULT } from './NoteChain/setting';
-import { WebViewLLMSettings_DEFAULT } from './WebViewerLLM/setting';
+import { NCSettings, NCSettings_DEFAULT } from './NoteChain/setting';
+import { WebviewLLMSettings, WebViewLLMSettings_DEFAULT } from './WebViewerLLM/setting';
 import { addCommands } from './commands';
 import { addEvents } from './events';
 import { EasyAPI } from './easyapi/easyapi';
@@ -27,9 +27,17 @@ import { getWebViewerPartition, installWebviewTlsTrust } from './server/tlsWebvi
 import { DailyJob } from './daily_job';
 import { WebViewerLLMModule } from './WebViewerLLM/WebViewerLLMModule';
 import { moveSelectedNotesAsNext } from './NoteChain/chainInsert';
+import { noteChainPlugin, obsidianApp, vaultBasePath } from './obsidian-app';
+import * as ncUtils from './utils';
+import * as obsidianApi from 'obsidian';
+
+export interface NoteChainPluginData {
+	notechain: NCSettings;
+	webviewllm: WebviewLLMSettings;
+}
 
 export default class NoteChainPlugin extends Plugin {
-	settings!: any;
+	settings!: NoteChainPluginData;
 	chain!: NoteChain;
 	textarea!: NCTextarea;
 	explorer!: NCFileExplorer;
@@ -41,9 +49,9 @@ export default class NoteChainPlugin extends Plugin {
 	strings!: Strings;
 	status!: string;
 	debug!: boolean;
-	utils!: any;
-	timerId: any = null;
-	ob!: any;
+	utils!: typeof ncUtils;
+	timerId: number | NodeJS.Timeout | null = null;
+	ob!: typeof obsidianApi;
 	easyapi!: EasyAPI;
 	httpServer: HTTPServer | null = null;
 	_autoNotechainTimers: Map<string, number> | null = null;
@@ -68,19 +76,20 @@ export default class NoteChainPlugin extends Plugin {
 	}
 
 	async _after_loading_() {
-		while (!(this.app as any).plugins?.plugins['note-chain']) {
+		while (!obsidianApp(this.app).plugins?.plugins['note-chain']) {
 			await new Promise(resolve => setTimeout(resolve, 100)); // 等待100ms再检查
 		}
 
-		void (this.app as any).commands.executeCommandById(
+		void obsidianApp(this.app).commands.executeCommandById(
 			"dataview:dataview-force-refresh-views"
 		);
 
-		let target = await (this.app as any).plugins.getPlugin("obsidian-tasks-plugin");
-		target && void target.cache.notifySubscribers();
+		let target = await obsidianApp(this.app).plugins.getPlugin("obsidian-tasks-plugin") as {
+			cache?: { notifySubscribers: () => unknown };
+		} | null;
+		target && void target.cache?.notifySubscribers();
 
-		// new Notice('Note Chain is ready!',3000)
-		return (this.app as any).plugins?.plugins['note-chain']
+		return noteChainPlugin(this.app);
 	}
 
 	async _onload_() {
@@ -90,8 +99,8 @@ export default class NoteChainPlugin extends Plugin {
 
 		this.easyapi = new EasyAPI(this.app);
 
-		this.utils = require('./utils');
-		this.ob = require('obsidian');
+		this.utils = ncUtils;
+		this.ob = obsidianApi;
 		
 		this.chain = new NoteChain(
 			this,
@@ -107,7 +116,7 @@ export default class NoteChainPlugin extends Plugin {
 		// HTTP/HTTPS 仅桌面端（依赖 Node crypto / fs；selfsigned 在 mobile 会因 webcrypto 崩溃）
 		if (Platform.isDesktopApp) {
 			const nodePath = require("path") as typeof import("path");
-			const vaultRoot = (this.app.vault.adapter as any).basePath as string;
+			const vaultRoot = vaultBasePath(this.app);
 			const configDirAbs = nodePath.join(vaultRoot, this.app.vault.configDir);
 			this.httpServer = new HTTPServer(
 				this.app,
@@ -180,18 +189,20 @@ export default class NoteChainPlugin extends Plugin {
 		await this.explorer.sort();
 	}
 
-	async ufunc_on_file_open(file: TFile) {
+	async ufunc_on_file_open(file: TFile | null) {
 		if (file?.basename == 'note-chain-templater-target') {
 			return;
 		}
 		if (this.settings.notechain.refreshDataView) {
-			void (this.app as any).commands.executeCommandById(
+			void obsidianApp(this.app).commands.executeCommandById(
 				"dataview:dataview-force-refresh-views"
 			);
 		}
 		if (this.settings.notechain.refreshTasks) {
-			let target = await (this.app as any).plugins.getPlugin("obsidian-tasks-plugin");
-			target && void target.cache.notifySubscribers();
+			let target = await obsidianApp(this.app).plugins.getPlugin("obsidian-tasks-plugin") as {
+				cache?: { notifySubscribers: () => unknown };
+			} | null;
+			target && void target.cache?.notifySubscribers();
 		}
 	}
 
@@ -274,17 +285,22 @@ export default class NoteChainPlugin extends Plugin {
 		if (tfile == null) { return; }
 		let notes = this.easyapi.file.get_inlinks(tfile);
 		if (notes.length) {
+			let op: string | [string, string] = mode;
 			if (mode === 'suggester') {
-				mode = await this.easyapi.dialog_suggest(
+				const picked = await this.easyapi.dialog_suggest(
 					["delete links", 'replace links', "delete paragraph with links",],
-					[['link', 'del'], ['link', 'rep'], ['para', 'del']]
+					[['link', 'del'], ['link', 'rep'], ['para', 'del']] as [string, string][]
 				);
+				if (!picked) { return; }
+				op = picked;
 			}
-			let reg = this.easyapi.editor.regexp_link(tfile, mode[0]);
+			const kind = op[0];
+			const action = op[1];
+			let reg = this.easyapi.editor.regexp_link(tfile, kind);
 			if (reg) {
 				for (let note of notes) {
 					let target;
-					if (mode[1] === 'rep') {
+					if (action === 'rep') {
 						target = tfile.basename;
 					} else {
 						target = ''
@@ -300,8 +316,8 @@ export default class NoteChainPlugin extends Plugin {
 		let selector = document.querySelectorAll(
 			'.tree-item-self.is-selected'
 		)
-		let items = Object.values(selector).map((x: any) => x.dataset?.path)
-		let tfiles = items.map(x => this.easyapi.file.get_tfile(x)).filter(x => x.extension == 'md')
+		let items = Object.values(selector).map((x) => (x as HTMLElement).dataset?.path)
+		let tfiles = items.map(x => this.easyapi.file.get_tfile(x ?? null)).filter((x): x is TFile => x instanceof TFile && x.extension == 'md')
 		if (tfiles.length > 1) {
 			await moveSelectedNotesAsNext(this, tfiles, { alignConfluenceTab: false });
 			return
@@ -309,11 +325,12 @@ export default class NoteChainPlugin extends Plugin {
 
 		let curr = this.chain.current_note;
 		if (curr == null) { return; }
-		let smode = (this.strings as any)[this.settings.notechain.suggesterNotesMode];
+		const modeKey = this.settings.notechain.suggesterNotesMode as keyof Strings;
+		let smode = this.strings[modeKey] as unknown as string;
 		let notes = await this.chain.suggester_notes(curr, false, smode);
 		if (!notes) { return }
 		notes = this.chain.sort_tfiles(notes, ['mtime', 'x']);
-		notes = this.chain.sort_tfiles_by_chain(notes);
+		notes = this.chain.sort_tfiles_by_chain(notes).filter((f): f is TFile => f instanceof TFile);
 		//notes = notes.filter(f=>f!=curr);
 		//为0时也显示，否则以为是bug
 		//if(notes.length==0){return;}
@@ -349,14 +366,14 @@ export default class NoteChainPlugin extends Plugin {
 			await this.editor.set_frontmatter_align_file(
 				note,
 				curr,
-				this.settings.field_of_confluence_tab_format
+				this.settings.notechain.field_of_confluence_tab_format
 			)
 		} else if (mode === this.strings.item_insert_node_after) {
 			await this.chain.chain_insert_node_after(curr, note);
 			await this.editor.set_frontmatter_align_file(
 				note,
 				curr,
-				this.settings.field_of_confluence_tab_format
+				this.settings.notechain.field_of_confluence_tab_format
 			)
 		} else if (mode === this.strings.item_insert_folder_after) {
 			await this.chain.chain_insert_folder_after(curr, note);
@@ -389,7 +406,7 @@ export default class NoteChainPlugin extends Plugin {
 		let notes = await this.chain.suggester_notes(curr, false)
 
 		notes = this.chain.sort_tfiles(notes, ['mtime', 'x']);
-		notes = this.chain.sort_tfiles_by_chain(notes);
+		notes = this.chain.sort_tfiles_by_chain(notes).filter((f): f is TFile => f instanceof TFile);
 		if (notes.length > 0) {
 			let note = await this.easyapi.dialog_suggest(
 				this.utils.array_prefix_id(

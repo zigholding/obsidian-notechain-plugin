@@ -1,5 +1,6 @@
 import { MCP_TEST_HTML } from './mcpTestPageHtml';
 import type { MCPToolsListService } from './mcpToolsList';
+import type { HttpReq, HttpRes } from '../http-types';
 
 export class MCPSkillAndTestPages {
     constructor(
@@ -8,7 +9,7 @@ export class MCPSkillAndTestPages {
     ) {}
 
     /** 提供 MCP call_tool 测试页面，浏览器访问 /mcp/test 即可 */
-    async handleMCPTestPage(req: any, res: any) {
+    async handleMCPTestPage(req: HttpReq, res: HttpRes) {
         const host = req.headers.host || `127.0.0.1:${this.getPort()}`;
         const baseUrl = `https://${host}`;
         const html = MCP_TEST_HTML.replace('__BASE_URL__', baseUrl);
@@ -21,7 +22,7 @@ export class MCPSkillAndTestPages {
      * @param baseUrl 例如 https://127.0.0.1:3000
      * @param tools 可选，当前支持的工具列表；传入时会生成表格并写入「先用表格、不够再 list_tools、找不到则告知无法完成」的流程说明
      */
-    getMCPSkillMarkdown(baseUrl: string, tools?: any[]): string {
+    getMCPSkillMarkdown(baseUrl: string, tools?: unknown[]): string {
         const base = baseUrl.replace(/\/$/, '');
         const toolsTable =
             tools && tools.length > 0
@@ -30,18 +31,20 @@ export class MCPSkillAndTestPages {
 
 | Name | Description | inputSchema |
 |------|-------------|-------------|
-${tools.map((t) => {
-            const name = (t.name ?? '').replace(/\|/g, '\\|');
-            const desc = (t.description ?? '').replace(/\n/g, ' ').replace(/\|/g, '\\|').trim();
+${tools.map((tool) => {
+            const t = tool as { name?: string; description?: string; inputSchema?: unknown };
+            const name = String(t.name ?? '').replace(/\|/g, '\\|');
+            const desc = String(t.description ?? '').replace(/\n/g, ' ').replace(/\|/g, '\\|').trim();
             const schemaStr = typeof t.inputSchema === 'object'
                 ? JSON.stringify(t.inputSchema).replace(/\n/g, ' ').replace(/\|/g, '\\|')
-                : (t.inputSchema ?? '{}').replace(/\n/g, ' ').replace(/\|/g, '\\|');
+                : String(t.inputSchema ?? '{}').replace(/\n/g, ' ').replace(/\|/g, '\\|');
             return `| ${name} | ${desc || '-'} | \`${schemaStr}\` |`;
         }).join('\n')}
 
 ### Full tool definitions (name, description, inputSchema)
 
-${tools.map((t) => {
+${tools.map((tool) => {
+            const t = tool as { name?: string; description?: string; inputSchema?: unknown };
             const name = t.name ?? '';
             const desc = t.description ?? '';
             const schema = t.inputSchema != null ? (typeof t.inputSchema === 'object' ? JSON.stringify(t.inputSchema, null, 2) : String(t.inputSchema)) : '{}';
@@ -123,7 +126,7 @@ Open in browser: \`${base}/mcp/test\` to try listing and calling tools from a fo
     }
 
     /** GET /mcp/skill 返回 SKILL.md 内容，便于 Agent 或用户复制 */
-    async handleMCPSkill(req: any, res: any) {
+    async handleMCPSkill(req: HttpReq, res: HttpRes) {
         const host = req.headers.host || `127.0.0.1:${this.getPort()}`;
         const baseUrl = `https://${host}`;
         const markdown = await this.getMCPSkillMarkdownAsync(baseUrl);

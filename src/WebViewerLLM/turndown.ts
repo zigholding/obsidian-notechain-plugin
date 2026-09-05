@@ -3,12 +3,13 @@ import { Notice, TFile } from 'obsidian';
 import type NoteChainPlugin from '../plugin';
 import { WebViewLLMSettings_DEFAULT } from './setting';
 import type { WebViewerTurndownStylesNormalized } from './WebViewerLLMModule';
+import type { WebViewerLLMModule } from './WebViewerLLMModule';
+
 
 export class WebViewerLLMTurndown {
-	/** Host WebViewerLLMModule fields/methods (filled by applyMixins). */
-	[key: string]: any;
+	plugin!: NoteChainPlugin;
 
-	async get_turndown() {
+	async get_turndown(this: WebViewerLLMModule) {
 		const TurndownService = (await import('turndown')).default;
 		const { gfm } = await import('turndown-plugin-gfm');
 		const turndown = new TurndownService({
@@ -24,7 +25,7 @@ export class WebViewerLLMTurndown {
 	}
 
 	get turndown_styles(): WebViewerTurndownStylesNormalized {
-		const yamljs = this.easyapi.editor.yamljs;
+		const yamljs = this.plugin.easyapi.editor.yamljs;
 		const parseDefault = () =>
 			yamljs.load(WebViewLLMSettings_DEFAULT.turndown_styles) as Record<string, unknown>;
 
@@ -65,7 +66,7 @@ export class WebViewerLLMTurndown {
 		return config as unknown as WebViewerTurndownStylesNormalized;
 	}
 
-	async html_to_markdown(html: string): Promise<string> {
+	async html_to_markdown(this: WebViewerLLMModule, html: string): Promise<string> {
 		const turndown_styles = this.turndown_styles;
 
 		if (Array.isArray(turndown_styles['pre-process'])) {
@@ -109,7 +110,7 @@ export class WebViewerLLMTurndown {
 			replacement: (_content: string, node: Element) => {
 				const rows = [];
 				const headers = Array.from(node.querySelectorAll('th')).map((th) =>
-					(th as any).textContent.replace(/\s+/g, ' ').trim()
+					(th.textContent ?? '').replace(/\s+/g, ' ').trim()
 				);
 				if (headers.length > 0) {
 					rows.push(`| ${headers.join(' | ')} |`);
@@ -118,7 +119,7 @@ export class WebViewerLLMTurndown {
 
 				node.querySelectorAll('tr').forEach((tr: Element) => {
 					const cols = Array.from(tr.querySelectorAll('td')).map((td) =>
-						(td as any).textContent.replace(/\s+/g, ' ').trim()
+						(td.textContent ?? '').replace(/\s+/g, ' ').trim()
 					);
 					if (cols.length > 0) {
 						rows.push(`| ${cols.join(' | ')} |`);
@@ -185,7 +186,7 @@ export class WebViewerLLMTurndown {
 
 		turndown.addRule('customBlockquote', {
 			filter: 'blockquote',
-			replacement: (content: any) => `> ${content.trim()}\n\n`,
+			replacement: (content: string) => `> ${content.trim()}\n\n`,
 		});
 
 		if (Array.isArray(turndown_styles['script'])) {
