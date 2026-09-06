@@ -64,8 +64,8 @@ export class WordCount{
             selection?: string,
             sanchor?:EditorPosition,
             shead?:EditorPosition,
-            scrollInfo?: { left: number, top: number }
         } = {};
+        let scrollInfo: { left: number, top: number } | undefined;
     
         if (activeView && activeView.file === tfile) {
             let editor = activeView.editor;
@@ -74,7 +74,8 @@ export class WordCount{
                 editorState.selection = editor.getSelection();
                 editorState.sanchor = editor.getCursor('anchor');
                 editorState.shead = editor.getCursor('head');
-                editorState.scrollInfo = editor.getScrollInfo();
+                // Capture viewport before frontmatter write; setCursor later must not steal it back.
+                scrollInfo = editor.getScrollInfo();
             }
         }
         let aline = editorState?.cursor?.line !== undefined
@@ -111,21 +112,44 @@ export class WordCount{
                 }
             }
         )
-        // Restore editor state if it was saved
+        // Restore cursor/selection if frontmatter write moved them, but keep the pre-write viewport.
+        // setCursor/setSelection scroll the cursor into view; re-apply scroll after that (incl. deferred).
         if (activeView && activeView.file === tfile) {
             let editor = activeView.editor;
             if (editor) {
                 if (editorState.selection && editorState.sanchor && editorState.shead) {
-                    try {
-                        editor.setSelection(editorState.sanchor,editorState.shead);
-                    } catch (error) {
-                        new Notice(`Error setting selection:${error}`,3000);
+                    const anchor = editor.getCursor('anchor');
+                    const head = editor.getCursor('head');
+                    if (
+                        anchor.line !== editorState.sanchor.line ||
+                        anchor.ch !== editorState.sanchor.ch ||
+                        head.line !== editorState.shead.line ||
+                        head.ch !== editorState.shead.ch
+                    ) {
+                        try {
+                            editor.setSelection(editorState.sanchor,editorState.shead);
+                        } catch (error) {
+                            new Notice(`Error setting selection:${error}`,3000);
+                        }
                     }
                 }else if (editorState.cursor) {
-                    editor.setCursor(editorState.cursor);
+                    const cur = editor.getCursor();
+                    if (
+                        cur.line !== editorState.cursor.line ||
+                        cur.ch !== editorState.cursor.ch
+                    ) {
+                        editor.setCursor(editorState.cursor);
+                    }
                 }
-                if (editorState.scrollInfo) {
-                    editor.scrollTo(editorState.scrollInfo.left, editorState.scrollInfo.top);
+                if (scrollInfo) {
+                    const { left, top } = scrollInfo;
+                    const applyScroll = () => {
+                        if (activeView.file === tfile) {
+                            editor.scrollTo(left, top);
+                        }
+                    };
+                    applyScroll();
+                    window.setTimeout(applyScroll, 0);
                 }
             }
         }
