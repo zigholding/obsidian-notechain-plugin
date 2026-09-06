@@ -5,13 +5,15 @@ import {
 import { isRecord } from './ts-helpers';
 import NoteChainPlugin from "./plugin";
 
+/** Obsidian types `moment` as a non-callable namespace; use `.unix` for "now". */
+const momentNow = () => moment.unix(Date.now() / 1000);
 
 export class WordCount{
 	app:App;
     plugin:NoteChainPlugin;
 	nretry:number;
     timerId: number | NodeJS.Timeout | null = null;
-    curr_active_file:TFile;
+    curr_active_file: TFile | null = null;
     events: EventRef[];
 
 	constructor(plugin:NoteChainPlugin,app:App){
@@ -89,7 +91,7 @@ export class WordCount{
                 if(fm[key]==null){
                     if(val>=0){
                         fm[key] = {};
-                        if(mtime== moment().format('YYYY-MM-DD') && mtime!=moment.unix(tfile.stat.ctime/1000).format('YYYY-MM-DD')){
+                        if(mtime== momentNow().format('YYYY-MM-DD') && mtime!=moment.unix(tfile.stat.ctime/1000).format('YYYY-MM-DD')){
                             fm[key][t.add(-1,'days').format('YYYY-MM-DD')] = val;
                         }else{
                             fm[key][mtime] = val;
@@ -129,7 +131,7 @@ export class WordCount{
         }
     }
 
-    get_new_words(tfile:TFile,day=moment().format('YYYY-MM-DD')){
+    get_new_words(tfile:TFile,day=momentNow().format('YYYY-MM-DD')){
         let meta = this.app.metadataCache.getFileCache(tfile);
         let values = meta?.frontmatter?.words;
         if(isRecord(values)){
@@ -282,12 +284,12 @@ export class WordCount{
         if (typeof day === 'string') {
             const s = day.trim().toLowerCase();
             if (s === 'yesterday') {
-                day = moment().add(-1, 'days').format('YYYY-MM-DD');
+                day = momentNow().add(-1, 'days').format('YYYY-MM-DD');
             } else {
                 const m = s.match(/^today([+-]\d+)?$/);
                 if (m) {
                     const offset = m[1] ? parseInt(m[1], 10) : 0;
-                    day = moment().add(offset, 'days').format('YYYY-MM-DD');
+                    day = momentNow().add(offset, 'days').format('YYYY-MM-DD');
                 }
             }
         }
@@ -310,10 +312,10 @@ export class WordCount{
     sum_words_of_tifles(files:Array<TFile>|null=null, begt:number|string=10, endt:number|string=0) {
         const wordMaps = this.get_words_of_tfiles(files)
         if(typeof(begt)=='number'){
-            begt = moment().add(-begt,'days').format('YYYY-MM-DD')
+            begt = momentNow().add(-begt,'days').format('YYYY-MM-DD')
         }
         if(typeof(endt)=='number'){
-            endt = moment().add(-endt,'days').format('YYYY-MM-DD')
+            endt = momentNow().add(-endt,'days').format('YYYY-MM-DD')
         }
         
         let startDate = new Date(begt);

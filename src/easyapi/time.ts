@@ -1,7 +1,15 @@
-import { moment,App } from 'obsidian';
+import { moment as momentImport, App } from 'obsidian';
 import { EasyAPI } from "./easyapi";
 
-type Moment = moment.Moment;
+type Moment = ReturnType<typeof momentImport.unix>;
+
+/** Obsidian types `moment` as a non-callable namespace; runtime is the factory. */
+const momentFn = momentImport as unknown as typeof momentImport & {
+	(): Moment;
+	(inp?: string | number | Date | Moment | null, strict?: boolean): Moment;
+	(inp?: string | number | Date | Moment | null, format?: string | string[], strict?: boolean): Moment;
+	(inp?: string | number | Date | Moment | null, format?: string | string[], language?: string, strict?: boolean): Moment;
+};
 
 export class Time{
     app:App;
@@ -11,26 +19,45 @@ export class Time{
         this.ea = ea;
     }
 
+	moment(t:string|number|Date|Moment|null):Moment{
+		if(!t){
+			return momentFn.unix(Date.now() / 1000);
+		}
+		if(typeof t === 'string'){
+			return momentFn(t);
+		}
+		if(typeof t === 'number'){
+			return momentFn.unix(t);
+		}
+		if(t instanceof Date){
+			return momentFn(t);
+		}
+		if(momentFn.isMoment(t)){
+			return t;
+		}
+		return momentFn.unix(Date.now() / 1000);
+	}
+
 	get today(){
-		let t = moment().format('YYYY-MM-DD');
-		return moment(t)
+		let t = momentFn().format('YYYY-MM-DD');
+		return momentFn(t)
 	}
 
 	as_date(t:Moment){
 		let xt = t.format('YYYY-MM-DD');
-		return moment(xt)
+		return momentFn(xt)
 	}
 	
 	/**
 	 * 获取相对于基准日期的偏移月份的指定日期
 	 * @param {number} dayIndex - 日期索引（正数表示第几天，负数表示倒数第几天）
 	 * @param {number} monthOffset - 月份偏移量（正数为未来月份，负数为过去月份）
-	 * @param {Date|string|moment.Moment} baseDate - 基准日期，默认为当日
+	 * @param {Date|string|momentFn.Moment} baseDate - 基准日期，默认为当日
 	 * @returns {moment.Moment} 计算后的目标日期
 	 */
 	relative_month_day(dayIndex:number, monthOffset:number=0, baseDate=this.today) {
 	    // 创建基准日期的moment对象
-	    let baseMoment = moment(baseDate).clone();
+	    let baseMoment = momentFn(baseDate).clone();
 	    
 	    // 计算目标月份
 	    let targetMoment = baseMoment.clone().add(monthOffset, 'months');
@@ -50,7 +77,7 @@ export class Time{
 	 * 获取相对于基准日期的偏移周数的指定星期几
 	 * @param {number} dayIndex - 星期索引（0-6，0为周日，1为周一，依此类推；或使用负数表示倒数）
 	 * @param {number} weekOffset - 周数偏移量（正数为未来周数，负数为过去周数）
-	 * @param {Date|string|moment.Moment} baseDate - 基准日期，默认为当日
+	 * @param {Date|string|momentFn.Moment} baseDate - 基准日期，默认为当日
 	 * @returns {moment.Moment} 计算后的目标日期
 	 * 
 	 * @example
@@ -61,7 +88,7 @@ export class Time{
 	 */
 	relative_week_day(dayIndex:number, weekOffset:number = 0, baseDate = this.today) {
 	    // 创建基准日期的moment对象并克隆（避免污染原对象）
-	    let baseMoment = moment(baseDate).clone();
+	    let baseMoment = momentFn(baseDate).clone();
 	    
 	    // 处理周偏移：先移动到目标周的开始（周一）
 	    let targetMoment = baseMoment.add(weekOffset, 'weeks');
@@ -254,13 +281,13 @@ export class Time{
 	
 	parse_time(st:string|Moment, date:Moment|string = this.today,nearest=true, base = 5) {
 		if(!st){return null}
-		if(moment.isMoment(st)){return this.snapTimeToBase(st, base)}
+		if(momentFn.isMoment(st)){return this.snapTimeToBase(st, base)}
 
 		if (typeof st === 'string' && st.trim() === '现在') {
-			return this.snapTimeToBase(moment(), base);
+			return this.snapTimeToBase(momentFn(), base);
 		}
 
-		if(moment.isMoment(date)){
+		if(momentFn.isMoment(date)){
 			date = date.format('YYYY-MM-DD');
 		}
 
@@ -269,7 +296,7 @@ export class Time{
 			const hour = parseInt(digitClock[1], 10);
 			const minute = parseInt(digitClock[2], 10);
 			if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
-				const t = moment(
+				const t = momentFn(
 					`${date} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`,
 					"YYYY-MM-DD HH:mm:ss"
 				);
@@ -299,7 +326,7 @@ export class Time{
 				}
 			}
 			hour %= 24;
-			let t = moment(`${date} ${hour}:${minute}`, 'YYYY-MM-DD HH:mm');
+			let t = momentFn(`${date} ${hour}:${minute}`, 'YYYY-MM-DD HH:mm');
 			if (t.isValid()) {
 				return this.snapTimeToBase(t, base);
 			}
@@ -327,7 +354,7 @@ export class Time{
 			} else if (['晚上'].includes(period)){
 				hour = hour >=5 && hour<12? hour+12:hour;
 			}else if (!period && nearest && hour<=12) {
-				let t = moment();
+				let t = momentFn();
 				let a = t.hour()*60+t.minutes();
 				let b = hour*60+minute;
 				if(a>b && (a-b)>(b-a+12*60)){
@@ -336,7 +363,7 @@ export class Time{
 			}
 	
 			hour %= 24;
-			let t = moment(`${date} ${hour}:${minute}`, "YYYY-MM-DD HH:mm");
+			let t = momentFn(`${date} ${hour}:${minute}`, "YYYY-MM-DD HH:mm");
 			return this.snapTimeToBase(t, base);
 		}
 		return null
@@ -377,7 +404,7 @@ export class Time{
 			if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
 				continue;
 			}
-			const t = moment(
+			const t = momentFn(
 				`${dateStr} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`,
 				"YYYY-MM-DD HH:mm:ss"
 			);
@@ -412,7 +439,7 @@ export class Time{
 				}
 			}
 			hour %= 24;
-			const snapped = this.snapTimeToBase(moment(`${dateStr} ${hour}:${minute}`, 'YYYY-MM-DD HH:mm'), base);
+			const snapped = this.snapTimeToBase(momentFn(`${dateStr} ${hour}:${minute}`, 'YYYY-MM-DD HH:mm'), base);
 			const timeStr = `${String(snapped.hour()).padStart(2, '0')}:${String(snapped.minute()).padStart(2, '0')}`;
 			const start = mm.index ?? 0;
 			const h: Hit = { start, end: start + mm[0].length, timeStr };
@@ -449,7 +476,7 @@ export class Time{
 					hour += 12;
 				}
 			} else if (!period && nearest && hour <= 12) {
-				const now = moment();
+				const now = momentFn();
 				const a = now.hour() * 60 + now.minute();
 				const b = hour * 60 + minute;
 				if (a > b && a - b > b - a + 12 * 60) {
@@ -458,7 +485,7 @@ export class Time{
 			}
 
 			hour %= 24;
-			const snapped = this.snapTimeToBase(moment(`${dateStr} ${hour}:${minute}`, 'YYYY-MM-DD HH:mm'), base);
+			const snapped = this.snapTimeToBase(momentFn(`${dateStr} ${hour}:${minute}`, 'YYYY-MM-DD HH:mm'), base);
 			const timeStr = `${String(snapped.hour()).padStart(2, '0')}:${String(snapped.minute()).padStart(2, '0')}`;
 			const start = cm.index ?? text.indexOf(cm[0]);
 			const h: Hit = {
@@ -473,7 +500,7 @@ export class Time{
 
 		const nowIdx = text.indexOf('现在');
 		if (nowIdx !== -1) {
-			const snapped = this.snapTimeToBase(moment(), base);
+			const snapped = this.snapTimeToBase(momentFn(), base);
 			const h: Hit = {
 				start: nowIdx,
 				end: nowIdx + 2,
@@ -528,7 +555,7 @@ export class Time{
 		// =========================
 		const dateBaseMoment =
 			baseDate != null && String(baseDate).trim() !== ""
-				? this.as_date(moment(baseDate))
+				? this.as_date(momentFn(baseDate))
 				: this.today;
 		let date = dateBaseMoment.format("YYYY-MM-DD");
 		let rest = raw;
@@ -634,7 +661,7 @@ export class Time{
 		let et = null;
 
 		if (recentEndWindow && !Number.isNaN(duration)) {
-			et = this.snapTimeToBase(moment(), base);
+			et = this.snapTimeToBase(momentFn(), base);
 			st = et.clone().subtract(duration, "minutes");
 			startTime = st.format("HH:mm");
 		} else {
@@ -684,9 +711,9 @@ export class Time{
 		if(!_st){return []}
         st = _st;
         let timeList = [];
-        let t = this.parse_time(moment().format('HH:mm'));
+        let t = this.parse_time(momentFn().format('HH:mm'));
         if (!is_today) {
-            t = this.parse_time(moment().format('23:59'));
+            t = this.parse_time(momentFn().format('23:59'));
         }
 		if(!t){return []}
         for (let hour = st.hour(); hour <= t.hour(); hour++) {
@@ -725,7 +752,7 @@ export class Time{
         if (jobs.length == 0) {
             return this.parse_time(st)
         } else {
-            return moment.unix(
+            return momentFn.unix(
                 Math.max(...jobs.map(x => x.et.valueOf())) / 1000
             )
         }
