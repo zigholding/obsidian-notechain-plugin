@@ -5,7 +5,6 @@ import {
 	TAbstractFile,
 	TFile, TFolder,
 	WorkspaceLeaf,
-	moment
 } from 'obsidian';
 
 import { NoteContentModal } from '../NCModal';
@@ -575,7 +574,7 @@ export class NoteChainNavigation {
 		let field = await this.plugin.easyapi.dialog_suggest(
 			Object.keys(kv),
 			Object.values(kv)
-		);s
+		);
 		if (field == null) { return []; }
 		if (field == 'chain') {
 			tfiles = this.sort_tfiles(tfiles, 'name');
