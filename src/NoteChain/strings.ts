@@ -180,7 +180,7 @@ export class Strings{
         if(this.language=='zh'){
             return '所选笔记设置属性'
         }else{
-            return "Set fronmatter for selected notes";
+            return "Set frontmatter for selected notes";
         }
     }
 
