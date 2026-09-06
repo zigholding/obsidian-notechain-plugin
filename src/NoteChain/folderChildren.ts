@@ -7,6 +7,51 @@ import type NoteChainPlugin from '../plugin';
 import type { NoteChain } from '../NoteChain';
 import { asFileExplorerView } from '../obsidian-app';
 
+const DIGIT_CHUNK = /(\d+)/;
+
+function isDigitToken(s: string): boolean {
+	if (s.length === 0) return false;
+	for (let i = 0; i < s.length; i++) {
+		const c = s.charCodeAt(i);
+		if (c < 48 || c > 57) return false;
+	}
+	return true;
+}
+
+function stripLeadingZeros(s: string): string {
+	let i = 0;
+	while (i < s.length - 1 && s.charAt(i) === '0') i++;
+	return s.slice(i);
+}
+
+function compareDigitTokens(sa: string, sb: string): number {
+	const a = stripLeadingZeros(sa);
+	const b = stripLeadingZeros(sb);
+	if (a.length !== b.length) return a.length - b.length;
+	if (a !== b) return a < b ? -1 : 1;
+	return sa.length - sb.length;
+}
+
+/** Natural order: same surrounding text, compare extracted numbers (1, 2, 10 not 1, 10, 2). */
+export function compareFileNamesNumeric(a: string, b: string): number {
+	if (a === b) return 0;
+	const pa = a.split(DIGIT_CHUNK);
+	const pb = b.split(DIGIT_CHUNK);
+	const n = Math.max(pa.length, pb.length);
+	for (let i = 0; i < n; i++) {
+		const sa = pa[i] ?? '';
+		const sb = pb[i] ?? '';
+		if (sa === sb) continue;
+		if (isDigitToken(sa) && isDigitToken(sb)) {
+			const c = compareDigitTokens(sa, sb);
+			if (c !== 0) return c;
+			continue;
+		}
+		return sa.localeCompare(sb);
+	}
+	return 0;
+}
+
 export class NoteChainFolderChildren {
 	plugin!: NoteChainPlugin;
 	app!: App;
@@ -110,6 +155,10 @@ export class NoteChainFolderChildren {
 			if (field === 'name' || field === 'alphabetical') {
 				return files.sort(
 					(a, b) => (a.name.localeCompare(b.name))
+				);
+			} else if (field === 'nameNumeric' || field === 'name-numeric') {
+				return files.sort(
+					(a, b) => compareFileNamesNumeric(a.name, b.name)
 				);
 			} else if (field === 'mtime' || field === 'byModifiedTime') {
 				return files.sort(

@@ -330,6 +330,22 @@ export class Strings{
         }
     }
 
+    get sort_suggester_name_numeric(){
+        if(this.language=='zh'){
+            return '文件名数字 (1, 2, 10)'
+        }else{
+            return 'name (1, 2, 10)';
+        }
+    }
+
+    get sort_suggester_name_numeric_rev(){
+        if(this.language=='zh'){
+            return '文件名数字 (10, 2, 1)'
+        }else{
+            return 'name (10, 2, 1)';
+        }
+    }
+
     get create_new_note(){
         if(this.language=='zh'){
             return '创建新笔记'

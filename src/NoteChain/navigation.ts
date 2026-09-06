@@ -200,7 +200,7 @@ export class NoteChainNavigation {
 			}
 		}
 
-		let t = moment();
+		let t = this.plugin.easyapi.time.moment(null);
 		for (let i = 0; i < 20; i++) {
 			let xt = t.clone().add(-i, 'days')
 			// 库中所有文件
@@ -560,19 +560,22 @@ export class NoteChainNavigation {
 	async suggester_sort(this: NoteChain, tfiles: Array<TFile>) {
 		if (!tfiles) { return []; }
 		if (tfiles.length == 0) { return [] };
-		let kv = {
+		const s = this.plugin.strings;
+		const kv: Record<string, string | [string, string]> = {
 			'chain': 'chain',
 			'name (a to z)': 'name',
+			[s.sort_suggester_name_numeric]: 'nameNumeric',
 			'ctime (old to new)': 'ctime',
 			'mtime (old to new)': 'mtime',
 			'name (z to a)': ['name', 'x'],
+			[s.sort_suggester_name_numeric_rev]: ['nameNumeric', 'x'],
 			'ctime (new to old)': ['ctime', 'x'],
 			'mtime (new to old)': ['mtime', 'x'],
 		}
 		let field = await this.plugin.easyapi.dialog_suggest(
 			Object.keys(kv),
 			Object.values(kv)
-		);
+		);s
 		if (field == null) { return []; }
 		if (field == 'chain') {
 			tfiles = this.sort_tfiles(tfiles, 'name');
