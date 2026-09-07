@@ -312,6 +312,42 @@ export class NCFileExplorer{
 		}
 	}
 
+	/** Re-apply indented/display titles after Files rewrites innerEl (e.g. rename). */
+	refresh_display_text(tfile?: TAbstractFile){
+		const items = this.file_explorer?.fileItems
+		if(!items){ return }
+		if(!tfile){
+			this.set_display_text()
+			return
+		}
+
+		const apply = (f: TAbstractFile) => {
+			this._set_display_text_(items[f.path], this.get_display_text(f))
+		}
+		apply(tfile)
+
+		if(tfile instanceof TFile && tfile.extension === 'md'){
+			const canvas = items[tfile.path.slice(0, tfile.path.length - 2) + 'canvas']
+			if(canvas){
+				this._set_display_text_(canvas, this.get_display_text(canvas.file))
+			}
+		}
+
+		const folder = tfile instanceof TFolder ? tfile : (
+			tfile instanceof TFile && tfile.parent && tfile.basename === tfile.parent.name
+				? tfile.parent
+				: null
+		)
+		if(!folder){ return }
+		const ppath = folder.path === '/' ? '' : folder.path + '/'
+		for(const key in items){
+			const item = items[key]
+			if(item.file.path.startsWith(ppath) || item.file.path === folder.path){
+				this._set_display_text_(item, this.get_display_text(item.file))
+			}
+		}
+	}
+
 	async get_fileitem_style(tfile:TAbstractFile){
 		if(this.plugin.settings.notechain.field_of_background_color){
 			let style = this.plugin.editor.get_frontmatter_config(tfile,this.plugin.settings.notechain.field_of_background_color)

@@ -70,7 +70,14 @@ const onRenameFile = (plugin: NoteChainPlugin) => {
 			if (oldFolder) plugin.chain.refresh_folder(oldFolder);
 			plugin.chain.refresh_tfile(file);
 			await plugin.explorer.sort();
-			await plugin.explorer.set_fileitem_style_of_file(file);
+			const refreshLabels = () => {
+				plugin.explorer.refresh_display_text(file);
+				void plugin.explorer.set_fileitem_style_of_file(file);
+			};
+			refreshLabels();
+			// Files rewrites innerEl after vault 'rename'; paint again once its handler has run.
+			window.setTimeout(refreshLabels, 50);
+			window.setTimeout(refreshLabels, 250);
 		}
 	));
 };
@@ -186,6 +193,7 @@ const onMetadataChanged = (plugin: NoteChainPlugin) => {
 					void (async () => {
 					const folderPath = file.parent?.path ?? '';
 					if (plugin._autoNotechainBusy?.has(folderPath)) {
+						plugin.explorer.refresh_display_text(file);
 						return;
 					}
 					if (file.parent) {
