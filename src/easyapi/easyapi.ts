@@ -86,20 +86,11 @@ export class EasyAPI {
     }
 
     get dc(): { query: (q: string) => Array<{ $path?: string }> } | undefined {
-        const api = (this.get_plugin('datacore') as { api?: { query?: (q: string) => unknown } } | undefined)?.api;
-        if (!api) {
+        const api = (this.get_plugin('datacore') as { api?: { query: (q: string) => Array<{ $path?: string }> } } | undefined)?.api;
+        if (!api || typeof api.query !== 'function') {
             return undefined;
         }
-        const queryFn = api.query;
-        if (typeof queryFn !== 'function') {
-            return undefined;
-        }
-        return {
-            query: (q: string) => {
-                const data = queryFn(q);
-                return Array.isArray(data) ? data as Array<{ $path?: string }> : [];
-            },
-        };
+        return api;
     }
 
     get cfile(){
