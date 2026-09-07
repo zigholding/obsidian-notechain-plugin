@@ -1,5 +1,5 @@
 import {
-	TFile
+	TFile,Notice
 } from 'obsidian';
 
 import type NoteChainPlugin from '../../plugin';
@@ -78,6 +78,8 @@ export const cmd_longform2notechain = (plugin:NoteChainPlugin) => ({
 		let chain = plugin.utils.concat_array<TFile>([notes,tfiles]);
 		await plugin.chain.chain_concat_tfiles(chain);
 		await plugin.explorer.sort();
+		new Notice(plugin.strings.cmd_longform2notechain+': done');
+		return;
 	}
 });
 

@@ -1,7 +1,3 @@
-import {
-	TFile
-} from 'obsidian';
-
 import type NoteChainPlugin from '../../plugin';
 
 export const chain_insert_node = (plugin:NoteChainPlugin) => ({
@@ -89,16 +85,20 @@ export const create_new_note = (plugin:NoteChainPlugin) => ({
 						curr.parent.path+'/'+name+'.md',
 						''
 					)
-					if(!(target==='null')){
-						const insert = (plugin.chain as unknown as Record<string, unknown>)[target];
-						if (typeof insert === 'function') {
-							await (insert as (dst: TFile, curr: TFile) => Promise<unknown>)(dst, curr);
-						}
-						if(target=='chain_insert_node_after'||target=='chain_insert_node_before'){
-							await plugin.editor.set_frontmatter_align_file(
-								curr,dst,plugin.settings.notechain.field_of_confluence_tab_format
-							)
-						}
+					if (target === 'chain_insert_node_after') {
+						await plugin.chain.chain_insert_node_after(dst, curr);
+						await plugin.editor.set_frontmatter_align_file(
+							curr, dst, plugin.settings.notechain.field_of_confluence_tab_format
+						);
+					} else if (target === 'chain_insert_node_before') {
+						await plugin.chain.chain_insert_node_before(dst, curr);
+						await plugin.editor.set_frontmatter_align_file(
+							curr, dst, plugin.settings.notechain.field_of_confluence_tab_format
+						);
+					} else if (target === 'chain_insert_node_as_tail') {
+						await plugin.chain.chain_insert_node_as_tail(dst, curr);
+					} else if (target === 'chain_insert_node_as_head') {
+						await plugin.chain.chain_insert_node_as_head(dst, curr);
 					}
 					await plugin.chain.open_note(dst);
 					await plugin.explorer.sort();

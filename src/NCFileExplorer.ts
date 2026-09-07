@@ -34,10 +34,9 @@ export class NCFileExplorer{
 		await this.waitForFileExplorer();
 		await this.patchFileExplorer();
 		try {			
-			await this.sort(0,true);
+			await this.sort(0,true)
 			this.set_display_text()
 			await this.set_fileitem_style()
-			
 		} catch {
 			// file explorer not ready
 		}
@@ -107,7 +106,6 @@ export class NCFileExplorer{
 					
 					original.call(this,...args);
 				},
-
 			})
 		);
 		}
