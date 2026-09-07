@@ -54,6 +54,40 @@ export default class NoteChainPlugin extends Plugin {
 	_autoNotechainTimers: Map<string, number> | null = null;
 	_autoNotechainPending: Map<string, TFile> | null = null;
 	_autoNotechainBusy: Set<string> | null = null;
+	_chainSortQuietUntil: Map<string, number> | null = null;
+	_chainSortQuietTimers: Map<string, number> | null = null;
+
+	/** Skip chain re-walk (rename link rewrite would scramble explorer order). */
+	quiet_chain_sort(folderPath: string, ms = 1500) {
+		this._chainSortQuietUntil = this._chainSortQuietUntil || new Map();
+		this._chainSortQuietTimers = this._chainSortQuietTimers || new Map();
+		const until = Date.now() + ms;
+		this._chainSortQuietUntil.set(folderPath, until);
+		const prev = this._chainSortQuietTimers.get(folderPath);
+		if (prev != null) {
+			window.clearTimeout(prev);
+		}
+		const timer = window.setTimeout(() => {
+			this._chainSortQuietTimers?.delete(folderPath);
+			const u = this._chainSortQuietUntil?.get(folderPath);
+			if (u != null && Date.now() >= u) {
+				this._chainSortQuietUntil.delete(folderPath);
+			}
+		}, ms);
+		this._chainSortQuietTimers.set(folderPath, timer);
+	}
+
+	is_chain_sort_quiet(folderPath: string): boolean {
+		const until = this._chainSortQuietUntil?.get(folderPath);
+		if (until == null) {
+			return false;
+		}
+		if (Date.now() >= until) {
+			this._chainSortQuietUntil.delete(folderPath);
+			return false;
+		}
+		return true;
+	}
 
 	/** 原 NCEditor API：与 `easyapi.editor` 相同 */
 	get editor(): EasyEditor {

@@ -59,20 +59,32 @@ const onRenameFile = (plugin: NoteChainPlugin) => {
 			const oldFolder = slash >= 0
 				? plugin.app.vault.getFolderByPath(oldPath.slice(0, slash))
 				: plugin.app.vault.getFolderByPath('/');
+			const sameFolder = oldFolder == file.parent;
 			if (
 				file instanceof TFile &&
-				oldFolder != file.parent &&
+				!sameFolder &&
 				plugin.settings.notechain.auto_notechain
 			) {
 				await plugin.chain.chain_pop_node(file);
 				plugin.schedule_auto_notechain(file);
 			}
-			if (oldFolder) plugin.chain.refresh_folder(oldFolder);
-			plugin.chain.refresh_tfile(file);
+			if (sameFolder) {
+				if (file instanceof TFolder) {
+					plugin.chain.remap_children_folder_path(oldPath, file.path);
+					plugin.quiet_chain_sort(file.path);
+				}
+				if (file.parent) {
+					plugin.quiet_chain_sort(file.parent.path);
+				}
+			} else {
+				if (oldFolder) plugin.chain.refresh_folder(oldFolder);
+				plugin.chain.refresh_tfile(file);
+			}
 			await plugin.explorer.sort();
 			const refreshLabels = () => {
 				plugin.explorer.refresh_display_text(file);
 				void plugin.explorer.set_fileitem_style_of_file(file);
+				void plugin.explorer.sort();
 			};
 			refreshLabels();
 			// Files rewrites innerEl after vault 'rename'; paint again once its handler has run.
@@ -196,7 +208,10 @@ const onMetadataChanged = (plugin: NoteChainPlugin) => {
 						plugin.explorer.refresh_display_text(file);
 						return;
 					}
-					if (file.parent) {
+					if (plugin.is_chain_sort_quiet(folderPath)) {
+						plugin.quiet_chain_sort(folderPath);
+						plugin.explorer.refresh_display_text(file);
+					} else if (file.parent) {
 						plugin.chain.refresh_folder(file.parent);
 					}
 					await plugin.explorer.sort(0, false);

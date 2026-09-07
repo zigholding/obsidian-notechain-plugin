@@ -90,26 +90,51 @@ export class NoteChainFolderChildren {
 	}
 
 	refresh_folder(this: NoteChain, tfolder: TFolder) {
-		if (tfolder?.children) {
-			if (!this.children) {
-				this.children = {};
-			}
-			let tfiles = tfolder.children.slice();
-			if (this.plugin.explorer?.file_explorer) {
-				tfiles = this.sort_tfiles(
-					tfiles,
-					this.plugin.explorer.file_explorer.sortOrder
-				);
-			}
-			this.children[tfolder.path] = this.sort_tfiles_by_chain(
-				tfiles
+		if (!tfolder?.children) {
+			return;
+		}
+		if (this.plugin.is_chain_sort_quiet(tfolder.path)) {
+			return;
+		}
+		if (!this.children) {
+			this.children = {};
+		}
+		let tfiles = tfolder.children.slice();
+		if (this.plugin.explorer?.file_explorer) {
+			tfiles = this.sort_tfiles(
+				tfiles,
+				this.plugin.explorer.file_explorer.sortOrder
 			);
 		}
+		this.children[tfolder.path] = this.sort_tfiles_by_chain(
+			tfiles
+		);
 	}
 
 	refresh_tfile(this: NoteChain, tfile: TAbstractFile) {
 		if (tfile.parent?.children) {
 			this.refresh_folder(tfile.parent);
+		}
+	}
+
+	/** Keep chain order across a folder path change; TFile/TFolder identities stay the same. */
+	remap_children_folder_path(this: NoteChain, oldPath: string, newPath: string) {
+		if (!this.children || oldPath === newPath) {
+			return;
+		}
+		const prefix = oldPath + '/';
+		const keys = Object.keys(this.children);
+		for (const k of keys) {
+			let nk: string | null = null;
+			if (k === oldPath) {
+				nk = newPath;
+			} else if (oldPath !== '/' && k.startsWith(prefix)) {
+				nk = newPath + k.slice(oldPath.length);
+			}
+			if (nk && nk !== k) {
+				this.children[nk] = this.children[k];
+				delete this.children[k];
+			}
 		}
 	}
 
