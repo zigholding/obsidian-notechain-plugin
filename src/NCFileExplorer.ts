@@ -127,6 +127,12 @@ export class NCFileExplorer{
 									return ia - ib;
 								});
 							}
+							for (const item of res) {
+								plugin.explorer._set_display_text_(
+									item,
+									plugin.explorer.get_display_text(item.file)
+								);
+							}
 							return res;
 						} catch (e) {
 							return original.call(this, e);
@@ -148,27 +154,68 @@ export class NCFileExplorer{
 		);
 
 
-		// 文件名称
-		let item = Object.values(this.file_explorer?.fileItems ?? {})[0];
-		
-		if(item){
-			around(Object.getPrototypeOf(item), {
-				getTtitle:(original) => function(this: FileExplorerTreeItem & { app?: App }, e: unknown) {
-					let plugin = this.app ? noteChainPlugin(this.app) : undefined;
-					return function(this: FileExplorerTreeItem){
-						if(plugin){
-							try{
-								let res = plugin.explorer.get_display_text(this.file)
-								return res;
-							}catch{
-								return original.call(this);
-							}
-						}else{
-							return original.call(this);
-						}
-					}
+		// File / folder titles (indent + display field). Collapsed folders
+		// create child items only on expand, via getTitle / setCollapsed.
+		const plugin = this.plugin;
+		const items = Object.values(this.file_explorer?.fileItems ?? {});
+		const patchedProtos = new Set<object>();
+		const patchGetTitle = (start: object) => {
+			let proto: object | null = start;
+			while (proto && proto !== Object.prototype) {
+				if (patchedProtos.has(proto)) { return; }
+				if (Object.prototype.hasOwnProperty.call(proto, 'getTitle')
+					&& typeof (proto as FileExplorerTreeItem).getTitle === 'function') {
+					patchedProtos.add(proto);
+					this.explorerPatches.push(
+						around(proto, {
+							getTitle: (original: () => string) => function(this: FileExplorerTreeItem) {
+								try {
+									return plugin.explorer.get_display_text(this.file);
+								} catch {
+									return original.call(this);
+								}
+							},
+						})
+					);
+					return;
 				}
-			})
+				proto = Object.getPrototypeOf(proto) as object | null;
+			}
+		};
+		const fileItem = items.find(i => i.file instanceof TFile);
+		const folderItem = items.find(i => i.file instanceof TFolder);
+		if (fileItem) {
+			patchGetTitle(Object.getPrototypeOf(fileItem) as object);
+		}
+		if (folderItem) {
+			patchGetTitle(Object.getPrototypeOf(folderItem) as object);
+			let folderProto: object | null = Object.getPrototypeOf(folderItem) as object;
+			while (folderProto && folderProto !== Object.prototype) {
+				if (Object.prototype.hasOwnProperty.call(folderProto, 'setCollapsed')
+					&& typeof (folderProto as FileExplorerTreeItem).setCollapsed === 'function') {
+					this.explorerPatches.push(
+						around(folderProto, {
+							setCollapsed: (original: (...args: unknown[]) => unknown) => function(this: FileExplorerTreeItem, ...args: unknown[]) {
+								const result = original.apply(this, args);
+								const collapsed = args[0];
+								const paint = () => {
+									if (this.file instanceof TFolder && collapsed === false) {
+										plugin.explorer.refresh_display_text(this.file);
+									}
+								};
+								if (result && typeof (result as Promise<unknown>).then === 'function') {
+									void (result as Promise<unknown>).then(paint);
+								} else {
+									window.setTimeout(paint, 0);
+								}
+								return result;
+							},
+						})
+					);
+					break;
+				}
+				folderProto = Object.getPrototypeOf(folderProto) as object | null;
+			}
 		}
 	}
 

@@ -255,6 +255,9 @@ export interface FileExplorerTreeItem {
 	file: TAbstractFile;
 	el: HTMLElement;
 	innerEl: HTMLElement;
+	collapsed?: boolean;
+	getTitle?: () => string;
+	setCollapsed?: (collapsed: boolean, ...args: unknown[]) => unknown;
 	vChildren?: {
 		_children: FileExplorerTreeItem[];
 		setChildren: (children: FileExplorerTreeItem[]) => void;
