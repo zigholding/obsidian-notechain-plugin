@@ -35,13 +35,18 @@ function isJiujiuWsPath(pathname: string | null | undefined): boolean {
     );
 }
 
+function isJiujiuPushPath(pathname: string | null | undefined): boolean {
+    const p = pathname || '';
+    return p === '/push' || p === '/jiujiu/push' || p === `${BASE}/jiujiu/push`;
+}
+
 /** /oldbuddy 聊天页与 API（页面 HTML 内嵌于 main.js，同 onlineHttp） */
 export class OldBuddyHttpHandlers {
     constructor(private store: OldBuddyStore) {}
 
     matches(pathname: string | null | undefined): boolean {
         if (!pathname) return false;
-        if (pathname === '/jiujiu' || pathname === '/ws') return true;
+        if (pathname === '/jiujiu' || pathname === '/ws' || isJiujiuPushPath(pathname)) return true;
         return pathname === BASE || pathname.startsWith(`${BASE}/`);
     }
 
@@ -53,7 +58,10 @@ export class OldBuddyHttpHandlers {
         const senderId = headerVal(req, 'x-sender-id');
         const q = parsed.query || {};
         const friendName = String(q.friendName || q.friend || q.name || headerVal(req, 'x-friend-name') || '').trim();
-        const friendId = String(q.friendId || headerVal(req, 'x-friend-id') || '').trim() || target;
+        const friendId =
+            String(
+                q.friendId || headerVal(req, 'x-friend-id') || headerVal(req, 'x-site-id') || '',
+            ).trim() || target;
         this.store.getWebSocketHub().handleUpgrade(req, socket, head, {
             kind,
             target: target || undefined,
@@ -71,11 +79,11 @@ export class OldBuddyHttpHandlers {
         const pathname = parsedUrl.pathname || '';
         if (!this.matches(pathname)) return false;
 
-        if (pathname === `${BASE}/jiujiu/push` && req.method === 'POST') {
+        if (isJiujiuPushPath(pathname) && req.method === 'POST') {
             await this.handleJiujiuPush(req, res);
             return true;
         }
-        if (pathname === `${BASE}/jiujiu/push` && req.method === 'GET') {
+        if (isJiujiuPushPath(pathname) && req.method === 'GET') {
             jsonResponse(res, 200, {
                 ok: true,
                 protocol: 'jiujiu',
@@ -92,7 +100,7 @@ export class OldBuddyHttpHandlers {
                 ok: true,
                 protocol: 'jiujiu',
                 ws: '/oldbuddy/jiujiu',
-                push: '/oldbuddy/jiujiu/push',
+                push: '/push',
             });
             return true;
         }

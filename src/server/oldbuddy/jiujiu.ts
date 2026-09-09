@@ -41,6 +41,22 @@ export function pickPushFriend(packet: JiujiuPacket): { friendName: string; frie
     return { friendName, friendId };
 }
 
+/** 多好友共用同一 WS 时，出站包带上会话路由，App 只写入对得上的那条。欢迎语不要带。 */
+export function attachJiujiuSession(
+    packet: JiujiuPacket,
+    session?: { friendName?: string; friendId?: string; target?: string },
+): JiujiuPacket {
+    if (!session) return packet;
+    const out: JiujiuPacket = { ...packet };
+    const friendName = String(session.friendName || '').trim();
+    const friendId = String(session.friendId || '').trim();
+    const target = String(session.target || '').trim();
+    if (friendName) out.friendName = friendName;
+    if (friendId) out.friendId = friendId;
+    if (target) out.target = target;
+    return out;
+}
+
 export function pickPushSender(packet: JiujiuPacket): { senderId: string; senderName: string } {
     const senderName = String(packet.senderName ?? '').trim();
     const senderField = String(packet.sender ?? '').trim();
@@ -147,10 +163,19 @@ export function jiujiuSenderToOldBuddy(senderId?: string | null): string {
 }
 
 export function jiujiuTimestampToIso(ts: unknown): string {
-    const n = Number(ts);
-    if (Number.isFinite(n) && n > 0) {
-        const ms = n < 1e12 ? n * 1000 : n;
+    if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+        const ms = ts < 1e12 ? ts * 1000 : ts;
         return new Date(ms).toISOString();
+    }
+    const s = String(ts ?? '').trim();
+    if (s) {
+        const asNum = Number(s);
+        if (Number.isFinite(asNum) && asNum > 0 && !s.includes('T') && !s.includes('-')) {
+            const ms = asNum < 1e12 ? asNum * 1000 : asNum;
+            return new Date(ms).toISOString();
+        }
+        const parsed = Date.parse(s);
+        if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
     }
     return new Date().toISOString();
 }

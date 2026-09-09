@@ -17,6 +17,7 @@ import {
     parseJiujiuPacket,
     pickPushFriend,
     pickPushSender,
+    attachJiujiuSession,
     JiujiuPushError,
     type JiujiuPacket,
 } from './jiujiu';
@@ -91,7 +92,7 @@ export class OldBuddyStore {
         }
     }
 
-    /** POST /oldbuddy/jiujiu/push：按 friendName / friendId 投递给匹配的啾啾连接 */
+    /** POST /push：按 friendName / friendId 投递给匹配的啾啾连接 */
     async handleJiujiuHttpPush(packet: JiujiuPacket): Promise<{ ok: true; clients: number; friendName?: string; friendId?: string }> {
         const friends = this.ws.listJiujiuFriends();
         if (friends.length <= 0) {
@@ -122,7 +123,14 @@ export class OldBuddyStore {
         if (!packet.msgId) packet.msgId = this.newId();
 
         if (isAction) {
-            this.ws.sendToMany(matched, toJiujiuActionPacket(packet, { senderId, senderName, msgId: String(packet.msgId) }));
+            const actionPacket = toJiujiuActionPacket(packet, {
+                senderId,
+                senderName,
+                msgId: String(packet.msgId),
+            });
+            for (const c of matched) {
+                this.ws.sendTo(c, attachJiujiuSession(actionPacket, c));
+            }
         }
 
         const msg = await this.ingestJiujiuPacket(packet, {
@@ -136,7 +144,9 @@ export class OldBuddyStore {
             if (msg) {
                 await this.emitJiujiuTo(msg, matched);
             } else {
-                this.ws.sendToMany(matched, packet);
+                for (const c of matched) {
+                    this.ws.sendTo(c, attachJiujiuSession(packet, c));
+                }
             }
         }
         return {
@@ -284,18 +294,22 @@ export class OldBuddyStore {
         void this.emitJiujiu(msg);
     }
 
+    private jiujiuClientsForMessage(msg: OldBuddyMessage): OldBuddyWsClient[] {
+        const target = String(msg.target || '').trim() || DEFAULT_TARGET;
+        return this.ws.findJiujiuFriends(target, target);
+    }
+
     private async emitJiujiu(msg: OldBuddyMessage) {
-        try {
-            this.ws.broadcastJiujiu(await this.buildJiujiuPacket(msg));
-        } catch (e) {
-            console.warn('[oldbuddy] jiujiu broadcast failed:', e);
-        }
+        await this.emitJiujiuTo(msg, this.jiujiuClientsForMessage(msg));
     }
 
     private async emitJiujiuTo(msg: OldBuddyMessage, clients: OldBuddyWsClient[]) {
         if (!clients.length) return;
         try {
-            this.ws.sendToMany(clients, await this.buildJiujiuPacket(msg));
+            const packet = await this.buildJiujiuPacket(msg);
+            for (const c of clients) {
+                this.ws.sendTo(c, attachJiujiuSession(packet, c));
+            }
         } catch (e) {
             console.warn('[oldbuddy] jiujiu send failed:', e);
         }
