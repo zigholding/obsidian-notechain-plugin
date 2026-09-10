@@ -69,21 +69,23 @@ export default class NoteChainPlugin extends Plugin {
 		}
 		const timer = window.setTimeout(() => {
 			this._chainSortQuietTimers?.delete(folderPath);
-			const u = this._chainSortQuietUntil?.get(folderPath);
-			if (u != null && Date.now() >= u) {
-				this._chainSortQuietUntil.delete(folderPath);
+			const quietUntil = this._chainSortQuietUntil;
+			const u = quietUntil?.get(folderPath);
+			if (quietUntil && u != null && Date.now() >= u) {
+				quietUntil.delete(folderPath);
 			}
 		}, ms);
 		this._chainSortQuietTimers.set(folderPath, timer);
 	}
 
 	is_chain_sort_quiet(folderPath: string): boolean {
-		const until = this._chainSortQuietUntil?.get(folderPath);
+		const quietUntil = this._chainSortQuietUntil;
+		const until = quietUntil?.get(folderPath);
 		if (until == null) {
 			return false;
 		}
 		if (Date.now() >= until) {
-			this._chainSortQuietUntil.delete(folderPath);
+			quietUntil?.delete(folderPath);
 			return false;
 		}
 		return true;

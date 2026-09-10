@@ -185,6 +185,11 @@ export class WordCount{
             ctx = ctx.slice(mcache.frontmatterPosition.end.offset)
         }
         let N = this.count_words(ctx);
+        const words = mcache?.frontmatter?.words;
+        const day = moment.unix(tfile.stat.mtime/1000).format('YYYY-MM-DD');
+        if (isRecord(words) && words[day] === N) {
+            return;
+        }
         await this.set_mtime_value(tfile,'words',N);
     }
 

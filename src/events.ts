@@ -11,6 +11,34 @@ import { moveSelectedNotesAsNext } from './NoteChain/chainInsert';
 
 const displayFieldByFile = new WeakMap<TFile, unknown>();
 const bgColorByFile = new WeakMap<TFile, unknown>();
+const explorerMetaByFile = new WeakMap<TFile, { chain: string; appearance: string }>();
+const metadataTimers = new Map<string, number>();
+
+function explorerMetaSnapshot(plugin: NoteChainPlugin, file: TFile): { chain: string; appearance: string } {
+	const nc = plugin.settings.notechain;
+	const ed = plugin.editor;
+	return {
+		chain: JSON.stringify([
+			ed.get_frontmatter(file, nc.field_of_prevnote),
+			ed.get_frontmatter(file, nc.field_of_nextnote),
+			ed.get_frontmatter(file, 'FolderPrevNote'),
+			ed.get_frontmatter(file, 'FolderPrevNoteOffset'),
+		]),
+		appearance: JSON.stringify([
+			nc.field_of_display_text ? ed.get_frontmatter(file, nc.field_of_display_text) : null,
+			nc.field_of_confluence_tab_format
+				? ed.get_frontmatter(file, nc.field_of_confluence_tab_format)
+				: null,
+			nc.field_of_background_color
+				? ed.get_frontmatter(file, nc.field_of_background_color)
+				: null,
+		]),
+	};
+}
+
+function isFolderNote(file: TFile): boolean {
+	return !!file.parent && file.basename === file.parent.name;
+}
 
 
 const onFileOpen = (plugin: NoteChainPlugin) => {
@@ -195,94 +223,125 @@ const onMetadataChanged = (plugin: NoteChainPlugin) => {
 	plugin.registerEvent(
 		plugin.app.metadataCache.on(
 			'changed',
-			async (file: TFile, _data: string, _cache: CachedMetadata) => {
-				if (file == plugin.chain.current_note) {
-					if (plugin.timerId != null) {
-						window.clearTimeout(plugin.timerId);
-					}
+			(_file: TFile, _data: string, _cache: CachedMetadata) => {
+				const file = _file;
+				const prevTimer = metadataTimers.get(file.path);
+				if (prevTimer != null) {
+					window.clearTimeout(prevTimer);
+				}
+				if (plugin.timerId != null && file == plugin.chain.current_note) {
+					window.clearTimeout(plugin.timerId);
 				}
 				const timerId = window.setTimeout(() => {
-					void (async () => {
-					const folderPath = file.parent?.path ?? '';
-					if (plugin._autoNotechainBusy?.has(folderPath)) {
-						plugin.explorer.refresh_display_text(file);
-						return;
+					metadataTimers.delete(file.path);
+					if (plugin.timerId === timerId) {
+						plugin.timerId = null;
 					}
-					if (plugin.is_chain_sort_quiet(folderPath)) {
-						plugin.quiet_chain_sort(folderPath);
-						plugin.explorer.refresh_display_text(file);
-					} else if (file.parent) {
-						plugin.chain.refresh_folder(file.parent);
-					}
-					await plugin.explorer.sort(0, false);
-
-					if (plugin.settings.notechain.field_of_display_text) {
-						const txt = plugin.explorer.get_display_text(file);
-						const items = plugin.explorer.file_explorer?.fileItems;
-						if (items) {
-						plugin.explorer._set_display_text_(items[file.path], txt);
-
-						const canvas = items[file.path.slice(0, file.path.length - 2) + 'canvas'];
-						plugin.explorer._set_display_text_(canvas, txt);
-
-						const parent = file.parent;
-						if (parent && (file.basename == parent.name || parent.path == '/')) {
-							const field = plugin.editor.get_frontmatter(file, plugin.settings.notechain.field_of_display_text);
-							const prev = displayFieldByFile.get(file);
-							if (!prev || prev != field) {
-								const ppath = parent.path == '/' ? '' : parent.path + '/';
-								for (const key in items) {
-									const item = items[key];
-									if (item.file.path.startsWith(ppath) || item.file.path == parent.path) {
-										const txt = plugin.explorer.get_display_text(item.file);
-										plugin.explorer._set_display_text_(item, txt);
-									}
-								}
-							}
-							displayFieldByFile.set(file, field);
-						}
-						}
-					}
-
-					if (plugin.settings.notechain.field_of_background_color) {
-						const style = await plugin.explorer.get_fileitem_style(file);
-						await plugin.explorer.set_fileitem_style_of_file(file, style);
-						const items = plugin.explorer.file_explorer?.fileItems;
-
-						if (items) {
-						const canvas = items[file.path.slice(0, file.path.length - 2) + 'canvas'];
-						if (canvas) {
-							await plugin.explorer.set_fileitem_style_of_file(canvas.file, style);
-						}
-
-						const parent = file.parent;
-						if (parent && (file.basename == parent.name || parent.path == '/')) {
-							const field = plugin.editor.get_frontmatter(file, plugin.settings.notechain.field_of_background_color);
-							const prev = bgColorByFile.get(file);
-							if (!prev || prev != field) {
-								const ppath = parent.path == '/' ? '' : parent.path + '/';
-								for (const key in items) {
-									const item = items[key];
-									if (item.file.path.startsWith(ppath) || item.file.path == parent.path) {
-										const style = await plugin.explorer.get_fileitem_style(item.file);
-										await plugin.explorer.set_fileitem_style_of_file(item.file, style);
-									}
-								}
-							}
-							bgColorByFile.set(file, field);
-						}
-						}
-					}
-
-				})();
+					void applyExplorerMetadata(plugin, file);
 				}, 500);
+				metadataTimers.set(file.path, timerId);
 				if (file == plugin.chain.current_note) {
 					plugin.timerId = timerId;
 				}
-
 			})
 	);
 };
+
+async function applyExplorerMetadata(plugin: NoteChainPlugin, file: TFile) {
+	const folderPath = file.parent?.path ?? '';
+	const snapshot = explorerMetaSnapshot(plugin, file);
+	const prevSnapshot = explorerMetaByFile.get(file);
+	explorerMetaByFile.set(file, snapshot);
+
+	if (plugin._autoNotechainBusy?.has(folderPath)) {
+		plugin.explorer.invalidate_display_text(file);
+		plugin.explorer.refresh_display_text(file);
+		return;
+	}
+
+	if (!prevSnapshot) {
+		return;
+	}
+	const chainChanged = prevSnapshot.chain !== snapshot.chain;
+	const appearanceChanged = prevSnapshot.appearance !== snapshot.appearance;
+	if (!chainChanged && !appearanceChanged) {
+		return;
+	}
+
+	const nc = plugin.settings.notechain;
+
+	if (plugin.is_chain_sort_quiet(folderPath)) {
+		plugin.quiet_chain_sort(folderPath);
+		plugin.explorer.invalidate_display_text(file);
+		plugin.explorer.refresh_display_text(file);
+	} else if (chainChanged && file.parent) {
+		plugin.chain.refresh_folder(file.parent);
+		await plugin.explorer.sort(0, false);
+	}
+
+	if (!appearanceChanged) {
+		return;
+	}
+
+	if (nc.field_of_display_text) {
+		plugin.explorer.invalidate_display_text(file);
+		const txt = plugin.explorer.get_display_text(file);
+		const items = plugin.explorer.file_explorer?.fileItems;
+		if (items) {
+			plugin.explorer._set_display_text_(items[file.path], txt);
+
+			const canvas = items[file.path.slice(0, file.path.length - 2) + 'canvas'];
+			plugin.explorer._set_display_text_(canvas, txt);
+
+			if (isFolderNote(file) && file.parent) {
+				const field = plugin.editor.get_frontmatter(file, nc.field_of_display_text);
+				const prev = displayFieldByFile.get(file);
+				if (!prev || prev != field) {
+					const parent = file.parent;
+					const ppath = parent.path == '/' ? '' : parent.path + '/';
+					for (const key in items) {
+						const item = items[key];
+						if (item.file.path.startsWith(ppath) || item.file.path == parent.path) {
+							plugin.explorer.invalidate_display_text(item.file);
+							plugin.explorer._set_display_text_(item, plugin.explorer.get_display_text(item.file));
+						}
+					}
+				}
+				displayFieldByFile.set(file, field);
+			}
+		}
+	}
+
+	if (nc.field_of_background_color) {
+		const style = await plugin.explorer.get_fileitem_style(file);
+		await plugin.explorer.set_fileitem_style_of_file(file, style);
+		const items = plugin.explorer.file_explorer?.fileItems;
+
+		if (items) {
+			const canvas = items[file.path.slice(0, file.path.length - 2) + 'canvas'];
+			if (canvas) {
+				await plugin.explorer.set_fileitem_style_of_file(canvas.file, style);
+			}
+
+			if (isFolderNote(file) && file.parent) {
+				const field = plugin.editor.get_frontmatter(file, nc.field_of_background_color);
+				const prev = bgColorByFile.get(file);
+				if (!prev || prev != field) {
+					const parent = file.parent;
+					const ppath = parent.path == '/' ? '' : parent.path + '/';
+					for (const key in items) {
+						const item = items[key];
+						if (item.file.path.startsWith(ppath) || item.file.path == parent.path) {
+							const childStyle = await plugin.explorer.get_fileitem_style(item.file);
+							await plugin.explorer.set_fileitem_style_of_file(item.file, childStyle);
+						}
+					}
+				}
+				bgColorByFile.set(file, field);
+			}
+		}
+	}
+}
 
 const eventBuilders = [
 	onFileOpen,

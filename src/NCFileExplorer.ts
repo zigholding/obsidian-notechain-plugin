@@ -22,6 +22,7 @@ export class NCFileExplorer{
 	chain:NoteChain;
 	_FolderDom_: unknown;
 	private explorerPatches: Array<() => void> = [];
+	private displayTextCache = new WeakMap<TAbstractFile, string>();
 
 	constructor(plugin:NoteChainPlugin){
 		this.plugin = plugin;
@@ -126,12 +127,6 @@ export class NCFileExplorer{
 									if (ib < 0) { ib = tfiles.length; }
 									return ia - ib;
 								});
-							}
-							for (const item of res) {
-								plugin.explorer._set_display_text_(
-									item,
-									plugin.explorer.get_display_text(item.file)
-								);
 							}
 							return res;
 						} catch (e) {
@@ -319,7 +314,19 @@ export class NCFileExplorer{
 		return item
 	}
 
+	invalidate_display_text(tfile?: TAbstractFile) {
+		if (!tfile) {
+			this.displayTextCache = new WeakMap();
+			return;
+		}
+		this.displayTextCache.delete(tfile);
+	}
+
 	get_display_text(tfile:TAbstractFile) {
+		const cached = this.displayTextCache.get(tfile);
+		if (cached !== undefined) {
+			return cached;
+		}
 		let str = this.get_field_of_display_text(tfile)
 
 		
@@ -330,17 +337,17 @@ export class NCFileExplorer{
 		}
 		
 		if(!str || str=='$0' || str=='<$0>'){
-			return this.get_origin_text(tfile)
+			const origin = this.get_origin_text(tfile)
+			this.displayTextCache.set(tfile, origin)
+			return origin
 		}
 	  
 		const mstr = str.replace(/<(.+?)?>/g, (_match:string, field:string) => {
 			return this.get_item(tfile,field)
 		})
-		if(mstr==''){
-			return this.get_origin_text(tfile)
-		}else{
-			return mstr
-		}
+		const text = mstr=='' ? this.get_origin_text(tfile) : mstr
+		this.displayTextCache.set(tfile, text)
+		return text
 	}
 
 	_set_display_text_(item: FileExplorerTreeItem | undefined, txt: unknown){
@@ -351,6 +358,7 @@ export class NCFileExplorer{
 		}
 	}
 	set_display_text(){
+		this.invalidate_display_text()
 		let items = this.file_explorer?.fileItems
 		for(let key in items){
 			let item = items[key]
@@ -369,6 +377,7 @@ export class NCFileExplorer{
 		}
 
 		const apply = (f: TAbstractFile) => {
+			this.invalidate_display_text(f)
 			this._set_display_text_(items[f.path], this.get_display_text(f))
 		}
 		apply(tfile)
@@ -376,6 +385,7 @@ export class NCFileExplorer{
 		if(tfile instanceof TFile && tfile.extension === 'md'){
 			const canvas = items[tfile.path.slice(0, tfile.path.length - 2) + 'canvas']
 			if(canvas){
+				this.invalidate_display_text(canvas.file)
 				this._set_display_text_(canvas, this.get_display_text(canvas.file))
 			}
 		}
@@ -390,6 +400,7 @@ export class NCFileExplorer{
 		for(const key in items){
 			const item = items[key]
 			if(item.file.path.startsWith(ppath) || item.file.path === folder.path){
+				this.invalidate_display_text(item.file)
 				this._set_display_text_(item, this.get_display_text(item.file))
 			}
 		}
