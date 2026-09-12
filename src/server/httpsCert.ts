@@ -1,9 +1,9 @@
-import { desktopNodeOrThrow, type NodeCryptoModule, type NodeFsModule, type NodePathModule } from '../obsidian-app';
+import { lazyDesktopNodeOrThrow, type NodeCryptoModule, type NodeFsModule, type NodePathModule } from '../obsidian-app';
 import { isRecord } from '../ts-helpers';
 
-const fs = desktopNodeOrThrow<NodeFsModule>('fs');
-const path = desktopNodeOrThrow<NodePathModule>('path');
-const crypto = desktopNodeOrThrow<NodeCryptoModule>('crypto');
+const nodeFs = lazyDesktopNodeOrThrow<NodeFsModule>('fs');
+const nodePath = lazyDesktopNodeOrThrow<NodePathModule>('path');
+const nodeCrypto = lazyDesktopNodeOrThrow<NodeCryptoModule>('crypto');
 
 /** Lazy-load: selfsigned touches nodeCrypto.webcrypto at require-time (breaks Obsidian mobile). */
 interface SelfsignedPems {
@@ -34,16 +34,16 @@ function normalizeCertFingerprint(fp: string): string {
 
 /** 读取 Note-Chain 自签证书 SHA-256 指纹（供 WebView 校验） */
 export function readNoteChainCertFingerprint(tlsDir: string): string | null {
-    const certPath = path.join(tlsDir, 'cert.pem');
-    if (!fs.existsSync(certPath)) return null;
+    const certPath = nodePath().join(tlsDir, 'cert.pem');
+    if (!nodeFs().existsSync(certPath)) return null;
     try {
-        const pem = fs.readFileSync(certPath, 'utf8');
+        const pem = nodeFs().readFileSync(certPath, 'utf8');
         const b64 = pem
             .replace(/-----BEGIN CERTIFICATE-----/g, '')
             .replace(/-----END CERTIFICATE-----/g, '')
             .replace(/\s/g, '');
         const der = Buffer.from(b64, 'base64');
-        return crypto.createHash('sha256').update(der).digest('hex').toUpperCase();
+        return nodeCrypto().createHash('sha256').update(der).digest('hex').toUpperCase();
     } catch {
         return null;
     }
@@ -57,7 +57,7 @@ type SanEntry = { type: number; value?: string; ip?: string };
 
 function certCoversAltNames(certPem: string, altNames: SanEntry[]): boolean {
     try {
-        const x509 = new crypto.X509Certificate(certPem);
+        const x509 = new (nodeCrypto().X509Certificate)(certPem);
         const san = String(x509.subjectAltName || '');
         for (const a of altNames) {
             if (a.type === 2 && a.value && !san.includes(`DNS:${a.value}`)) {
@@ -89,18 +89,18 @@ function sansKeyFromAltNames(altNames: SanEntry[]): string {
 
 /** 自签 TLS 证书（仅 localhost / 127.0.0.1，避免采集网卡/主机身份） */
 export async function ensureSelfSignedCert(tlsDir: string): Promise<{ key: string; cert: string }> {
-    const keyPath = path.join(tlsDir, 'key.pem');
-    const certPath = path.join(tlsDir, 'cert.pem');
-    const metaPath = path.join(tlsDir, 'meta.json');
+    const keyPath = nodePath().join(tlsDir, 'key.pem');
+    const certPath = nodePath().join(tlsDir, 'cert.pem');
+    const metaPath = nodePath().join(tlsDir, 'meta.json');
 
     const altNames = buildAltNames();
     const sansKey = sansKeyFromAltNames(altNames);
 
-    if (fs.existsSync(keyPath) && fs.existsSync(certPath) && fs.existsSync(metaPath)) {
+    if (nodeFs().existsSync(keyPath) && nodeFs().existsSync(certPath) && nodeFs().existsSync(metaPath)) {
         try {
-            const metaRaw: unknown = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-            const key = fs.readFileSync(keyPath, 'utf8');
-            const cert = fs.readFileSync(certPath, 'utf8');
+            const metaRaw: unknown = JSON.parse(nodeFs().readFileSync(metaPath, 'utf8'));
+            const key = nodeFs().readFileSync(keyPath, 'utf8');
+            const cert = nodeFs().readFileSync(certPath, 'utf8');
             if (
                 isRecord(metaRaw) &&
                 metaRaw.sansKey === sansKey &&
@@ -115,7 +115,7 @@ export async function ensureSelfSignedCert(tlsDir: string): Promise<{ key: strin
         }
     }
 
-    fs.mkdirSync(tlsDir, { recursive: true });
+    nodeFs().mkdirSync(tlsDir, { recursive: true });
     const notAfterDate = new Date();
     notAfterDate.setDate(notAfterDate.getDate() + 825);
 
@@ -130,9 +130,9 @@ export async function ensureSelfSignedCert(tlsDir: string): Promise<{ key: strin
         throw new Error('TLS certificate generation failed (empty key or cert)');
     }
 
-    fs.writeFileSync(keyPath, pems.private, 'utf8');
-    fs.writeFileSync(certPath, pems.cert, 'utf8');
-    fs.writeFileSync(
+    nodeFs().writeFileSync(keyPath, pems.private, 'utf8');
+    nodeFs().writeFileSync(certPath, pems.cert, 'utf8');
+    nodeFs().writeFileSync(
         metaPath,
         JSON.stringify({ sansKey, generatedAt: new Date().toISOString() }, null, 2),
         'utf8',

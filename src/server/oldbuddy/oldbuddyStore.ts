@@ -1,4 +1,4 @@
-import { desktopNodeOrThrow, type NodeCryptoModule, type NodeFsModule, type NodePathModule } from '../../obsidian-app';
+import { lazyDesktopNodeOrThrow, type NodeCryptoModule, type NodeFsModule, type NodePathModule } from '../../obsidian-app';
 import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem, OldBuddyAvatarMap, OldBuddyAttachment, isUserSender, normalizeAttachments, normalizeOldBuddyMessage, attachmentKindFromMime } from './types';
 import { OldBuddyWebSocketHub, OldBuddyWsClient } from './oldbuddyWebSocket';
 import {
@@ -20,12 +20,19 @@ import {
     attachJiujiuSession,
     JiujiuPushError,
     type JiujiuPacket,
+    normalizeJiujiuPacket,
+    packetToOutgoing,
+    isJiujiuInteractive,
+    isJiujiuResult,
+    hasJiujiuCardPayload,
 } from './jiujiu';
+import { MEAL_CARD, widgetNames, widgetSample, yesnoActions } from './demoCards';
 import { Templater } from '../../easyapi/templater';
+import { isRecord } from '../../ts-helpers';
 
-const fs = desktopNodeOrThrow<NodeFsModule>('fs');
-const path = desktopNodeOrThrow<NodePathModule>('path');
-const crypto = desktopNodeOrThrow<NodeCryptoModule>('crypto');
+const nodeFs = lazyDesktopNodeOrThrow<NodeFsModule>('fs');
+const nodePath = lazyDesktopNodeOrThrow<NodePathModule>('path');
+const nodeCrypto = lazyDesktopNodeOrThrow<NodeCryptoModule>('crypto');
 
 const DEFAULT_TARGETS: OldBuddyLabelTextItem[] = [{ label: 'local', text: 'local' }];
 const DEFAULT_QUICK_COMMANDS: OldBuddyLabelTextItem[] = [{ label: '你是谁', text: '你是谁' }];
@@ -39,6 +46,7 @@ const AVATAR_TEMPLATE = 'nochain_oldbuddy_avatar';
 const MAX_MESSAGES = 5000;
 const DEFAULT_REPLY_TEMPLATE = 'nochain_oldbuddy_reply';
 const DEFAULT_TARGET = DEFAULT_TARGETS[0].text;
+const CARD_RESULT_LIMIT = 20;
 
 export class OldBuddyStore {
     private messages: OldBuddyMessage[] = [];
@@ -51,15 +59,16 @@ export class OldBuddyStore {
     private vaultOnlyMessageIds = new Set<string>();
     /** 啾啾 App 已本地展示的消息，广播时不再回推 */
     private jiujiuEchoIds = new Set<string>();
+    private cardResults: Record<string, unknown>[] = [];
 
     constructor(
         private templater: Templater,
         configDir: string,
         private replyTemplate: string = DEFAULT_REPLY_TEMPLATE,
     ) {
-        this.dataDir = path.join(configDir, 'plugins', 'note-chain', 'oldbuddy-data');
-        this.uploadsDir = path.join(this.dataDir, 'uploads');
-        this.messagesFile = path.join(this.dataDir, 'messages.json');
+        this.dataDir = nodePath().join(configDir, 'plugins', 'note-chain', 'oldbuddy-data');
+        this.uploadsDir = nodePath().join(this.dataDir, 'uploads');
+        this.messagesFile = nodePath().join(this.dataDir, 'messages.json');
         this.ws.onJiujiuOpen = (client) => {
             this.ws.sendTo(client, jiujiuWelcomePacket());
         };
@@ -74,6 +83,7 @@ export class OldBuddyStore {
     async handleJiujiuIncoming(client: OldBuddyWsClient, raw: string) {
         const packet = parseJiujiuPacket(raw);
         if (!packet) return;
+        this.touchJiujiuClient(client, packet);
         if (isJiujiuHelp(packet)) {
             this.ws.sendTo(client, jiujiuWelcomePacket());
             return;
@@ -82,25 +92,52 @@ export class OldBuddyStore {
         if (type === 'welcome' || type === 'action' || type === 'timer' || type === 'alarm' || type === 'player') {
             return;
         }
+        if (isJiujiuResult(packet) || isJiujiuInteractive(packet)) {
+            this.rememberCardResult(packet);
+        }
         try {
             await this.ingestJiujiuPacket(packet, {
                 senderId: packet.senderId || client.senderId,
-                target: client.target,
+                target: packet.target || client.target,
             });
         } catch (e) {
             console.warn('[oldbuddy] jiujiu ingest failed:', e);
         }
     }
 
+    private touchJiujiuClient(client: OldBuddyWsClient, packet: JiujiuPacket) {
+        const friendId = String(packet.friendId || '').trim();
+        const friendName = String(packet.friendName || packet.friend || '').trim();
+        const senderId = String(packet.senderId || '').trim();
+        const target = String(packet.target || '').trim();
+        if (friendId) client.friendId = friendId;
+        if (friendName) client.friendName = friendName;
+        if (senderId) client.senderId = senderId;
+        if (target) client.target = target;
+    }
+
+    rememberCardResult(packet: JiujiuPacket | Record<string, unknown>) {
+        const row = isRecord(packet) ? { ...packet } : {};
+        this.cardResults.push(row);
+        if (this.cardResults.length > CARD_RESULT_LIMIT) {
+            this.cardResults = this.cardResults.slice(-CARD_RESULT_LIMIT);
+        }
+    }
+
+    listCardResults(): Record<string, unknown>[] {
+        return [...this.cardResults];
+    }
+
     /** POST /push：按 friendName / friendId 投递给匹配的啾啾连接 */
-    async handleJiujiuHttpPush(packet: JiujiuPacket): Promise<{ ok: true; clients: number; friendName?: string; friendId?: string }> {
+    async handleJiujiuHttpPush(packet: JiujiuPacket): Promise<{ ok: true; clients: number; msgId: string; friendName?: string; friendId?: string }> {
+        packet = normalizeJiujiuPacket(packet);
         const friends = this.ws.listJiujiuFriends();
         if (friends.length <= 0) {
             throw new JiujiuPushError(503, 'no jiujiu client');
         }
-        const { friendName, friendId } = pickPushFriend(packet);
-        let matched = this.ws.findJiujiuFriends(friendName, friendId);
-        if (!friendName && !friendId) {
+        const { friendName, friendId, target } = pickPushFriend(packet);
+        let matched = this.ws.findJiujiuFriends(friendName || target, friendId || target);
+        if (!friendName && !friendId && !target) {
             if (friends.length > 1) {
                 throw new JiujiuPushError(400, 'friendName required', friends);
             }
@@ -110,10 +147,11 @@ export class OldBuddyStore {
         }
 
         const isAction = isJiujiuActionPacket(packet);
+        const interactive = isJiujiuInteractive(packet);
         const content = String(packet.content || '').trim();
         const attachments = Array.isArray(packet.attachments) ? packet.attachments : [];
         const actionName = String(packet.name || '').trim();
-        if (!content && !attachments.length && !(isAction && actionName)) {
+        if (!content && !attachments.length && !(isAction && actionName) && !interactive) {
             throw new Error('content required');
         }
 
@@ -122,7 +160,7 @@ export class OldBuddyStore {
         if (senderName) packet.senderName = senderName;
         if (!packet.msgId) packet.msgId = this.newId();
 
-        if (isAction) {
+        if (isAction && !interactive) {
             const actionPacket = toJiujiuActionPacket(packet, {
                 senderId,
                 senderName,
@@ -133,25 +171,23 @@ export class OldBuddyStore {
             }
         }
 
-        const msg = await this.ingestJiujiuPacket(packet, {
+        await this.ingestJiujiuPacket(packet, {
             senderId,
             senderName,
             target: packet.target != null ? String(packet.target) : matched[0]?.target || 'local',
             skipReply: !isUserSender(senderId),
             echoToJiujiu: false,
         });
-        if (!isAction) {
-            if (msg) {
-                await this.emitJiujiuTo(msg, matched);
-            } else {
-                for (const c of matched) {
-                    this.ws.sendTo(c, attachJiujiuSession(packet, c));
-                }
+        if (!isAction || interactive) {
+            const outgoing = packetToOutgoing(packet);
+            for (const c of matched) {
+                this.ws.sendTo(c, attachJiujiuSession(outgoing, c));
             }
         }
         return {
             ok: true,
             clients: matched.length,
+            msgId: String(packet.msgId),
             friendName: friendName || matched[0]?.friendName || undefined,
             friendId: friendId || matched[0]?.friendId || matched[0]?.target || undefined,
         };
@@ -169,10 +205,14 @@ export class OldBuddyStore {
     ): Promise<OldBuddyMessage | null> {
         this.ensureLoaded();
         const isAction = isJiujiuActionPacket(packet);
+        const interactive = isJiujiuInteractive(packet) || isJiujiuResult(packet);
         const action = jiujiuActionName(packet);
         let content = String(packet.content || '').trim();
         if (!content && isAction) {
             content = String(packet.name || action || '').trim();
+        }
+        if (!content && interactive) {
+            content = String(packet.title || packet.description || packet.action || '').trim();
         }
         const rawAtts = Array.isArray(packet.attachments) ? packet.attachments : [];
         const saved: OldBuddyAttachment[] = [];
@@ -198,7 +238,7 @@ export class OldBuddyStore {
             }
             saved.push(row);
         }
-        if (!content && !saved.length && !isAction) return null;
+        if (!content && !saved.length && !isAction && !interactive) return null;
 
         const id = String(packet.msgId || '').trim() || this.newId();
         if (!opts.echoToJiujiu) {
@@ -229,6 +269,7 @@ export class OldBuddyStore {
             hour: packet.hour != null ? Number(packet.hour) : undefined,
             minute: packet.minute != null ? Number(packet.minute) : undefined,
             direct: packet.direct === true || packet.direct === 'true',
+            jiujiu: interactive ? packetToOutgoing(packet) as Record<string, unknown> : undefined,
         });
     }
 
@@ -236,13 +277,13 @@ export class OldBuddyStore {
         if (this.loaded) return;
         this.loaded = true;
         try {
-            fs.mkdirSync(this.uploadsDir, { recursive: true });
+            nodeFs().mkdirSync(this.uploadsDir, { recursive: true });
         } catch {
             // ignore
         }
         try {
-            if (fs.existsSync(this.messagesFile)) {
-                const raw = fs.readFileSync(this.messagesFile, 'utf8');
+            if (nodeFs().existsSync(this.messagesFile)) {
+                const raw = nodeFs().readFileSync(this.messagesFile, 'utf8');
                 const parsed = JSON.parse(raw);
                 if (Array.isArray(parsed)) {
                     this.messages = parsed
@@ -257,16 +298,16 @@ export class OldBuddyStore {
 
     private persist() {
         try {
-            fs.mkdirSync(this.dataDir, { recursive: true });
+            nodeFs().mkdirSync(this.dataDir, { recursive: true });
             const payload = this.messages.filter((m) => !this.vaultOnlyMessageIds.has(m.id));
-            fs.writeFileSync(this.messagesFile, JSON.stringify(payload, null, 2), 'utf8');
+            nodeFs().writeFileSync(this.messagesFile, JSON.stringify(payload, null, 2), 'utf8');
         } catch (e) {
             console.warn('[oldbuddy] persist messages failed:', e);
         }
     }
 
     private newId() {
-        return `${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+        return `${Date.now()}_${nodeCrypto().randomBytes(4).toString('hex')}`;
     }
 
     private pushMessage(msg: OldBuddyMessage) {
@@ -524,14 +565,14 @@ export class OldBuddyStore {
 
     saveUpload(fileBuf: Buffer, originalName: string, mime: string) {
         this.ensureLoaded();
-        const ext = path.extname(originalName || '') || guessExt(mime);
-        const base = sanitizeBaseName(path.basename(originalName || 'file', ext)) || 'file';
+        const ext = nodePath().extname(originalName || '') || guessExt(mime);
+        const base = sanitizeBaseName(nodePath().basename(originalName || 'file', ext)) || 'file';
         const fname = `${Date.now()}_${base}${ext}`;
-        const abs = path.join(this.uploadsDir, fname);
-        fs.writeFileSync(abs, fileBuf);
+        const abs = nodePath().join(this.uploadsDir, fname);
+        nodeFs().writeFileSync(abs, fileBuf);
         const mimeNorm = String(mime || '').trim();
         if (mimeNorm && mimeNorm !== 'application/octet-stream') {
-            fs.writeFileSync(`${abs}.mime`, mimeNorm, 'utf8');
+            nodeFs().writeFileSync(`${abs}.mime`, mimeNorm, 'utf8');
         }
         return { fname, abs, url: `/oldbuddy/uploads/${encodeURIComponent(fname)}` };
     }
@@ -539,19 +580,19 @@ export class OldBuddyStore {
     serveUploadFile(fname: string): { data: Buffer; mime: string } | null {
         const meta = this.serveUploadMeta(fname);
         if (!meta) return null;
-        return { data: fs.readFileSync(meta.abs), mime: meta.mime };
+        return { data: nodeFs().readFileSync(meta.abs), mime: meta.mime };
     }
 
     serveUploadMeta(fname: string): { abs: string; size: number; mime: string; mtime: number } | null {
         this.ensureLoaded();
-        const safe = path.basename(fname);
+        const safe = nodePath().basename(fname);
         if (!safe || safe.includes('..')) return null;
-        const abs = path.join(this.uploadsDir, safe);
-        if (!fs.existsSync(abs)) return null;
-        const stat = fs.statSync(abs);
+        const abs = nodePath().join(this.uploadsDir, safe);
+        if (!nodeFs().existsSync(abs)) return null;
+        const stat = nodeFs().statSync(abs);
         const mimeSidecar = `${abs}.mime`;
-        const mime = fs.existsSync(mimeSidecar)
-            ? fs.readFileSync(mimeSidecar, 'utf8').trim()
+        const mime = nodeFs().existsSync(mimeSidecar)
+            ? nodeFs().readFileSync(mimeSidecar, 'utf8').trim()
             : mimeFromExt(abs);
         return {
             abs,
@@ -809,6 +850,7 @@ export class OldBuddyStore {
         minute?: number;
         direct?: boolean;
         mime?: string;
+        jiujiu?: Record<string, unknown>;
     }): Promise<OldBuddyMessage> {
         this.ensureLoaded();
         const normalized = normalizeOldBuddyMessage({
@@ -831,11 +873,14 @@ export class OldBuddyStore {
             minute: params.minute,
             direct: params.direct,
             quick_cmd_id: params.quick_cmd_id,
+            jiujiu: params.jiujiu,
         });
         if (!normalized) {
             throw new Error('content required');
         }
-        if (!normalized.content && !normalizeAttachments(normalized.attachments).length && normalized.type !== 'action') {
+        const interactivePacket = params.jiujiu ? normalizeJiujiuPacket(params.jiujiu) : null;
+        const hasInteractive = !!(interactivePacket && (isJiujiuInteractive(interactivePacket) || isJiujiuResult(interactivePacket)));
+        if (!normalized.content && !normalizeAttachments(normalized.attachments).length && normalized.type !== 'action' && !hasInteractive) {
             throw new Error('content required');
         }
         const msg = normalized;
@@ -884,10 +929,16 @@ export class OldBuddyStore {
             if (isTemplaterTrue(result)) {
                 return;
             }
+            const cardPacket = templaterReplyAsPacket(result);
+            if (cardPacket) {
+                this.pushBuddyInteractive(cardPacket, userMsg.target);
+                return;
+            }
             if (typeof result === 'string' && result.trim()) {
                 replyText = result.trim();
             } else if (Array.isArray(result) && result[0] != null && String(result[0]).trim()) {
-                replyText = String(result[0]).trim();
+                const first = result[0];
+                if (typeof first === 'string') replyText = first.trim();
             }
         } catch (e) {
             console.warn('[oldbuddy] templater reply failed:', e);
@@ -901,18 +952,26 @@ export class OldBuddyStore {
             if (userMsg.type === 'welcome' || userMsg.type === 'action') {
                 return;
             }
-            const nAtt = Array.isArray(userMsg.attachments) ? userMsg.attachments.length : 0;
-            const kinds = (userMsg.attachments || []).map((a) => String(a.kind || '').toLowerCase());
-            if (userMsg.type === 'audio' || kinds.includes('audio')) {
-                replyText = '收到你的语音了。';
-            } else if (kinds.includes('image')) {
-                replyText = '收到你的图片了。';
-            } else if (kinds.includes('video')) {
-                replyText = '收到你的视频了。';
-            } else if (nAtt) {
-                replyText = `收到${userMsg.content ? `：${userMsg.content}` : ''}（${nAtt} 个附件）`;
+            if (this.tryBuiltinCardCommand(userMsg)) {
+                return;
+            }
+            const stored = userMsg.jiujiu ? normalizeJiujiuPacket(userMsg.jiujiu) : null;
+            if (stored && isJiujiuResult(stored)) {
+                replyText = formatInteractiveResult(stored);
             } else {
-                replyText = `嗯，我听到了：${userMsg.content}`;
+                const nAtt = Array.isArray(userMsg.attachments) ? userMsg.attachments.length : 0;
+                const kinds = (userMsg.attachments || []).map((a) => String(a.kind || '').toLowerCase());
+                if (userMsg.type === 'audio' || kinds.includes('audio')) {
+                    replyText = '收到你的语音了。';
+                } else if (kinds.includes('image')) {
+                    replyText = '收到你的图片了。';
+                } else if (kinds.includes('video')) {
+                    replyText = '收到你的视频了。';
+                } else if (nAtt) {
+                    replyText = `收到${userMsg.content ? `：${userMsg.content}` : ''}（${nAtt} 个附件）`;
+                } else {
+                    replyText = `嗯，我听到了：${userMsg.content}`;
+                }
             }
         }
 
@@ -927,9 +986,135 @@ export class OldBuddyStore {
         });
     }
 
+    private pushBuddyInteractive(packet: JiujiuPacket, target?: string) {
+        const outgoing = packetToOutgoing({
+            ...packet,
+            type: packet.type || 'interactive',
+            msgId: packet.msgId || this.newId(),
+            senderId: packet.senderId || 'buddy',
+        });
+        this.pushMessage({
+            id: String(outgoing.msgId),
+            sender: 'buddy',
+            target: target || DEFAULT_TARGET,
+            timestamp: new Date().toISOString(),
+            type: 'message',
+            content: String(outgoing.content || outgoing.title || '互动卡片'),
+            jiujiu: outgoing as Record<string, unknown>,
+        });
+    }
+
+    private tryBuiltinCardCommand(userMsg: OldBuddyMessage): boolean {
+        const text = String(userMsg.content || '').trim();
+        if (text === '/card' || text === '/form' || text === '/interactive') {
+            this.pushBuddyInteractive({
+                type: 'interactive',
+                content: '晚饭吃什么？',
+                card: MEAL_CARD,
+                reply: 'both',
+            }, userMsg.target);
+            return true;
+        }
+        if (text === '/widgets' || text.startsWith('/widgets ')) {
+            const name = text.slice('/widgets'.length).trim();
+            const spec = widgetSample(name);
+            if (!spec) {
+                const available = widgetNames().map((item) => `\`${item}\``).join(' ');
+                this.pushMessage({
+                    id: this.newId(),
+                    sender: 'buddy',
+                    target: userMsg.target,
+                    timestamp: new Date().toISOString(),
+                    type: 'message',
+                    content: `没有名为 \`${name || 'all'}\` 的控件示例。可用：${available}`,
+                    card: true,
+                });
+                return true;
+            }
+            this.pushBuddyInteractive({
+                type: 'interactive',
+                content: String(spec.description || spec.title || '请选择'),
+                card: spec,
+                reply: 'both',
+            }, userMsg.target);
+            return true;
+        }
+        if (text === '/yesno' || text.startsWith('/yesno ')) {
+            const question = text.slice('/yesno'.length).trim() || '确认吗？';
+            this.pushBuddyInteractive({
+                type: 'interactive',
+                content: question,
+                actions: yesnoActions(),
+                reply: 'both',
+            }, userMsg.target);
+            return true;
+        }
+        return false;
+    }
+
     close() {
         this.ws.closeAll();
     }
+}
+
+function templaterReplyAsPacket(result: unknown): JiujiuPacket | null {
+    let value: unknown = result;
+    if (Array.isArray(value) && value.length === 1) {
+        value = value[0];
+    }
+    if (typeof value === 'string') {
+        const s = value.trim();
+        if (!s.startsWith('{')) return null;
+        try {
+            value = JSON.parse(s);
+        } catch {
+            return null;
+        }
+    }
+    if (!isRecord(value)) return null;
+    const type = String(value.type || '');
+    if (!hasJiujiuCardPayload(value) && !isJiujiuInteractive({ type }) && !isJiujiuResult({ type })) {
+        return null;
+    }
+    return normalizeJiujiuPacket(value);
+}
+
+function formatResultValue(value: unknown): string {
+    if (value == null) return '';
+    if (typeof value === 'boolean') return value ? '是' : '否';
+    if (Array.isArray(value)) {
+        return value.map((item) => formatResultValue(item)).filter(Boolean).join('、');
+    }
+    if (isRecord(value)) {
+        return Object.entries(value)
+            .map(([key, item]) => {
+                const text = formatResultValue(item);
+                return text ? `${key} ${text}` : '';
+            })
+            .filter(Boolean)
+            .join('，');
+    }
+    return String(value).trim();
+}
+
+function formatInteractiveResult(packet: JiujiuPacket): string {
+    const summary = String(packet.content || '').trim();
+    if (summary) return `已收到卡片回复：${summary}`;
+    const result = packet.result && isRecord(packet.result) ? packet.result : {};
+    const values = isRecord(result.values) ? result.values : {};
+    const action = String(packet.action || result.action || '').trim();
+    const parts = Object.entries(values)
+        .map(([key, item]) => {
+            const text = formatResultValue(item);
+            return text ? `${key}=${text}` : '';
+        })
+        .filter(Boolean);
+    if (parts.length) {
+        const label = action || '已回复';
+        return `已收到卡片回复：**${label}**（${parts.join('，')}）`;
+    }
+    if (action) return `已收到卡片回复：**${action}**`;
+    return '已收到卡片回复。';
 }
 
 function mergeMessages(...sources: OldBuddyMessage[][]): OldBuddyMessage[] {
@@ -1126,7 +1311,7 @@ export function inferOldBuddyMessageType(
 }
 
 function mimeFromExt(filePath: string) {
-    const ext = path.extname(filePath).toLowerCase();
+    const ext = nodePath().extname(filePath).toLowerCase();
     const map: Record<string, string> = {
         '.html': 'text/html; charset=utf-8',
         '.css': 'text/css; charset=utf-8',

@@ -10,7 +10,7 @@ import { OldBuddyHttpHandlers } from './oldbuddy/oldbuddyHttp';
 import type { HttpReq, HttpRes, ParsedReqUrl, SseConnection } from '../http-types';
 import { parseRequestUrl } from '../http-types';
 import { errorMessage } from '../ts-helpers';
-import { desktopNodeOrThrow, type NodeNetSocket, type NodePathModule } from '../obsidian-app';
+import { lazyDesktopNodeOrThrow, type NodeNetSocket, type NodePathModule } from '../obsidian-app';
 
 type Socket = NodeNetSocket;
 
@@ -38,9 +38,9 @@ interface NodeHttpsModule {
 
 type RequestHandler = (req: HttpReq, res: HttpRes) => void | Promise<void>;
 
-const https = desktopNodeOrThrow<NodeHttpsModule>('https');
-const http = desktopNodeOrThrow<NodeHttpModule>('http');
-const path = desktopNodeOrThrow<NodePathModule>('path');
+const nodeHttps = lazyDesktopNodeOrThrow<NodeHttpsModule>('https');
+const nodeHttp = lazyDesktopNodeOrThrow<NodeHttpModule>('http');
+const nodePath = lazyDesktopNodeOrThrow<NodePathModule>('path');
 
 export class HTTPServer {
     private templater: Templater;
@@ -72,7 +72,7 @@ export class HTTPServer {
         this.templater = templater;
         this.host = host;
         this.port = port;
-        this.tlsDir = path.join(configDir, 'plugins', 'note-chain', 'tls');
+        this.tlsDir = nodePath().join(configDir, 'plugins', 'note-chain', 'tls');
         this.mcp = new MCPHttpHandlers(app, templater, this.sseConnections, () => this.port);
         this.online = new OnlineHttpHandlers(app);
         this.oldbuddyStore = new OldBuddyStore(templater, configDir);
@@ -96,6 +96,15 @@ export class HTTPServer {
 
     getObsidianOldBuddyUrl(): string {
         return `${this.getHttpBaseUrl()}/oldbuddy`;
+    }
+
+    /** 啾啾 `POST /push`：投递给已连接的协议好友，不等待点选。 */
+    pushJiujiu(packet: Record<string, unknown>) {
+        return this.oldbuddyStore.handleJiujiuHttpPush(packet);
+    }
+
+    listJiujiuCardResults(): Record<string, unknown>[] {
+        return this.oldbuddyStore.listCardResults();
     }
 
     getHost(): string {
@@ -228,7 +237,7 @@ export class HTTPServer {
     private async startHttpsServer(handler: RequestHandler): Promise<void> {
         const { key, cert } = await ensureSelfSignedCert(this.tlsDir);
         return new Promise((resolve, reject) => {
-            const httpsSrv = https.createServer({ key, cert }, (req, res) => {
+            const httpsSrv = nodeHttps().createServer({ key, cert }, (req, res) => {
                 void handler(req, res);
             });
             this.server = httpsSrv;
@@ -270,7 +279,7 @@ export class HTTPServer {
     private startLocalHttpServer(handler: RequestHandler, localPort: number): Promise<void> {
         if (this.localServer) return Promise.resolve();
 
-        const httpSrv = http.createServer((req, res) => {
+        const httpSrv = nodeHttp().createServer((req, res) => {
             void handler(req, res);
         });
         this.localServer = httpSrv;

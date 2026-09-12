@@ -1,7 +1,7 @@
 import type { HttpReq, HttpRes } from '../http-types';
-import { desktopNodeOrThrow, type NodeFsModule } from '../obsidian-app';
+import { lazyDesktopNodeOrThrow, type NodeFsModule } from '../obsidian-app';
 
-const fs = desktopNodeOrThrow<NodeFsModule>('fs');
+const nodeFs = lazyDesktopNodeOrThrow<NodeFsModule>('fs');
 
 /** 读取 HTTP 请求体（Node IncomingMessage） */
 export function readHttpBody(req: HttpReq): Promise<string> {
@@ -157,7 +157,7 @@ export function sendLocalFile(
             'Content-Length': chunkSize,
             'Content-Range': `bytes ${start}-${end}/${size}`,
         });
-        fs.createReadStream(absPath, { start, end }).pipe(res);
+        nodeFs().createReadStream(absPath, { start, end }).pipe(res);
         return;
     }
 
@@ -165,5 +165,5 @@ export function sendLocalFile(
         ...baseHeaders,
         'Content-Length': size,
     });
-    fs.createReadStream(absPath).pipe(res);
+        nodeFs().createReadStream(absPath).pipe(res);
 }

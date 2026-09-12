@@ -40,13 +40,18 @@ function isJiujiuPushPath(pathname: string | null | undefined): boolean {
     return p === '/push' || p === '/jiujiu/push' || p === `${BASE}/jiujiu/push`;
 }
 
+function isJiujiuCardResultPath(pathname: string | null | undefined): boolean {
+    const p = pathname || '';
+    return p === '/card-result' || p === '/jiujiu/card-result' || p === `${BASE}/jiujiu/card-result`;
+}
+
 /** /oldbuddy 聊天页与 API（页面 HTML 内嵌于 main.js，同 onlineHttp） */
 export class OldBuddyHttpHandlers {
     constructor(private store: OldBuddyStore) {}
 
     matches(pathname: string | null | undefined): boolean {
         if (!pathname) return false;
-        if (pathname === '/jiujiu' || pathname === '/ws' || isJiujiuPushPath(pathname)) return true;
+        if (pathname === '/jiujiu' || pathname === '/ws' || isJiujiuPushPath(pathname) || isJiujiuCardResultPath(pathname)) return true;
         return pathname === BASE || pathname.startsWith(`${BASE}/`);
     }
 
@@ -89,6 +94,18 @@ export class OldBuddyHttpHandlers {
                 protocol: 'jiujiu',
                 clients: this.store.getWebSocketHub().jiujiuCount(),
                 friends: this.store.getWebSocketHub().listJiujiuFriends(),
+                cardResult: '/card-result',
+            });
+            return true;
+        }
+        if (isJiujiuCardResultPath(pathname) && req.method === 'POST') {
+            await this.handleJiujiuCardResult(req, res);
+            return true;
+        }
+        if (isJiujiuCardResultPath(pathname) && req.method === 'GET') {
+            jsonResponse(res, 200, {
+                ok: true,
+                results: this.store.listCardResults(),
             });
             return true;
         }
@@ -101,6 +118,7 @@ export class OldBuddyHttpHandlers {
                 protocol: 'jiujiu',
                 ws: '/oldbuddy/jiujiu',
                 push: '/push',
+                cardResult: '/card-result',
             });
             return true;
         }
@@ -218,6 +236,21 @@ export class OldBuddyHttpHandlers {
             const msg = errorMessage(e) || 'push failed';
             const status = msg === 'content required' || msg === 'attachment too large' ? 400 : 500;
             jsonResponse(res, status, { ok: false, error: msg });
+        }
+    }
+
+    private async handleJiujiuCardResult(req: HttpReq, res: HttpRes) {
+        try {
+            const body = await readHttpBody(req);
+            const fields = JSON.parse(body || '{}') as unknown;
+            if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
+                jsonResponse(res, 400, { ok: false, error: 'payload must be a JSON object' });
+                return;
+            }
+            this.store.rememberCardResult(fields as Record<string, unknown>);
+            jsonResponse(res, 200, { ok: true, stored: this.store.listCardResults().length });
+        } catch (e: unknown) {
+            jsonResponse(res, 400, { ok: false, error: errorMessage(e) || 'invalid json' });
         }
     }
 

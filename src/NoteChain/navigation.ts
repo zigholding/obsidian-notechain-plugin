@@ -12,6 +12,42 @@ import { NoteContentView } from '../NCView';
 import type NoteChainPlugin from '../plugin';
 import type { NoteChain } from '../NoteChain';
 import { obsidianApp, vaultFullPath } from '../obsidian-app';
+import { isRecord } from '../ts-helpers';
+
+const HTTP_URL_RE = /https?:\/\/[^\s<>"']+/gi;
+
+function addFrontmatterHttpUrls(
+	value: unknown,
+	path: string,
+	items: Record<string, string>,
+	seen: Set<string>
+) {
+	if (typeof value === 'string') {
+		const urls = value.match(HTTP_URL_RE);
+		if (!urls) { return; }
+		for (let i = 0; i < urls.length; i++) {
+			const url = urls[i];
+			if (seen.has(url)) { continue; }
+			seen.add(url);
+			const key = urls.length === 1 ? `🌐 ${path}` : `🌐 ${path}[${i}]`;
+			items[key] = url;
+		}
+		return;
+	}
+	if (Array.isArray(value)) {
+		for (let i = 0; i < value.length; i++) {
+			const next = path ? `${path}[${i}]` : `[${i}]`;
+			addFrontmatterHttpUrls(value[i], next, items, seen);
+		}
+		return;
+	}
+	if (!isRecord(value)) { return; }
+	for (const k of Object.keys(value)) {
+		if (!path && k === 'position') { continue; }
+		const next = path ? `${path}.${k}` : k;
+		addFrontmatterHttpUrls(value[k], next, items, seen);
+	}
+}
 
 export class NoteChainNavigation {
 	plugin!: NoteChainPlugin;
@@ -616,6 +652,11 @@ export class NoteChainNavigation {
 				}
 			}
 
+			const fm = this.app.metadataCache.getFileCache(tfile)?.frontmatter;
+			if (fm) {
+				addFrontmatterHttpUrls(fm, '', items, new Set(Object.values(items)));
+			}
+
 
 			let text = await this.app.vault.cachedRead(tfile)
 			// 匹配外部链接
@@ -665,6 +706,11 @@ export class NoteChainNavigation {
 			}
 		}
 		items['💒 vault'] = vaultFullPath(this.app, '.');
+		
+		items['⚙️ config'] = this.plugin.easyapi.file.CONFIG;
+		items['🔌 plugins'] = this.plugin.easyapi.file.PLUGINS;
+		items['✂️ snippets'] = this.plugin.easyapi.file.SNIPPETS;
+
 		return items;
 	}
 

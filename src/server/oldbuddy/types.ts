@@ -50,6 +50,8 @@ export interface OldBuddyMessage {
     extra_text?: string;
     file_name?: string;
     file_size?: number;
+    /** 啾啾协议原文（互动卡片 / 点选结果），网页客户端忽略 */
+    jiujiu?: Record<string, unknown>;
 }
 
 export interface OldBuddyTarget {
@@ -230,5 +232,8 @@ export function normalizeOldBuddyMessage(raw: unknown): OldBuddyMessage | null {
     if (row.direct === true || row.direct === 'true' || row.direct === 1) out.direct = true;
     const quick = String(row.quick_cmd_id ?? '').trim();
     if (quick) out.quick_cmd_id = quick;
+    if (row.jiujiu && typeof row.jiujiu === 'object' && !Array.isArray(row.jiujiu)) {
+        out.jiujiu = row.jiujiu as Record<string, unknown>;
+    }
     return out;
 }

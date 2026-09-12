@@ -1,7 +1,7 @@
-import { desktopNodeOrThrow, type NodeCryptoModule, type NodeNetSocket } from '../../obsidian-app';
+import { lazyDesktopNodeOrThrow, type NodeCryptoModule, type NodeNetSocket } from '../../obsidian-app';
 import type { HttpReq } from '../../http-types';
 
-const crypto = desktopNodeOrThrow<NodeCryptoModule>('crypto');
+const nodeCrypto = lazyDesktopNodeOrThrow<NodeCryptoModule>('crypto');
 type Socket = NodeNetSocket;
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
@@ -38,7 +38,7 @@ export class OldBuddyWebSocketHub {
             socket.destroy();
             return;
         }
-        const accept = crypto
+        const accept = nodeCrypto()
             .createHash('sha1')
             .update(String(key) + WS_GUID)
             .digest('base64');
@@ -242,7 +242,7 @@ export class OldBuddyWebSocketHub {
             );
         }
         if (mask) {
-            const maskKey = crypto.randomBytes(4);
+            const maskKey = nodeCrypto().randomBytes(4);
             header.push(...maskKey);
             const masked = Buffer.alloc(payload.length);
             for (let i = 0; i < payload.length; i++) {

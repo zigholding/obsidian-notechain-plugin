@@ -246,6 +246,15 @@ export function desktopNodeOrThrow<T>(moduleId: string): T {
 	return mod;
 }
 
+/** Call `desktopNodeOrThrow` on first use. Never invoke at module top-level (mobile has no Node builtins). */
+export function lazyDesktopNodeOrThrow<T>(moduleId: string): () => T {
+	let cached: T | undefined;
+	return () => {
+		cached ??= desktopNodeOrThrow<T>(moduleId);
+		return cached;
+	};
+}
+
 export function hasCommunityPlugin(app: App, id: string): boolean {
 	return Object.prototype.hasOwnProperty.call(obsidianApp(app).plugins?.plugins ?? {}, id);
 }
