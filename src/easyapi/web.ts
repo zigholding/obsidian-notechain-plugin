@@ -1,6 +1,5 @@
 import { App, Platform } from 'obsidian';
 import { desktopNode, noteChainPlugin } from '../obsidian-app';
-import { isRecord } from '../ts-helpers';
 
 export interface WebRequestOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -205,33 +204,32 @@ export class Web {
     }
 
     /**
-     * 向啾啾协议好友推送一条消息或互动卡片（不等待点选）。
-     * 字符串当正文；对象当完整协议包。仅一条连接时可省略 friendName。
+     * 向啾啾协议好友推送 App 协议 JSON，不做卡片字段解析。
+     * 字符串会包成 `{ type: 'message', content }`。仅一条连接时可省略 friendName。
      */
     async push_message(
-        content: string | Record<string, unknown>,
-        options: JiujiuChatOptions = {},
+        friendName: string,
+        data: string | Record<string, unknown>,
     ): Promise<JiujiuPushResult> {
-        const packet = buildJiujiuPayload(content, options, false);
-        return this.dispatchJiujiuPush(packet);
+        return this.dispatchJiujiuPush(asJiujiuPushData(friendName, data));
     }
 
     /**
-     * 推一张互动卡片并等到用户点选。字符串默认是/否；也可传 card / actions。
-     * 若内容是网站卡片（`urls` / `tabs`），只投递、不等待，返回推送结果。
+     * 推送协议 JSON 并等到 `interactive_result`（按 msgId）。网站卡请用 `push_message`。
+     * `timeout` 为秒，默认 120。
      */
     async ask_message(
-        content: string | Record<string, unknown>,
-        options: JiujiuChatOptions = {},
+        friendName: string,
+        data: string | Record<string, unknown>,
+        timeout = 120,
     ): Promise<Record<string, unknown>> {
-        const packet = buildJiujiuPayload(content, options, true);
+        const packet = asJiujiuPushData(friendName, data);
         const pushed = await this.dispatchJiujiuPush(packet);
-        if (isWebsitePayload(packet)) {
+        if (isWebsitePushData(packet)) {
             return { ...pushed, type: String(packet.type || 'website') };
         }
         const msgId = pushed.msgId;
-        const timeoutSec = options.timeout ?? 120;
-        const deadline = Date.now() + timeoutSec * 1000;
+        const deadline = Date.now() + timeout * 1000;
         while (Date.now() < deadline) {
             const found = findCardAnswer(this.jiujiuStore().listJiujiuCardResults(), msgId);
             if (found) return found;
@@ -280,29 +278,6 @@ export class Web {
     }
 }
 
-export interface JiujiuChatOptions {
-    friendName?: string;
-    friend?: string;
-    friendId?: string;
-    target?: string;
-    senderName?: string;
-    sender?: string;
-    senderId?: string;
-    /** ask_message 等待秒数，默认 120 */
-    timeout?: number;
-    actions?: unknown[];
-    card?: Record<string, unknown>;
-    fields?: unknown[];
-    title?: string;
-    reply?: string;
-    callbackUrl?: string;
-    urls?: unknown[];
-    tabs?: unknown[];
-    layout?: 'vertical' | 'horizontal' | string;
-    /** 网站卡片：点开后新页 WebView。与 urls / tabs 二选一即可。 */
-    website?: Record<string, unknown>;
-}
-
 export interface JiujiuPushResult {
     ok: true;
     clients: number;
@@ -311,85 +286,19 @@ export interface JiujiuPushResult {
     friendId?: string;
 }
 
-function looksLikeCardPayload(data: Record<string, unknown>): boolean {
-    if (data.card || data.actions || data.fields) return true;
-    const content = data.content;
-    if (!isRecord(content)) return false;
-    return !!(content.card || content.actions || content.fields || content.title || content.description);
-}
-
-function isInteractiveType(msgType: unknown): boolean {
-    const t = String(msgType || '').trim().toLowerCase();
-    return t === 'interactive' || t === 'card' || t === 'form' || t === 'ui' || t === 'interactive_card';
-}
-
-function isWebsiteType(msgType: unknown): boolean {
-    const t = String(msgType || '').trim().toLowerCase();
-    return t === 'website' || t === 'web' || t === 'lookup' || t === 'sites';
-}
-
-function isWebsitePayload(data: Record<string, unknown>): boolean {
-    return isWebsiteType(data.type) || Array.isArray(data.urls) || Array.isArray(data.tabs);
-}
-
-function buildJiujiuPayload(
-    content: string | Record<string, unknown>,
-    options: JiujiuChatOptions,
-    ask: boolean,
-): Record<string, unknown> {
-    const packet: Record<string, unknown> = isRecord(content) ? { ...content } : { content };
-    if (typeof content === 'string') {
-        packet.content = content;
-    }
-    if (options.website && isRecord(options.website)) {
-        Object.assign(packet, options.website);
-        if (!packet.type) packet.type = 'website';
-    }
-    const friendName = String(options.friendName ?? options.friend ?? packet.friendName ?? packet.friend ?? '').trim();
-    const friendId = String(options.friendId ?? packet.friendId ?? '').trim();
-    const target = String(options.target ?? packet.target ?? '').trim();
-    const senderName = String(options.senderName ?? options.sender ?? packet.senderName ?? '').trim();
-    const senderId = String(options.senderId ?? packet.senderId ?? '').trim();
-    if (friendName) packet.friendName = friendName;
-    if (friendId) packet.friendId = friendId;
-    if (target) packet.target = target;
-    if (senderName) packet.senderName = senderName;
-    if (senderId) packet.senderId = senderId;
-    if (options.card) packet.card = options.card;
-    if (options.actions) packet.actions = options.actions;
-    if (options.fields) packet.fields = options.fields;
-    if (options.title) packet.title = options.title;
-    if (options.reply) packet.reply = options.reply;
-    if (options.callbackUrl) packet.callbackUrl = options.callbackUrl;
-    if (options.urls) packet.urls = options.urls;
-    if (options.tabs) packet.tabs = options.tabs;
-    if (options.layout) packet.layout = options.layout;
-
-    if (isWebsitePayload(packet)) {
-        if (!packet.type) packet.type = 'website';
-        if (packet.content == null || packet.content === '') {
-            packet.content = String(packet.title || '网站');
-        }
-        return packet;
-    }
-
-    const interactive = ask || isInteractiveType(packet.type) || looksLikeCardPayload(packet);
-    if (interactive) {
-        if (!packet.type) packet.type = 'interactive';
-        if (!packet.reply) packet.reply = 'both';
-        if (!packet.card && !packet.actions && !packet.fields && !looksLikeCardPayload(packet)) {
-            packet.actions = [
-                { id: 'yes', label: '是' },
-                { id: 'no', label: '否' },
-            ];
-        }
-        if (packet.content == null || packet.content === '') {
-            packet.content = String(packet.title || '请选择');
-        }
-    } else if (!packet.type) {
-        packet.type = 'message';
-    }
+function asJiujiuPushData(friendName: string, data: string | Record<string, unknown>): Record<string, unknown> {
+    const packet: Record<string, unknown> = typeof data === 'string'
+        ? { type: 'message', content: data }
+        : { ...data };
+    const name = String(friendName || packet.friendName || packet.friend || '').trim();
+    if (name) packet.friendName = name;
     return packet;
+}
+
+function isWebsitePushData(packet: Record<string, unknown>): boolean {
+    const t = String(packet.type || '').trim().toLowerCase();
+    return t === 'website' || t === 'web' || t === 'lookup' || t === 'sites'
+        || Array.isArray(packet.urls) || Array.isArray(packet.tabs);
 }
 
 function findCardAnswer(results: Record<string, unknown>[], msgId: string): Record<string, unknown> | null {

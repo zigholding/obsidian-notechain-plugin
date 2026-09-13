@@ -3,11 +3,12 @@ export const OLDBUDDY_MESSAGE_TYPES = [
     'audio',
     'welcome',
     'action',
+    'json',
 ] as const;
 
 export type OldBuddyMessageType = (typeof OLDBUDDY_MESSAGE_TYPES)[number];
 
-const LEGACY_MEDIA_TYPES = new Set(['text', 'image', 'audio', 'video', 'file', 'message', 'welcome', 'action']);
+const LEGACY_MEDIA_TYPES = new Set(['text', 'image', 'audio', 'video', 'file', 'message', 'welcome', 'action', 'json']);
 
 /** 啾啾兼容附件：存储用 url，出站再读文件填 Base64 */
 export interface OldBuddyAttachment {
@@ -50,7 +51,8 @@ export interface OldBuddyMessage {
     extra_text?: string;
     file_name?: string;
     file_size?: number;
-    /** 啾啾协议原文（互动卡片 / 点选结果），网页客户端忽略 */
+    friendName?: string;
+    /** 旧字段：卡片曾拆进这里；新入库用 type=json + content 为协议 JSON */
     jiujiu?: Record<string, unknown>;
 }
 
@@ -86,7 +88,7 @@ export function isUserSender(sender?: string | null): boolean {
 
 export function isEnvelopeType(type?: string | null): boolean {
     const t = String(type || '');
-    return t === 'message' || t === 'welcome' || t === 'audio' || t === 'action';
+    return t === 'message' || t === 'welcome' || t === 'audio' || t === 'action' || t === 'json';
 }
 
 export function looksLikeUploadUrl(value: string | undefined | null): boolean {
@@ -156,6 +158,7 @@ function toEnvelopeType(rawType: string): OldBuddyMessageType {
     const t = String(rawType || '').toLowerCase();
     if (t === 'audio') return 'audio';
     if (t === 'welcome') return 'welcome';
+    if (t === 'json') return 'json';
     if (t === 'action' || t === 'player' || t === 'timer' || t === 'alarm') return 'action';
     return 'message';
 }
@@ -173,7 +176,16 @@ export function normalizeOldBuddyMessage(raw: unknown): OldBuddyMessage | null {
         // unknown types still become message
     }
 
-    let content = row.content != null ? String(row.content) : '';
+    let content = '';
+    if (row.content != null && typeof row.content === 'object') {
+        try {
+            content = JSON.stringify(row.content);
+        } catch {
+            content = String(row.content);
+        }
+    } else if (row.content != null) {
+        content = String(row.content);
+    }
     const extraText = String(row.extra_text ?? '').trim();
     const fileName = String(row.file_name ?? '').trim();
     const fileSize =
@@ -215,10 +227,12 @@ export function normalizeOldBuddyMessage(raw: unknown): OldBuddyMessage | null {
     if (row.card === true || row.card === 'true' || row.card === 1) out.card = true;
     const senderName = String(row.senderName ?? '').trim();
     if (senderName) out.senderName = senderName;
+    const friendName = String(row.friendName ?? '').trim();
+    if (friendName) out.friendName = friendName;
     if (attachments.length) out.attachments = attachments;
     const action = String(row.action ?? (rawType === 'player' || rawType === 'timer' || rawType === 'alarm' ? rawType : '')).trim();
     if (type === 'action' && action) out.action = action;
-    else if (action) {
+    else if (action && type !== 'json') {
         out.type = 'action';
         out.action = action;
     }

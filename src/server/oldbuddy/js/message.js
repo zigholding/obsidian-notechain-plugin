@@ -624,8 +624,37 @@ function normalizeClientMessage(raw) {
         if (extraText && !content) msg.content = extraText;
         delete msg.extra_text;
     }
-    if (msg.action && msg.type !== 'action') msg.type = 'action';
+    if (msg.action && msg.type !== 'action' && msg.type !== 'json') msg.type = 'action';
     return msg;
+}
+
+function parseClientJsonPayload(msg) {
+    if (!msg || String(msg.type || '') !== 'json') return null;
+    const raw = msg.content;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw;
+    try {
+        const value = JSON.parse(String(raw || ''));
+        return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function jsonMessagePreview(data) {
+    if (!data || typeof data !== 'object') return '';
+    const t = String(data.type || '').toLowerCase();
+    const title = String(data.title || '').trim();
+    const content = String(data.content || '').trim();
+    if (t === 'website' || t === 'web' || t === 'lookup' || t === 'sites') {
+        return title || content || '网站卡片';
+    }
+    if (t === 'interactive' || t === 'card' || t === 'form' || t === 'ui' || t === 'interactive_card') {
+        return content || title || '互动卡片';
+    }
+    if (t === 'interactive_result' || t === 'card_result' || t === 'form_result') {
+        return content || title || '卡片回复';
+    }
+    return content || title || t;
 }
 
 function appendExtraText(contentDiv, msg) {
@@ -871,6 +900,25 @@ function renderMessage(msg) {
 
     if (msg.type === 'action' || msg.action) {
         appendActionBody(contentDiv, msg);
+    } else if (msg.type === 'json') {
+        const data = parseClientJsonPayload(msg);
+        if (data && (String(data.type || '').toLowerCase() === 'action' || data.action)) {
+            appendActionBody(contentDiv, {
+                ...msg,
+                action: data.action || data.type,
+                name: data.name,
+                durationMs: data.durationMs,
+                hour: data.hour,
+                minute: data.minute,
+                content: data.content,
+            });
+        } else {
+            appendMarkdownBody(contentDiv, jsonMessagePreview(data), msg);
+            appendEnvelopeAttachments(contentDiv, msg);
+            if (!jsonMessagePreview(data) && !messageAttachments(msg).length) {
+                contentDiv.textContent = '';
+            }
+        }
     } else if (msg.type === 'audio') {
         const atts = messageAttachments(msg);
         const src = (atts[0] && atts[0].url) || (looksLikeUploadUrl(msg.content) ? msg.content : '');

@@ -118,6 +118,11 @@ export function isJiujiuResult(packet: JiujiuPacket): boolean {
     return isJiujiuResultType(String(packet.type || ''));
 }
 
+/** 互动卡 / 网站卡 / 点选结果入库为 OldBuddy `type=json`；message / audio / action 仍走信封。 */
+export function isJiujiuJsonStored(packet: JiujiuPacket): boolean {
+    return isJiujiuInteractive(packet) || isJiujiuWebsite(packet) || isJiujiuResult(packet);
+}
+
 function normalizeContent(data: Record<string, unknown>): { content: string; card?: Record<string, unknown> } {
     const card = asDict(data.card);
     const content = data.content;
@@ -451,6 +456,40 @@ export function actionMessageToJiujiuPacket(
     return packet;
 }
 
+/** 从 OldBuddy `type=json` 的 content 还原协议包；旧记录仍可读 `message.jiujiu`。 */
+export function parseOldBuddyJsonPacket(msg: OldBuddyMessage): JiujiuPacket | null {
+    if (msg.type === 'json') {
+        try {
+            const value = JSON.parse(String(msg.content || ''));
+            if (isRecord(value)) {
+                const packet: JiujiuPacket = { ...value };
+                packet.msgId = String(msg.id || packet.msgId || '');
+                packet.timestamp = packet.timestamp ?? oldBuddyTimestampToMs(msg.timestamp);
+                if (msg.sender) packet.senderId = msg.sender;
+                if (msg.senderName && !packet.senderName) packet.senderName = msg.senderName;
+                if (msg.target && !packet.target) packet.target = msg.target;
+                if (msg.friendName && !packet.friendName) packet.friendName = msg.friendName;
+                return packet;
+            }
+        } catch {
+            return null;
+        }
+    }
+    return packetFromStoredJiujiu(msg);
+}
+
+export function stripJiujiuAttachmentData(packet: JiujiuPacket): JiujiuPacket {
+    const out: JiujiuPacket = { ...packet };
+    if (!Array.isArray(out.attachments)) return out;
+    out.attachments = out.attachments.map((att) => {
+        if (!att || typeof att !== 'object') return att;
+        const rest = { ...att };
+        delete rest.data;
+        return rest;
+    });
+    return out;
+}
+
 function packetFromStoredJiujiu(msg: OldBuddyMessage): JiujiuPacket | null {
     if (!msg.jiujiu) return null;
     const stored = normalizeJiujiuPacket(msg.jiujiu);
@@ -471,7 +510,7 @@ export function oldBuddyToJiujiuPacket(
     msg: OldBuddyMessage,
     attachment?: { data: Buffer; mime: string } | null,
 ): JiujiuPacket {
-    const stored = packetFromStoredJiujiu(msg);
+    const stored = parseOldBuddyJsonPacket(msg);
     if (stored) return stored;
     if (msg.type === 'action' || msg.action) {
         return actionMessageToJiujiuPacket(msg);
@@ -502,7 +541,7 @@ export function envelopeToJiujiuPacket(
     msg: OldBuddyMessage,
     files: Array<{ att: OldBuddyAttachment; data: Buffer; mime: string }>,
 ): JiujiuPacket {
-    const stored = packetFromStoredJiujiu(msg);
+    const stored = parseOldBuddyJsonPacket(msg);
     if (stored) {
         if (files.length) {
             const attachments: JiujiuAttachment[] = [];
