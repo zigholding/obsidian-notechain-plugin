@@ -218,7 +218,7 @@ export class Web {
 
     /**
      * 推一张互动卡片并等到用户点选。字符串默认是/否；也可传 card / actions。
-     * 结果来自本机 `interactive_result`（与 GET /card-result 相同），不要把 callbackUrl 写成 127.0.0.1。
+     * 若内容是网站卡片（`urls` / `tabs`），只投递、不等待，返回推送结果。
      */
     async ask_message(
         content: string | Record<string, unknown>,
@@ -226,6 +226,9 @@ export class Web {
     ): Promise<Record<string, unknown>> {
         const packet = buildJiujiuPayload(content, options, true);
         const pushed = await this.dispatchJiujiuPush(packet);
+        if (isWebsitePayload(packet)) {
+            return { ...pushed, type: String(packet.type || 'website') };
+        }
         const msgId = pushed.msgId;
         const timeoutSec = options.timeout ?? 120;
         const deadline = Date.now() + timeoutSec * 1000;
@@ -293,6 +296,11 @@ export interface JiujiuChatOptions {
     title?: string;
     reply?: string;
     callbackUrl?: string;
+    urls?: unknown[];
+    tabs?: unknown[];
+    layout?: 'vertical' | 'horizontal' | string;
+    /** 网站卡片：点开后新页 WebView。与 urls / tabs 二选一即可。 */
+    website?: Record<string, unknown>;
 }
 
 export interface JiujiuPushResult {
@@ -315,6 +323,15 @@ function isInteractiveType(msgType: unknown): boolean {
     return t === 'interactive' || t === 'card' || t === 'form' || t === 'ui' || t === 'interactive_card';
 }
 
+function isWebsiteType(msgType: unknown): boolean {
+    const t = String(msgType || '').trim().toLowerCase();
+    return t === 'website' || t === 'web' || t === 'lookup' || t === 'sites';
+}
+
+function isWebsitePayload(data: Record<string, unknown>): boolean {
+    return isWebsiteType(data.type) || Array.isArray(data.urls) || Array.isArray(data.tabs);
+}
+
 function buildJiujiuPayload(
     content: string | Record<string, unknown>,
     options: JiujiuChatOptions,
@@ -323,6 +340,10 @@ function buildJiujiuPayload(
     const packet: Record<string, unknown> = isRecord(content) ? { ...content } : { content };
     if (typeof content === 'string') {
         packet.content = content;
+    }
+    if (options.website && isRecord(options.website)) {
+        Object.assign(packet, options.website);
+        if (!packet.type) packet.type = 'website';
     }
     const friendName = String(options.friendName ?? options.friend ?? packet.friendName ?? packet.friend ?? '').trim();
     const friendId = String(options.friendId ?? packet.friendId ?? '').trim();
@@ -340,6 +361,17 @@ function buildJiujiuPayload(
     if (options.title) packet.title = options.title;
     if (options.reply) packet.reply = options.reply;
     if (options.callbackUrl) packet.callbackUrl = options.callbackUrl;
+    if (options.urls) packet.urls = options.urls;
+    if (options.tabs) packet.tabs = options.tabs;
+    if (options.layout) packet.layout = options.layout;
+
+    if (isWebsitePayload(packet)) {
+        if (!packet.type) packet.type = 'website';
+        if (packet.content == null || packet.content === '') {
+            packet.content = String(packet.title || '网站');
+        }
+        return packet;
+    }
 
     const interactive = ask || isInteractiveType(packet.type) || looksLikeCardPayload(packet);
     if (interactive) {

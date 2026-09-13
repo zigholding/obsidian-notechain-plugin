@@ -24,9 +24,10 @@ import {
     packetToOutgoing,
     isJiujiuInteractive,
     isJiujiuResult,
+    isJiujiuWebsite,
     hasJiujiuCardPayload,
 } from './jiujiu';
-import { MEAL_CARD, widgetNames, widgetSample, yesnoActions } from './demoCards';
+import { MEAL_CARD, lookupWebsitePacket, widgetNames, widgetSample, yesnoActions } from './demoCards';
 import { Templater } from '../../easyapi/templater';
 import { isRecord } from '../../ts-helpers';
 
@@ -148,10 +149,11 @@ export class OldBuddyStore {
 
         const isAction = isJiujiuActionPacket(packet);
         const interactive = isJiujiuInteractive(packet);
+        const website = isJiujiuWebsite(packet);
         const content = String(packet.content || '').trim();
         const attachments = Array.isArray(packet.attachments) ? packet.attachments : [];
         const actionName = String(packet.name || '').trim();
-        if (!content && !attachments.length && !(isAction && actionName) && !interactive) {
+        if (!content && !attachments.length && !(isAction && actionName) && !interactive && !website) {
             throw new Error('content required');
         }
 
@@ -160,7 +162,7 @@ export class OldBuddyStore {
         if (senderName) packet.senderName = senderName;
         if (!packet.msgId) packet.msgId = this.newId();
 
-        if (isAction && !interactive) {
+        if (isAction && !interactive && !website) {
             const actionPacket = toJiujiuActionPacket(packet, {
                 senderId,
                 senderName,
@@ -178,7 +180,7 @@ export class OldBuddyStore {
             skipReply: !isUserSender(senderId),
             echoToJiujiu: false,
         });
-        if (!isAction || interactive) {
+        if (!isAction || interactive || website) {
             const outgoing = packetToOutgoing(packet);
             for (const c of matched) {
                 this.ws.sendTo(c, attachJiujiuSession(outgoing, c));
@@ -206,12 +208,13 @@ export class OldBuddyStore {
         this.ensureLoaded();
         const isAction = isJiujiuActionPacket(packet);
         const interactive = isJiujiuInteractive(packet) || isJiujiuResult(packet);
+        const website = isJiujiuWebsite(packet);
         const action = jiujiuActionName(packet);
         let content = String(packet.content || '').trim();
         if (!content && isAction) {
             content = String(packet.name || action || '').trim();
         }
-        if (!content && interactive) {
+        if (!content && (interactive || website)) {
             content = String(packet.title || packet.description || packet.action || '').trim();
         }
         const rawAtts = Array.isArray(packet.attachments) ? packet.attachments : [];
@@ -238,7 +241,7 @@ export class OldBuddyStore {
             }
             saved.push(row);
         }
-        if (!content && !saved.length && !isAction && !interactive) return null;
+        if (!content && !saved.length && !isAction && !interactive && !website) return null;
 
         const id = String(packet.msgId || '').trim() || this.newId();
         if (!opts.echoToJiujiu) {
@@ -269,7 +272,7 @@ export class OldBuddyStore {
             hour: packet.hour != null ? Number(packet.hour) : undefined,
             minute: packet.minute != null ? Number(packet.minute) : undefined,
             direct: packet.direct === true || packet.direct === 'true',
-            jiujiu: interactive ? packetToOutgoing(packet) as Record<string, unknown> : undefined,
+            jiujiu: (interactive || website) ? packetToOutgoing(packet) as Record<string, unknown> : undefined,
         });
     }
 
@@ -879,7 +882,11 @@ export class OldBuddyStore {
             throw new Error('content required');
         }
         const interactivePacket = params.jiujiu ? normalizeJiujiuPacket(params.jiujiu) : null;
-        const hasInteractive = !!(interactivePacket && (isJiujiuInteractive(interactivePacket) || isJiujiuResult(interactivePacket)));
+        const hasInteractive = !!(interactivePacket && (
+            isJiujiuInteractive(interactivePacket)
+            || isJiujiuResult(interactivePacket)
+            || isJiujiuWebsite(interactivePacket)
+        ));
         if (!normalized.content && !normalizeAttachments(normalized.attachments).length && normalized.type !== 'action' && !hasInteractive) {
             throw new Error('content required');
         }
@@ -1049,6 +1056,14 @@ export class OldBuddyStore {
             }, userMsg.target);
             return true;
         }
+        if (text === '/web' || text === '/website' || text === '/lookup' || text.startsWith('/web ') || text.startsWith('/website ') || text.startsWith('/lookup ')) {
+            let word = 'apple';
+            if (text.startsWith('/web ')) word = text.slice('/web '.length).trim() || word;
+            else if (text.startsWith('/website ')) word = text.slice('/website '.length).trim() || word;
+            else if (text.startsWith('/lookup ')) word = text.slice('/lookup '.length).trim() || word;
+            this.pushBuddyInteractive(lookupWebsitePacket(word), userMsg.target);
+            return true;
+        }
         return false;
     }
 
@@ -1072,11 +1087,11 @@ function templaterReplyAsPacket(result: unknown): JiujiuPacket | null {
         }
     }
     if (!isRecord(value)) return null;
-    const type = String(value.type || '');
-    if (!hasJiujiuCardPayload(value) && !isJiujiuInteractive({ type }) && !isJiujiuResult({ type })) {
+    const packet = normalizeJiujiuPacket(value);
+    if (!hasJiujiuCardPayload(value) && !isJiujiuInteractive(packet) && !isJiujiuResult(packet) && !isJiujiuWebsite(packet)) {
         return null;
     }
-    return normalizeJiujiuPacket(value);
+    return packet;
 }
 
 function formatResultValue(value: unknown): string {

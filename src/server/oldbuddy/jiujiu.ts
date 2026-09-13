@@ -42,10 +42,14 @@ export interface JiujiuPacket {
     description?: string;
     reply?: string;
     callbackUrl?: string;
+    urls?: unknown[];
+    tabs?: unknown[];
+    layout?: string;
     [key: string]: unknown;
 }
 
 const INTERACTIVE_TYPES = new Set(['interactive', 'card', 'form', 'ui', 'interactive_card']);
+const WEBSITE_TYPES = new Set(['website', 'web', 'lookup', 'sites']);
 const RESULT_TYPES = new Set(['interactive_result', 'card_result', 'form_result']);
 const CONSUMED_KEYS = new Set([
     'type', 'content', 'msgId', 'id', 'timestamp', 'attachments',
@@ -54,6 +58,7 @@ const CONSUMED_KEYS = new Set([
     'target', 'to', 'dest', 'room', 'replyTo', 'inReplyTo', 'result',
     'card', 'actions', 'fields', 'title', 'description', 'desc',
     'reply', 'replyMode', 'callbackUrl', 'callback', 'replyUrl',
+    'urls', 'tabs', 'layout',
 ]);
 
 function asStr(...values: unknown[]): string {
@@ -75,7 +80,20 @@ function asList(value: unknown): unknown[] {
 
 function looksLikeCard(value: unknown): value is Record<string, unknown> {
     if (!isRecord(value)) return false;
+    if (hasJiujiuWebsitePayload(value)) return false;
     return !!(value.card || value.actions || value.fields || value.title || value.description);
+}
+
+export function hasJiujiuWebsitePayload(data: Record<string, unknown> | JiujiuPacket): boolean {
+    return Array.isArray(data.urls) || Array.isArray(data.tabs);
+}
+
+export function isJiujiuWebsiteType(msgType: string): boolean {
+    return WEBSITE_TYPES.has(msgType.trim().toLowerCase());
+}
+
+export function isJiujiuWebsite(packet: JiujiuPacket): boolean {
+    return isJiujiuWebsiteType(String(packet.type || '')) || hasJiujiuWebsitePayload(packet);
 }
 
 export function hasJiujiuCardPayload(data: Record<string, unknown> | JiujiuPacket): boolean {
@@ -122,6 +140,7 @@ export function normalizeJiujiuPacket(raw: Record<string, unknown> | JiujiuPacke
     const data = raw as Record<string, unknown>;
     const { content, card } = normalizeContent(data);
     let rawType = asStr(data.type);
+    if (!rawType && hasJiujiuWebsitePayload(data)) rawType = 'website';
     if (!rawType && hasJiujiuCardPayload(data)) rawType = 'interactive';
     if (!rawType) rawType = 'message';
 
@@ -175,6 +194,12 @@ export function normalizeJiujiuPacket(raw: Record<string, unknown> | JiujiuPacke
     if (reply) packet.reply = reply;
     const callbackUrl = asStr(data.callbackUrl, data.callback, data.replyUrl);
     if (callbackUrl) packet.callbackUrl = callbackUrl;
+    const urls = asList(data.urls);
+    if (urls.length) packet.urls = urls;
+    const tabs = asList(data.tabs);
+    if (tabs.length) packet.tabs = tabs;
+    const layout = asStr(data.layout).toLowerCase();
+    if (layout === 'vertical' || layout === 'horizontal') packet.layout = layout;
     return packet;
 }
 
@@ -206,6 +231,9 @@ export function packetToOutgoing(packet: JiujiuPacket): JiujiuPacket {
     if (packet.description && !packet.card) out.description = packet.description;
     if (packet.reply) out.reply = packet.reply;
     if (packet.callbackUrl) out.callbackUrl = packet.callbackUrl;
+    if (packet.urls && packet.urls.length) out.urls = packet.urls;
+    if (packet.tabs && packet.tabs.length) out.tabs = packet.tabs;
+    if (packet.layout) out.layout = packet.layout;
     if (Array.isArray(packet.attachments) && packet.attachments.length) {
         out.attachments = packet.attachments;
     }
@@ -326,7 +354,7 @@ export function jiujiuWelcomePacket(): JiujiuPacket {
         content:
             '我是 **OldBuddy（老友）**。直接发文字、图片或语音即可。\n\n' +
             '回复由笔记脚本 `nochain_oldbuddy_reply` 生成。发送 `/help` 可再看本说明。\n\n' +
-            '也可发 `/card`、`/yesno`、`/widgets` 试互动卡片。第三方 `POST /push` 可推卡片；点选后 App 会发 `interactive_result`。',
+            '也可发 `/card`、`/yesno`、`/widgets` 试互动卡片，发 `/web` 试网站卡片。第三方 `POST /push` 可推卡片；点选互动卡后 App 会发 `interactive_result`。',
         msgId: 'welcome',
         timestamp: Date.now(),
     };
@@ -426,7 +454,7 @@ export function actionMessageToJiujiuPacket(
 function packetFromStoredJiujiu(msg: OldBuddyMessage): JiujiuPacket | null {
     if (!msg.jiujiu) return null;
     const stored = normalizeJiujiuPacket(msg.jiujiu);
-    if (!isJiujiuInteractive(stored) && !isJiujiuResult(stored)) return null;
+    if (!isJiujiuInteractive(stored) && !isJiujiuResult(stored) && !isJiujiuWebsite(stored)) return null;
     const packet = normalizeJiujiuPacket({
         ...stored,
         content: msg.content || stored.content,

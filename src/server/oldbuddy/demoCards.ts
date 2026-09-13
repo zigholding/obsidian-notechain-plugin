@@ -1,5 +1,7 @@
 /** 演示用互动卡片，对齐啾啾 App / rochat 字段。 */
 
+import type { JiujiuPacket } from './jiujiu';
+
 function actions(...extra: Record<string, unknown>[]): Record<string, unknown>[] {
     return [
         { id: 'ok', label: '确定' },
@@ -267,4 +269,23 @@ export function yesnoActions(): Record<string, unknown>[] {
         { id: 'yes', label: '是' },
         { id: 'no', label: '否' },
     ];
+}
+
+/** 网站卡片：点开后新页 WebView，不是嵌进气泡。 */
+export function lookupWebsitePacket(word?: string): JiujiuPacket {
+    const q = String(word || 'apple').trim() || 'apple';
+    const enc = encodeURIComponent(q);
+    return {
+        type: 'website',
+        title: q,
+        content: q,
+        layout: 'vertical',
+        urls: [
+            [
+                `https://www.google.com/search?tbm=isch&q=${enc}`,
+                `https://dict.youdao.com/result?word=${enc}&lang=en`,
+            ],
+            [`https://www.bing.com/dict/search?q=${enc}`],
+        ],
+    };
 }
