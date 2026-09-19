@@ -10,6 +10,7 @@ import {selectColor} from './gui/selectColor'
 import { openCardNavigator } from './gui/inputCardSuggester'
 import { openCalendarGallery } from './gui/calendarGalleryModal'
 import { exitLightbox } from './gui/mediaLightbox'
+import { showOpenDialog, showSaveDialog } from './gui/fileDialog'
 import {EasyEditor } from './editor';
 import {File } from './file';
 import {Random } from './random';
@@ -30,6 +31,8 @@ export class EasyAPI {
     dialog_cards: typeof openCardNavigator
     dialog_calendar: typeof openCalendarGallery
     dialog_color: typeof selectColor
+    dialog_open_file: typeof showOpenDialog
+    dialog_save_file: typeof showSaveDialog
     exit_lightbox: typeof exitLightbox
     editor: EasyEditor
     file: File
@@ -49,6 +52,8 @@ export class EasyAPI {
 		this.dialog_cards = openCardNavigator;
 		this.dialog_calendar = openCalendarGallery;
         this.dialog_color = selectColor;
+        this.dialog_open_file = showOpenDialog;
+        this.dialog_save_file = showSaveDialog;
 		this.exit_lightbox = exitLightbox;
         this.editor = new EasyEditor(app,this);
         this.file = new File(app,this);
