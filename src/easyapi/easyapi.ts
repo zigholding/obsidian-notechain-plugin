@@ -19,6 +19,7 @@ import { Templater } from './templater';
 import {Time} from './time'
 import { Web } from './web';
 import { FsEditor } from './fseditor';
+import { Destop } from './destop';
 import { activeFileView, isMobileApp, noteChainPlugin, obsidianApp } from '../obsidian-app';
 import type NoteChainPlugin from '../plugin';
 
@@ -42,6 +43,7 @@ export class EasyAPI {
     time: Time
     web: Web
     fs: FsEditor
+    destop: Destop
 
     constructor(app: App) {
         this.app = app;
@@ -63,6 +65,7 @@ export class EasyAPI {
         this.time = new Time(app,this);
         this.web = new Web(app);
         this.fs = new FsEditor(app,this);
+        this.destop = new Destop(app);
         window.ea = this;
     }
 

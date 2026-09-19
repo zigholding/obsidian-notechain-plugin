@@ -1705,10 +1705,10 @@ function parseClientJsonPayload(msg) {
         }
     }
     if (t !== 'json') return null;
-    const raw = msg.content;
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw;
+    const contentRaw = msg.content;
+    if (contentRaw && typeof contentRaw === 'object' && !Array.isArray(contentRaw)) return contentRaw;
     try {
-        const value = JSON.parse(String(raw || ''));
+        const value = JSON.parse(String(contentRaw || ''));
         return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
     } catch (e) {
         return null;

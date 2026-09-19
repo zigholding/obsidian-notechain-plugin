@@ -212,6 +212,17 @@ export interface NodeChildProcessModule {
 			timeout?: number;
 		},
 	): string;
+	exec(
+		command: string,
+		options: {
+			maxBuffer?: number;
+			encoding?: BufferEncoding | 'buffer';
+			timeout?: number;
+			cwd?: string;
+			windowsHide?: boolean;
+		},
+		callback: (error: Error | null, stdout: string | Uint8Array, stderr: string | Uint8Array) => void,
+	): unknown;
 }
 
 export function desktopRequire(): NodeRequire | undefined {
