@@ -1,5 +1,5 @@
 import { lazyDesktopNodeOrThrow, type NodeCryptoModule, type NodeFsModule, type NodePathModule } from '../../obsidian-app';
-import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem, OldBuddyAvatarMap, OldBuddyAttachment, isUserSender, normalizeAttachments, normalizeOldBuddyMessage, attachmentKindFromMime } from './types';
+import { OldBuddyMessage, OldBuddyTargetsConfig, OldBuddyLabelTextItem, OldBuddyAvatarMap, OldBuddyAttachment, isUserSender, normalizeAttachments, normalizeOldBuddyMessage, attachmentKindFromMime, isJiujiuCardStoredType } from './types';
 import { OldBuddyWebSocketHub, OldBuddyWsClient } from './oldbuddyWebSocket';
 import {
     JIUJIU_MAX_ATTACH_BYTES,
@@ -22,7 +22,7 @@ import {
     type JiujiuPacket,
     normalizeJiujiuPacket,
     parseOldBuddyJsonPacket,
-    stripJiujiuAttachmentData,
+    jiujiuBodyWithoutType,
     isJiujiuInteractive,
     isJiujiuResult,
     isJiujiuWebsite,
@@ -252,15 +252,7 @@ export class OldBuddyStore {
         const friendName = String(packet.friendName || packet.friend || '').trim() || undefined;
 
         if (storeAsJson) {
-            const persist = stripJiujiuAttachmentData({
-                ...packet,
-                msgId: id,
-                timestamp,
-                senderId: sender,
-            });
-            if (senderName) persist.senderName = senderName;
-            persist.target = target;
-            if (friendName) persist.friendName = friendName;
+            const persist = jiujiuBodyWithoutType(packet);
             if (saved.length) {
                 persist.attachments = saved.map((row) => ({
                     name: row.name,
@@ -269,15 +261,17 @@ export class OldBuddyStore {
                     url: row.url,
                     size: row.size,
                     durationMs: row.durationMs,
-                })) as JiujiuPacket['attachments'];
+                }));
             }
+            const cardType = String(packet.type || (isJiujiuWebsite(packet) ? 'website' : 'interactive'));
             return this.pushExternalMessage({
-                content: JSON.stringify(persist),
+                content: String(packet.content || packet.title || '').trim(),
                 sender,
                 senderName,
                 friendName,
                 target,
-                type: 'json',
+                type: cardType,
+                config: persist,
                 attachments: saved,
                 id,
                 timestamp,
@@ -879,6 +873,7 @@ export class OldBuddyStore {
         senderName?: string;
         friendName?: string;
         attachments?: OldBuddyAttachment[];
+        config?: Record<string, unknown> | string;
         action?: string;
         name?: string;
         durationMs?: number;
@@ -896,13 +891,14 @@ export class OldBuddyStore {
             friendName: params.friendName,
             target: params.target || DEFAULT_TARGET,
             timestamp: params.timestamp || new Date().toISOString(),
-            type: params.type || (params.attachments?.length ? 'message' : 'message'),
+            type: params.type || 'message',
             content: params.content,
             extra_text: params.extra_text,
             file_name: params.file_name,
             file_size: params.file_size,
             card: params.card,
             attachments: params.attachments,
+            config: params.config,
             action: params.action,
             name: params.name,
             durationMs: params.durationMs,
@@ -924,8 +920,10 @@ export class OldBuddyStore {
         if (
             !normalized.content
             && !normalizeAttachments(normalized.attachments).length
+            && !normalized.config
             && normalized.type !== 'action'
             && normalized.type !== 'json'
+            && !isJiujiuCardStoredType(normalized.type)
             && !hasInteractive
         ) {
             throw new Error('content required');
@@ -1009,7 +1007,9 @@ export class OldBuddyStore {
                 replyText = formatInteractiveResult(stored);
             } else {
                 const nAtt = Array.isArray(userMsg.attachments) ? userMsg.attachments.length : 0;
-                const kinds = (userMsg.attachments || []).map((a) => String(a.kind || '').toLowerCase());
+                const kinds = Array.isArray(userMsg.attachments)
+                    ? userMsg.attachments.map((a) => String(a.kind || '').toLowerCase())
+                    : [];
                 const text = protocolUserText(userMsg, protocol);
                 if (userMsg.type === 'audio' || innerType === 'audio' || kinds.includes('audio')) {
                     replyText = '收到你的语音了。';
@@ -1043,13 +1043,15 @@ export class OldBuddyStore {
             msgId: packet.msgId || this.newId(),
             senderId: packet.senderId || 'buddy',
         };
+        const cardType = String(outgoing.type || 'interactive');
         this.pushMessage({
             id: String(outgoing.msgId),
             sender: 'buddy',
             target: target || DEFAULT_TARGET,
             timestamp: new Date().toISOString(),
-            type: 'json',
-            content: JSON.stringify(outgoing),
+            type: cardType,
+            content: String(outgoing.content || outgoing.title || ''),
+            config: jiujiuBodyWithoutType(outgoing),
             senderName: outgoing.senderName,
             friendName: outgoing.friendName,
         });

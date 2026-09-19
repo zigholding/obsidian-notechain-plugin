@@ -624,12 +624,36 @@ function normalizeClientMessage(raw) {
         if (extraText && !content) msg.content = extraText;
         delete msg.extra_text;
     }
-    if (msg.action && msg.type !== 'action' && msg.type !== 'json') msg.type = 'action';
+    if (msg.action && msg.type !== 'action' && msg.type !== 'json' && !isClientCardType(msg.type)) msg.type = 'action';
     return msg;
 }
 
+function isClientCardType(type) {
+    const t = String(type || '').toLowerCase();
+    return t === 'interactive' || t === 'card' || t === 'form' || t === 'ui' || t === 'interactive_card'
+        || t === 'website' || t === 'web' || t === 'lookup' || t === 'sites'
+        || t === 'interactive_result' || t === 'card_result' || t === 'form_result';
+}
+
 function parseClientJsonPayload(msg) {
-    if (!msg || String(msg.type || '') !== 'json') return null;
+    if (!msg) return null;
+    const t = String(msg.type || '');
+    const raw = msg.config != null ? msg.config
+        : (typeof msg.attachments === 'string' ? msg.attachments : null);
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        return { type: t, content: msg.content, ...raw };
+    }
+    if (typeof raw === 'string') {
+        try {
+            const value = JSON.parse(raw);
+            if (value && typeof value === 'object' && !Array.isArray(value)) {
+                return { type: t, content: msg.content, ...value };
+            }
+        } catch (e) {
+            // ignore
+        }
+    }
+    if (t !== 'json') return null;
     const raw = msg.content;
     if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw;
     try {
@@ -900,24 +924,14 @@ function renderMessage(msg) {
 
     if (msg.type === 'action' || msg.action) {
         appendActionBody(contentDiv, msg);
-    } else if (msg.type === 'json') {
-        const data = parseClientJsonPayload(msg);
-        if (data && (String(data.type || '').toLowerCase() === 'action' || data.action)) {
-            appendActionBody(contentDiv, {
-                ...msg,
-                action: data.action || data.type,
-                name: data.name,
-                durationMs: data.durationMs,
-                hour: data.hour,
-                minute: data.minute,
-                content: data.content,
-            });
-        } else {
-            appendMarkdownBody(contentDiv, jsonMessagePreview(data), msg);
+    } else if (msg.type === 'json' || isClientCardType(msg.type)) {
+        appendMarkdownBody(contentDiv, String(msg.content || jsonMessagePreview(parseClientJsonPayload(msg)) || ''), msg);
+        if (Array.isArray(msg.attachments)) {
             appendEnvelopeAttachments(contentDiv, msg);
-            if (!jsonMessagePreview(data) && !messageAttachments(msg).length) {
-                contentDiv.textContent = '';
-            }
+        }
+        if (!msg.content && !(Array.isArray(msg.attachments) && msg.attachments.length)) {
+            const preview = jsonMessagePreview(parseClientJsonPayload(msg));
+            if (!preview) contentDiv.textContent = '';
         }
     } else if (msg.type === 'audio') {
         const atts = messageAttachments(msg);

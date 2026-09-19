@@ -4,11 +4,38 @@ export const OLDBUDDY_MESSAGE_TYPES = [
     'welcome',
     'action',
     'json',
+    'interactive',
+    'card',
+    'form',
+    'ui',
+    'interactive_card',
+    'website',
+    'web',
+    'lookup',
+    'sites',
+    'interactive_result',
+    'card_result',
+    'form_result',
 ] as const;
 
-export type OldBuddyMessageType = (typeof OLDBUDDY_MESSAGE_TYPES)[number];
+export type OldBuddyMessageType = string;
 
-const LEGACY_MEDIA_TYPES = new Set(['text', 'image', 'audio', 'video', 'file', 'message', 'welcome', 'action', 'json']);
+const LEGACY_MEDIA_TYPES = new Set([
+    'text', 'image', 'audio', 'video', 'file', 'message', 'welcome', 'action', 'json',
+    'interactive', 'card', 'form', 'ui', 'interactive_card',
+    'website', 'web', 'lookup', 'sites',
+    'interactive_result', 'card_result', 'form_result',
+]);
+
+const JIUJIU_CARD_STORED_TYPES = new Set([
+    'interactive', 'card', 'form', 'ui', 'interactive_card',
+    'website', 'web', 'lookup', 'sites',
+    'interactive_result', 'card_result', 'form_result',
+]);
+
+export function isJiujiuCardStoredType(type?: string | null): boolean {
+    return JIUJIU_CARD_STORED_TYPES.has(String(type || '').trim().toLowerCase());
+}
 
 /** 啾啾兼容附件：存储用 url，出站再读文件填 Base64 */
 export interface OldBuddyAttachment {
@@ -39,6 +66,8 @@ export interface OldBuddyMessage {
     card?: boolean;
     senderName?: string;
     attachments?: OldBuddyAttachment[];
+    /** 卡片协议（去掉 type）；YAML 里是对象 */
+    config?: Record<string, unknown>;
     /** 啾啾 action：player / timer / alarm */
     action?: string;
     name?: string;
@@ -52,7 +81,7 @@ export interface OldBuddyMessage {
     file_name?: string;
     file_size?: number;
     friendName?: string;
-    /** 旧字段：卡片曾拆进这里；新入库用 type=json + content 为协议 JSON */
+    /** 旧字段：卡片曾拆进这里；新入库用 type + config */
     jiujiu?: Record<string, unknown>;
 }
 
@@ -88,7 +117,27 @@ export function isUserSender(sender?: string | null): boolean {
 
 export function isEnvelopeType(type?: string | null): boolean {
     const t = String(type || '');
-    return t === 'message' || t === 'welcome' || t === 'audio' || t === 'action' || t === 'json';
+    return t === 'message' || t === 'welcome' || t === 'audio' || t === 'action';
+}
+
+export function asProtocolConfig(raw: unknown): Record<string, unknown> | undefined {
+    if (typeof raw === 'string') {
+        const text = raw.trim();
+        if (!text) return undefined;
+        try {
+            const value = JSON.parse(text) as unknown;
+            if (value && typeof value === 'object' && !Array.isArray(value)) {
+                return value as Record<string, unknown>;
+            }
+        } catch {
+            return undefined;
+        }
+        return undefined;
+    }
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        return { ...(raw as Record<string, unknown>) };
+    }
+    return undefined;
 }
 
 export function looksLikeUploadUrl(value: string | undefined | null): boolean {
@@ -160,7 +209,8 @@ function toEnvelopeType(rawType: string): OldBuddyMessageType {
     if (t === 'welcome') return 'welcome';
     if (t === 'json') return 'json';
     if (t === 'action' || t === 'player' || t === 'timer' || t === 'alarm') return 'action';
-    return 'message';
+    if (t === 'text' || t === 'image' || t === 'video' || t === 'file' || t === 'message' || !t) return 'message';
+    return t;
 }
 
 /** 旧 text/image/video/file 及 content=url 的 audio → 啾啾信封。不改日记，只在读/写路径调用。 */
@@ -192,6 +242,10 @@ export function normalizeOldBuddyMessage(raw: unknown): OldBuddyMessage | null {
         row.file_size != null && Number.isFinite(Number(row.file_size)) ? Number(row.file_size) : undefined;
     let attachments = normalizeAttachments(row.attachments);
     let type = toEnvelopeType(rawType);
+    const config = asProtocolConfig(row.config)
+        || (isJiujiuCardStoredType(type) && !Array.isArray(row.attachments)
+            ? asProtocolConfig(row.attachments)
+            : undefined);
 
     const legacyMedia = rawType === 'image' || rawType === 'video' || rawType === 'file';
     const legacyAudioUrl = rawType === 'audio' && looksLikeUploadUrl(content) && !attachments.length;
@@ -230,9 +284,14 @@ export function normalizeOldBuddyMessage(raw: unknown): OldBuddyMessage | null {
     const friendName = String(row.friendName ?? '').trim();
     if (friendName) out.friendName = friendName;
     if (attachments.length) out.attachments = attachments;
+    if (config && Object.keys(config).length) {
+        const stored = { ...config };
+        delete stored.type;
+        out.config = stored;
+    }
     const action = String(row.action ?? (rawType === 'player' || rawType === 'timer' || rawType === 'alarm' ? rawType : '')).trim();
     if (type === 'action' && action) out.action = action;
-    else if (action && type !== 'json') {
+    else if (action && type !== 'json' && !isJiujiuCardStoredType(type)) {
         out.type = 'action';
         out.action = action;
     }

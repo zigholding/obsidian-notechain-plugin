@@ -206,12 +206,14 @@ export class Web {
     /**
      * 向啾啾协议好友推送 App 协议 JSON，不做卡片字段解析。
      * 字符串会包成 `{ type: 'message', content }`。仅一条连接时可省略 friendName。
+     * `senderName` 显示在手机气泡上。
      */
     async push_message(
         friendName: string,
         data: string | Record<string, unknown>,
+        senderName?: string,
     ): Promise<JiujiuPushResult> {
-        return this.dispatchJiujiuPush(asJiujiuPushData(friendName, data));
+        return this.dispatchJiujiuPush(asJiujiuPushData(friendName, data, senderName));
     }
 
     /**
@@ -286,12 +288,18 @@ export interface JiujiuPushResult {
     friendId?: string;
 }
 
-function asJiujiuPushData(friendName: string, data: string | Record<string, unknown>): Record<string, unknown> {
+function asJiujiuPushData(
+    friendName: string,
+    data: string | Record<string, unknown>,
+    senderName?: string,
+): Record<string, unknown> {
     const packet: Record<string, unknown> = typeof data === 'string'
         ? { type: 'message', content: data }
         : { ...data };
     const name = String(friendName || packet.friendName || packet.friend || '').trim();
     if (name) packet.friendName = name;
+    const sender = String(senderName || packet.senderName || packet.sender || '').trim();
+    if (sender) packet.senderName = sender;
     return packet;
 }
 

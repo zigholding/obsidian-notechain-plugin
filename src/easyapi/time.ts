@@ -19,7 +19,7 @@ export class Time{
         this.ea = ea;
     }
 
-	moment(t:string|number|Date|Moment|null):Moment{
+	moment(t:string|number|Date|Moment|null=null):Moment{
 		if(!t){
 			return momentFn.unix(Date.now() / 1000);
 		}

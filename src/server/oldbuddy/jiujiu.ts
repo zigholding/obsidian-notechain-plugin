@@ -1,5 +1,5 @@
 import type { OldBuddyAttachment, OldBuddyMessage, OldBuddyMessageType } from './types';
-import { attachmentKindFromMime, isUserSender } from './types';
+import { attachmentKindFromMime, asProtocolConfig, isJiujiuCardStoredType, isUserSender } from './types';
 import { isRecord } from '../../ts-helpers';
 
 export const JIUJIU_MAX_ATTACH_BYTES = 6 * 1024 * 1024;
@@ -118,9 +118,19 @@ export function isJiujiuResult(packet: JiujiuPacket): boolean {
     return isJiujiuResultType(String(packet.type || ''));
 }
 
-/** 互动卡 / 网站卡 / 点选结果入库为 OldBuddy `type=json`；message / audio / action 仍走信封。 */
+/** 互动卡 / 网站卡 / 点选结果：OldBuddy.type 用啾啾 type，协议其余字段进 attachments JSON。 */
 export function isJiujiuJsonStored(packet: JiujiuPacket): boolean {
     return isJiujiuInteractive(packet) || isJiujiuWebsite(packet) || isJiujiuResult(packet);
+}
+
+export function jiujiuBodyWithoutType(packet: JiujiuPacket): Record<string, unknown> {
+    const persist = stripJiujiuAttachmentData({ ...packet }) as Record<string, unknown>;
+    delete persist.type;
+    for (const key of Object.keys(persist)) {
+        const value = persist[key];
+        if (value === undefined || value === '') delete persist[key];
+    }
+    return persist;
 }
 
 function normalizeContent(data: Record<string, unknown>): { content: string; card?: Record<string, unknown> } {
@@ -456,8 +466,23 @@ export function actionMessageToJiujiuPacket(
     return packet;
 }
 
-/** 从 OldBuddy `type=json` 的 content 还原协议包；旧记录仍可读 `message.jiujiu`。 */
+/** 从 OldBuddy 卡片记录还原协议包；旧 `type=json` / `message.jiujiu` / attachments 字符串仍可读。 */
 export function parseOldBuddyJsonPacket(msg: OldBuddyMessage): JiujiuPacket | null {
+    const body = asProtocolConfig(msg.config)
+        || (typeof msg.attachments === 'string' ? asProtocolConfig(msg.attachments) : undefined);
+    if (isJiujiuCardStoredType(msg.type) || body) {
+        const packet: JiujiuPacket = { ...(body || {}) };
+        packet.type = msg.type && msg.type !== 'json' ? msg.type : (packet.type || 'interactive');
+        const text = String(msg.content || packet.content || packet.title || '').trim();
+        if (text) packet.content = text;
+        packet.msgId = String(msg.id || packet.msgId || '');
+        packet.timestamp = packet.timestamp ?? oldBuddyTimestampToMs(msg.timestamp);
+        if (msg.sender) packet.senderId = msg.sender;
+        if (msg.senderName && !packet.senderName) packet.senderName = msg.senderName;
+        if (msg.target && !packet.target) packet.target = msg.target;
+        if (msg.friendName && !packet.friendName) packet.friendName = msg.friendName;
+        return packet;
+    }
     if (msg.type === 'json') {
         try {
             const value = JSON.parse(String(msg.content || ''));
