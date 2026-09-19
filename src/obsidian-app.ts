@@ -214,16 +214,30 @@ export interface NodeChildProcessModule {
 	): string;
 	exec(
 		command: string,
-		options: {
-			maxBuffer?: number;
-			encoding?: BufferEncoding | 'buffer';
-			timeout?: number;
-			cwd?: string;
-			windowsHide?: boolean;
-		},
-		callback: (error: Error | null, stdout: string | Uint8Array, stderr: string | Uint8Array) => void,
+		options: NodeChildProcessExecOptions,
+		callback: NodeChildProcessExecCallback,
+	): unknown;
+	execFile(
+		file: string,
+		args: string[],
+		options: NodeChildProcessExecOptions,
+		callback: NodeChildProcessExecCallback,
 	): unknown;
 }
+
+export interface NodeChildProcessExecOptions {
+	maxBuffer?: number;
+	encoding?: BufferEncoding | 'buffer';
+	timeout?: number;
+	cwd?: string;
+	windowsHide?: boolean;
+}
+
+export type NodeChildProcessExecCallback = (
+	error: Error | null,
+	stdout: string | Uint8Array,
+	stderr: string | Uint8Array,
+) => void;
 
 export function desktopRequire(): NodeRequire | undefined {
 	if (typeof window !== 'undefined') {
