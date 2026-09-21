@@ -77,6 +77,15 @@ body {
     padding: 4px 6px;
 }
 
+#quick-cmd-btn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 6px;
+    height: 22px;
+}
+
 #current-target-chip {
     background: #e8f5e9;
     color: #2e7d32;
@@ -84,6 +93,52 @@ body {
     border-radius: 999px;
     font-size: 12px;
     cursor: pointer;
+}
+
+.ob-target-switcher {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 8px;
+    min-width: 180px;
+    max-height: min(50vh, 320px);
+    overflow: auto;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    z-index: 1005;
+    padding: 4px;
+    flex-direction: column;
+}
+
+.ob-target-switcher.is-open {
+    display: flex;
+}
+
+.ob-target-switcher-item {
+    border: none;
+    background: transparent;
+    text-align: left;
+    padding: 8px 10px;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.ob-target-switcher-item:hover {
+    background: #f5f5f5;
+}
+
+.ob-target-switcher-item.is-current {
+    font-weight: 600;
+    background: #e8f5e9;
+}
+
+.ob-target-switcher-empty {
+    color: var(--wechat-meta);
+    font-size: 12px;
+    padding: 8px 10px;
 }
 
 #chat-target {
@@ -169,7 +224,9 @@ body {
 }
 
 body.ob-settings-open #input-bar,
-body.ob-settings-open #file-menu {
+body.ob-settings-open #file-menu,
+body.ob-settings-open #slash-cmd-menu,
+body.ob-settings-open #quick-cmd-menu {
     display: none;
 }
 
@@ -329,6 +386,116 @@ body.ob-settings-open #file-menu {
     color: var(--wechat-meta);
     font-size: 13px;
     margin-bottom: 8px;
+}
+
+.jiujiu-interactive {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.jiujiu-interactive.is-submitted {
+    opacity: 0.72;
+}
+
+.jiujiu-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.jiujiu-field-label {
+    font-size: 12px;
+    color: var(--wechat-meta);
+}
+
+.jiujiu-field input,
+.jiujiu-field textarea,
+.jiujiu-field select {
+    font: inherit;
+    font-size: 14px;
+    padding: 6px 8px;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.jiujiu-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+}
+
+.jiujiu-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.jiujiu-range-value {
+    font-size: 12px;
+    color: var(--wechat-meta);
+}
+
+.jiujiu-repeat {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.jiujiu-repeat-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid #eee;
+    border-radius: 6px;
+}
+
+.jiujiu-repeat-add,
+.jiujiu-repeat-del {
+    align-self: flex-start;
+    border: none;
+    background: transparent;
+    color: #576b95;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0;
+}
+
+.jiujiu-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.jiujiu-action {
+    border: none;
+    background: #07c160;
+    color: #fff;
+    border-radius: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.jiujiu-action.is-cancel {
+    background: #f0f0f0;
+    color: #333;
+}
+
+.jiujiu-action.is-danger {
+    background: #fa5151;
+}
+
+.jiujiu-interactive-error {
+    color: #fa5151;
+    font-size: 12px;
+    min-height: 1em;
 }
 
 .jiujiu-proto-card-links a {
@@ -920,6 +1087,51 @@ body.ob-preview-lock {
     background: #f5f5f5;
 }
 
+.ob-slash-menu {
+    display: none;
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: calc(var(--input-bar-height) + 8px);
+    max-height: min(40vh, 280px);
+    overflow: auto;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    z-index: 1003;
+    flex-direction: column;
+    padding: 4px;
+}
+
+.ob-slash-menu.is-open {
+    display: flex;
+}
+
+.ob-slash-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    border: none;
+    background: transparent;
+    text-align: left;
+    padding: 8px 10px;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.ob-slash-item.is-active,
+.ob-slash-item:hover {
+    background: #f5f5f5;
+}
+
+.ob-slash-item-hint {
+    color: var(--wechat-meta);
+    font-size: 12px;
+}
+
 .ob-upload-overlay {
     position: fixed;
     top: 0;
@@ -1010,7 +1222,8 @@ body.ob-preview-lock {
         <div id="status-bar">
             <div id="status-dot"></div>
             <span id="status-text">离线</span>
-            <span id="current-target-chip" title="打开设置">本地</span>
+            <span id="current-target-chip" title="切换聊天对象">本地</span>
+            <div id="target-switcher" class="ob-target-switcher" role="listbox" aria-label="聊天对象"></div>
             <button id="status-settings-toggle" type="button" title="设置" aria-haspopup="dialog" aria-expanded="false" aria-controls="status-settings-overlay">⚙️</button>
         </div>
         <div id="messages" role="log" aria-live="polite"></div>
@@ -1050,9 +1263,11 @@ body.ob-preview-lock {
             <button id="send-file">📁</button>
             <button id="send-audio">🎤</button>
         </div>
-        <textarea id="text-input" placeholder="输入消息，可粘贴截图 (Ctrl+V)..." rows="1"></textarea>
+        <textarea id="text-input" placeholder="输入 / 打开命令，可粘贴截图 (Ctrl+V)..." rows="1"></textarea>
         <button id="send-text">发送</button>
     </div>
+
+    <div id="slash-cmd-menu" class="ob-slash-menu" role="listbox" aria-label="斜杠命令"></div>
 
     <div id="file-menu">
         <button id="camera-btn">拍照</button>
@@ -1114,6 +1329,7 @@ body.ob-preview-lock {
             textInput.addEventListener('keydown', async (e) => {
                 if (typeof isReferencePickerOpen === 'function' && isReferencePickerOpen()) return;
                 if (typeof isTagPickerOpen === 'function' && isTagPickerOpen()) return;
+                if (typeof isSlashPaletteOpen === 'function' && isSlashPaletteOpen()) return;
                 if (e.key !== 'Enter' || e.shiftKey) return;
                 if (!mqFinePointer.matches) return; /* 触摸为主：不拦截，由系统插入换行 */
                 e.preventDefault();
@@ -1566,6 +1782,7 @@ const CHAT_TARGET_STORAGE_KEY = 'rochat.chatTarget';
 const FILTER_CURRENT_TARGET_STORAGE_KEY = 'rochat.filterCurrentTargetOnly';
 const FILTER_HIDE_OLDER_STORAGE_KEY = 'rochat.filterHideOlder';
 const FILTER_HIDE_OLDER_SINCE_STORAGE_KEY = 'rochat.filterHideOlderSince';
+const RECENT_TARGETS_STORAGE_KEY = 'rochat.recentTargets';
 const TARGET_TITLE_MAP = {};
 let TARGET_SWITCH_RULES = [];
 let DEFAULT_TARGET = 'local';
@@ -1597,6 +1814,75 @@ function detectSwitchTargetByText(text) {
         if (s.includes(rule.phrase)) return rule.targetId;
     }
     return null;
+}
+
+function loadRecentTargets() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(RECENT_TARGETS_STORAGE_KEY) || '[]');
+        return Array.isArray(raw) ? raw.map((id) => String(id)).filter(Boolean) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function rememberRecentTarget(target) {
+    const id = String(target || '').trim();
+    if (!id) return;
+    const next = [id, ...loadRecentTargets().filter((item) => item !== id)].slice(0, 12);
+    localStorage.setItem(RECENT_TARGETS_STORAGE_KEY, JSON.stringify(next));
+}
+
+function listChatTargets() {
+    const ids = Object.keys(TARGET_TITLE_MAP);
+    const recent = loadRecentTargets().filter((id) => ids.indexOf(id) >= 0);
+    const rest = ids.filter((id) => recent.indexOf(id) < 0);
+    return [...recent, ...rest].map((id) => ({ id, label: TARGET_TITLE_MAP[id] || id }));
+}
+
+function closeTargetSwitcher() {
+    const menu = document.getElementById('target-switcher');
+    if (menu) menu.classList.remove('is-open');
+}
+
+function renderTargetSwitcher() {
+    const menu = document.getElementById('target-switcher');
+    if (!menu) return;
+    const cur = getCurrentChatTarget();
+    menu.replaceChildren();
+    const targets = listChatTargets();
+    if (!targets.length) {
+        const empty = document.createElement('div');
+        empty.className = 'ob-target-switcher-empty';
+        empty.textContent = '暂无对象';
+        menu.appendChild(empty);
+        return;
+    }
+    for (const item of targets) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ob-target-switcher-item';
+        if (item.id === cur) btn.classList.add('is-current');
+        btn.textContent = item.label;
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeTargetSwitcher();
+            if (item.id !== cur) setCurrentChatTarget(item.id, { notify: true });
+        });
+        menu.appendChild(btn);
+    }
+}
+
+function toggleTargetSwitcher(forceOpen) {
+    const menu = document.getElementById('target-switcher');
+    if (!menu) return;
+    const open = forceOpen === true || (forceOpen !== false && !menu.classList.contains('is-open'));
+    if (!open) {
+        closeTargetSwitcher();
+        return;
+    }
+    renderTargetSwitcher();
+    menu.classList.add('is-open');
 }
 
 function getCurrentChatTarget() {
@@ -1635,6 +1921,7 @@ function setCurrentChatTarget(target, options = {}) {
     if (el && target) el.value = target;
     if (!target) return;
     localStorage.setItem(CHAT_TARGET_STORAGE_KEY, target);
+    rememberRecentTarget(target);
     updateTargetChip(target);
     applyMessageTargetFilter();
     if (typeof refreshQuickCommandMenu === 'function') {
@@ -1692,6 +1979,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 settingsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
                 document.body.classList.toggle('ob-preview-lock', open);
                 document.body.classList.toggle('ob-settings-open', open);
+                if (open) closeTargetSwitcher();
             };
             settingsToggle.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1701,19 +1989,25 @@ document.addEventListener('DOMContentLoaded', () => {
             if (chip) {
                 chip.setAttribute('role', 'button');
                 chip.tabIndex = 0;
-                const openFromChip = (e) => {
+                chip.title = '切换聊天对象';
+                const openSwitcher = (e) => {
                     e.preventDefault();
-                    setSettingsPageOpen(true);
+                    e.stopPropagation();
+                    toggleTargetSwitcher();
                 };
-                chip.addEventListener('click', openFromChip);
+                chip.addEventListener('click', openSwitcher);
                 chip.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') openFromChip(e);
+                    if (e.key === 'Enter' || e.key === ' ') openSwitcher(e);
                 });
             }
+            document.addEventListener('click', () => closeTargetSwitcher());
+            const switcher = document.getElementById('target-switcher');
+            if (switcher) switcher.addEventListener('click', (e) => e.stopPropagation());
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape' && overlay && overlay.classList.contains('is-open')) {
                     setSettingsPageOpen(false);
                 }
+                if (e.key === 'Escape') closeTargetSwitcher();
             });
         }
     });
@@ -2619,6 +2913,16 @@ function appendProtocolCardBody(contentDiv, msg) {
         appendWebsiteCard(contentDiv, data, msg);
         return;
     }
+    if (typeof isInteractiveType === 'function' && (
+        isInteractiveType(type)
+        || isCardObject(data && data.card)
+        || (Array.isArray(data && data.actions) && data.actions.length)
+        || (Array.isArray(data && data.fields) && data.fields.length)
+    )) {
+        if (typeof appendInteractiveCard === 'function' && appendInteractiveCard(contentDiv, msg, data)) {
+            return;
+        }
+    }
     const title = String((data && data.title) || '').trim();
     const description = String((data && (data.description || data.desc)) || '').trim();
     const content = String(msg.content || (data && data.content) || '').trim();
@@ -3239,6 +3543,7 @@ async function sendTextMessage() {
     const sendBtn = document.getElementById('send-text');
     let content = input.value.trim();
     if (!content) return;
+    if (typeof hideSlashPalette === 'function') hideSlashPalette();
     const switchTarget = detectSwitchTargetByText(content);
     if (switchTarget) {
         setCurrentChatTarget(switchTarget, { notify: true });
@@ -3293,6 +3598,499 @@ async function sendTextMessage() {
         sendBtn.textContent = prevBtnText;
         // 滚动由 appendMessage 负责（此处避免重复计算导致偶发不滚动）
     }
+}
+
+
+const SUBMITTED_CARDS_KEY = 'rochat.submittedCards';
+
+function cssName(name) {
+    const text = String(name || '');
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(text);
+    return text.replace(/[^a-zA-Z0-9_-]/g, '\\\\$&');
+}
+
+function isInteractiveType(type) {
+    const t = String(type || '').toLowerCase();
+    return t === 'interactive' || t === 'card' || t === 'form' || t === 'ui' || t === 'interactive_card';
+}
+
+function loadSubmittedCardIds() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(SUBMITTED_CARDS_KEY) || '[]');
+        return Array.isArray(raw) ? raw.map((id) => String(id)) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function markCardSubmitted(id) {
+    const key = String(id || '').trim();
+    if (!key) return;
+    const ids = loadSubmittedCardIds().filter((item) => item !== key);
+    ids.push(key);
+    localStorage.setItem(SUBMITTED_CARDS_KEY, JSON.stringify(ids.slice(-80)));
+}
+
+function isCardSubmitted(id) {
+    const key = String(id || '').trim();
+    return !!key && loadSubmittedCardIds().indexOf(key) >= 0;
+}
+
+function fieldId(field, fallback) {
+    if (!field || typeof field !== 'object') return String(fallback || '');
+    return String(field.id || field.name || fallback || '').trim();
+}
+
+function fieldType(field) {
+    const t = String((field && field.type) || 'text').toLowerCase();
+    if (t === 'input') return 'text';
+    if (t === 'datetime') return 'datetime-local';
+    if (t === 'slider') return 'range';
+    if (t === 'autocomplete') return 'combobox';
+    if (t === 'list') return 'checkbox_list';
+    if (t === 'toggle') return 'switch';
+    if (t === 'group' || t === 'repeat') return 'repeating';
+    return t;
+}
+
+function optionPairs(options) {
+    const list = Array.isArray(options) ? options : [];
+    const out = [];
+    for (const item of list) {
+        if (typeof item === 'string' || typeof item === 'number') {
+            const value = String(item);
+            out.push({ value, label: value });
+            continue;
+        }
+        if (!item || typeof item !== 'object') continue;
+        const value = String(item.value != null ? item.value : item.id != null ? item.id : item.label || '').trim();
+        const label = String(item.label || item.name || value);
+        if (value) out.push({ value, label });
+    }
+    return out;
+}
+
+function defaultFieldValue(field) {
+    if (!field || typeof field !== 'object') return '';
+    if (field.default !== undefined) return field.default;
+    if (field.value !== undefined) return field.value;
+    return '';
+}
+
+function resolveInteractiveSpec(data) {
+    const card = data && data.card && typeof data.card === 'object' && !Array.isArray(data.card) ? data.card : null;
+    const fields = Array.isArray(card && card.fields) ? card.fields
+        : (Array.isArray(data && data.fields) ? data.fields : []);
+    const actions = Array.isArray(card && card.actions) ? card.actions
+        : (Array.isArray(data && data.actions) ? data.actions : []);
+    return {
+        title: String((card && card.title) || (data && data.title) || '').trim(),
+        description: String((card && (card.description || card.desc)) || (data && (data.description || data.desc)) || '').trim(),
+        fields: fields.filter((row) => row && typeof row === 'object'),
+        actions: actions.filter((row) => row && typeof row === 'object'),
+        callbackUrl: String((data && (data.callbackUrl || data.callback || data.replyUrl))
+            || (card && (card.callbackUrl || card.callback || card.replyUrl)) || '').trim(),
+        reply: String((data && (data.reply || data.replyMode)) || '').trim().toLowerCase(),
+    };
+}
+
+function actionIsCancel(action) {
+    const id = String((action && (action.id || action.name)) || '').trim().toLowerCase();
+    const style = String((action && action.style) || '').trim().toLowerCase();
+    if (action && action.submit === false) return true;
+    return style === 'cancel' || id === 'cancel' || id === 'skip';
+}
+
+function actionIsDanger(action) {
+    const style = String((action && action.style) || '').trim().toLowerCase();
+    const id = String((action && (action.id || action.name)) || '').trim().toLowerCase();
+    return style === 'danger' || id === 'clear';
+}
+
+function actionShouldSubmit(action) {
+    if (!action) return true;
+    if (action.submit === false && actionIsDanger(action)) return false;
+    return true;
+}
+
+function appendFieldLabel(wrap, field, forId) {
+    const label = String((field && field.label) || '').trim();
+    if (!label) return;
+    const el = document.createElement('label');
+    el.className = 'jiujiu-field-label';
+    if (forId) el.setAttribute('for', forId);
+    el.textContent = label + (field && field.required ? ' *' : '');
+    wrap.appendChild(el);
+}
+
+function applyInputLimits(input, field) {
+    if (!field) return;
+    if (field.min != null && field.min !== '') input.min = String(field.min);
+    if (field.max != null && field.max !== '') input.max = String(field.max);
+    if (field.step != null && field.step !== '') input.step = String(field.step);
+    if (field.placeholder) input.placeholder = String(field.placeholder);
+    if (field.rows) input.rows = Number(field.rows) || 3;
+}
+
+function appendScalarInput(wrap, field, name, inputType) {
+    const input = document.createElement(inputType === 'textarea' ? 'textarea' : 'input');
+    const id = \`f-\${name}\`;
+    input.id = id;
+    input.name = name;
+    if (inputType !== 'textarea') input.type = inputType === 'combobox' ? 'text' : inputType;
+    const def = defaultFieldValue(field);
+    if (def !== '' && def != null && typeof def !== 'boolean') input.value = String(def);
+    applyInputLimits(input, field);
+    if (field && field.required) input.required = true;
+    wrap.appendChild(input);
+    if (inputType === 'combobox') {
+        const listId = \`\${id}-list\`;
+        const list = document.createElement('datalist');
+        list.id = listId;
+        input.setAttribute('list', listId);
+        for (const opt of optionPairs(field.options)) {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = opt.label;
+            list.appendChild(option);
+        }
+        wrap.appendChild(list);
+    }
+    if (inputType === 'range') {
+        const hint = document.createElement('span');
+        hint.className = 'jiujiu-range-value';
+        hint.textContent = input.value;
+        input.addEventListener('input', () => {
+            hint.textContent = input.value;
+        });
+        wrap.appendChild(hint);
+    }
+    return input;
+}
+
+function appendChoiceGroup(wrap, field, name, multiple) {
+    const box = document.createElement('div');
+    box.className = multiple ? 'jiujiu-options is-multi' : 'jiujiu-options';
+    const opts = optionPairs(field.options);
+    const def = defaultFieldValue(field);
+    const selected = new Set(
+        Array.isArray(def) ? def.map((item) => String(item))
+            : (def !== '' && def != null ? [String(def)] : []),
+    );
+    opts.forEach((opt, i) => {
+        const row = document.createElement('label');
+        row.className = 'jiujiu-option';
+        const input = document.createElement('input');
+        input.type = multiple ? 'checkbox' : 'radio';
+        input.name = multiple ? \`\${name}[]\` : name;
+        input.value = opt.value;
+        input.checked = selected.has(opt.value);
+        const text = document.createElement('span');
+        text.textContent = opt.label;
+        row.appendChild(input);
+        row.appendChild(text);
+        box.appendChild(row);
+    });
+    wrap.appendChild(box);
+}
+
+function appendSelect(wrap, field, name) {
+    const select = document.createElement('select');
+    select.name = name;
+    select.id = \`f-\${name}\`;
+    if (field.allow_empty) {
+        const empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = String(field.empty_label || '不选');
+        select.appendChild(empty);
+    }
+    const def = String(defaultFieldValue(field) ?? '');
+    for (const opt of optionPairs(field.options)) {
+        const option = document.createElement('option');
+        option.value = opt.value;
+        option.textContent = opt.label;
+        if (opt.value === def) option.selected = true;
+        select.appendChild(option);
+    }
+    wrap.appendChild(select);
+}
+
+function appendToggle(wrap, field, name) {
+    const row = document.createElement('label');
+    row.className = 'jiujiu-option';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.name = name;
+    const def = defaultFieldValue(field);
+    input.checked = def === true || def === 'true' || def === 1 || def === '1';
+    const text = document.createElement('span');
+    text.textContent = String(field.label || (fieldType(field) === 'switch' ? '开' : '勾选'));
+    row.appendChild(input);
+    row.appendChild(text);
+    wrap.appendChild(row);
+}
+
+function appendRepeatRow(list, field, name, index) {
+    const row = document.createElement('div');
+    row.className = 'jiujiu-repeat-row';
+    const nested = Array.isArray(field.fields) ? field.fields : [];
+    nested.forEach((child, i) => {
+        appendInteractiveField(row, child, \`\${name}.\${index}.\${fieldId(child, i)}\`);
+    });
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'jiujiu-repeat-del';
+    del.textContent = '删除';
+    del.addEventListener('click', () => {
+        const min = Number(field.min);
+        const count = list.querySelectorAll('.jiujiu-repeat-row').length;
+        if (Number.isFinite(min) && count <= min) return;
+        row.remove();
+    });
+    row.appendChild(del);
+    list.appendChild(row);
+}
+
+function appendRepeating(wrap, field, name) {
+    const box = document.createElement('div');
+    box.className = 'jiujiu-repeat';
+    box.dataset.repeatName = name;
+    const list = document.createElement('div');
+    list.className = 'jiujiu-repeat-rows';
+    const min = Number(field.min);
+    const start = Number.isFinite(min) && min > 0 ? min : 1;
+    for (let i = 0; i < start; i++) appendRepeatRow(list, field, name, i);
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'jiujiu-repeat-add';
+    add.textContent = String(field.add_label || '添加');
+    add.addEventListener('click', () => {
+        const max = Number(field.max);
+        const count = list.querySelectorAll('.jiujiu-repeat-row').length;
+        if (Number.isFinite(max) && count >= max) return;
+        appendRepeatRow(list, field, name, count);
+    });
+    box.appendChild(list);
+    box.appendChild(add);
+    wrap.appendChild(box);
+}
+
+function appendInteractiveField(parent, field, name) {
+    const t = fieldType(field);
+    const wrap = document.createElement('div');
+    wrap.className = 'jiujiu-field';
+    wrap.dataset.fieldId = name;
+    wrap.dataset.fieldType = t;
+    if (t !== 'checkbox' && t !== 'switch') appendFieldLabel(wrap, field, \`f-\${name}\`);
+    if (t === 'textarea') appendScalarInput(wrap, field, name, 'textarea');
+    else if (t === 'select') appendSelect(wrap, field, name);
+    else if (t === 'radio') appendChoiceGroup(wrap, field, name, false);
+    else if (t === 'checkbox_list' || t === 'multiselect') appendChoiceGroup(wrap, field, name, true);
+    else if (t === 'checkbox' || t === 'switch') appendToggle(wrap, field, name);
+    else if (t === 'range') appendScalarInput(wrap, field, name, 'range');
+    else if (t === 'repeating') appendRepeating(wrap, field, name);
+    else if (t === 'combobox') appendScalarInput(wrap, field, name, 'combobox');
+    else if (t === 'number' || t === 'email' || t === 'tel' || t === 'url' || t === 'date' || t === 'time' || t === 'datetime-local') {
+        appendScalarInput(wrap, field, name, t);
+    } else {
+        appendScalarInput(wrap, field, name, 'text');
+    }
+    parent.appendChild(wrap);
+}
+
+function readNamedValue(root, name, type) {
+    if (type === 'checkbox' || type === 'switch') {
+        const el = root.querySelector(\`[name="\${cssName(name)}"]\`);
+        return !!(el && el.checked);
+    }
+    if (type === 'checkbox_list' || type === 'multiselect') {
+        return Array.from(root.querySelectorAll(\`[name="\${cssName(\`\${name}[]\`)}"]\`))
+            .filter((el) => el.checked)
+            .map((el) => el.value);
+    }
+    if (type === 'radio') {
+        const el = root.querySelector(\`[name="\${cssName(name)}"]:checked\`);
+        return el ? el.value : '';
+    }
+    if (type === 'repeating') {
+        const box = root.querySelector(\`[data-repeat-name="\${cssName(name)}"]\`);
+        if (!box) return [];
+        return Array.from(box.querySelectorAll(':scope > .jiujiu-repeat-rows > .jiujiu-repeat-row')).map((row) => {
+            const obj = {};
+            row.querySelectorAll(':scope > .jiujiu-field').forEach((child) => {
+                const fid = String(child.dataset.fieldId || '').split('.').pop();
+                const ft = child.dataset.fieldType;
+                if (!fid) return;
+                obj[fid] = readNamedValue(child, child.dataset.fieldId, ft);
+            });
+            return obj;
+        });
+    }
+    const el = root.querySelector(\`[name="\${cssName(name)}"]\`);
+    if (!el) return '';
+    return el.value;
+}
+
+function collectInteractiveValues(form, fields) {
+    const values = {};
+    fields.forEach((field, i) => {
+        const id = fieldId(field, i);
+        if (!id) return;
+        values[id] = readNamedValue(form, id, fieldType(field));
+    });
+    return values;
+}
+
+function validateInteractiveValues(fields, values) {
+    for (const field of fields) {
+        if (!field || !field.required) continue;
+        const t = fieldType(field);
+        const id = fieldId(field);
+        const value = values[id];
+        if (t === 'checkbox' || t === 'switch') continue;
+        if (t === 'checkbox_list' || t === 'multiselect' || t === 'repeating') {
+            if (!Array.isArray(value) || !value.length) return \`\${field.label || id} 必填\`;
+            continue;
+        }
+        if (value == null || String(value).trim() === '') return \`\${field.label || id} 必填\`;
+    }
+    return '';
+}
+
+function summarizeInteractiveValues(action, values) {
+    const parts = [];
+    if (action) parts.push(action);
+    Object.keys(values || {}).forEach((key) => {
+        const value = values[key];
+        if (value == null || value === '') return;
+        if (typeof value === 'boolean') {
+            parts.push(\`\${key} \${value ? '是' : '否'}\`);
+            return;
+        }
+        if (Array.isArray(value)) {
+            if (!value.length) return;
+            parts.push(\`\${key} \${value.map((item) => (item && typeof item === 'object' ? JSON.stringify(item) : String(item))).join('、')}\`);
+            return;
+        }
+        parts.push(\`\${key} \${String(value)}\`);
+    });
+    return parts.join(' · ') || '已提交';
+}
+
+function disableInteractiveForm(form) {
+    form.classList.add('is-submitted');
+    Array.from(form.querySelectorAll('input, textarea, select, button')).forEach((el) => {
+        el.disabled = true;
+    });
+}
+
+async function submitInteractiveResult(msg, spec, action, values) {
+    const replyTo = typeof messageId === 'function' ? messageId(msg) : String((msg && (msg.msgId || msg.id)) || '');
+    const actionId = String((action && (action.id || action.name)) || 'ok');
+    const packet = {
+        type: 'interactive_result',
+        msgId: \`web_\${Date.now()}_\${Math.random().toString(36).slice(2, 8)}\`,
+        senderId: 'user',
+        target: String((msg && msg.target) || (typeof getCurrentChatTarget === 'function' ? getCurrentChatTarget() : 'local')),
+        replyTo,
+        action: actionId,
+        result: { values, action: actionId },
+        content: summarizeInteractiveValues(actionId, values),
+        timestamp: Date.now(),
+    };
+    const res = await fetch('/oldbuddy/push_message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(packet),
+    });
+    if (!res.ok) throw new Error('submit failed');
+    const data = await res.json();
+    if (data && data.message && typeof appendMessage === 'function') {
+        appendMessage(data.message);
+    }
+    if (spec.callbackUrl && spec.reply !== 'message') {
+        try {
+            await fetch(spec.callbackUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(packet),
+            });
+        } catch (e) {
+            // 浏览器跨域时忽略，入库已经完成
+        }
+    }
+    markCardSubmitted(replyTo);
+}
+
+function appendInteractiveCard(el, msg, data) {
+    const spec = resolveInteractiveSpec(data);
+    if (!spec.fields.length && !spec.actions.length) return false;
+    const mid = typeof messageId === 'function' ? messageId(msg) : String((msg && (msg.msgId || msg.id)) || '');
+    if (spec.title) {
+        const title = document.createElement('div');
+        title.className = 'jiujiu-proto-card-title';
+        title.textContent = spec.title;
+        el.appendChild(title);
+    }
+    const prompt = String((data && data.content) || (msg && msg.content) || spec.description || '').trim();
+    if (prompt && prompt !== spec.title) {
+        const desc = document.createElement('div');
+        desc.className = 'jiujiu-proto-card-desc';
+        desc.textContent = prompt;
+        el.appendChild(desc);
+    } else if (spec.description && spec.description !== spec.title) {
+        const desc = document.createElement('div');
+        desc.className = 'jiujiu-proto-card-desc';
+        desc.textContent = spec.description;
+        el.appendChild(desc);
+    }
+    const form = document.createElement('form');
+    form.className = 'jiujiu-interactive';
+    form.addEventListener('submit', (e) => e.preventDefault());
+    spec.fields.forEach((field, i) => appendInteractiveField(form, field, fieldId(field, i)));
+    const err = document.createElement('div');
+    err.className = 'jiujiu-interactive-error';
+    form.appendChild(err);
+    const bar = document.createElement('div');
+    bar.className = 'jiujiu-actions';
+    const actions = spec.actions.length ? spec.actions : [{ id: 'ok', label: '确定' }];
+    actions.forEach((action) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'jiujiu-action';
+        if (actionIsDanger(action)) btn.classList.add('is-danger');
+        if (actionIsCancel(action)) btn.classList.add('is-cancel');
+        btn.textContent = String(action.label || action.id || '确定');
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            err.textContent = '';
+            if (!actionShouldSubmit(action) && actionIsDanger(action)) {
+                form.reset();
+                return;
+            }
+            const values = collectInteractiveValues(form, spec.fields);
+            if (!actionIsCancel(action)) {
+                const problem = validateInteractiveValues(spec.fields, values);
+                if (problem) {
+                    err.textContent = problem;
+                    return;
+                }
+            }
+            btn.disabled = true;
+            try {
+                await submitInteractiveResult(msg, spec, action, values);
+                disableInteractiveForm(form);
+            } catch (ex) {
+                err.textContent = '提交失败，请再试一次';
+                btn.disabled = false;
+            }
+        });
+        bar.appendChild(btn);
+    });
+    form.appendChild(bar);
+    if (isCardSubmitted(mid)) disableInteractiveForm(form);
+    el.appendChild(form);
+    return true;
 }
 
 
@@ -3446,6 +4244,18 @@ function refreshAllMessageAvatars() {
 
 // static/js/quick_commands.js
 let quickCmdMenu = null;
+let lastQuickCommands = [];
+let slashMenu = null;
+let slashOpen = false;
+let slashItems = [];
+let slashHighlight = 0;
+
+const SLASH_BUILTINS = [
+    { id: 'slash-card', label: '/card 晚饭示例', text: '/card', needsArg: false },
+    { id: 'slash-yesno', label: '/yesno 是或否', text: '/yesno', needsArg: true },
+    { id: 'slash-widgets', label: '/widgets 控件', text: '/widgets', needsArg: true },
+    { id: 'slash-web', label: '/web 查词', text: '/web', needsArg: true },
+];
 
 function getQuickCommandTarget() {
     return (typeof getCurrentChatTarget === "function")
@@ -3479,15 +4289,179 @@ function renderQuickCommandButtons(menu, cmds) {
 }
 
 async function refreshQuickCommandMenu(target) {
-    if (!quickCmdMenu) return;
     const tid = target || getQuickCommandTarget();
     try {
-        const cmds = await loadQuickCommandsForTarget(tid);
-        renderQuickCommandButtons(quickCmdMenu, cmds);
+        lastQuickCommands = await loadQuickCommandsForTarget(tid);
+        if (quickCmdMenu) renderQuickCommandButtons(quickCmdMenu, lastQuickCommands);
+        if (slashOpen) renderSlashPalette();
     } catch (err) {
-        console.error("[quick_commands] 刷新失败：", err);
-        quickCmdMenu.replaceChildren();
+        lastQuickCommands = [];
+        if (quickCmdMenu) quickCmdMenu.replaceChildren();
     }
+}
+
+function isSlashPaletteOpen() {
+    return slashOpen;
+}
+
+function hideSlashPalette() {
+    slashOpen = false;
+    slashHighlight = 0;
+    slashItems = [];
+    if (slashMenu) {
+        slashMenu.classList.remove('is-open');
+        slashMenu.replaceChildren();
+    }
+}
+
+function slashCatalog() {
+    const cmds = (lastQuickCommands || []).map((cmd, i) => ({
+        id: String(cmd.id || \`qc-\${i}\`),
+        label: String(cmd.label || cmd.text || ''),
+        text: String(cmd.text || ''),
+        needsArg: false,
+        cmdId: cmd.id || '',
+    })).filter((item) => item.text);
+    return [...SLASH_BUILTINS, ...cmds];
+}
+
+function filterSlashItems(query) {
+    const q = String(query || '');
+    const rest = q.startsWith('/') ? q.slice(1).trim().toLowerCase() : q.trim().toLowerCase();
+    const all = slashCatalog();
+    if (!rest) return all;
+    return all.filter((item) => {
+        const text = item.text.toLowerCase();
+        const label = item.label.toLowerCase();
+        return text.startsWith(q.toLowerCase())
+            || text.startsWith(rest)
+            || label.indexOf(rest) >= 0;
+    });
+}
+
+function renderSlashPalette() {
+    const input = document.getElementById('text-input');
+    if (!slashMenu || !input) return;
+    const typed = input.value;
+    if (!typed.startsWith('/')) {
+        hideSlashPalette();
+        return;
+    }
+    const items = filterSlashItems(typed);
+    slashItems = items;
+    slashMenu.replaceChildren();
+    if (!items.length) {
+        hideSlashPalette();
+        return;
+    }
+    if (slashHighlight >= items.length) slashHighlight = items.length - 1;
+    items.forEach((item, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ob-slash-item';
+        if (idx === slashHighlight) btn.classList.add('is-active');
+        btn.setAttribute('role', 'option');
+        const label = document.createElement('span');
+        label.className = 'ob-slash-item-label';
+        label.textContent = item.label;
+        const hint = document.createElement('span');
+        hint.className = 'ob-slash-item-hint';
+        hint.textContent = item.text;
+        btn.appendChild(label);
+        if (item.text && item.text !== item.label) btn.appendChild(hint);
+        btn.addEventListener('mousedown', (e) => e.preventDefault());
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            applySlashItem(item);
+        });
+        slashMenu.appendChild(btn);
+    });
+    slashOpen = true;
+    slashMenu.classList.add('is-open');
+}
+
+function moveSlashHighlight(delta) {
+    if (!slashItems.length) return;
+    slashHighlight = (slashHighlight + delta + slashItems.length) % slashItems.length;
+    const rows = slashMenu ? slashMenu.querySelectorAll('.ob-slash-item') : [];
+    rows.forEach((row, i) => {
+        if (i === slashHighlight) row.classList.add('is-active');
+        else row.classList.remove('is-active');
+    });
+    const active = rows[slashHighlight];
+    if (active && typeof active.scrollIntoView === 'function') {
+        active.scrollIntoView({ block: 'nearest' });
+    }
+}
+
+async function applySlashItem(item) {
+    const input = document.getElementById('text-input');
+    if (!input || !item) return;
+    const typed = input.value.trim();
+    const hasArgs = typed.length > item.text.length && typed.toLowerCase().startsWith(item.text.toLowerCase());
+    hideSlashPalette();
+    if (hasArgs) {
+        input.value = typed;
+        if (typeof sendTextMessage === 'function') await sendTextMessage();
+        else await sendQuickCommand(typed, item.cmdId || null);
+        return;
+    }
+    if (item.needsArg) {
+        input.value = item.text + ' ';
+        if (typeof autosizeTextInput === 'function') autosizeTextInput(input);
+        input.focus();
+        return;
+    }
+    if (item.cmdId) {
+        input.value = '';
+        if (typeof autosizeTextInput === 'function') autosizeTextInput(input);
+        await sendQuickCommand(item.text, item.cmdId);
+        return;
+    }
+    input.value = item.text;
+    if (typeof sendTextMessage === 'function') await sendTextMessage();
+    else await sendQuickCommand(item.text, null);
+}
+
+function initSlashPalette() {
+    slashMenu = document.getElementById('slash-cmd-menu');
+    const input = document.getElementById('text-input');
+    if (!slashMenu || !input) return;
+    input.addEventListener('input', () => {
+        if (input.value.startsWith('/')) renderSlashPalette();
+        else hideSlashPalette();
+    });
+    input.addEventListener('keydown', (e) => {
+        if (!slashOpen) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            moveSlashHighlight(1);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            moveSlashHighlight(-1);
+        } else if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            const item = slashItems[slashHighlight];
+            if (item) applySlashItem(item);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            hideSlashPalette();
+        } else if (e.key === 'Tab') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            const item = slashItems[slashHighlight];
+            if (item) {
+                input.value = item.needsArg ? item.text + ' ' : item.text;
+                if (typeof autosizeTextInput === 'function') autosizeTextInput(input);
+                if (item.needsArg) renderSlashPalette();
+                else hideSlashPalette();
+            }
+        }
+    }, true);
 }
 
 async function createQuickCommandUI() {
@@ -3497,10 +4471,6 @@ async function createQuickCommandUI() {
     quickBtn.type = "button";
     quickBtn.title = "快捷命令";
     quickBtn.textContent = "⚡";
-    quickBtn.style.cssText = \`
-        margin-right:8px; border:none; background:transparent; cursor:pointer;
-        font-size:16px; padding:0 6px; height:22px; display:flex; align-items:center;
-    \`;
     const statusDot = document.getElementById("status-dot");
     statusBar.insertBefore(quickBtn, statusDot);
 
@@ -3511,12 +4481,11 @@ async function createQuickCommandUI() {
     quickCmdMenu = menu;
 
     await refreshQuickCommandMenu(getQuickCommandTarget());
+    initSlashPalette();
 
     quickBtn.onclick = (e) => {
         e.stopPropagation();
         menu.classList.toggle("is-open");
-        const rect = quickBtn.getBoundingClientRect();
-        menu.style.left = \`\${Math.max(8, rect.left)}px\`;
     };
 
     document.addEventListener("click", () => { menu.classList.remove("is-open"); });
@@ -3525,6 +4494,7 @@ async function createQuickCommandUI() {
 
 async function sendQuickCommand(text, cmdId = null) {
     if (!text) return;
+    hideSlashPalette();
     try {
         const target = getQuickCommandTarget();
         const res = await fetch('/oldbuddy/api/message/text', {
@@ -3542,8 +4512,11 @@ async function sendQuickCommand(text, cmdId = null) {
             appendMessage(data.message);
         }
     } catch (err) {
-        console.error("[quick_commands] 发送失败：", err);
-        alert("发送快捷命令失败");
+        const input = document.getElementById('text-input');
+        if (input && !input.value) {
+            input.value = text;
+            if (typeof autosizeTextInput === 'function') autosizeTextInput(input);
+        }
     }
 }
 

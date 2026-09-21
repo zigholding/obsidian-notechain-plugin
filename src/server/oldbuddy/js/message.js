@@ -105,6 +105,7 @@ const CHAT_TARGET_STORAGE_KEY = 'rochat.chatTarget';
 const FILTER_CURRENT_TARGET_STORAGE_KEY = 'rochat.filterCurrentTargetOnly';
 const FILTER_HIDE_OLDER_STORAGE_KEY = 'rochat.filterHideOlder';
 const FILTER_HIDE_OLDER_SINCE_STORAGE_KEY = 'rochat.filterHideOlderSince';
+const RECENT_TARGETS_STORAGE_KEY = 'rochat.recentTargets';
 const TARGET_TITLE_MAP = {};
 let TARGET_SWITCH_RULES = [];
 let DEFAULT_TARGET = 'local';
@@ -136,6 +137,75 @@ function detectSwitchTargetByText(text) {
         if (s.includes(rule.phrase)) return rule.targetId;
     }
     return null;
+}
+
+function loadRecentTargets() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(RECENT_TARGETS_STORAGE_KEY) || '[]');
+        return Array.isArray(raw) ? raw.map((id) => String(id)).filter(Boolean) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function rememberRecentTarget(target) {
+    const id = String(target || '').trim();
+    if (!id) return;
+    const next = [id, ...loadRecentTargets().filter((item) => item !== id)].slice(0, 12);
+    localStorage.setItem(RECENT_TARGETS_STORAGE_KEY, JSON.stringify(next));
+}
+
+function listChatTargets() {
+    const ids = Object.keys(TARGET_TITLE_MAP);
+    const recent = loadRecentTargets().filter((id) => ids.indexOf(id) >= 0);
+    const rest = ids.filter((id) => recent.indexOf(id) < 0);
+    return [...recent, ...rest].map((id) => ({ id, label: TARGET_TITLE_MAP[id] || id }));
+}
+
+function closeTargetSwitcher() {
+    const menu = document.getElementById('target-switcher');
+    if (menu) menu.classList.remove('is-open');
+}
+
+function renderTargetSwitcher() {
+    const menu = document.getElementById('target-switcher');
+    if (!menu) return;
+    const cur = getCurrentChatTarget();
+    menu.replaceChildren();
+    const targets = listChatTargets();
+    if (!targets.length) {
+        const empty = document.createElement('div');
+        empty.className = 'ob-target-switcher-empty';
+        empty.textContent = '暂无对象';
+        menu.appendChild(empty);
+        return;
+    }
+    for (const item of targets) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ob-target-switcher-item';
+        if (item.id === cur) btn.classList.add('is-current');
+        btn.textContent = item.label;
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeTargetSwitcher();
+            if (item.id !== cur) setCurrentChatTarget(item.id, { notify: true });
+        });
+        menu.appendChild(btn);
+    }
+}
+
+function toggleTargetSwitcher(forceOpen) {
+    const menu = document.getElementById('target-switcher');
+    if (!menu) return;
+    const open = forceOpen === true || (forceOpen !== false && !menu.classList.contains('is-open'));
+    if (!open) {
+        closeTargetSwitcher();
+        return;
+    }
+    renderTargetSwitcher();
+    menu.classList.add('is-open');
 }
 
 function getCurrentChatTarget() {
@@ -174,6 +244,7 @@ function setCurrentChatTarget(target, options = {}) {
     if (el && target) el.value = target;
     if (!target) return;
     localStorage.setItem(CHAT_TARGET_STORAGE_KEY, target);
+    rememberRecentTarget(target);
     updateTargetChip(target);
     applyMessageTargetFilter();
     if (typeof refreshQuickCommandMenu === 'function') {
@@ -231,6 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 settingsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
                 document.body.classList.toggle('ob-preview-lock', open);
                 document.body.classList.toggle('ob-settings-open', open);
+                if (open) closeTargetSwitcher();
             };
             settingsToggle.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -240,19 +312,25 @@ document.addEventListener('DOMContentLoaded', () => {
             if (chip) {
                 chip.setAttribute('role', 'button');
                 chip.tabIndex = 0;
-                const openFromChip = (e) => {
+                chip.title = '切换聊天对象';
+                const openSwitcher = (e) => {
                     e.preventDefault();
-                    setSettingsPageOpen(true);
+                    e.stopPropagation();
+                    toggleTargetSwitcher();
                 };
-                chip.addEventListener('click', openFromChip);
+                chip.addEventListener('click', openSwitcher);
                 chip.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') openFromChip(e);
+                    if (e.key === 'Enter' || e.key === ' ') openSwitcher(e);
                 });
             }
+            document.addEventListener('click', () => closeTargetSwitcher());
+            const switcher = document.getElementById('target-switcher');
+            if (switcher) switcher.addEventListener('click', (e) => e.stopPropagation());
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape' && overlay && overlay.classList.contains('is-open')) {
                     setSettingsPageOpen(false);
                 }
+                if (e.key === 'Escape') closeTargetSwitcher();
             });
         }
     });
@@ -1158,6 +1236,16 @@ function appendProtocolCardBody(contentDiv, msg) {
         appendWebsiteCard(contentDiv, data, msg);
         return;
     }
+    if (typeof isInteractiveType === 'function' && (
+        isInteractiveType(type)
+        || isCardObject(data && data.card)
+        || (Array.isArray(data && data.actions) && data.actions.length)
+        || (Array.isArray(data && data.fields) && data.fields.length)
+    )) {
+        if (typeof appendInteractiveCard === 'function' && appendInteractiveCard(contentDiv, msg, data)) {
+            return;
+        }
+    }
     const title = String((data && data.title) || '').trim();
     const description = String((data && (data.description || data.desc)) || '').trim();
     const content = String(msg.content || (data && data.content) || '').trim();
@@ -1778,6 +1866,7 @@ async function sendTextMessage() {
     const sendBtn = document.getElementById('send-text');
     let content = input.value.trim();
     if (!content) return;
+    if (typeof hideSlashPalette === 'function') hideSlashPalette();
     const switchTarget = detectSwitchTargetByText(content);
     if (switchTarget) {
         setCurrentChatTarget(switchTarget, { notify: true });

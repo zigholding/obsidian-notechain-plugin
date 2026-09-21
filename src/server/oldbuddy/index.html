@@ -39,7 +39,8 @@
         <div id="status-bar">
             <div id="status-dot"></div>
             <span id="status-text">离线</span>
-            <span id="current-target-chip" title="打开设置">本地</span>
+            <span id="current-target-chip" title="切换聊天对象">本地</span>
+            <div id="target-switcher" class="ob-target-switcher" role="listbox" aria-label="聊天对象"></div>
             <button id="status-settings-toggle" type="button" title="设置" aria-haspopup="dialog" aria-expanded="false" aria-controls="status-settings-overlay">⚙️</button>
         </div>
         <div id="messages" role="log" aria-live="polite"></div>
@@ -79,9 +80,11 @@
             <button id="send-file">📁</button>
             <button id="send-audio">🎤</button>
         </div>
-        <textarea id="text-input" placeholder="输入消息，可粘贴截图 (Ctrl+V)..." rows="1"></textarea>
+        <textarea id="text-input" placeholder="输入 / 打开命令，可粘贴截图 (Ctrl+V)..." rows="1"></textarea>
         <button id="send-text">发送</button>
     </div>
+
+    <div id="slash-cmd-menu" class="ob-slash-menu" role="listbox" aria-label="斜杠命令"></div>
 
     <div id="file-menu">
         <button id="camera-btn">拍照</button>
@@ -99,6 +102,7 @@
     <script src="static/js/websocket.js?v=20260318"></script>
     <script src="static/js/markdown.js?v=20260417b"></script>
     <script src="static/js/message.js?v=20260422c"></script>
+    <script src="static/js/card.js?v=20260921"></script>
     <script src="static/js/avatars.js?v=20260621"></script>
     <script src="static/js/quick_commands.js?v=20260420a"></script>
     <script src="static/js/reference.js?v=20260621"></script>
@@ -152,6 +156,7 @@
             textInput.addEventListener('keydown', async (e) => {
                 if (typeof isReferencePickerOpen === 'function' && isReferencePickerOpen()) return;
                 if (typeof isTagPickerOpen === 'function' && isTagPickerOpen()) return;
+                if (typeof isSlashPaletteOpen === 'function' && isSlashPaletteOpen()) return;
                 if (e.key !== 'Enter' || e.shiftKey) return;
                 if (!mqFinePointer.matches) return; /* 触摸为主：不拦截，由系统插入换行 */
                 e.preventDefault();

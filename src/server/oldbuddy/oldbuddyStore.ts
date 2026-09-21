@@ -100,9 +100,6 @@ export class OldBuddyStore {
         if (type === 'welcome' || type === 'action' || type === 'timer' || type === 'alarm' || type === 'player') {
             return;
         }
-        if (isJiujiuResult(packet) || isJiujiuInteractive(packet)) {
-            this.rememberCardResult(packet);
-        }
         try {
             await this.ingestJiujiuPacket(packet, {
                 senderId: packet.senderId || client.senderId,
@@ -208,6 +205,7 @@ export class OldBuddyStore {
         },
     ): Promise<OldBuddyMessage | null> {
         this.ensureLoaded();
+        if (isJiujiuResult(packet)) this.rememberCardResult(packet);
         const isAction = isJiujiuActionPacket(packet);
         const storeAsJson = isJiujiuJsonStored(packet);
         const action = jiujiuActionName(packet);

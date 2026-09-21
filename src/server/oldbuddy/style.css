@@ -69,6 +69,15 @@ body {
     padding: 4px 6px;
 }
 
+#quick-cmd-btn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 6px;
+    height: 22px;
+}
+
 #current-target-chip {
     background: #e8f5e9;
     color: #2e7d32;
@@ -76,6 +85,52 @@ body {
     border-radius: 999px;
     font-size: 12px;
     cursor: pointer;
+}
+
+.ob-target-switcher {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 8px;
+    min-width: 180px;
+    max-height: min(50vh, 320px);
+    overflow: auto;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    z-index: 1005;
+    padding: 4px;
+    flex-direction: column;
+}
+
+.ob-target-switcher.is-open {
+    display: flex;
+}
+
+.ob-target-switcher-item {
+    border: none;
+    background: transparent;
+    text-align: left;
+    padding: 8px 10px;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.ob-target-switcher-item:hover {
+    background: #f5f5f5;
+}
+
+.ob-target-switcher-item.is-current {
+    font-weight: 600;
+    background: #e8f5e9;
+}
+
+.ob-target-switcher-empty {
+    color: var(--wechat-meta);
+    font-size: 12px;
+    padding: 8px 10px;
 }
 
 #chat-target {
@@ -161,7 +216,9 @@ body {
 }
 
 body.ob-settings-open #input-bar,
-body.ob-settings-open #file-menu {
+body.ob-settings-open #file-menu,
+body.ob-settings-open #slash-cmd-menu,
+body.ob-settings-open #quick-cmd-menu {
     display: none;
 }
 
@@ -321,6 +378,116 @@ body.ob-settings-open #file-menu {
     color: var(--wechat-meta);
     font-size: 13px;
     margin-bottom: 8px;
+}
+
+.jiujiu-interactive {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.jiujiu-interactive.is-submitted {
+    opacity: 0.72;
+}
+
+.jiujiu-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.jiujiu-field-label {
+    font-size: 12px;
+    color: var(--wechat-meta);
+}
+
+.jiujiu-field input,
+.jiujiu-field textarea,
+.jiujiu-field select {
+    font: inherit;
+    font-size: 14px;
+    padding: 6px 8px;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.jiujiu-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+}
+
+.jiujiu-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.jiujiu-range-value {
+    font-size: 12px;
+    color: var(--wechat-meta);
+}
+
+.jiujiu-repeat {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.jiujiu-repeat-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid #eee;
+    border-radius: 6px;
+}
+
+.jiujiu-repeat-add,
+.jiujiu-repeat-del {
+    align-self: flex-start;
+    border: none;
+    background: transparent;
+    color: #576b95;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0;
+}
+
+.jiujiu-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.jiujiu-action {
+    border: none;
+    background: #07c160;
+    color: #fff;
+    border-radius: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.jiujiu-action.is-cancel {
+    background: #f0f0f0;
+    color: #333;
+}
+
+.jiujiu-action.is-danger {
+    background: #fa5151;
+}
+
+.jiujiu-interactive-error {
+    color: #fa5151;
+    font-size: 12px;
+    min-height: 1em;
 }
 
 .jiujiu-proto-card-links a {
@@ -910,6 +1077,51 @@ body.ob-preview-lock {
 
 .ob-quick-cmd-menu button:hover {
     background: #f5f5f5;
+}
+
+.ob-slash-menu {
+    display: none;
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: calc(var(--input-bar-height) + 8px);
+    max-height: min(40vh, 280px);
+    overflow: auto;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    z-index: 1003;
+    flex-direction: column;
+    padding: 4px;
+}
+
+.ob-slash-menu.is-open {
+    display: flex;
+}
+
+.ob-slash-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    border: none;
+    background: transparent;
+    text-align: left;
+    padding: 8px 10px;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.ob-slash-item.is-active,
+.ob-slash-item:hover {
+    background: #f5f5f5;
+}
+
+.ob-slash-item-hint {
+    color: var(--wechat-meta);
+    font-size: 12px;
 }
 
 .ob-upload-overlay {
