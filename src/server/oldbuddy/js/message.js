@@ -388,8 +388,8 @@ async function loadMessages(limit = 10) {
         }
 
         msgs.sort((a, b) => {
-            const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-            const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            const ta = parseClientTime(a && a.timestamp).getTime();
+            const tb = parseClientTime(b && b.timestamp).getTime();
             return tb - ta;
         });
 
@@ -408,14 +408,14 @@ async function loadMessages(limit = 10) {
 
         if (inserted === 0 && hasMore && msgs.length > 0) {
             const oldest = msgs[msgs.length - 1];
-            const ms = Date.parse(oldest?.timestamp || '');
+            const ms = parseClientTime(oldest?.timestamp).getTime();
             if (Number.isFinite(ms)) {
                 const firstMsg = root.querySelector('.message');
                 if (firstMsg) {
-                    const prevMs = before ? Date.parse(before) : NaN;
+                    const prevMs = before ? parseClientTime(before).getTime() : NaN;
                     firstMsg.dataset.timestamp = Number.isFinite(prevMs) && prevMs === ms
-                        ? new Date(ms - 1).toISOString()
-                        : String(oldest.timestamp);
+                        ? String(ms - 1)
+                        : String(ms);
                 }
             }
         }
@@ -569,6 +569,35 @@ function isUserSender(sender) {
     return s === 'user' || s.startsWith('user_');
 }
 
+function messageId(msg) {
+    return String((msg && (msg.msgId || msg.id)) || '').trim();
+}
+
+function messageSender(msg) {
+    return String((msg && (msg.senderId || msg.sender)) || '').trim();
+}
+
+function isCardObject(card) {
+    return !!(card && typeof card === 'object' && !Array.isArray(card));
+}
+
+function parseClientTime(value) {
+    if (value instanceof Date && !isNaN(value.getTime())) return value;
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+        const ms = value < 1e12 ? value * 1000 : value;
+        return new Date(ms);
+    }
+    const s = String(value ?? '').trim();
+    if (!s) return new Date();
+    const asNum = Number(s);
+    if (Number.isFinite(asNum) && asNum > 0 && !s.includes('T') && !s.includes('-')) {
+        const ms = asNum < 1e12 ? asNum * 1000 : asNum;
+        return new Date(ms);
+    }
+    const t = new Date(s);
+    return isNaN(t.getTime()) ? new Date() : t;
+}
+
 function messageSenderClass(sender) {
     if (isUserSender(sender)) return 'user';
     const s = String(sender || '').trim();
@@ -577,13 +606,13 @@ function messageSenderClass(sender) {
 
 /**
  * 是否使用「卡片」式 Markdown 气泡（更宽、层次更清晰）
- * - 后端可设 msg.card === true
- * - 系统 / 调试侧消息默认按卡片展示
+ * 啾啾的 card 是对象；buddy / system 回复仍用宽气泡。
  */
 function useMarkdownCard(msg) {
+    if (isCardObject(msg.card)) return true;
     if (msg.card === true || msg.card === "true" || msg.card === 1) return true;
-    const s = msg.sender || "";
-    return /^(system|debug)/.test(s);
+    const s = messageSender(msg);
+    return /^(system|debug|buddy)$/.test(s);
 }
 
 function isVideoMediaUrl(url) {
@@ -595,14 +624,41 @@ function looksLikeUploadUrl(value) {
     return /\/oldbuddy\/uploads\//i.test(String(value || ''));
 }
 
+function attachmentSrc(att) {
+    if (!att || typeof att !== 'object') return '';
+    const url = String(att.url || '').trim();
+    if (url) return url;
+    const data = String(att.data || '').trim();
+    if (!data) return '';
+    const b64 = data.includes(',') ? data.slice(data.indexOf(',') + 1) : data;
+    const mime = String(att.mime || 'application/octet-stream');
+    return `data:${mime};base64,${b64}`;
+}
+
 function normalizeClientMessage(raw) {
     if (!raw || typeof raw !== 'object') return raw;
     const msg = { ...raw };
+    const id = messageId(msg);
+    const sender = messageSender(msg);
+    if (id) {
+        msg.id = id;
+        msg.msgId = id;
+    }
+    if (sender) {
+        msg.sender = sender;
+        msg.senderId = sender;
+    }
     const rawType = String(msg.type || 'message').toLowerCase();
     let content = msg.content != null ? String(msg.content) : '';
     const extraText = String(msg.extra_text || '').trim();
     const fileName = String(msg.file_name || '').trim();
     let attachments = Array.isArray(msg.attachments) ? msg.attachments.filter(Boolean).slice() : [];
+    attachments = attachments.map((att) => {
+        if (!att || typeof att !== 'object') return att;
+        const src = attachmentSrc(att);
+        if (src && src !== att.url) return { ...att, url: src };
+        return att;
+    });
     const legacyMedia = rawType === 'image' || rawType === 'video' || rawType === 'file';
     const legacyAudioUrl = rawType === 'audio' && looksLikeUploadUrl(content) && !attachments.length;
     if ((legacyMedia || legacyAudioUrl) && looksLikeUploadUrl(content)) {
@@ -624,15 +680,30 @@ function normalizeClientMessage(raw) {
         if (extraText && !content) msg.content = extraText;
         delete msg.extra_text;
     }
+    if (attachments.length) msg.attachments = attachments;
+    if (isCardObject(msg.card) && !isClientCardType(msg.type)) msg.type = 'interactive';
+    if ((Array.isArray(msg.urls) || Array.isArray(msg.tabs)) && !isClientCardType(msg.type)) msg.type = 'website';
     if (msg.action && msg.type !== 'action' && msg.type !== 'json' && !isClientCardType(msg.type)) msg.type = 'action';
     return msg;
 }
 
 function isClientCardType(type) {
     const t = String(type || '').toLowerCase();
-    return t === 'interactive' || t === 'card' || t === 'form' || t === 'ui' || t === 'interactive_card'
-        || t === 'website' || t === 'web' || t === 'lookup' || t === 'sites'
-        || t === 'interactive_result' || t === 'card_result' || t === 'form_result';
+    if (!t || t === 'message' || t === 'audio' || t === 'welcome' || t === 'action'
+        || t === 'text' || t === 'image' || t === 'video' || t === 'file') {
+        return false;
+    }
+    return true;
+}
+
+function isSliderType(type) {
+    const t = String(type || '').toLowerCase();
+    return t === 'slider' || t === 'carousel' || t === 'slideshow';
+}
+
+function isHtmlType(type) {
+    const t = String(type || '').toLowerCase();
+    return t === 'html' || t === 'html_card' || t === 'richhtml';
 }
 
 function parseClientJsonPayload(msg) {
@@ -653,6 +724,9 @@ function parseClientJsonPayload(msg) {
             // ignore
         }
     }
+    if (isClientCardType(t) || isCardObject(msg.card) || Array.isArray(msg.urls) || Array.isArray(msg.tabs)) {
+        return msg;
+    }
     if (t !== 'json') return null;
     const contentRaw = msg.content;
     if (contentRaw && typeof contentRaw === 'object' && !Array.isArray(contentRaw)) return contentRaw;
@@ -661,6 +735,215 @@ function parseClientJsonPayload(msg) {
         return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
     } catch (e) {
         return null;
+    }
+}
+
+function flattenWebsiteUrls(data) {
+    const urls = [];
+    const walk = (node) => {
+        if (typeof node === 'string' && node.trim()) {
+            urls.push(node.trim());
+            return;
+        }
+        if (Array.isArray(node)) {
+            node.forEach(walk);
+            return;
+        }
+        if (node && typeof node === 'object') {
+            if (typeof node.url === 'string' && node.url.trim()) urls.push(node.url.trim());
+            if (Array.isArray(node.urls)) walk(node.urls);
+            if (Array.isArray(node.tabs)) walk(node.tabs);
+        }
+    };
+    if (!data || typeof data !== 'object') return urls;
+    walk(data.urls);
+    walk(data.tabs);
+    return urls.filter((href, i) => urls.indexOf(href) === i);
+}
+
+function appendHtmlFragment(el, html) {
+    if (!html) return;
+    if (typeof window.appendTrustedHtml === 'function') {
+        window.appendTrustedHtml(el, html);
+        return;
+    }
+    const body = document.createElement('div');
+    body.textContent = html;
+    el.appendChild(body);
+}
+
+function slidePlainText(slide) {
+    if (!slide || typeof slide !== 'object') return '';
+    return String(slide.content || slide.title || '').trim();
+}
+
+function slideLooksLong(slide) {
+    const text = slidePlainText(slide);
+    if (text.length >= 160) return true;
+    return text.split(/\n/).length >= 8;
+}
+
+function appendSlideBody(el, slide, msg) {
+    if (!slide || typeof slide !== 'object') return;
+    const t = String(slide.type || 'message').toLowerCase();
+    if (isHtmlType(t)) {
+        const title = String(slide.title || '').trim();
+        if (title) {
+            const h = document.createElement('div');
+            h.className = 'jiujiu-proto-card-title';
+            h.textContent = title;
+            el.appendChild(h);
+        }
+        appendHtmlFragment(el, String(slide.content || ''));
+        return;
+    }
+    const text = slidePlainText(slide);
+    if (text) appendMarkdownBody(el, text, msg);
+    const links = flattenWebsiteUrls(slide);
+    if (links.length) {
+        const wrap = document.createElement('div');
+        wrap.className = 'jiujiu-proto-card-links';
+        for (const href of links) {
+            const a = document.createElement('a');
+            a.href = href;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.textContent = href;
+            wrap.appendChild(a);
+        }
+        el.appendChild(wrap);
+    }
+    const nested = Array.isArray(slide.attachments) ? slide.attachments : [];
+    for (const att of nested) {
+        if (!att || typeof att !== 'object') continue;
+        if (att.type && isClientCardType(att.type)) {
+            appendSlideBody(el, att, msg);
+            continue;
+        }
+        const src = attachmentSrc(att);
+        if (src) appendAttachment(el, { ...att, url: src });
+    }
+}
+
+function showSliderFullPage(slide, msg) {
+    const existing = document.getElementById('slider-full-overlay');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'slider-full-overlay';
+    overlay.className = 'jiujiu-full-overlay';
+    const panel = document.createElement('div');
+    panel.className = 'jiujiu-full-overlay-body';
+    appendSlideBody(panel, slide, msg);
+    overlay.appendChild(panel);
+    const close = () => {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+        document.body.classList.remove('ob-preview-lock');
+    };
+    function onKey(e) {
+        if (e.key === 'Escape') close();
+    }
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.classList.add('ob-preview-lock');
+    document.body.appendChild(overlay);
+}
+
+function appendSliderBody(contentDiv, msg, data) {
+    const title = String(msg.content || (data && data.content) || (data && data.title) || '').trim();
+    if (title) {
+        const el = document.createElement('div');
+        el.className = 'jiujiu-proto-card-title';
+        el.textContent = title;
+        contentDiv.appendChild(el);
+    }
+    const slides = Array.isArray(data && data.attachments) ? data.attachments.filter((row) => row && typeof row === 'object') : [];
+    if (!slides.length) return;
+    const track = document.createElement('div');
+    track.className = 'jiujiu-slider';
+    for (const slide of slides) {
+        const page = document.createElement('div');
+        page.className = 'jiujiu-slider-page';
+        const body = document.createElement('div');
+        body.className = 'jiujiu-slider-page-body';
+        appendSlideBody(body, slide, msg);
+        page.appendChild(body);
+        if (slideLooksLong(slide)) {
+            const more = document.createElement('button');
+            more.type = 'button';
+            more.className = 'jiujiu-slider-more';
+            more.textContent = '查看全文';
+            more.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                showSliderFullPage(slide, msg);
+            });
+            page.appendChild(more);
+        }
+        track.appendChild(page);
+    }
+    contentDiv.appendChild(track);
+}
+
+function appendProtocolCardBody(contentDiv, msg) {
+    const data = parseClientJsonPayload(msg) || msg;
+    contentDiv.classList.add('jiujiu-proto-card');
+    const type = String((data && data.type) || msg.type || '').toLowerCase();
+    if (isSliderType(type)) {
+        appendSliderBody(contentDiv, msg, data);
+        return;
+    }
+    if (isHtmlType(type)) {
+        const title = String((data && data.title) || '').trim();
+        if (title) {
+            const el = document.createElement('div');
+            el.className = 'jiujiu-proto-card-title';
+            el.textContent = title;
+            contentDiv.appendChild(el);
+        }
+        appendHtmlFragment(contentDiv, String(msg.content || (data && data.content) || ''));
+        return;
+    }
+    const title = String((data && data.title) || '').trim();
+    const description = String((data && (data.description || data.desc)) || '').trim();
+    const content = String(msg.content || (data && data.content) || '').trim();
+    if (title) {
+        const el = document.createElement('div');
+        el.className = 'jiujiu-proto-card-title';
+        el.textContent = title;
+        contentDiv.appendChild(el);
+    }
+    if (description && description !== title) {
+        const el = document.createElement('div');
+        el.className = 'jiujiu-proto-card-desc';
+        el.textContent = description;
+        contentDiv.appendChild(el);
+    }
+    if (content && content !== title) {
+        appendMarkdownBody(contentDiv, content, msg);
+    }
+    const links = flattenWebsiteUrls(data);
+    if (links.length) {
+        const wrap = document.createElement('div');
+        wrap.className = 'jiujiu-proto-card-links';
+        for (const href of links) {
+            const a = document.createElement('a');
+            a.href = href;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.textContent = href;
+            wrap.appendChild(a);
+        }
+        contentDiv.appendChild(wrap);
+    }
+    if (Array.isArray(msg.attachments)) {
+        appendEnvelopeAttachments(contentDiv, msg);
+    }
+    if (!contentDiv.childNodes.length) {
+        const preview = jsonMessagePreview(data);
+        if (preview) appendMarkdownBody(contentDiv, preview, msg);
     }
 }
 
@@ -677,6 +960,12 @@ function jsonMessagePreview(data) {
     }
     if (t === 'interactive_result' || t === 'card_result' || t === 'form_result') {
         return content || title || '卡片回复';
+    }
+    if (t === 'slider' || t === 'carousel' || t === 'slideshow') {
+        return title || content || '轮播';
+    }
+    if (t === 'html' || t === 'html_card' || t === 'richhtml') {
+        return title || content || 'HTML 卡片';
     }
     return content || title || t;
 }
@@ -846,20 +1135,16 @@ function appendMarkdownBody(contentDiv, text, msg) {
 function renderMessage(msg) {
     msg = normalizeClientMessage(msg) || msg;
     const div = document.createElement('div');
-    const mid = msg.id ?? (`local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
-    div.className = `message ${messageSenderClass(msg.sender)}`;
+    const mid = messageId(msg) || (`local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+    const sender = messageSender(msg);
+    div.className = `message ${messageSenderClass(sender)}`;
     div.dataset.id = mid;
-    div.dataset.sender = msg.sender || '';
+    div.dataset.sender = sender || '';
     div.dataset.target = msg.target || '';
 
     // ---------- 时间 ----------
-    let t;
-    try {
-        t = msg.timestamp ? new Date(msg.timestamp) : new Date();
-    } catch (e) {
-        t = new Date();
-    }
-    div.dataset.timestamp = String(msg.timestamp || t.toISOString());
+    const t = parseClientTime(msg.timestamp);
+    div.dataset.timestamp = String(t.getTime());
 
     // 默认时间节点
     const timeDiv = document.createElement('div');
@@ -892,15 +1177,15 @@ function renderMessage(msg) {
     }
 
     // ---------- 时间显示逻辑 ----------
-    const first = Array.from(getMessagesContainer().children).find(el => el.dataset.id !== msg.id);
-    const last = Array.from([...getMessagesContainer().children].reverse()).find(el => el.dataset.id !== msg.id);
+    const first = Array.from(getMessagesContainer().children).find(el => el.dataset.id !== mid);
+    const last = Array.from([...getMessagesContainer().children].reverse()).find(el => el.dataset.id !== mid);
 
     const FIVE_MIN = 5 * 60 * 1000;
     const tMs = t.getTime();
 
     if (first && last) {
-        const firstTime = new Date(first.dataset.timestamp).getTime();
-        const lastTime = new Date(last.dataset.timestamp).getTime();
+        const firstTime = parseClientTime(first.dataset.timestamp).getTime();
+        const lastTime = parseClientTime(last.dataset.timestamp).getTime();
 
         if (tMs < firstTime) {
             // 向前插入（加载历史）
@@ -925,14 +1210,7 @@ function renderMessage(msg) {
     if (msg.type === 'action' || msg.action) {
         appendActionBody(contentDiv, msg);
     } else if (msg.type === 'json' || isClientCardType(msg.type)) {
-        appendMarkdownBody(contentDiv, String(msg.content || jsonMessagePreview(parseClientJsonPayload(msg)) || ''), msg);
-        if (Array.isArray(msg.attachments)) {
-            appendEnvelopeAttachments(contentDiv, msg);
-        }
-        if (!msg.content && !(Array.isArray(msg.attachments) && msg.attachments.length)) {
-            const preview = jsonMessagePreview(parseClientJsonPayload(msg));
-            if (!preview) contentDiv.textContent = '';
-        }
+        appendProtocolCardBody(contentDiv, msg);
     } else if (msg.type === 'audio') {
         const atts = messageAttachments(msg);
         const src = (atts[0] && atts[0].url) || (looksLikeUploadUrl(msg.content) ? msg.content : '');
@@ -1048,7 +1326,7 @@ function messageNodeSignature(msg) {
         msg.content || '',
         msg.action || '',
         msg.name || '',
-        msg.sender || '',
+        messageSender(msg),
         msg.target || '',
         atts,
     ].join('\x1e');
@@ -1065,7 +1343,8 @@ function shouldSkipMessageRerender(existingNode, msg) {
 function prependMessage(msg) {
     const root = getMessagesContainer();
     if (!root) return;
-    const id = msg.id ?? null;
+    msg = normalizeClientMessage(msg) || msg;
+    const id = messageId(msg) || null;
     const existingNode = id ? findMessageNode(id) : null;
     if (shouldSkipMessageRerender(existingNode, msg)) {
         applyMessageTargetFilter();
@@ -1091,7 +1370,8 @@ function prependMessage(msg) {
 
 
 function appendMessage(msg) {
-    const id = msg.id ?? null;
+    msg = normalizeClientMessage(msg) || msg;
+    const id = messageId(msg) || null;
     const existingNode = id ? findMessageNode(id) : null;
     if (shouldSkipMessageRerender(existingNode, msg)) {
         applyMessageTargetFilter();

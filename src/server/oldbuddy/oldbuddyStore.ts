@@ -11,7 +11,9 @@ import {
     jiujiuTimestampToIso,
     jiujiuWelcomePacket,
     oldBuddyToJiujiuPacket,
+    oldBuddyToWebPacket,
     envelopeToJiujiuPacket,
+    tryParseTimestampMs,
     toJiujiuActionPacket,
     jiujiuTypeToOldBuddy,
     parseJiujiuPacket,
@@ -22,6 +24,9 @@ import {
     type JiujiuPacket,
     normalizeJiujiuPacket,
     parseOldBuddyJsonPacket,
+    persistNestedAttachmentFiles,
+    hydrateJiujiuAttachmentData,
+    isNestedJiujiuMessage,
     jiujiuBodyWithoutType,
     isJiujiuInteractive,
     isJiujiuResult,
@@ -215,29 +220,42 @@ export class OldBuddyStore {
         }
         const rawAtts = Array.isArray(packet.attachments) ? packet.attachments : [];
         const saved: OldBuddyAttachment[] = [];
-        for (const att of rawAtts) {
-            const buf = decodeJiujiuBase64(att.data);
-            if (!buf) continue;
-            if (buf.length > JIUJIU_MAX_ATTACH_BYTES) {
-                throw new Error('attachment too large');
+        const hasNested = rawAtts.some((att) => isNestedJiujiuMessage(att));
+        if (!hasNested) {
+            for (const att of rawAtts) {
+                const mime = String(att.mime || 'application/octet-stream');
+                const filename = String(att.name || 'upload');
+                const kind = attachmentKindFromMime(mime, filename, att.kind);
+                const buf = decodeJiujiuBase64(att.data);
+                if (buf) {
+                    if (buf.length > JIUJIU_MAX_ATTACH_BYTES) {
+                        throw new Error('attachment too large');
+                    }
+                    const file = this.saveUpload(buf, filename, mime);
+                    const row: OldBuddyAttachment = {
+                        name: filename,
+                        mime,
+                        kind,
+                        url: file.url,
+                        size: buf.length,
+                    };
+                    if (att.durationMs != null && Number.isFinite(Number(att.durationMs))) {
+                        row.durationMs = Number(att.durationMs);
+                    }
+                    saved.push(row);
+                    continue;
+                }
+                const url = String(att.url || '').trim();
+                if (!url) continue;
+                const row: OldBuddyAttachment = { name: filename, mime, kind, url };
+                if (att.size != null && Number.isFinite(Number(att.size))) row.size = Number(att.size);
+                if (att.durationMs != null && Number.isFinite(Number(att.durationMs))) {
+                    row.durationMs = Number(att.durationMs);
+                }
+                saved.push(row);
             }
-            const mime = String(att.mime || 'application/octet-stream');
-            const filename = String(att.name || 'upload');
-            const file = this.saveUpload(buf, filename, mime);
-            const kind = attachmentKindFromMime(mime, filename, att.kind);
-            const row: OldBuddyAttachment = {
-                name: filename,
-                mime,
-                kind,
-                url: file.url,
-                size: buf.length,
-            };
-            if (att.durationMs != null && Number.isFinite(Number(att.durationMs))) {
-                row.durationMs = Number(att.durationMs);
-            }
-            saved.push(row);
         }
-        if (!saved.length && !hasJiujiuPushBody(packet)) return null;
+        if (!saved.length && !hasNested && !hasJiujiuPushBody(packet)) return null;
 
         const id = String(packet.msgId || '').trim() || this.newId();
         if (!opts.echoToJiujiu) {
@@ -252,8 +270,30 @@ export class OldBuddyStore {
         const friendName = String(packet.friendName || packet.friend || '').trim() || undefined;
 
         if (storeAsJson) {
-            const persist = jiujiuBodyWithoutType(packet);
-            if (saved.length) {
+            const persisted = hasNested
+                ? persistNestedAttachmentFiles(packet, (att, buf) => {
+                    if (buf.length > JIUJIU_MAX_ATTACH_BYTES) {
+                        throw new Error('attachment too large');
+                    }
+                    const mime = String(att.mime || 'application/octet-stream');
+                    const filename = String(att.name || 'upload');
+                    const file = this.saveUpload(buf, filename, mime);
+                    const kind = attachmentKindFromMime(mime, filename, att.kind);
+                    const row: OldBuddyAttachment = {
+                        name: filename,
+                        mime,
+                        kind,
+                        url: file.url,
+                        size: buf.length,
+                    };
+                    if (att.durationMs != null && Number.isFinite(Number(att.durationMs))) {
+                        row.durationMs = Number(att.durationMs);
+                    }
+                    return row;
+                })
+                : packet;
+            const persist = jiujiuBodyWithoutType(persisted);
+            if (!hasNested && saved.length) {
                 persist.attachments = saved.map((row) => ({
                     name: row.name,
                     mime: row.mime,
@@ -272,7 +312,7 @@ export class OldBuddyStore {
                 target,
                 type: cardType,
                 config: persist,
-                attachments: saved,
+                attachments: hasNested ? undefined : saved,
                 id,
                 timestamp,
                 skip_reply: !!opts.skipReply,
@@ -354,8 +394,28 @@ export class OldBuddyStore {
         return msg;
     }
 
+    toWebPacket(msg: OldBuddyMessage) {
+        return oldBuddyToWebPacket(msg);
+    }
+
+    /** 网页 / 外部 JSON 入站：按啾啾信封入库，不回推手机。 */
+    ingestClientPacket(
+        packet: JiujiuPacket,
+        opts: {
+            senderId?: string;
+            senderName?: string;
+            target?: string;
+            skipReply?: boolean;
+        } = {},
+    ) {
+        return this.ingestJiujiuPacket(packet, {
+            ...opts,
+            echoToJiujiu: false,
+        });
+    }
+
     private emitRealtime(msg: OldBuddyMessage) {
-        this.ws.broadcast(msg);
+        this.ws.broadcast(oldBuddyToWebPacket(msg));
         if (this.jiujiuEchoIds.has(msg.id)) {
             this.jiujiuEchoIds.delete(msg.id);
             return;
@@ -386,6 +446,10 @@ export class OldBuddyStore {
     }
 
     private async buildJiujiuPacket(msg: OldBuddyMessage) {
+        const stored = parseOldBuddyJsonPacket(msg);
+        if (stored) {
+            return hydrateJiujiuAttachmentData(stored, (url) => this.readUploadFromContent(url));
+        }
         const atts = normalizeAttachments(msg.attachments);
         if (atts.length) {
             const files = [];
@@ -455,7 +519,7 @@ export class OldBuddyStore {
         }
         list.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         if (before) {
-            const beforeMs = Date.parse(before);
+            const beforeMs = tryParseTimestampMs(before);
             if (Number.isFinite(beforeMs)) {
                 list = list.filter((m) => new Date(m.timestamp).getTime() < beforeMs);
             }
@@ -464,7 +528,10 @@ export class OldBuddyStore {
             list = list.filter((m) => (m.target || DEFAULT_TARGET) === target);
         }
         const hasMore = list.length > pageSize;
-        const messages = list.slice(-pageSize).map((m) => normalizeOldBuddyMessage(m) || m);
+        const messages = list.slice(-pageSize).map((m) => {
+            const row = normalizeOldBuddyMessage(m) || m;
+            return oldBuddyToWebPacket(row);
+        });
         return { messages, has_more: hasMore };
     }
 
@@ -509,7 +576,7 @@ export class OldBuddyStore {
         const targetFilter = params.target;
 
         const msgTime = (m: OldBuddyMessage) => {
-            const t = Date.parse(String(m.timestamp || ''));
+            const t = tryParseTimestampMs(m.timestamp);
             return Number.isFinite(t) ? t : 0;
         };
 
@@ -526,7 +593,10 @@ export class OldBuddyStore {
             .sort((a, b) => a.basename.localeCompare(b.basename));
 
         if (before) {
-            const day = before.slice(0, 10);
+            const beforeMs = tryParseTimestampMs(before);
+            const day = Number.isFinite(beforeMs)
+                ? new Date(beforeMs).toISOString().slice(0, 10)
+                : before.slice(0, 10);
             if (dailyRe.test(day)) {
                 dailies = dailies.filter((f) => f.basename <= day);
             }
@@ -563,7 +633,7 @@ export class OldBuddyStore {
             list = list.filter((m) => (m.target || DEFAULT_TARGET) === targetFilter);
         }
         if (before) {
-            const beforeMs = Date.parse(before);
+            const beforeMs = tryParseTimestampMs(before);
             if (Number.isFinite(beforeMs)) {
                 list = list.filter((m) => msgTime(m) < beforeMs);
             }

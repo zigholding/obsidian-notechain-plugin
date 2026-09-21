@@ -95,7 +95,7 @@ export class OldBuddyWebSocketHub {
         }
     }
 
-    /** 网页客户端：OldBuddyMessage JSON */
+    /** 网页客户端：啾啾信封（附件用 url） */
     broadcast(payload: unknown) {
         this.writeToKind('web', payload);
     }

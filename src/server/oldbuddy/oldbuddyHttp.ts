@@ -8,7 +8,7 @@ import {
 } from '../httpUtil';
 import { OLDBUDDY_PAGE_HTML } from '../oldbuddyPageHtml';
 import { OldBuddyStore, inferOldBuddyMessageType } from './oldbuddyStore';
-import { parseJiujiuPacket, JiujiuPushError } from './jiujiu';
+import { parseJiujiuPacket, JiujiuPushError, looksLikeJiujiuClientPayload, pickPushSender } from './jiujiu';
 import { normalizeAttachments } from './types';
 import type { HttpReq, HttpRes, ParsedReqUrl } from '../../http-types';
 import { parseRequestUrl } from '../../http-types';
@@ -325,7 +325,7 @@ export class OldBuddyHttpHandlers {
                 extra_text: fields.extra_text,
                 quick_cmd_id: fields.quick_cmd_id,
             });
-            jsonResponse(res, 200, { message });
+            jsonResponse(res, 200, { message: this.store.toWebPacket(message) });
         } catch (e: unknown) {
             jsonResponse(res, 500, { error: errorMessage(e) || 'send failed' });
         }
@@ -357,7 +357,7 @@ export class OldBuddyHttpHandlers {
                 file_size: file.data.length,
                 mime: file.mime || undefined,
             });
-            jsonResponse(res, 200, { message });
+            jsonResponse(res, 200, { message: this.store.toWebPacket(message) });
         } catch (e: unknown) {
             jsonResponse(res, 500, { error: errorMessage(e) || 'upload failed' });
         }
@@ -376,16 +376,36 @@ export class OldBuddyHttpHandlers {
             } else {
                 fields = parseUrlEncoded(body);
             }
+            if (looksLikeJiujiuClientPayload(fields)) {
+                const packet = parseJiujiuPacket(JSON.stringify(fields)) || { content: String(fields.content || '') };
+                const skipReply = fields.skip_reply === true || fields.skip_reply === 'true';
+                const { senderId, senderName } = pickPushSender(packet);
+                const message = await this.store.ingestClientPacket(packet, {
+                    senderId,
+                    senderName,
+                    target: String(packet.target || fields.target || 'local'),
+                    skipReply,
+                });
+                if (!message) {
+                    jsonResponse(res, 400, { ok: false, error: 'content required' });
+                    return;
+                }
+                jsonResponse(res, 200, {
+                    ok: true,
+                    message: this.store.toWebPacket(message),
+                });
+                return;
+            }
             const message = await this.store.pushExternalMessage({
                 content: String(fields.content || ''),
-                sender: fields.sender != null ? String(fields.sender) : undefined,
+                sender: fields.sender != null ? String(fields.sender) : (fields.senderId != null ? String(fields.senderId) : undefined),
                 target: fields.target != null ? String(fields.target) : undefined,
                 type: fields.type != null ? String(fields.type) : undefined,
                 extra_text: fields.extra_text != null ? String(fields.extra_text) : undefined,
                 file_name: fields.file_name != null ? String(fields.file_name) : undefined,
                 file_size: fields.file_size != null ? Number(fields.file_size) : undefined,
                 card: fields.card as boolean | string | number | undefined,
-                id: fields.id != null ? String(fields.id) : undefined,
+                id: fields.id != null ? String(fields.id) : (fields.msgId != null ? String(fields.msgId) : undefined),
                 timestamp: fields.timestamp != null ? String(fields.timestamp) : undefined,
                 skip_reply: fields.skip_reply as boolean | string | undefined,
                 quick_cmd_id: fields.quick_cmd_id != null ? String(fields.quick_cmd_id) : undefined,
@@ -394,7 +414,7 @@ export class OldBuddyHttpHandlers {
                     ? normalizeAttachments(fields.attachments)
                     : undefined,
             });
-            jsonResponse(res, 200, { ok: true, message });
+            jsonResponse(res, 200, { ok: true, message: this.store.toWebPacket(message) });
         } catch (e: unknown) {
             const msg = errorMessage(e) || 'push failed';
             const status = msg === 'content required' || msg === 'invalid type' ? 400 : 500;

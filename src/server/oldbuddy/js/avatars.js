@@ -64,7 +64,10 @@ function createMessageAvatarEl(profile) {
 }
 
 function wrapMessageWithAvatar(div, msg, contentDiv) {
-    const profile = resolveSenderProfile(msg.sender);
+    const sender = typeof messageSender === 'function'
+        ? messageSender(msg)
+        : String((msg && (msg.senderId || msg.sender)) || '');
+    const profile = resolveSenderProfile(sender);
     const row = document.createElement('div');
     row.className = 'message-row';
 
@@ -72,7 +75,7 @@ function wrapMessageWithAvatar(div, msg, contentDiv) {
     const body = document.createElement('div');
     body.className = 'message-body';
 
-    if (shouldShowNickname(msg.sender, profile) || msg.senderName) {
+    if (shouldShowNickname(sender, profile) || msg.senderName) {
         const nick = document.createElement('div');
         nick.className = 'message-nickname';
         nick.textContent = msg.senderName || profile.name;
@@ -81,7 +84,7 @@ function wrapMessageWithAvatar(div, msg, contentDiv) {
 
     body.appendChild(contentDiv);
 
-    if (typeof isUserSender === 'function' && isUserSender(msg.sender)) {
+    if (typeof isUserSender === 'function' && isUserSender(sender)) {
         row.classList.add('message-row-user');
         row.appendChild(body);
         row.appendChild(avatar);

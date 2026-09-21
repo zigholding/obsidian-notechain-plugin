@@ -1,5 +1,5 @@
 import type { OldBuddyAttachment, OldBuddyMessage, OldBuddyMessageType } from './types';
-import { attachmentKindFromMime, asProtocolConfig, isJiujiuCardStoredType, isUserSender } from './types';
+import { attachmentKindFromMime, asProtocolConfig, isEnvelopeType, isJiujiuCardStoredType, isUserSender, normalizeAttachments } from './types';
 import { isRecord } from '../../ts-helpers';
 
 export const JIUJIU_MAX_ATTACH_BYTES = 6 * 1024 * 1024;
@@ -11,8 +11,20 @@ export interface JiujiuAttachment {
     mime?: string;
     kind?: string;
     data?: string;
+    url?: string;
+    size?: number;
     durationMs?: number;
 }
+
+export type JiujiuAttachNode = JiujiuAttachment & {
+    type?: string;
+    content?: string;
+    title?: string;
+    attachments?: JiujiuAttachNode[];
+    urls?: unknown[];
+    tabs?: unknown[];
+    card?: Record<string, unknown>;
+};
 
 export interface JiujiuPacket {
     type?: string;
@@ -32,7 +44,7 @@ export interface JiujiuPacket {
     hour?: number;
     minute?: number;
     direct?: boolean | string;
-    attachments?: JiujiuAttachment[];
+    attachments?: JiujiuAttachNode[];
     replyTo?: string;
     result?: Record<string, unknown>;
     card?: Record<string, unknown>;
@@ -50,6 +62,8 @@ export interface JiujiuPacket {
 
 const INTERACTIVE_TYPES = new Set(['interactive', 'card', 'form', 'ui', 'interactive_card']);
 const WEBSITE_TYPES = new Set(['website', 'web', 'lookup', 'sites']);
+const SLIDER_TYPES = new Set(['slider', 'carousel', 'slideshow']);
+const HTML_TYPES = new Set(['html', 'html_card', 'richhtml']);
 const RESULT_TYPES = new Set(['interactive_result', 'card_result', 'form_result']);
 const CONSUMED_KEYS = new Set([
     'type', 'content', 'msgId', 'id', 'timestamp', 'attachments',
@@ -118,9 +132,29 @@ export function isJiujiuResult(packet: JiujiuPacket): boolean {
     return isJiujiuResultType(String(packet.type || ''));
 }
 
-/** 互动卡 / 网站卡 / 点选结果：OldBuddy.type 用啾啾 type，协议其余字段进 attachments JSON。 */
+export function isJiujiuSliderType(msgType: string): boolean {
+    return SLIDER_TYPES.has(msgType.trim().toLowerCase());
+}
+
+export function isJiujiuHtmlType(msgType: string): boolean {
+    return HTML_TYPES.has(msgType.trim().toLowerCase());
+}
+
+export function isNestedJiujiuMessage(att: unknown): boolean {
+    if (!isRecord(att)) return false;
+    const t = String(att.type || '').trim().toLowerCase();
+    if (t && t !== 'image' && t !== 'audio' && t !== 'file' && t !== 'video') return true;
+    if (isRecord(att.card) || Array.isArray(att.urls) || Array.isArray(att.tabs)) return true;
+    return Array.isArray(att.attachments) && (att.content != null || att.title != null);
+}
+
+/** 非信封 type（互动卡、网站卡、轮播、HTML 及以后的新卡片）用啾啾 type + config。 */
 export function isJiujiuJsonStored(packet: JiujiuPacket): boolean {
-    return isJiujiuInteractive(packet) || isJiujiuWebsite(packet) || isJiujiuResult(packet);
+    if (isJiujiuInteractive(packet) || isJiujiuWebsite(packet) || isJiujiuResult(packet)) return true;
+    if (isJiujiuActionPacket(packet)) return false;
+    const t = String(packet.type || '').trim().toLowerCase();
+    if (!t || isEnvelopeType(t)) return false;
+    return true;
 }
 
 export function jiujiuBodyWithoutType(packet: JiujiuPacket): Record<string, unknown> {
@@ -389,22 +423,23 @@ export function jiujiuSenderToOldBuddy(senderId?: string | null): string {
     return `user_${s.replace(/[^\w.-]+/g, '_').slice(0, 40)}`;
 }
 
-export function jiujiuTimestampToIso(ts: unknown): string {
+export function tryParseTimestampMs(ts: unknown): number {
     if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
-        const ms = ts < 1e12 ? ts * 1000 : ts;
-        return new Date(ms).toISOString();
+        return ts < 1e12 ? ts * 1000 : ts;
     }
     const s = String(ts ?? '').trim();
-    if (s) {
-        const asNum = Number(s);
-        if (Number.isFinite(asNum) && asNum > 0 && !s.includes('T') && !s.includes('-')) {
-            const ms = asNum < 1e12 ? asNum * 1000 : asNum;
-            return new Date(ms).toISOString();
-        }
-        const parsed = Date.parse(s);
-        if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
+    if (!s) return NaN;
+    const asNum = Number(s);
+    if (Number.isFinite(asNum) && asNum > 0 && !s.includes('T') && !s.includes('-')) {
+        return asNum < 1e12 ? asNum * 1000 : asNum;
     }
-    return new Date().toISOString();
+    const parsed = Date.parse(s);
+    return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+export function jiujiuTimestampToIso(ts: unknown): string {
+    const ms = tryParseTimestampMs(ts);
+    return Number.isFinite(ms) ? new Date(ms).toISOString() : new Date().toISOString();
 }
 
 export function oldBuddyTimestampToMs(iso: string | undefined): number {
@@ -506,19 +541,109 @@ export function parseOldBuddyJsonPacket(msg: OldBuddyMessage): JiujiuPacket | nu
 export function stripJiujiuAttachmentData(packet: JiujiuPacket): JiujiuPacket {
     const out: JiujiuPacket = { ...packet };
     if (!Array.isArray(out.attachments)) return out;
-    out.attachments = out.attachments.map((att) => {
-        if (!att || typeof att !== 'object') return att;
-        const rest = { ...att };
-        delete rest.data;
-        return rest;
-    });
+    out.attachments = out.attachments.map((att) => stripAttachNode(att));
     return out;
+}
+
+function stripAttachNode(att: JiujiuAttachNode): JiujiuAttachNode {
+    const nested: JiujiuAttachNode = { ...att };
+    if (isNestedJiujiuMessage(att)) {
+        delete nested.data;
+        if (Array.isArray(nested.attachments)) {
+            nested.attachments = nested.attachments.map((child) => stripAttachNode(child));
+        }
+        return nested;
+    }
+    delete nested.data;
+    return nested;
+}
+
+export function persistNestedAttachmentFiles(
+    packet: JiujiuPacket,
+    saveFile: (att: JiujiuAttachment, data: Buffer) => {
+        url?: string;
+        name?: string;
+        mime?: string;
+        kind?: string;
+        size?: number;
+        durationMs?: number;
+    },
+): JiujiuPacket {
+    const out: JiujiuPacket = { ...packet };
+    if (!Array.isArray(out.attachments)) return stripJiujiuAttachmentData(out);
+    out.attachments = out.attachments.map((att) => persistAttachNode(att, saveFile));
+    return out;
+}
+
+function persistAttachNode(
+    att: JiujiuAttachNode,
+    saveFile: (att: JiujiuAttachment, data: Buffer) => {
+        url?: string;
+        name?: string;
+        mime?: string;
+        kind?: string;
+        size?: number;
+        durationMs?: number;
+    },
+): JiujiuAttachNode {
+    if (isNestedJiujiuMessage(att)) {
+        const nested: JiujiuAttachNode = { ...att };
+        delete nested.data;
+        if (Array.isArray(nested.attachments)) {
+            nested.attachments = nested.attachments.map((child) => persistAttachNode(child, saveFile));
+        }
+        return nested;
+    }
+    const buf = decodeJiujiuBase64(att.data);
+    const rest: JiujiuAttachNode = { ...att };
+    delete rest.data;
+    if (!buf) return rest;
+    const saved = saveFile(att, buf);
+    if (saved.url) rest.url = saved.url;
+    if (saved.name) rest.name = saved.name;
+    if (saved.mime) rest.mime = saved.mime;
+    if (saved.kind) rest.kind = saved.kind;
+    if (saved.size != null) rest.size = saved.size;
+    if (saved.durationMs != null) rest.durationMs = saved.durationMs;
+    return rest;
+}
+
+export function hydrateJiujiuAttachmentData(
+    packet: JiujiuPacket,
+    readFile: (url: string) => { data: Buffer; mime: string } | null,
+): JiujiuPacket {
+    const out: JiujiuPacket = { ...packet };
+    if (!Array.isArray(out.attachments)) return out;
+    out.attachments = out.attachments.map((att) => hydrateAttachNode(att, readFile));
+    return out;
+}
+
+function hydrateAttachNode(
+    att: JiujiuAttachNode,
+    readFile: (url: string) => { data: Buffer; mime: string } | null,
+): JiujiuAttachNode {
+    if (isNestedJiujiuMessage(att)) {
+        const nested: JiujiuAttachNode = { ...att };
+        if (Array.isArray(nested.attachments)) {
+            nested.attachments = nested.attachments.map((child) => hydrateAttachNode(child, readFile));
+        }
+        return nested;
+    }
+    const url = String(att.url || '').trim();
+    if (!url) return att;
+    const file = readFile(url);
+    if (!file?.data?.length || file.data.length > JIUJIU_MAX_ATTACH_BYTES) return att;
+    const rest: JiujiuAttachNode = { ...att };
+    rest.data = file.data.toString('base64');
+    if (!rest.mime) rest.mime = file.mime;
+    delete rest.url;
+    return rest;
 }
 
 function packetFromStoredJiujiu(msg: OldBuddyMessage): JiujiuPacket | null {
     if (!msg.jiujiu) return null;
     const stored = normalizeJiujiuPacket(msg.jiujiu);
-    if (!isJiujiuInteractive(stored) && !isJiujiuResult(stored) && !isJiujiuWebsite(stored)) return null;
+    if (!isJiujiuJsonStored(stored)) return null;
     const packet = normalizeJiujiuPacket({
         ...stored,
         content: msg.content || stored.content,
@@ -529,6 +654,57 @@ function packetFromStoredJiujiu(msg: OldBuddyMessage): JiujiuPacket | null {
         target: msg.target || stored.target,
     });
     return packetToOutgoing(packet);
+}
+
+/** 网页 OldBuddy：啾啾信封，附件用 url 不内嵌 Base64。 */
+export function oldBuddyToWebPacket(msg: OldBuddyMessage): JiujiuPacket {
+    const stored = parseOldBuddyJsonPacket(msg);
+    let packet: JiujiuPacket;
+    if (stored) {
+        packet = { ...stored };
+    } else if (msg.type === 'action' || msg.action) {
+        packet = actionMessageToJiujiuPacket(msg);
+    } else {
+        packet = {
+            type: msg.type === 'audio' ? 'audio' : msg.type === 'welcome' ? 'welcome' : 'message',
+            content: String(msg.content || ''),
+            msgId: msg.id,
+            timestamp: oldBuddyTimestampToMs(msg.timestamp),
+        };
+    }
+    packet.msgId = String(msg.id || packet.msgId || '');
+    packet.timestamp = packet.timestamp ?? oldBuddyTimestampToMs(msg.timestamp);
+    if (msg.sender) packet.senderId = msg.sender;
+    if (msg.senderName && !packet.senderName) packet.senderName = msg.senderName;
+    if (msg.target && !packet.target) packet.target = msg.target;
+    if (msg.friendName && !packet.friendName) packet.friendName = msg.friendName;
+    const atts = normalizeAttachments(msg.attachments);
+    if (atts.length && !(Array.isArray(packet.attachments) && packet.attachments.some((row) => isNestedJiujiuMessage(row)))) {
+        packet.attachments = atts.map((att) => {
+            const row: JiujiuAttachment = {};
+            if (att.name) row.name = att.name;
+            if (att.mime) row.mime = att.mime;
+            if (att.kind) row.kind = att.kind;
+            if (att.url) row.url = att.url;
+            if (att.size != null && Number.isFinite(Number(att.size))) row.size = Number(att.size);
+            if (att.durationMs != null && Number.isFinite(Number(att.durationMs))) {
+                row.durationMs = Number(att.durationMs);
+            }
+            return row;
+        });
+    }
+    return packetToOutgoing(packet);
+}
+
+export function looksLikeJiujiuClientPayload(fields: Record<string, unknown>): boolean {
+    if (fields.msgId != null || fields.senderId != null) return true;
+    if (isRecord(fields.card)) return true;
+    if ((Array.isArray(fields.urls) && fields.urls.length) || (Array.isArray(fields.tabs) && fields.tabs.length)) return true;
+    if ((Array.isArray(fields.actions) && fields.actions.length) || (Array.isArray(fields.fields) && fields.fields.length)) return true;
+    const t = String(fields.type || '').trim().toLowerCase();
+    return isJiujiuInteractiveType(t) || isJiujiuWebsiteType(t) || isJiujiuResultType(t)
+        || isJiujiuSliderType(t) || isJiujiuHtmlType(t)
+        || t === 'welcome' || t === 'action';
 }
 
 export function oldBuddyToJiujiuPacket(

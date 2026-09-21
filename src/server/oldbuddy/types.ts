@@ -16,6 +16,12 @@ export const OLDBUDDY_MESSAGE_TYPES = [
     'interactive_result',
     'card_result',
     'form_result',
+    'slider',
+    'carousel',
+    'slideshow',
+    'html',
+    'html_card',
+    'richhtml',
 ] as const;
 
 export type OldBuddyMessageType = string;
@@ -25,12 +31,16 @@ const LEGACY_MEDIA_TYPES = new Set([
     'interactive', 'card', 'form', 'ui', 'interactive_card',
     'website', 'web', 'lookup', 'sites',
     'interactive_result', 'card_result', 'form_result',
+    'slider', 'carousel', 'slideshow',
+    'html', 'html_card', 'richhtml',
 ]);
 
 const JIUJIU_CARD_STORED_TYPES = new Set([
     'interactive', 'card', 'form', 'ui', 'interactive_card',
     'website', 'web', 'lookup', 'sites',
     'interactive_result', 'card_result', 'form_result',
+    'slider', 'carousel', 'slideshow',
+    'html', 'html_card', 'richhtml',
 ]);
 
 export function isJiujiuCardStoredType(type?: string | null): boolean {
@@ -217,8 +227,8 @@ function toEnvelopeType(rawType: string): OldBuddyMessageType {
 export function normalizeOldBuddyMessage(raw: unknown): OldBuddyMessage | null {
     if (!raw || typeof raw !== 'object') return null;
     const row = raw as Record<string, unknown>;
-    const id = String(row.id ?? '').trim();
-    const sender = String(row.sender ?? '').trim();
+    const id = String(row.id ?? row.msgId ?? '').trim();
+    const sender = String(row.sender ?? row.senderId ?? '').trim();
     if (!id || !sender) return null;
 
     const rawType = String(row.type || 'message').toLowerCase();
@@ -278,14 +288,36 @@ export function normalizeOldBuddyMessage(raw: unknown): OldBuddyMessage | null {
     };
     const target = String(row.target ?? '').trim();
     if (target) out.target = target;
-    if (row.card === true || row.card === 'true' || row.card === 1) out.card = true;
+    const cardObj = row.card && typeof row.card === 'object' && !Array.isArray(row.card)
+        ? { ...(row.card as Record<string, unknown>) }
+        : undefined;
+    if (cardObj) {
+        const stored: Record<string, unknown> = { ...(out.config || {}), card: cardObj };
+        delete stored.type;
+        out.config = stored;
+        if (!isJiujiuCardStoredType(out.type)) {
+            out.type = String(rawType || 'interactive');
+        }
+    } else if (row.card === true || row.card === 'true' || row.card === 1) {
+        out.card = true;
+    }
+    if ((Array.isArray(row.urls) && row.urls.length) || (Array.isArray(row.tabs) && row.tabs.length)) {
+        const stored: Record<string, unknown> = { ...(out.config || {}) };
+        if (Array.isArray(row.urls) && !stored.urls) stored.urls = row.urls;
+        if (Array.isArray(row.tabs) && !stored.tabs) stored.tabs = row.tabs;
+        const layout = String(row.layout ?? stored.layout ?? '').trim();
+        if (layout) stored.layout = layout;
+        delete stored.type;
+        out.config = stored;
+        if (!isJiujiuCardStoredType(out.type)) out.type = String(rawType || 'website');
+    }
     const senderName = String(row.senderName ?? '').trim();
     if (senderName) out.senderName = senderName;
     const friendName = String(row.friendName ?? '').trim();
     if (friendName) out.friendName = friendName;
     if (attachments.length) out.attachments = attachments;
     if (config && Object.keys(config).length) {
-        const stored = { ...config };
+        const stored = { ...config, ...(out.config || {}) };
         delete stored.type;
         out.config = stored;
     }

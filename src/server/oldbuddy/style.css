@@ -259,9 +259,113 @@ body {
     background: var(--wechat-green);
 }
 
-.message-content.markdown-card {
+.message-content.markdown-card,
+.message-content.jiujiu-proto-card {
     min-width: min(92vw, 520px);
     max-width: min(92vw, 680px);
+}
+
+.jiujiu-proto-card-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.jiujiu-proto-card-desc {
+    color: var(--wechat-meta);
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.jiujiu-proto-card-links a {
+    display: block;
+    margin: 4px 0;
+    word-break: break-all;
+}
+
+.jiujiu-slider {
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    gap: 8px;
+    margin-top: 8px;
+    max-height: min(36vh, 280px);
+    align-items: flex-start;
+}
+
+.jiujiu-slider-page {
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+    min-width: 100%;
+    max-height: min(36vh, 280px);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.jiujiu-slider-page.markdown,
+.jiujiu-slider-page.markdown-card,
+.jiujiu-slider-page-body.markdown,
+.jiujiu-slider-page-body.markdown-card {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.jiujiu-slider-page-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    /* max-height on the scroller itself — flex max-height does not clip content */
+    max-height: min(32vh, 240px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.jiujiu-slider-page-body pre,
+.jiujiu-slider-page-body code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    max-width: 100%;
+}
+
+.jiujiu-slider-more {
+    flex: 0 0 auto;
+    display: block;
+    margin-top: 6px;
+    border: none;
+    background: transparent;
+    color: #576b95;
+    font-size: 13px;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+}
+
+.jiujiu-full-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 16px;
+}
+
+.jiujiu-full-overlay-body {
+    width: min(92vw, 680px);
+    max-height: 88vh;
+    overflow: auto;
+    background: #fff;
+    color: var(--wechat-text);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.45;
 }
 
 .message-content.markdown p {
