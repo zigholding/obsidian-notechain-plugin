@@ -4,6 +4,8 @@ let lastLoadedMessageId = null;
 let loadingMessages = false;
 let isLoading = false;
 let hasMore = true;
+/** 离开顶端后再回到顶端才自动加载下一页，避免一直停在顶部连刷。 */
+let historyLoadArmed = true;
 const HISTORY_SENTINEL_ID = 'history-load-sentinel';
 let _messagesContainer = null;
 
@@ -17,6 +19,26 @@ function getMessagesContainer() {
 function resetMessagePagination() {
     hasMore = true;
     isLoading = false;
+    historyLoadArmed = true;
+}
+
+function firstVisibleMessage(root) {
+    if (!root) return null;
+    const nodes = root.querySelectorAll('.message');
+    for (const node of nodes) {
+        if (!node.classList.contains('ob-hidden')) return node;
+    }
+    return nodes[0] || null;
+}
+
+function pinMessageOffset(root, pin) {
+    if (!root || !pin || !pin.isConnected) return 0;
+    return pin.getBoundingClientRect().top - root.getBoundingClientRect().top;
+}
+
+function restorePinnedScroll(root, pin, pinOffset) {
+    if (!root || !pin || !pin.isConnected) return;
+    root.scrollTop += pinMessageOffset(root, pin) - pinOffset;
 }
 
 function ensureHistoryLoadSentinel() {
@@ -173,7 +195,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const filterBtn = document.getElementById('target-filter-toggle');
         const timeFilterBtn = document.getElementById('time-filter-toggle');
         const settingsToggle = document.getElementById('status-settings-toggle');
-        const settingsMenu = document.getElementById('status-settings-menu');
         if (!el) return;
         const saved = localStorage.getItem(CHAT_TARGET_STORAGE_KEY);
         if (saved) {
@@ -199,13 +220,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 setHideOlderMessages(!!timeFilterBtn.checked, { notify: true });
             });
         }
-        if (settingsToggle && settingsMenu) {
+        if (settingsToggle) {
+            const overlay = document.getElementById('status-settings-overlay');
+            const closeBtn = document.getElementById('status-settings-close');
+            const chip = document.getElementById('current-target-chip');
+            const setSettingsPageOpen = (open) => {
+                if (!overlay) return;
+                overlay.classList.toggle('is-open', open);
+                overlay.setAttribute('aria-hidden', open ? 'false' : 'true');
+                settingsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                document.body.classList.toggle('ob-preview-lock', open);
+                document.body.classList.toggle('ob-settings-open', open);
+            };
             settingsToggle.addEventListener('click', (e) => {
                 e.stopPropagation();
-                settingsMenu.classList.toggle('open');
+                setSettingsPageOpen(!overlay || !overlay.classList.contains('is-open'));
             });
-            settingsMenu.addEventListener('click', (e) => e.stopPropagation());
-            document.addEventListener('click', () => settingsMenu.classList.remove('open'));
+            if (closeBtn) closeBtn.addEventListener('click', () => setSettingsPageOpen(false));
+            if (chip) {
+                chip.setAttribute('role', 'button');
+                chip.tabIndex = 0;
+                const openFromChip = (e) => {
+                    e.preventDefault();
+                    setSettingsPageOpen(true);
+                };
+                chip.addEventListener('click', openFromChip);
+                chip.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') openFromChip(e);
+                });
+            }
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && overlay && overlay.classList.contains('is-open')) {
+                    setSettingsPageOpen(false);
+                }
+            });
         }
     });
 });
@@ -348,8 +396,8 @@ async function initTargetConfig() {
 /**
  * 从后端加载历史消息（每次加载 limit 条，默认 10）
  * - 将历史消息按时间从旧到新插入到容器顶部（保持旧 -> 新 顺序）
- * - 在插入前记录滚动高度，插入后恢复视图位置，避免跳动
- * - 使用 isLoading / hasMore 锁来避免重复请求
+ * - 插入后钉住原先可见的那条，滚动条不要回到顶端
+ * - isLoading / hasMore / 离开顶端后才允许再自动加载
  */
 async function loadMessages(limit = 10) {
     const root = getMessagesContainer();
@@ -362,16 +410,14 @@ async function loadMessages(limit = 10) {
     isLoading = true;
     updateHistoryLoadTrigger();
 
-    const scrollThreshold = 80;
-
     try {
         ensureHistoryLoadSentinel();
         ensureHistoryLoadTrigger();
         const childCountBefore = root.querySelectorAll('.message').length;
-
-        const oldScrollHeight = root.scrollHeight;
-        const oldScrollTop = root.scrollTop;
-        const wasAtTop = oldScrollTop <= scrollThreshold;
+        const pin = firstVisibleMessage(root);
+        const pinOffset = pinMessageOffset(root, pin);
+        const isFirstPage = !pin;
+        if (!isFirstPage) historyLoadArmed = false;
 
         const before = getOldestLoadedBefore();
         const url = before
@@ -421,18 +467,16 @@ async function loadMessages(limit = 10) {
             }
         }
 
-        const newScrollHeight = root.scrollHeight;
-        const heightDiff = newScrollHeight - oldScrollHeight;
-        const atBottom = (oldScrollHeight - oldScrollTop - root.clientHeight) < 50;
-        if (wasAtTop) {
-            root.scrollTop = 0;
-        } else if (!atBottom) {
-            root.scrollTop = oldScrollTop + heightDiff;
-        } else {
+        if (isFirstPage) {
             root.scrollTop = root.scrollHeight;
+        } else {
+            restorePinnedScroll(root, pin, pinOffset);
+            requestAnimationFrame(() => restorePinnedScroll(root, pin, pinOffset));
         }
+        if (inserted === 0 && hasMore) historyLoadArmed = true;
 
     } catch (err) {
+        historyLoadArmed = true;
         console.error('loadMessages error', err);
     } finally {
         isLoading = false;
@@ -473,6 +517,7 @@ function setupScrollLoader(threshold = 80, touchPullThreshold = 48) {
     function tryLoadHistory() {
         if (isLoading) return;
         if (!hasMore) return;
+        if (!historyLoadArmed) return;
         loadMessages(20);
     }
 
@@ -481,9 +526,11 @@ function setupScrollLoader(threshold = 80, touchPullThreshold = 48) {
     }
 
     function onScroll() {
-        if (nearTop()) {
-            tryLoadHistory();
+        if (!nearTop()) {
+            historyLoadArmed = true;
+            return;
         }
+        tryLoadHistory();
     }
 
     let scrollRaf = null;
@@ -521,9 +568,8 @@ function setupScrollLoader(threshold = 80, touchPullThreshold = 48) {
     function onTouchEnd() {
         touchStartY = null;
         touchTriggered = false;
-        if (nearTop()) {
-            tryLoadHistory();
-        }
+        if (!nearTop()) historyLoadArmed = true;
+        else tryLoadHistory();
     }
 
     root.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -542,7 +588,7 @@ function setupScrollLoader(threshold = 80, touchPullThreshold = 48) {
             }
         }, {
             root,
-            rootMargin: '120px 0px 0px 0px',
+            rootMargin: '0px',
             threshold: 0,
         });
         if (sentinel) io.observe(sentinel);

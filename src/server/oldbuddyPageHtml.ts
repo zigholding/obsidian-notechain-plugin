@@ -56,47 +56,6 @@ body {
     z-index: 1000;
 }
 
-#status-settings-wrap {
-    position: relative;
-}
-
-#status-settings-toggle {
-    border: 1px solid #ccc;
-    background: #fff;
-    border-radius: 4px;
-    padding: 2px 8px;
-    font-size: 12px;
-    cursor: pointer;
-}
-
-#status-settings-menu {
-    display: none;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    margin-top: 4px;
-    background: #fff;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    padding: 8px 10px;
-    min-width: 160px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-    z-index: 1002;
-}
-
-#status-settings-menu.open {
-    display: block;
-}
-
-.status-setting-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    margin: 4px 0;
-    cursor: pointer;
-}
-
 #status-dot {
     width: 10px;
     height: 10px;
@@ -108,22 +67,110 @@ body {
     color: var(--wechat-meta);
 }
 
+#status-settings-toggle {
+    margin-left: auto;
+    border: none;
+    background: transparent;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 6px;
+}
+
 #current-target-chip {
     background: #e8f5e9;
     color: #2e7d32;
     padding: 2px 8px;
     border-radius: 999px;
     font-size: 12px;
+    cursor: pointer;
 }
 
 #chat-target {
-    margin-left: auto;
-    max-width: 160px;
-    font-size: 12px;
-    padding: 4px 6px;
-    border-radius: 4px;
+    width: 100%;
+    font-size: 14px;
+    padding: 8px 10px;
+    border-radius: 6px;
     border: 1px solid #ccc;
     background: #fff;
+}
+
+.ob-settings-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10020;
+    background: #ededed;
+}
+
+.ob-settings-overlay.is-open {
+    display: flex;
+    flex-direction: column;
+}
+
+.ob-settings-page {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    background: #ededed;
+}
+
+.ob-settings-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #f7f7f7;
+    border-bottom: 1px solid #dcdcdc;
+}
+
+#status-settings-close {
+    border: none;
+    background: transparent;
+    color: #576b95;
+    font-size: 15px;
+    cursor: pointer;
+    padding: 4px 0;
+}
+
+.ob-settings-title {
+    font-weight: 600;
+}
+
+.ob-settings-body {
+    flex: 1 1 auto;
+    overflow: auto;
+    padding: 12px;
+}
+
+.ob-settings-label {
+    font-size: 12px;
+    color: var(--wechat-meta);
+    margin: 12px 0 6px;
+}
+
+.ob-settings-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.status-setting-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    margin: 8px 0;
+    cursor: pointer;
+}
+
+body.ob-settings-open #input-bar,
+body.ob-settings-open #file-menu {
+    display: none;
 }
 
 #messages {
@@ -781,10 +828,6 @@ body {
 }
 
 @media (max-width: 600px) {
-    #chat-target {
-        max-width: 120px;
-    }
-
     .message {
         max-width: 92%;
     }
@@ -965,9 +1008,29 @@ body.ob-preview-lock {
 <body>
 <div id="chat-wrapper">
         <div id="status-bar">
-            <div id="status-settings-wrap">
-                <button id="status-settings-toggle" title="打开状态设置">状态设置</button>
-                <div id="status-settings-menu" aria-label="状态设置">
+            <div id="status-dot"></div>
+            <span id="status-text">离线</span>
+            <span id="current-target-chip" title="打开设置">本地</span>
+            <button id="status-settings-toggle" type="button" title="设置" aria-haspopup="dialog" aria-expanded="false" aria-controls="status-settings-overlay">⚙️</button>
+        </div>
+        <div id="messages" role="log" aria-live="polite"></div>
+    </div>
+
+    <div id="status-settings-overlay" class="ob-settings-overlay" aria-hidden="true">
+        <div class="ob-settings-page" role="dialog" aria-modal="true" aria-labelledby="ob-settings-title">
+            <div class="ob-settings-bar">
+                <button type="button" id="status-settings-close">返回</button>
+                <div id="ob-settings-title" class="ob-settings-title">设置</div>
+            </div>
+            <div class="ob-settings-body">
+                <div class="ob-settings-label">聊天对象</div>
+                <div class="ob-settings-card">
+                    <select id="chat-target" title="聊天对象">
+                        <option value="local">local</option>
+                    </select>
+                </div>
+                <div class="ob-settings-label">显示</div>
+                <div class="ob-settings-card">
                     <label class="status-setting-item">
                         <input id="target-filter-toggle" type="checkbox">
                         <span>仅当前对象</span>
@@ -978,14 +1041,7 @@ body.ob-preview-lock {
                     </label>
                 </div>
             </div>
-            <div id="status-dot"></div>
-            <span id="status-text">离线</span>
-            <span id="current-target-chip">本地</span>
-            <select id="chat-target" title="聊天对象">
-                <option value="local">local</option>
-            </select>
         </div>
-        <div id="messages" role="log" aria-live="polite"></div>
     </div>
 
     <!-- 移出 #chat-wrapper 并 fixed，避免移动端 100vh/dvh + overflow:hidden 把整栏裁到屏外 -->
@@ -1409,6 +1465,8 @@ let lastLoadedMessageId = null;
 let loadingMessages = false;
 let isLoading = false;
 let hasMore = true;
+/** 离开顶端后再回到顶端才自动加载下一页，避免一直停在顶部连刷。 */
+let historyLoadArmed = true;
 const HISTORY_SENTINEL_ID = 'history-load-sentinel';
 let _messagesContainer = null;
 
@@ -1422,6 +1480,26 @@ function getMessagesContainer() {
 function resetMessagePagination() {
     hasMore = true;
     isLoading = false;
+    historyLoadArmed = true;
+}
+
+function firstVisibleMessage(root) {
+    if (!root) return null;
+    const nodes = root.querySelectorAll('.message');
+    for (const node of nodes) {
+        if (!node.classList.contains('ob-hidden')) return node;
+    }
+    return nodes[0] || null;
+}
+
+function pinMessageOffset(root, pin) {
+    if (!root || !pin || !pin.isConnected) return 0;
+    return pin.getBoundingClientRect().top - root.getBoundingClientRect().top;
+}
+
+function restorePinnedScroll(root, pin, pinOffset) {
+    if (!root || !pin || !pin.isConnected) return;
+    root.scrollTop += pinMessageOffset(root, pin) - pinOffset;
 }
 
 function ensureHistoryLoadSentinel() {
@@ -1578,7 +1656,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const filterBtn = document.getElementById('target-filter-toggle');
         const timeFilterBtn = document.getElementById('time-filter-toggle');
         const settingsToggle = document.getElementById('status-settings-toggle');
-        const settingsMenu = document.getElementById('status-settings-menu');
         if (!el) return;
         const saved = localStorage.getItem(CHAT_TARGET_STORAGE_KEY);
         if (saved) {
@@ -1604,13 +1681,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 setHideOlderMessages(!!timeFilterBtn.checked, { notify: true });
             });
         }
-        if (settingsToggle && settingsMenu) {
+        if (settingsToggle) {
+            const overlay = document.getElementById('status-settings-overlay');
+            const closeBtn = document.getElementById('status-settings-close');
+            const chip = document.getElementById('current-target-chip');
+            const setSettingsPageOpen = (open) => {
+                if (!overlay) return;
+                overlay.classList.toggle('is-open', open);
+                overlay.setAttribute('aria-hidden', open ? 'false' : 'true');
+                settingsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                document.body.classList.toggle('ob-preview-lock', open);
+                document.body.classList.toggle('ob-settings-open', open);
+            };
             settingsToggle.addEventListener('click', (e) => {
                 e.stopPropagation();
-                settingsMenu.classList.toggle('open');
+                setSettingsPageOpen(!overlay || !overlay.classList.contains('is-open'));
             });
-            settingsMenu.addEventListener('click', (e) => e.stopPropagation());
-            document.addEventListener('click', () => settingsMenu.classList.remove('open'));
+            if (closeBtn) closeBtn.addEventListener('click', () => setSettingsPageOpen(false));
+            if (chip) {
+                chip.setAttribute('role', 'button');
+                chip.tabIndex = 0;
+                const openFromChip = (e) => {
+                    e.preventDefault();
+                    setSettingsPageOpen(true);
+                };
+                chip.addEventListener('click', openFromChip);
+                chip.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') openFromChip(e);
+                });
+            }
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && overlay && overlay.classList.contains('is-open')) {
+                    setSettingsPageOpen(false);
+                }
+            });
         }
     });
 });
@@ -1753,8 +1857,8 @@ async function initTargetConfig() {
 /**
  * 从后端加载历史消息（每次加载 limit 条，默认 10）
  * - 将历史消息按时间从旧到新插入到容器顶部（保持旧 -> 新 顺序）
- * - 在插入前记录滚动高度，插入后恢复视图位置，避免跳动
- * - 使用 isLoading / hasMore 锁来避免重复请求
+ * - 插入后钉住原先可见的那条，滚动条不要回到顶端
+ * - isLoading / hasMore / 离开顶端后才允许再自动加载
  */
 async function loadMessages(limit = 10) {
     const root = getMessagesContainer();
@@ -1767,16 +1871,14 @@ async function loadMessages(limit = 10) {
     isLoading = true;
     updateHistoryLoadTrigger();
 
-    const scrollThreshold = 80;
-
     try {
         ensureHistoryLoadSentinel();
         ensureHistoryLoadTrigger();
         const childCountBefore = root.querySelectorAll('.message').length;
-
-        const oldScrollHeight = root.scrollHeight;
-        const oldScrollTop = root.scrollTop;
-        const wasAtTop = oldScrollTop <= scrollThreshold;
+        const pin = firstVisibleMessage(root);
+        const pinOffset = pinMessageOffset(root, pin);
+        const isFirstPage = !pin;
+        if (!isFirstPage) historyLoadArmed = false;
 
         const before = getOldestLoadedBefore();
         const url = before
@@ -1826,18 +1928,16 @@ async function loadMessages(limit = 10) {
             }
         }
 
-        const newScrollHeight = root.scrollHeight;
-        const heightDiff = newScrollHeight - oldScrollHeight;
-        const atBottom = (oldScrollHeight - oldScrollTop - root.clientHeight) < 50;
-        if (wasAtTop) {
-            root.scrollTop = 0;
-        } else if (!atBottom) {
-            root.scrollTop = oldScrollTop + heightDiff;
-        } else {
+        if (isFirstPage) {
             root.scrollTop = root.scrollHeight;
+        } else {
+            restorePinnedScroll(root, pin, pinOffset);
+            requestAnimationFrame(() => restorePinnedScroll(root, pin, pinOffset));
         }
+        if (inserted === 0 && hasMore) historyLoadArmed = true;
 
     } catch (err) {
+        historyLoadArmed = true;
         console.error('loadMessages error', err);
     } finally {
         isLoading = false;
@@ -1878,6 +1978,7 @@ function setupScrollLoader(threshold = 80, touchPullThreshold = 48) {
     function tryLoadHistory() {
         if (isLoading) return;
         if (!hasMore) return;
+        if (!historyLoadArmed) return;
         loadMessages(20);
     }
 
@@ -1886,9 +1987,11 @@ function setupScrollLoader(threshold = 80, touchPullThreshold = 48) {
     }
 
     function onScroll() {
-        if (nearTop()) {
-            tryLoadHistory();
+        if (!nearTop()) {
+            historyLoadArmed = true;
+            return;
         }
+        tryLoadHistory();
     }
 
     let scrollRaf = null;
@@ -1926,9 +2029,8 @@ function setupScrollLoader(threshold = 80, touchPullThreshold = 48) {
     function onTouchEnd() {
         touchStartY = null;
         touchTriggered = false;
-        if (nearTop()) {
-            tryLoadHistory();
-        }
+        if (!nearTop()) historyLoadArmed = true;
+        else tryLoadHistory();
     }
 
     root.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -1947,7 +2049,7 @@ function setupScrollLoader(threshold = 80, touchPullThreshold = 48) {
             }
         }, {
             root,
-            rootMargin: '120px 0px 0px 0px',
+            rootMargin: '0px',
             threshold: 0,
         });
         if (sentinel) io.observe(sentinel);

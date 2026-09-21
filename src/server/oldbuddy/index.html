@@ -37,9 +37,29 @@
 <body>
     <div id="chat-wrapper">
         <div id="status-bar">
-            <div id="status-settings-wrap">
-                <button id="status-settings-toggle" title="打开状态设置">状态设置</button>
-                <div id="status-settings-menu" aria-label="状态设置">
+            <div id="status-dot"></div>
+            <span id="status-text">离线</span>
+            <span id="current-target-chip" title="打开设置">本地</span>
+            <button id="status-settings-toggle" type="button" title="设置" aria-haspopup="dialog" aria-expanded="false" aria-controls="status-settings-overlay">⚙️</button>
+        </div>
+        <div id="messages" role="log" aria-live="polite"></div>
+    </div>
+
+    <div id="status-settings-overlay" class="ob-settings-overlay" aria-hidden="true">
+        <div class="ob-settings-page" role="dialog" aria-modal="true" aria-labelledby="ob-settings-title">
+            <div class="ob-settings-bar">
+                <button type="button" id="status-settings-close">返回</button>
+                <div id="ob-settings-title" class="ob-settings-title">设置</div>
+            </div>
+            <div class="ob-settings-body">
+                <div class="ob-settings-label">聊天对象</div>
+                <div class="ob-settings-card">
+                    <select id="chat-target" title="聊天对象">
+                        <option value="local">local</option>
+                    </select>
+                </div>
+                <div class="ob-settings-label">显示</div>
+                <div class="ob-settings-card">
                     <label class="status-setting-item">
                         <input id="target-filter-toggle" type="checkbox">
                         <span>仅当前对象</span>
@@ -50,14 +70,7 @@
                     </label>
                 </div>
             </div>
-            <div id="status-dot"></div>
-            <span id="status-text">离线</span>
-            <span id="current-target-chip">本地</span>
-            <select id="chat-target" title="聊天对象">
-                <option value="local">local</option>
-            </select>
         </div>
-        <div id="messages" role="log" aria-live="polite"></div>
     </div>
 
     <!-- 移出 #chat-wrapper 并 fixed，避免移动端 100vh/dvh + overflow:hidden 把整栏裁到屏外 -->
