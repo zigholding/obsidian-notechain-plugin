@@ -17,6 +17,8 @@ type Socket = NodeNetSocket;
 interface NodeHttpServer {
     keepAliveTimeout: number;
     headersTimeout: number;
+    timeout?: number;
+    requestTimeout?: number;
     on(event: 'error', listener: (error: NodeJS.ErrnoException) => void): this;
     on(event: 'upgrade', listener: (req: HttpReq, socket: Socket, head: Buffer) => void): this;
     listen(port: number, host: string, cb: () => void): this;
@@ -143,6 +145,9 @@ export class HTTPServer {
 
     private createRequestHandler() {
         return async (req: HttpReq, res: HttpRes) => {
+            if (String(req.headers?.upgrade || '').toLowerCase() === 'websocket') {
+                return;
+            }
             res.setHeader('Access-Control-Allow-Origin', '*');
             res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
             res.setHeader(
@@ -242,7 +247,9 @@ export class HTTPServer {
             });
             this.server = httpsSrv;
             httpsSrv.keepAliveTimeout = 120000;
-            httpsSrv.headersTimeout = 120000;
+            httpsSrv.headersTimeout = 0;
+            httpsSrv.timeout = 0;
+            httpsSrv.requestTimeout = 0;
 
             httpsSrv.on('error', (error: NodeJS.ErrnoException) => {
                 this.server = null;
@@ -284,7 +291,9 @@ export class HTTPServer {
         });
         this.localServer = httpSrv;
         httpSrv.keepAliveTimeout = 120000;
-        httpSrv.headersTimeout = 120000;
+        httpSrv.headersTimeout = 0;
+        httpSrv.timeout = 0;
+        httpSrv.requestTimeout = 0;
 
         return new Promise((resolve, reject) => {
             httpSrv.on('error', (error: NodeJS.ErrnoException) => {

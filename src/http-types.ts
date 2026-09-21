@@ -6,7 +6,7 @@ export interface HttpReq {
 	method?: string;
 	url?: string;
 	headers: HttpHeaders;
-	socket?: { destroy?: () => void };
+	socket?: { destroy?: () => void; setTimeout?: (ms: number) => void };
 	on(event: 'data', listener: (chunk: Buffer | string) => void): this;
 	on(event: 'end', listener: () => void): this;
 	on(event: 'error', listener: (error: Error) => void): this;
@@ -19,7 +19,7 @@ export interface HttpRes {
 	statusCode?: number;
 	headersSent?: boolean;
 	writableEnded?: boolean;
-	socket?: { destroy?: () => void };
+	socket?: { destroy?: () => void; setTimeout?: (ms: number) => void };
 	flush?: () => void;
 	setHeader(name: string, value: string | number | readonly string[]): void;
 	writeHead(statusCode: number, headers?: Record<string, string | number | readonly string[]>): this;

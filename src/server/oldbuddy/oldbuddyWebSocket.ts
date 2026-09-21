@@ -29,18 +29,27 @@ export interface OldBuddyWsUpgradeOpts {
 /** 轻量 WebSocket 服务：网页实时推送 + 啾啾 Native Chat */
 export class OldBuddyWebSocketHub {
     private clients = new Set<OldBuddyWsClient>();
+    private sseWriters = new Set<(payload: unknown) => void>();
     onJiujiuMessage: ((client: OldBuddyWsClient, raw: string) => void | Promise<void>) | null = null;
     onJiujiuOpen: ((client: OldBuddyWsClient) => void | Promise<void>) | null = null;
 
+    addSseWriter(write: (payload: unknown) => void): () => void {
+        this.sseWriters.add(write);
+        return () => {
+            this.sseWriters.delete(write);
+        };
+    }
+
     handleUpgrade(req: HttpReq, socket: Socket, head: Buffer, opts?: OldBuddyWsUpgradeOpts) {
-        const key = req.headers['sec-websocket-key'];
+        const rawKey = req.headers['sec-websocket-key'];
+        const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
         if (!key) {
             socket.destroy();
             return;
         }
         const accept = nodeCrypto()
             .createHash('sha1')
-            .update(String(key) + WS_GUID)
+            .update(String(key).trim() + WS_GUID)
             .digest('base64');
         const headers = [
             'HTTP/1.1 101 Switching Protocols',
@@ -144,6 +153,7 @@ export class OldBuddyWebSocketHub {
             }
         }
         this.clients.clear();
+        this.sseWriters.clear();
     }
 
     private writeToKind(kind: OldBuddyWsKind, payload: unknown) {
@@ -151,6 +161,15 @@ export class OldBuddyWebSocketHub {
         for (const client of this.clients) {
             if (client.kind !== kind) continue;
             this.writeFrame(client, frame);
+        }
+        if (kind === 'web') {
+            for (const write of this.sseWriters) {
+                try {
+                    write(payload);
+                } catch {
+                    this.sseWriters.delete(write);
+                }
+            }
         }
     }
 
@@ -182,7 +201,7 @@ export class OldBuddyWebSocketHub {
             const masked = (buf[1] & 0x80) !== 0;
             if (masked) offset += 4;
             if (buf.length < offset + payloadLen) return buf;
-            let payload = buf.subarray(offset, offset + payloadLen);
+            let payload = Buffer.from(buf.subarray(offset, offset + payloadLen));
             if (masked) {
                 const mask = buf.subarray(offset - 4, offset);
                 for (let i = 0; i < payload.length; i++) {

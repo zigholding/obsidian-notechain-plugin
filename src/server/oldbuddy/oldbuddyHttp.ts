@@ -57,7 +57,7 @@ export class OldBuddyHttpHandlers {
 
     handleUpgrade(req: HttpReq, socket: Socket, head: Buffer) {
         const parsed = parseRequestUrl(req.url || '');
-        const pathname = parsed.pathname || '';
+        const pathname = (parsed.pathname || '').replace(/\/+$/, '') || '/';
         const kind = pathname === `${BASE}/ws` ? 'web' : 'jiujiu';
         const target = String(parsed.query?.target || '').trim();
         const senderId = headerVal(req, 'x-sender-id');
@@ -77,7 +77,8 @@ export class OldBuddyHttpHandlers {
     }
 
     isWebSocketPath(pathname: string | null | undefined): boolean {
-        return pathname === `${BASE}/ws` || isJiujiuWsPath(pathname);
+        const p = (pathname || '').replace(/\/+$/, '') || '/';
+        return p === `${BASE}/ws` || isJiujiuWsPath(p);
     }
 
     async handle(req: HttpReq, res: HttpRes, parsedUrl: ParsedReqUrl): Promise<boolean> {
@@ -182,6 +183,10 @@ export class OldBuddyHttpHandlers {
             jsonResponse(res, 200, await this.store.listMessages(limit, before || null, target || null));
             return true;
         }
+        if (sub === 'api/stream' && req.method === 'GET') {
+            this.handleWebStream(req, res);
+            return true;
+        }
         if (sub === 'api/message/text' && req.method === 'POST') {
             await this.handleTextMessage(req, res);
             return true;
@@ -257,6 +262,48 @@ export class OldBuddyHttpHandlers {
     handleOldBuddyPage(_req: HttpReq, res: HttpRes) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(OLDBUDDY_PAGE_HTML);
+    }
+
+    private handleWebStream(req: HttpReq, res: HttpRes) {
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive',
+            'X-Accel-Buffering': 'no',
+            'Access-Control-Allow-Origin': '*',
+        });
+        res.write(': ok\n\n');
+        if (typeof res.flush === 'function') {
+            res.flush();
+        }
+        req.socket?.setTimeout?.(0);
+        res.socket?.setTimeout?.(0);
+
+        const write = (payload: unknown) => {
+            if (res.writableEnded) return;
+            res.write(`data: ${JSON.stringify(payload)}\n\n`);
+            if (typeof res.flush === 'function') {
+                res.flush();
+            }
+        };
+        const unsub = this.store.getWebSocketHub().addSseWriter(write);
+        const heartbeat = window.setInterval(() => {
+            if (res.writableEnded) {
+                window.clearInterval(heartbeat);
+                unsub();
+                return;
+            }
+            res.write(': ping\n\n');
+            if (typeof res.flush === 'function') {
+                res.flush();
+            }
+        }, 15000);
+        const done = () => {
+            window.clearInterval(heartbeat);
+            unsub();
+        };
+        req.on('close', done);
+        res.on('close', done);
     }
 
     private async handleTextMessage(req: HttpReq, res: HttpRes) {
