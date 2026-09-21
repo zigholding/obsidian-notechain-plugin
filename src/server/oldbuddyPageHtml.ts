@@ -290,6 +290,195 @@ body {
     word-break: break-all;
 }
 
+.jiujiu-website-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    background: #fafafa;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+}
+
+.jiujiu-website-card:hover {
+    background: #f0f0f0;
+}
+
+.jiujiu-website-card:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+
+.jiujiu-website-card-icon {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: #07c160;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.jiujiu-website-card-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.jiujiu-website-card-title {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.jiujiu-website-card-meta {
+    color: var(--wechat-meta);
+    font-size: 12px;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.jiujiu-website-card-go {
+    flex: 0 0 auto;
+    color: #bbb;
+    font-size: 22px;
+    line-height: 1;
+}
+
+.jiujiu-website-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    color: var(--wechat-text);
+}
+
+.jiujiu-website-viewer-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e5e5e5;
+    background: #f7f7f7;
+}
+
+.jiujiu-website-viewer-back {
+    border: none;
+    background: transparent;
+    color: #576b95;
+    font-size: 15px;
+    cursor: pointer;
+    padding: 4px 0;
+}
+
+.jiujiu-website-viewer-title {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.jiujiu-website-viewer-tabs {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    border-bottom: 1px solid #e5e5e5;
+    background: #fff;
+}
+
+.jiujiu-website-viewer-tab {
+    flex: 0 0 auto;
+    border: none;
+    background: transparent;
+    padding: 10px 14px;
+    cursor: pointer;
+    color: var(--wechat-meta);
+    border-bottom: 2px solid transparent;
+}
+
+.jiujiu-website-viewer-tab.is-active {
+    color: var(--wechat-text);
+    font-weight: 600;
+    border-bottom-color: #07c160;
+}
+
+.jiujiu-website-viewer-stage {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.jiujiu-website-panes {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.jiujiu-website-panes.is-vertical {
+    flex-direction: column;
+}
+
+.jiujiu-website-panes.is-horizontal {
+    flex-direction: row;
+}
+
+.jiujiu-website-pane {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #eee;
+}
+
+.jiujiu-website-pane-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 8px;
+    background: #f7f7f7;
+    font-size: 12px;
+}
+
+.jiujiu-website-pane-host {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--wechat-meta);
+}
+
+.jiujiu-website-pane-open {
+    flex: 0 0 auto;
+    color: #576b95;
+    text-decoration: none;
+}
+
+.jiujiu-website-frame {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    border: 0;
+    background: #fff;
+}
+
 .jiujiu-slider {
     display: flex;
     overflow-x: auto;
@@ -1921,6 +2110,11 @@ function isHtmlType(type) {
     return t === 'html' || t === 'html_card' || t === 'richhtml';
 }
 
+function isWebsiteType(type) {
+    const t = String(type || '').toLowerCase();
+    return t === 'website' || t === 'web' || t === 'lookup' || t === 'sites';
+}
+
 function parseClientJsonPayload(msg) {
     if (!msg) return null;
     const t = String(msg.type || '');
@@ -1953,27 +2147,233 @@ function parseClientJsonPayload(msg) {
     }
 }
 
-function flattenWebsiteUrls(data) {
-    const urls = [];
-    const walk = (node) => {
-        if (typeof node === 'string' && node.trim()) {
-            urls.push(node.trim());
-            return;
+function websiteLayout(value, fallback) {
+    const t = String(value || '').toLowerCase();
+    if (t === 'horizontal' || t === 'vertical') return t;
+    return fallback === 'horizontal' ? 'horizontal' : 'vertical';
+}
+
+function collectWebsiteHrefs(node, out) {
+    if (typeof node === 'string') {
+        const href = node.trim();
+        if (href) out.push(href);
+        return;
+    }
+    if (Array.isArray(node)) {
+        node.forEach((item) => collectWebsiteHrefs(item, out));
+        return;
+    }
+    if (node && typeof node === 'object') {
+        if (typeof node.url === 'string' && node.url.trim()) out.push(node.url.trim());
+        if (Array.isArray(node.urls)) collectWebsiteHrefs(node.urls, out);
+        if (Array.isArray(node.tabs)) collectWebsiteHrefs(node.tabs, out);
+    }
+}
+
+function uniqueWebsiteHrefs(list) {
+    const seen = new Set();
+    const out = [];
+    for (const href of list) {
+        if (seen.has(href)) continue;
+        seen.add(href);
+        out.push(href);
+    }
+    return out;
+}
+
+function websiteHostLabel(href) {
+    try {
+        return new URL(href).hostname || href;
+    } catch (e) {
+        return href;
+    }
+}
+
+/** App: [a,b] 同一页分栏；[[a,b],[c]] 两个分页。tabs 可带 title。 */
+function parseWebsitePages(data) {
+    if (!data || typeof data !== 'object') return [];
+    const rootLayout = websiteLayout(data.layout, 'vertical');
+    const pages = [];
+    if (Array.isArray(data.tabs) && data.tabs.length) {
+        for (const tab of data.tabs) {
+            const hrefs = [];
+            const title = tab && typeof tab === 'object'
+                ? String(tab.title || tab.name || '').trim()
+                : '';
+            if (tab && typeof tab === 'object') {
+                collectWebsiteHrefs(tab.urls != null ? tab.urls : tab.url, hrefs);
+            } else {
+                collectWebsiteHrefs(tab, hrefs);
+            }
+            const urls = uniqueWebsiteHrefs(hrefs);
+            if (!urls.length) continue;
+            pages.push({
+                title: title || \`页面 \${pages.length + 1}\`,
+                layout: websiteLayout(tab && typeof tab === 'object' ? tab.layout : '', rootLayout),
+                urls,
+            });
         }
-        if (Array.isArray(node)) {
-            node.forEach(walk);
-            return;
+        if (pages.length) return pages;
+    }
+    const raw = Array.isArray(data.urls) ? data.urls : [];
+    if (!raw.length) return pages;
+    if (raw.some((item) => Array.isArray(item))) {
+        for (const item of raw) {
+            const hrefs = [];
+            collectWebsiteHrefs(item, hrefs);
+            const urls = uniqueWebsiteHrefs(hrefs);
+            if (!urls.length) continue;
+            pages.push({
+                title: \`页面 \${pages.length + 1}\`,
+                layout: rootLayout,
+                urls,
+            });
         }
-        if (node && typeof node === 'object') {
-            if (typeof node.url === 'string' && node.url.trim()) urls.push(node.url.trim());
-            if (Array.isArray(node.urls)) walk(node.urls);
-            if (Array.isArray(node.tabs)) walk(node.tabs);
-        }
+        return pages;
+    }
+    const hrefs = [];
+    collectWebsiteHrefs(raw, hrefs);
+    const urls = uniqueWebsiteHrefs(hrefs);
+    if (urls.length) pages.push({ title: '页面 1', layout: rootLayout, urls });
+    return pages;
+}
+
+function appendWebsiteCard(el, data, msg) {
+    const pages = parseWebsitePages(data);
+    const title = String((data && data.title) || (msg && msg.content) || (data && data.content) || '').trim() || '网站卡片';
+    const nPages = pages.length;
+    const nUrls = pages.reduce((n, page) => n + page.urls.length, 0);
+    let meta = '点开查看';
+    if (nPages > 1) meta = \`\${nPages} 个页面\`;
+    else if (nUrls > 1) meta = \`\${nUrls} 个网站\`;
+    else if (nUrls === 1) meta = websiteHostLabel(pages[0].urls[0]);
+
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'jiujiu-website-card';
+    const icon = document.createElement('div');
+    icon.className = 'jiujiu-website-card-icon';
+    icon.textContent = '网';
+    const text = document.createElement('div');
+    text.className = 'jiujiu-website-card-text';
+    const heading = document.createElement('div');
+    heading.className = 'jiujiu-website-card-title';
+    heading.textContent = title;
+    const sub = document.createElement('div');
+    sub.className = 'jiujiu-website-card-meta';
+    sub.textContent = meta;
+    text.appendChild(heading);
+    text.appendChild(sub);
+    const go = document.createElement('div');
+    go.className = 'jiujiu-website-card-go';
+    go.textContent = '›';
+    card.appendChild(icon);
+    card.appendChild(text);
+    card.appendChild(go);
+    if (pages.length) {
+        card.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showWebsiteViewer(title, pages);
+        });
+    } else {
+        card.disabled = true;
+    }
+    el.appendChild(card);
+}
+
+function renderWebsitePage(stage, page) {
+    while (stage.firstChild) stage.removeChild(stage.firstChild);
+    const panes = document.createElement('div');
+    panes.className = page.layout === 'horizontal' ? 'jiujiu-website-panes is-horizontal' : 'jiujiu-website-panes is-vertical';
+    for (const href of page.urls) {
+        const pane = document.createElement('div');
+        pane.className = 'jiujiu-website-pane';
+        const chrome = document.createElement('div');
+        chrome.className = 'jiujiu-website-pane-bar';
+        const host = document.createElement('span');
+        host.className = 'jiujiu-website-pane-host';
+        host.textContent = websiteHostLabel(href);
+        const open = document.createElement('a');
+        open.className = 'jiujiu-website-pane-open';
+        open.href = href;
+        open.target = '_blank';
+        open.rel = 'noopener noreferrer';
+        open.textContent = '新标签打开';
+        chrome.appendChild(host);
+        chrome.appendChild(open);
+        const frame = document.createElement('iframe');
+        frame.className = 'jiujiu-website-frame';
+        frame.src = href;
+        frame.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
+        frame.setAttribute('title', websiteHostLabel(href));
+        pane.appendChild(chrome);
+        pane.appendChild(frame);
+        panes.appendChild(pane);
+    }
+    stage.appendChild(panes);
+}
+
+function showWebsiteViewer(title, pages) {
+    const existing = document.getElementById('website-viewer-overlay');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'website-viewer-overlay';
+    overlay.className = 'jiujiu-website-viewer';
+    const bar = document.createElement('div');
+    bar.className = 'jiujiu-website-viewer-bar';
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'jiujiu-website-viewer-back';
+    back.textContent = '返回';
+    const heading = document.createElement('div');
+    heading.className = 'jiujiu-website-viewer-title';
+    heading.textContent = title || '网站';
+    bar.appendChild(back);
+    bar.appendChild(heading);
+    overlay.appendChild(bar);
+    const stage = document.createElement('div');
+    stage.className = 'jiujiu-website-viewer-stage';
+    const tabButtons = [];
+    if (pages.length > 1) {
+        const tabs = document.createElement('div');
+        tabs.className = 'jiujiu-website-viewer-tabs';
+        pages.forEach((page, i) => {
+            const tab = document.createElement('button');
+            tab.type = 'button';
+            tab.className = 'jiujiu-website-viewer-tab';
+            tab.textContent = page.title;
+            tab.addEventListener('click', (e) => {
+                e.preventDefault();
+                tabButtons.forEach((btn, j) => {
+                    if (j === i) btn.classList.add('is-active');
+                    else btn.classList.remove('is-active');
+                });
+                renderWebsitePage(stage, page);
+            });
+            tabs.appendChild(tab);
+            tabButtons.push(tab);
+        });
+        overlay.appendChild(tabs);
+    }
+    overlay.appendChild(stage);
+    const close = () => {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+        document.body.classList.remove('ob-preview-lock');
     };
-    if (!data || typeof data !== 'object') return urls;
-    walk(data.urls);
-    walk(data.tabs);
-    return urls.filter((href, i) => urls.indexOf(href) === i);
+    function onKey(e) {
+        if (e.key === 'Escape') close();
+    }
+    back.addEventListener('click', (e) => {
+        e.preventDefault();
+        close();
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.classList.add('ob-preview-lock');
+    document.body.appendChild(overlay);
+    if (tabButtons[0]) tabButtons[0].classList.add('is-active');
+    renderWebsitePage(stage, pages[0]);
 }
 
 function appendHtmlFragment(el, html) {
@@ -2012,22 +2412,12 @@ function appendSlideBody(el, slide, msg) {
         appendHtmlFragment(el, String(slide.content || ''));
         return;
     }
+    if (isWebsiteType(t) || parseWebsitePages(slide).length) {
+        appendWebsiteCard(el, slide, msg);
+        return;
+    }
     const text = slidePlainText(slide);
     if (text) appendMarkdownBody(el, text, msg);
-    const links = flattenWebsiteUrls(slide);
-    if (links.length) {
-        const wrap = document.createElement('div');
-        wrap.className = 'jiujiu-proto-card-links';
-        for (const href of links) {
-            const a = document.createElement('a');
-            a.href = href;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            a.textContent = href;
-            wrap.appendChild(a);
-        }
-        el.appendChild(wrap);
-    }
     const nested = Array.isArray(slide.attachments) ? slide.attachments : [];
     for (const att of nested) {
         if (!att || typeof att !== 'object') continue;
@@ -2121,6 +2511,10 @@ function appendProtocolCardBody(contentDiv, msg) {
         appendHtmlFragment(contentDiv, String(msg.content || (data && data.content) || ''));
         return;
     }
+    if (isWebsiteType(type) || parseWebsitePages(data).length) {
+        appendWebsiteCard(contentDiv, data, msg);
+        return;
+    }
     const title = String((data && data.title) || '').trim();
     const description = String((data && (data.description || data.desc)) || '').trim();
     const content = String(msg.content || (data && data.content) || '').trim();
@@ -2138,20 +2532,6 @@ function appendProtocolCardBody(contentDiv, msg) {
     }
     if (content && content !== title) {
         appendMarkdownBody(contentDiv, content, msg);
-    }
-    const links = flattenWebsiteUrls(data);
-    if (links.length) {
-        const wrap = document.createElement('div');
-        wrap.className = 'jiujiu-proto-card-links';
-        for (const href of links) {
-            const a = document.createElement('a');
-            a.href = href;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            a.textContent = href;
-            wrap.appendChild(a);
-        }
-        contentDiv.appendChild(wrap);
     }
     if (Array.isArray(msg.attachments)) {
         appendEnvelopeAttachments(contentDiv, msg);

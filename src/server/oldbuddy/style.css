@@ -282,6 +282,195 @@ body {
     word-break: break-all;
 }
 
+.jiujiu-website-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    background: #fafafa;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+}
+
+.jiujiu-website-card:hover {
+    background: #f0f0f0;
+}
+
+.jiujiu-website-card:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+
+.jiujiu-website-card-icon {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: #07c160;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.jiujiu-website-card-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.jiujiu-website-card-title {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.jiujiu-website-card-meta {
+    color: var(--wechat-meta);
+    font-size: 12px;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.jiujiu-website-card-go {
+    flex: 0 0 auto;
+    color: #bbb;
+    font-size: 22px;
+    line-height: 1;
+}
+
+.jiujiu-website-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    color: var(--wechat-text);
+}
+
+.jiujiu-website-viewer-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e5e5e5;
+    background: #f7f7f7;
+}
+
+.jiujiu-website-viewer-back {
+    border: none;
+    background: transparent;
+    color: #576b95;
+    font-size: 15px;
+    cursor: pointer;
+    padding: 4px 0;
+}
+
+.jiujiu-website-viewer-title {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.jiujiu-website-viewer-tabs {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    border-bottom: 1px solid #e5e5e5;
+    background: #fff;
+}
+
+.jiujiu-website-viewer-tab {
+    flex: 0 0 auto;
+    border: none;
+    background: transparent;
+    padding: 10px 14px;
+    cursor: pointer;
+    color: var(--wechat-meta);
+    border-bottom: 2px solid transparent;
+}
+
+.jiujiu-website-viewer-tab.is-active {
+    color: var(--wechat-text);
+    font-weight: 600;
+    border-bottom-color: #07c160;
+}
+
+.jiujiu-website-viewer-stage {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.jiujiu-website-panes {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.jiujiu-website-panes.is-vertical {
+    flex-direction: column;
+}
+
+.jiujiu-website-panes.is-horizontal {
+    flex-direction: row;
+}
+
+.jiujiu-website-pane {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #eee;
+}
+
+.jiujiu-website-pane-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 8px;
+    background: #f7f7f7;
+    font-size: 12px;
+}
+
+.jiujiu-website-pane-host {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--wechat-meta);
+}
+
+.jiujiu-website-pane-open {
+    flex: 0 0 auto;
+    color: #576b95;
+    text-decoration: none;
+}
+
+.jiujiu-website-frame {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    border: 0;
+    background: #fff;
+}
+
 .jiujiu-slider {
     display: flex;
     overflow-x: auto;
