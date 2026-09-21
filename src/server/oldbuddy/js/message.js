@@ -281,10 +281,11 @@ function applyMessageTargetFilter() {
     const sinceMs = getHideOlderSinceMs();
     const nodes = Array.from(getMessagesContainer().children);
     for (const node of nodes) {
+        if (!node.classList.contains('message')) continue;
         const mt = messageTargetOfNode(node);
         let visible = !onlyCurrent || mt === cur;
         if (visible && hideOlder && Number.isFinite(sinceMs)) {
-            const msgTs = Date.parse(node.dataset.timestamp || '');
+            const msgTs = parseClientTime(node.dataset.timestamp).getTime();
             visible = Number.isFinite(msgTs) ? msgTs >= sinceMs : true;
         }
         node.classList.toggle('ob-hidden', !visible);

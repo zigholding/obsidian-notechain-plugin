@@ -922,7 +922,8 @@ body.ob-preview-lock {
 }
 
 .ob-page .ob-hidden,
-.ob-hidden {
+.ob-hidden,
+.message.ob-hidden {
     display: none;
 }
 
