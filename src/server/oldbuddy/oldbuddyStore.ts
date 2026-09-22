@@ -33,6 +33,8 @@ import {
     isJiujiuWebsite,
     isJiujiuJsonStored,
     hasJiujiuCardPayload,
+    tryParseEmbeddedSpecialPacket,
+    liftEmbeddedSpecialPacket,
 } from './jiujiu';
 import { MEAL_CARD, lookupWebsitePacket, widgetNames, widgetSample, yesnoActions } from './demoCards';
 import { Templater } from '../../easyapi/templater';
@@ -205,6 +207,7 @@ export class OldBuddyStore {
         },
     ): Promise<OldBuddyMessage | null> {
         this.ensureLoaded();
+        packet = liftEmbeddedSpecialPacket(packet);
         if (isJiujiuResult(packet)) this.rememberCardResult(packet);
         const isAction = isJiujiuActionPacket(packet);
         const storeAsJson = isJiujiuJsonStored(packet);
@@ -404,11 +407,12 @@ export class OldBuddyStore {
             senderName?: string;
             target?: string;
             skipReply?: boolean;
+            echoToJiujiu?: boolean;
         } = {},
     ) {
         return this.ingestJiujiuPacket(packet, {
             ...opts,
-            echoToJiujiu: false,
+            echoToJiujiu: opts.echoToJiujiu ?? false,
         });
     }
 
@@ -871,6 +875,16 @@ export class OldBuddyStore {
     }) {
         this.ensureLoaded();
         const content = String(params.content || params.extra_text || '').trim();
+        const special = tryParseEmbeddedSpecialPacket(content);
+        if (special) {
+            const converted = await this.ingestClientPacket(special, {
+                senderId: params.sender || 'user',
+                target: params.target || DEFAULT_TARGET,
+                skipReply: params.skipReply,
+                echoToJiujiu: true,
+            });
+            if (converted) return converted;
+        }
         const userMsg = this.pushMessage({
             id: this.newId(),
             sender: params.sender || 'user',

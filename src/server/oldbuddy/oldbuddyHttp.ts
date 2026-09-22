@@ -8,7 +8,7 @@ import {
 } from '../httpUtil';
 import { OLDBUDDY_PAGE_HTML } from '../oldbuddyPageHtml';
 import { OldBuddyStore, inferOldBuddyMessageType } from './oldbuddyStore';
-import { parseJiujiuPacket, JiujiuPushError, looksLikeJiujiuClientPayload, pickPushSender } from './jiujiu';
+import { parseJiujiuPacket, JiujiuPushError, looksLikeJiujiuClientPayload, pickPushSender, tryParseEmbeddedSpecialPacket } from './jiujiu';
 import { normalizeAttachments } from './types';
 import type { HttpReq, HttpRes, ParsedReqUrl } from '../../http-types';
 import { parseRequestUrl } from '../../http-types';
@@ -376,12 +376,14 @@ export class OldBuddyHttpHandlers {
             } else {
                 fields = parseUrlEncoded(body);
             }
-            if (looksLikeJiujiuClientPayload(fields)) {
-                const packet = parseJiujiuPacket(JSON.stringify(fields)) || { content: String(fields.content || '') };
-                const skipReply = fields.skip_reply === true || fields.skip_reply === 'true';
+            const skipReply = fields.skip_reply === true || fields.skip_reply === 'true';
+            const packet = looksLikeJiujiuClientPayload(fields)
+                ? (parseJiujiuPacket(JSON.stringify(fields)) || { content: String(fields.content || '') })
+                : tryParseEmbeddedSpecialPacket(String(fields.content || ''));
+            if (packet) {
                 const { senderId, senderName } = pickPushSender(packet);
                 const message = await this.store.ingestClientPacket(packet, {
-                    senderId,
+                    senderId: senderId || (fields.sender != null ? String(fields.sender) : undefined),
                     senderName,
                     target: String(packet.target || fields.target || 'local'),
                     skipReply,

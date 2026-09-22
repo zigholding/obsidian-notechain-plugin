@@ -1,3 +1,4 @@
+import { parseYaml } from 'obsidian';
 import type { OldBuddyAttachment, OldBuddyMessage, OldBuddyMessageType } from './types';
 import { attachmentKindFromMime, asProtocolConfig, isEnvelopeType, isJiujiuCardStoredType, isUserSender, normalizeAttachments } from './types';
 import { isRecord } from '../../ts-helpers';
@@ -705,6 +706,66 @@ export function looksLikeJiujiuClientPayload(fields: Record<string, unknown>): b
     return isJiujiuInteractiveType(t) || isJiujiuWebsiteType(t) || isJiujiuResultType(t)
         || isJiujiuSliderType(t) || isJiujiuHtmlType(t)
         || t === 'welcome' || t === 'action';
+}
+
+/** 聊天正文里的 JSON/YAML：对得上啾啾协议（含 `message` 信封和卡片）才转。 */
+export function looksLikeSpecialChatPayload(fields: Record<string, unknown>): boolean {
+    if (isRecord(fields.card)) return true;
+    if ((Array.isArray(fields.urls) && fields.urls.length) || (Array.isArray(fields.tabs) && fields.tabs.length)) return true;
+    if ((Array.isArray(fields.actions) && fields.actions.length) || (Array.isArray(fields.fields) && fields.fields.length)) return true;
+    const t = String(fields.type || '').trim().toLowerCase();
+    if (!t) return false;
+    return t === 'text' || t === 'json' || isEnvelopeType(t) || isJiujiuCardStoredType(t);
+}
+
+function unwrapChatStructuredText(raw: string): string {
+    const s = raw.trim().replace(/^\uFEFF/, '');
+    const fenced = /^```(?:json|yaml|yml)?\s*\r?\n([\s\S]*?)\r?\n```\s*$/i.exec(s);
+    return fenced ? fenced[1].trim() : s;
+}
+
+function tryParseObjectFromChatText(raw: string): Record<string, unknown> | null {
+    const text = unwrapChatStructuredText(raw);
+    if (!text) return null;
+    const head = text.trimStart();
+    if (head.startsWith('{')) {
+        try {
+            const json = JSON.parse(text) as unknown;
+            if (isRecord(json)) return json;
+        } catch {
+            // JSON 失败时再试 YAML（允许尾逗号等）
+        }
+    } else if (head.startsWith('[')) {
+        return null;
+    }
+    try {
+        const yaml = parseYaml(text) as unknown;
+        return isRecord(yaml) ? yaml : null;
+    } catch {
+        return null;
+    }
+}
+
+/** 用户发送的 JSON/YAML 若匹配网站卡、互动卡、轮播、HTML 等，转为对应协议包。 */
+export function tryParseEmbeddedSpecialPacket(content: string): JiujiuPacket | null {
+    const fields = tryParseObjectFromChatText(content);
+    if (!fields || !looksLikeSpecialChatPayload(fields)) return null;
+    return normalizeJiujiuPacket(fields);
+}
+
+/** 信封 `type=message` 的 content 里若嵌了特殊卡片，提升为该 type。 */
+export function liftEmbeddedSpecialPacket(packet: JiujiuPacket): JiujiuPacket {
+    if (isJiujiuJsonStored(packet) || isJiujiuActionPacket(packet)) return packet;
+    const t = String(packet.type || '').trim().toLowerCase();
+    if (t && t !== 'message' && t !== 'text') return packet;
+    const inner = tryParseEmbeddedSpecialPacket(String(packet.content || ''));
+    if (!inner) return packet;
+    if (packet.msgId) inner.msgId = packet.msgId;
+    if (packet.timestamp != null) inner.timestamp = packet.timestamp;
+    if (packet.senderId) inner.senderId = packet.senderId;
+    if (packet.senderName) inner.senderName = packet.senderName;
+    if (packet.target) inner.target = packet.target;
+    return inner;
 }
 
 export function oldBuddyToJiujiuPacket(
