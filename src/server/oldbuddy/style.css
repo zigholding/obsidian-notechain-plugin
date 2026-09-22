@@ -5,6 +5,9 @@
     --wechat-text: #111;
     --wechat-meta: #888;
     --input-bar-height: 80px;
+    --msg-avatar-size: 40px;
+    --msg-avatar-gap: 8px;
+    --msg-opposite-gutter: calc(var(--msg-avatar-size) + var(--msg-avatar-gap) + 4px);
 }
 
 * {
@@ -261,14 +264,23 @@ body.ob-settings-open #quick-cmd-menu {
     display: flex;
     flex-direction: column;
     margin-bottom: 10px;
-    max-width: min(92%, 760px);
+    min-width: 0;
+    max-width: min(calc(100% - var(--msg-opposite-gutter)), 760px);
     width: fit-content;
+}
+
+.message:has(.markdown-card),
+.message:has(.jiujiu-proto-card) {
+    width: min(calc(100% - var(--msg-opposite-gutter)), 680px);
+    max-width: min(calc(100% - var(--msg-opposite-gutter)), 680px);
 }
 
 .message-row {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--msg-avatar-gap);
+    width: 100%;
+    min-width: 0;
     max-width: 100%;
 }
 
@@ -277,9 +289,9 @@ body.ob-settings-open #quick-cmd-menu {
 }
 
 .message-avatar {
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
+    width: var(--msg-avatar-size);
+    height: var(--msg-avatar-size);
+    min-width: var(--msg-avatar-size);
     border-radius: 4px;
     flex-shrink: 0;
     overflow: hidden;
@@ -302,8 +314,9 @@ body.ob-settings-open #quick-cmd-menu {
 .message-body {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
     min-width: 0;
-    max-width: calc(100vw - 80px);
+    max-width: calc(100% - var(--msg-avatar-size) - var(--msg-avatar-gap));
 }
 
 .message-nickname {
@@ -334,14 +347,17 @@ body.ob-settings-open #quick-cmd-menu {
 .message-time {
     font-size: 11px;
     color: var(--wechat-meta);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     text-align: center;
-    align-self: stretch;
+    align-self: center;
+    flex-shrink: 0;
     max-width: 100%;
+    position: relative;
+    z-index: 1;
 }
 
 .message.user .message-time {
-    text-align: right;
+    text-align: center;
 }
 
 .message-target {
@@ -357,6 +373,8 @@ body.ob-settings-open #quick-cmd-menu {
     word-break: break-word;
     line-height: 1.45;
     box-shadow: 0 1px 1px rgba(0, 0, 0, 0.06);
+    max-width: 100%;
+    min-width: 0;
 }
 
 .message.user .message-content {
@@ -365,8 +383,11 @@ body.ob-settings-open #quick-cmd-menu {
 
 .message-content.markdown-card,
 .message-content.jiujiu-proto-card {
-    min-width: min(92vw, 520px);
-    max-width: min(92vw, 680px);
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    overflow-wrap: anywhere;
 }
 
 .jiujiu-proto-card-title {
@@ -988,7 +1009,13 @@ body.ob-settings-open #quick-cmd-menu {
 
 @media (max-width: 600px) {
     .message {
-        max-width: 92%;
+        max-width: calc(100% - var(--msg-opposite-gutter));
+    }
+
+    .message:has(.markdown-card),
+    .message:has(.jiujiu-proto-card) {
+        width: calc(100% - var(--msg-opposite-gutter));
+        max-width: calc(100% - var(--msg-opposite-gutter));
     }
 }
 
