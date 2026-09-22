@@ -109,6 +109,15 @@ export class HTTPServer {
         return this.oldbuddyStore.listCardResults();
     }
 
+    /** 网页 OldBuddy `POST /oldbuddy/push_message`：只入库网页侧，不回推手机。 */
+    async pushOldBuddy(fields: Record<string, unknown>) {
+        const message = await this.oldbuddyStore.ingestWebPush(fields);
+        return {
+            ok: true as const,
+            message: this.oldbuddyStore.toWebPacket(message) as Record<string, unknown>,
+        };
+    }
+
     getHost(): string {
         return this.host;
     }

@@ -204,11 +204,40 @@ export class Web {
     }
 
     /**
+     * 向网页 OldBuddy 推送消息（与 `POST /oldbuddy/push_message` 相同，走内存不绕 HTTP）。
+     * 字符串会包成 `{ content, sender: 'buddy', target: 'local', skip_reply: true }`。
+     * 对象缺省同样：`sender` 为 buddy、`target` 为 local、`skip_reply` 为 true。
+     */
+    async push_message(data: string | Record<string, unknown>): Promise<OldBuddyPushResult> {
+        return this.chatServer().pushOldBuddy(asOldBuddyPushFields(data));
+    }
+
+    /**
+     * 向网页 OldBuddy 推送协议 JSON，并等到 `interactive_result`（按 msgId / replyTo）。
+     * 网站卡请用 `push_message`。`timeout` 为秒，默认 120。
+     */
+    async ask_message(
+        data: string | Record<string, unknown>,
+        timeout = 120,
+    ): Promise<Record<string, unknown>> {
+        const fields = asOldBuddyPushFields(data);
+        const pushed = await this.chatServer().pushOldBuddy(fields);
+        if (isWebsitePushData(fields) || isWebsitePushData(pushed.message)) {
+            return { ...pushed, type: String(fields.type || pushed.message.type || 'website') };
+        }
+        const msgId = String(pushed.message.msgId || pushed.message.id || '');
+        if (!msgId) {
+            throw new Error('等待卡片结果失败：缺少 msgId');
+        }
+        return this.waitForCardAnswer(msgId, timeout);
+    }
+
+    /**
      * 向啾啾协议好友推送 App 协议 JSON，不做卡片字段解析。
      * 字符串会包成 `{ type: 'message', content }`。仅一条连接时可省略 friendName。
      * `senderName` 显示在手机气泡上。
      */
-    async push_message(
+    async push_message_jiujiu(
         friendName: string,
         data: string | Record<string, unknown>,
         senderName?: string,
@@ -217,10 +246,10 @@ export class Web {
     }
 
     /**
-     * 推送协议 JSON 并等到 `interactive_result`（按 msgId）。网站卡请用 `push_message`。
+     * 推送协议 JSON 并等到 `interactive_result`（按 msgId）。网站卡请用 `push_message_jiujiu`。
      * `timeout` 为秒，默认 120。
      */
-    async ask_message(
+    async ask_message_jiujiu(
         friendName: string,
         data: string | Record<string, unknown>,
         timeout = 120,
@@ -231,9 +260,13 @@ export class Web {
             return { ...pushed, type: String(packet.type || 'website') };
         }
         const msgId = pushed.msgId;
+        return this.waitForCardAnswer(msgId, timeout);
+    }
+
+    private async waitForCardAnswer(msgId: string, timeout: number): Promise<Record<string, unknown>> {
         const deadline = Date.now() + timeout * 1000;
         while (Date.now() < deadline) {
-            const found = findCardAnswer(this.jiujiuStore().listJiujiuCardResults(), msgId);
+            const found = findCardAnswer(this.chatServer().listJiujiuCardResults(), msgId);
             if (found) return found;
             await sleepMs(400);
         }
@@ -241,19 +274,20 @@ export class Web {
     }
 
     private dispatchJiujiuPush(packet: Record<string, unknown>): Promise<JiujiuPushResult> {
-        return this.jiujiuStore().pushJiujiu(packet);
+        return this.chatServer().pushJiujiu(packet);
     }
 
-    private jiujiuStore(): {
+    private chatServer(): {
         pushJiujiu(packet: Record<string, unknown>): Promise<JiujiuPushResult>;
         listJiujiuCardResults(): Record<string, unknown>[];
+        pushOldBuddy(fields: Record<string, unknown>): Promise<OldBuddyPushResult>;
     } {
         if (!Platform.isDesktop) {
-            throw new Error('啾啾推送仅桌面可用');
+            throw new Error('OldBuddy / 啾啾推送仅桌面可用');
         }
         const server = noteChainPlugin(this.app)?.httpServer;
         if (!server) {
-            throw new Error('HTTP 服务未启动，无法推送到啾啾');
+            throw new Error('HTTP 服务未启动，无法推送');
         }
         return server;
     }
@@ -286,6 +320,22 @@ export interface JiujiuPushResult {
     msgId: string;
     friendName?: string;
     friendId?: string;
+}
+
+export interface OldBuddyPushResult {
+    ok: true;
+    message: Record<string, unknown>;
+}
+
+function asOldBuddyPushFields(data: string | Record<string, unknown>): Record<string, unknown> {
+    if (typeof data === 'string') {
+        return { content: data, sender: 'buddy', target: 'local', skip_reply: true };
+    }
+    const fields = { ...data };
+    if (fields.sender == null && fields.senderId == null) fields.sender = 'buddy';
+    if (fields.target == null) fields.target = 'local';
+    if (fields.skip_reply == null) fields.skip_reply = true;
+    return fields;
 }
 
 function asJiujiuPushData(

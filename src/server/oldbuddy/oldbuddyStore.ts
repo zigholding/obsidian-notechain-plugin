@@ -17,6 +17,7 @@ import {
     toJiujiuActionPacket,
     jiujiuTypeToOldBuddy,
     parseJiujiuPacket,
+    looksLikeJiujiuClientPayload,
     pickPushFriend,
     pickPushSender,
     attachJiujiuSession,
@@ -80,9 +81,36 @@ export class OldBuddyStore {
         this.uploadsDir = nodePath().join(this.dataDir, 'uploads');
         this.messagesFile = nodePath().join(this.dataDir, 'messages.json');
         this.ws.onJiujiuOpen = (client) => {
-            this.ws.sendTo(client, jiujiuWelcomePacket());
+            void this.onJiujiuConnected(client);
         };
         this.ws.onJiujiuMessage = (client, raw) => this.handleJiujiuIncoming(client, raw);
+    }
+
+    private async onJiujiuConnected(client: OldBuddyWsClient) {
+        try {
+            await this.hydrateJiujiuFriendName(client);
+        } catch {
+            // 对象表读失败时仍发欢迎语
+        }
+        this.ws.sendTo(client, jiujiuWelcomePacket());
+    }
+
+    /** URL 只有 target 时，用 nochain_oldbuddy_targets 的 label 当作通讯录名称。 */
+    private async hydrateJiujiuFriendName(client: OldBuddyWsClient) {
+        if (String(client.friendName || '').trim()) return;
+        const row = await this.resolveJiujiuRoute(client.target);
+        const label = String(row?.label || '').trim();
+        if (label) client.friendName = label;
+    }
+
+    /** 通讯录名称或 target id 任一能对上 [[nochain_oldbuddy_targets]] 即可。 */
+    private async resolveJiujiuRoute(key: string): Promise<{ id: string; label: string } | null> {
+        const k = String(key || '').trim();
+        if (!k) return null;
+        const cfg = await this.loadTargetsConfig();
+        const row = cfg.targets.find((t) => t.id === k || t.label === k);
+        if (!row) return null;
+        return { id: row.id, label: row.label || row.id };
     }
 
     getWebSocketHub() {
@@ -144,6 +172,12 @@ export class OldBuddyStore {
         }
         const { friendName, friendId, target } = pickPushFriend(packet);
         let matched = this.ws.findJiujiuFriends(friendName || target, friendId || target);
+        if (!matched.length) {
+            const route = await this.resolveJiujiuRoute(friendName || friendId || target);
+            if (route) {
+                matched = this.ws.findJiujiuFriends(route.label, route.id);
+            }
+        }
         if (!friendName && !friendId && !target) {
             if (friends.length > 1) {
                 throw new JiujiuPushError(400, 'friendName required', friends);
@@ -413,6 +447,49 @@ export class OldBuddyStore {
         return this.ingestJiujiuPacket(packet, {
             ...opts,
             echoToJiujiu: opts.echoToJiujiu ?? false,
+        });
+    }
+
+    /** 与 `POST /oldbuddy/push_message` 相同：只入库网页侧，不回推啾啾。 */
+    async ingestWebPush(fields: Record<string, unknown>): Promise<OldBuddyMessage> {
+        let body = fields;
+        if (isRecord(fields.message)) {
+            body = fields.message;
+        }
+        const skipReply = body.skip_reply === true || body.skip_reply === 'true';
+        const packet = looksLikeJiujiuClientPayload(body)
+            ? (parseJiujiuPacket(JSON.stringify(body)) || { content: String(body.content || '') })
+            : tryParseEmbeddedSpecialPacket(String(body.content || ''));
+        if (packet) {
+            const { senderId, senderName } = pickPushSender(packet);
+            const message = await this.ingestClientPacket(packet, {
+                senderId: senderId || (body.sender != null ? String(body.sender) : undefined),
+                senderName,
+                target: String(packet.target || body.target || 'local'),
+                skipReply,
+            });
+            if (!message) {
+                throw new Error('content required');
+            }
+            return message;
+        }
+        return this.pushExternalMessage({
+            content: String(body.content || ''),
+            sender: body.sender != null ? String(body.sender) : (body.senderId != null ? String(body.senderId) : undefined),
+            target: body.target != null ? String(body.target) : undefined,
+            type: body.type != null ? String(body.type) : undefined,
+            extra_text: body.extra_text != null ? String(body.extra_text) : undefined,
+            file_name: body.file_name != null ? String(body.file_name) : undefined,
+            file_size: body.file_size != null ? Number(body.file_size) : undefined,
+            card: body.card as boolean | string | number | undefined,
+            id: body.id != null ? String(body.id) : (body.msgId != null ? String(body.msgId) : undefined),
+            timestamp: body.timestamp != null ? String(body.timestamp) : undefined,
+            skip_reply: body.skip_reply as boolean | string | undefined,
+            quick_cmd_id: body.quick_cmd_id != null ? String(body.quick_cmd_id) : undefined,
+            senderName: body.senderName != null ? String(body.senderName) : undefined,
+            attachments: Array.isArray(body.attachments)
+                ? normalizeAttachments(body.attachments)
+                : undefined,
         });
     }
 

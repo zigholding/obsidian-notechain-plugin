@@ -8,8 +8,7 @@ import {
 } from '../httpUtil';
 import { OLDBUDDY_PAGE_HTML } from '../oldbuddyPageHtml';
 import { OldBuddyStore, inferOldBuddyMessageType } from './oldbuddyStore';
-import { parseJiujiuPacket, JiujiuPushError, looksLikeJiujiuClientPayload, pickPushSender, tryParseEmbeddedSpecialPacket } from './jiujiu';
-import { normalizeAttachments } from './types';
+import { parseJiujiuPacket, JiujiuPushError } from './jiujiu';
 import type { HttpReq, HttpRes, ParsedReqUrl } from '../../http-types';
 import { parseRequestUrl } from '../../http-types';
 import { errorMessage } from '../../ts-helpers';
@@ -22,6 +21,21 @@ const BASE = '/oldbuddy';
 function headerVal(req: HttpReq, name: string): string {
     const v = req.headers?.[name] ?? req.headers?.[name.toLowerCase()];
     return Array.isArray(v) ? String(v[0] || '') : String(v || '');
+}
+
+function queryText(q: ParsedReqUrl['query'] | undefined, ...keys: string[]): string {
+    if (!q) return '';
+    const lower: Record<string, string> = {};
+    for (const [k, raw] of Object.entries(q)) {
+        const v = Array.isArray(raw) ? raw[0] : raw;
+        const s = String(v || '').trim();
+        if (s) lower[k.toLowerCase()] = s;
+    }
+    for (const key of keys) {
+        const s = lower[key.toLowerCase()];
+        if (s) return s;
+    }
+    return '';
 }
 
 function isJiujiuWsPath(pathname: string | null | undefined): boolean {
@@ -59,14 +73,17 @@ export class OldBuddyHttpHandlers {
         const parsed = parseRequestUrl(req.url || '');
         const pathname = (parsed.pathname || '').replace(/\/+$/, '') || '/';
         const kind = pathname === `${BASE}/ws` ? 'web' : 'jiujiu';
-        const target = String(parsed.query?.target || '').trim();
-        const senderId = headerVal(req, 'x-sender-id');
         const q = parsed.query || {};
-        const friendName = String(q.friendName || q.friend || q.name || headerVal(req, 'x-friend-name') || '').trim();
-        const friendId =
-            String(
-                q.friendId || headerVal(req, 'x-friend-id') || headerVal(req, 'x-site-id') || '',
-            ).trim() || target;
+        const target = queryText(q, 'target');
+        const senderId = headerVal(req, 'x-sender-id');
+        const friendName = queryText(q, 'friendName', 'friend', 'name', 'siteName', 'displayName', 'nickname')
+            || headerVal(req, 'x-friend-name')
+            || headerVal(req, 'x-site-name')
+            || headerVal(req, 'x-display-name');
+        const friendId = queryText(q, 'friendId')
+            || headerVal(req, 'x-friend-id')
+            || headerVal(req, 'x-site-id')
+            || target;
         this.store.getWebSocketHub().handleUpgrade(req, socket, head, {
             kind,
             target: target || undefined,
@@ -376,47 +393,11 @@ export class OldBuddyHttpHandlers {
             } else {
                 fields = parseUrlEncoded(body);
             }
-            const skipReply = fields.skip_reply === true || fields.skip_reply === 'true';
-            const packet = looksLikeJiujiuClientPayload(fields)
-                ? (parseJiujiuPacket(JSON.stringify(fields)) || { content: String(fields.content || '') })
-                : tryParseEmbeddedSpecialPacket(String(fields.content || ''));
-            if (packet) {
-                const { senderId, senderName } = pickPushSender(packet);
-                const message = await this.store.ingestClientPacket(packet, {
-                    senderId: senderId || (fields.sender != null ? String(fields.sender) : undefined),
-                    senderName,
-                    target: String(packet.target || fields.target || 'local'),
-                    skipReply,
-                });
-                if (!message) {
-                    jsonResponse(res, 400, { ok: false, error: 'content required' });
-                    return;
-                }
-                jsonResponse(res, 200, {
-                    ok: true,
-                    message: this.store.toWebPacket(message),
-                });
-                return;
-            }
-            const message = await this.store.pushExternalMessage({
-                content: String(fields.content || ''),
-                sender: fields.sender != null ? String(fields.sender) : (fields.senderId != null ? String(fields.senderId) : undefined),
-                target: fields.target != null ? String(fields.target) : undefined,
-                type: fields.type != null ? String(fields.type) : undefined,
-                extra_text: fields.extra_text != null ? String(fields.extra_text) : undefined,
-                file_name: fields.file_name != null ? String(fields.file_name) : undefined,
-                file_size: fields.file_size != null ? Number(fields.file_size) : undefined,
-                card: fields.card as boolean | string | number | undefined,
-                id: fields.id != null ? String(fields.id) : (fields.msgId != null ? String(fields.msgId) : undefined),
-                timestamp: fields.timestamp != null ? String(fields.timestamp) : undefined,
-                skip_reply: fields.skip_reply as boolean | string | undefined,
-                quick_cmd_id: fields.quick_cmd_id != null ? String(fields.quick_cmd_id) : undefined,
-                senderName: fields.senderName != null ? String(fields.senderName) : undefined,
-                attachments: Array.isArray(fields.attachments)
-                    ? normalizeAttachments(fields.attachments)
-                    : undefined,
+            const message = await this.store.ingestWebPush(fields);
+            jsonResponse(res, 200, {
+                ok: true,
+                message: this.store.toWebPacket(message),
             });
-            jsonResponse(res, 200, { ok: true, message: this.store.toWebPacket(message) });
         } catch (e: unknown) {
             const msg = errorMessage(e) || 'push failed';
             const status = msg === 'content required' || msg === 'invalid type' ? 400 : 500;
