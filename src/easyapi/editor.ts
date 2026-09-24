@@ -1,4 +1,4 @@
-import { App, parseYaml } from 'obsidian';
+import { App, parseYaml, stringifyYaml } from 'obsidian';
 import { EasyAPI } from 'src/easyapi/easyapi';
 
 import { EasyEditorFrontmatter } from './editor/frontmatter';
@@ -7,6 +7,7 @@ import { EasyEditorBlocks } from './editor/blocks';
 import { EasyEditorSections } from './editor/sections';
 import { EasyEditorObjPath } from './editor/objPath';
 import { EasyEditorClipboard } from './editor/clipboard';
+import { EasyEditorSort } from './editor/sort';
 import { applyMixins } from '../ts-helpers';
 
 export interface EasyEditor extends
@@ -16,10 +17,14 @@ export interface EasyEditor extends
 	EasyEditorBlocks,
 	EasyEditorSections,
 	EasyEditorObjPath,
-	EasyEditorClipboard {}
+	EasyEditorClipboard,
+	EasyEditorSort {}
 
 class EasyEditorClass {
-    yamljs = { load: (src: string) => parseYaml(src) };
+    yamljs = {
+        load: (src: string) => parseYaml(src),
+        dump: (obj: unknown) => stringifyYaml(obj),
+    };
     app: App;
     ea: EasyAPI;
     /** set_frontmatter / set_multi_frontmatter 默认重试次数 */
@@ -42,4 +47,5 @@ applyMixins(EasyEditorClass, [
 	EasyEditorSections,
 	EasyEditorObjPath,
 	EasyEditorClipboard,
+	EasyEditorSort,
 ]);
