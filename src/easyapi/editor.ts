@@ -9,6 +9,7 @@ import { EasyEditorObjPath } from './editor/objPath';
 import { EasyEditorClipboard } from './editor/clipboard';
 import { EasyEditorSort } from './editor/sort';
 import { applyMixins } from '../ts-helpers';
+import { dialogCheck } from './gui/checkModal';
 
 export interface EasyEditor extends
 	EasyEditorClass,
@@ -33,6 +34,14 @@ class EasyEditorClass {
     constructor(app: App, api: EasyAPI) {
         this.app = app;
         this.ea = api;
+    }
+
+    /**
+     * Yes/No 确认框。Yes 为 true，No 或关闭为 false。
+     * `content` 按 Markdown 渲染。`title` 为空时用「确认」。
+     */
+    dialog_check(title: string, content: string): Promise<boolean> {
+        return dialogCheck(this.app, title, content);
     }
 }
 

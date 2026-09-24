@@ -832,6 +832,19 @@ body.nc-modal-open .menu {
   gap: 8px;
 }
 
+.ncCheckModal .nc-check-content {
+  max-height: 60vh;
+  overflow: auto;
+  margin-bottom: 0.5rem;
+}
+
+.ncCheckModal .button-bar.nc-check-actions {
+  margin-top: 1.75rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  justify-items: center;
+}
+
 .qaMultInputPrompt .qa-mult-input-main {
   min-width: min(92vw, 900px);
 }
