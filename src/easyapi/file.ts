@@ -1,7 +1,7 @@
 
 
 
-import { App, TFile, TFolder, TAbstractFile } from 'obsidian';
+import { App, TFile, TFolder, TAbstractFile, Notice } from 'obsidian';
 import { CardNavigatorOptions, type CardItem } from './gui/inputCardSuggester'
 
 import { EasyAPI } from 'src/easyapi/easyapi'
@@ -94,40 +94,40 @@ export class File {
 				return null;
 			}
 
-			const byExactPath = this.app.vault.getFileByPath(link);
+			const normalized = link.replace(/\\/g, '/');
+			const hasDir = normalized.includes('/');
+
+			const byExactPath = this.app.vault.getFileByPath(normalized);
 			if (byExactPath) {
 				return byExactPath;
 			}
-			if (!/\.[A-Za-z0-9]+$/.test(link)) {
-				const withMd = this.app.vault.getFileByPath(link + '.md');
+			if (!/\.[A-Za-z0-9]+$/.test(normalized)) {
+				const withMd = this.app.vault.getFileByPath(normalized + '.md');
 				if (withMd) {
 					return withMd;
 				}
 			}
 
-			const dest = this.app.metadataCache.getFirstLinkpathDest(link, '');
+			const dest = this.app.metadataCache.getFirstLinkpathDest(normalized, '');
+			if (hasDir) {
+				if (dest && filePathCoversLink(dest.path, normalized)) {
+					return only_first ? dest : [dest];
+				}
+				const pathMatches = (filesNamedLike(this.app, normalized) ?? [])
+					.filter((x) => filePathCoversLink(x.path, normalized));
+				if (pathMatches.length > 0) {
+					return only_first ? pathMatches[0] : pathMatches;
+				}
+				return null;
+			}
 			if (dest && only_first) {
 				return dest;
 			}
 
-			const lookup = uniqueFileLookup(this.app);
-			const base = link.includes('/') ? link.slice(link.lastIndexOf('/') + 1) : link;
-			let tfiles = lookup?.get(base.toLowerCase());
-			if (!tfiles) {
-				tfiles = lookup?.get(base.toLowerCase() + '.md');
-			}
+			const base = normalized;
+			const tfiles = filesNamedLike(this.app, base);
 			if (!tfiles || tfiles.length === 0) {
 				return dest ?? null;
-			}
-
-			const normalized = link.replace(/\\/g, '/');
-			const pathMatches = tfiles.filter((x: TFile) =>
-				x.path === normalized
-				|| x.path === normalized + '.md'
-				|| x.path.slice(0, Math.max(0, x.path.length - x.extension.length - 1)) === normalized
-			);
-			if (pathMatches.length > 0) {
-				return only_first ? pathMatches[0] : pathMatches;
 			}
 
 			let ctfiles = tfiles.filter((x: TFile) => x.name == base || x.name == base + '.md' || x.basename == base)
@@ -501,12 +501,28 @@ export class File {
 		return folders;
 	}
 
-	get_tfolders(name: string) {
+	get_tfolders(name: string|TFolder|null,only_first = false) :TFolder|TFolder[]|null{
+		if(name instanceof TFolder){
+			if(only_first){
+				return name;
+			}
+			return [name];
+		}
+		if(name==null){
+			return null;
+		}
 		let folder = this.app.vault.getFolderByPath(name);
 		if (folder) {
+			if(only_first){
+				return folder;
+			}
 			return [folder];
 		}
-		return this.get_all_folders().filter((x: TFolder) => x.name == name);
+		let items =  this.get_all_folders().filter((x: TFolder) => x.name == name);
+		if(only_first){
+			return items[0];
+		}
+		return items;
 	}
 
 	get_all_tfiles_tags(tags: string | Array<string>) {
@@ -542,7 +558,7 @@ export class File {
 			}
 		}
 
-		let folders = this.get_tfolders(group);
+		let folders = this.get_tfolders(group) as TFolder[];
 		for (let folder of folders) {
 			let xfiles = this.get_tfiles_of_folder(folder, -1);
 			for (let f of xfiles) {
@@ -564,13 +580,13 @@ export class File {
 		return tfiles;
 	}
 
-	get_selected_files(current_if_no_selected = true): TFile[] {
+	get_selected_files(current_if_no_selected = true, only_md = true): TFile[] {
 		let selector = document.querySelectorAll(
 			".tree-item-self.is-selected"
 		);
 		let items = Object.values(selector).map((x) => (x as HTMLElement).dataset?.path);
 		let tfiles = items.map(
-			(x) => this.get_tfile(x ?? null)).filter((x): x is TFile => x instanceof TFile && x.extension == "md"
+			(x) => this.get_tfile(x ?? null)).filter((x): x is TFile => x instanceof TFile && (only_md ? x.extension == "md" : true)
 			)
 		if (tfiles.length > 0) {
 			return tfiles
@@ -674,4 +690,50 @@ export class File {
 		let tfiles = data.map((x) => this.get_tfile(x.$path ?? null));
 		return tfiles.filter((x): x is TFile => x instanceof TFile);
 	}
+
+	async move(tfile: TFile|string, folder: TFolder|string) {
+		let xfile = this.get_tfile(tfile,true) as TFile;
+		let xfolder = this.get_tfolders(folder,true) as TFolder;
+		
+		if(!xfile){
+			return;
+		}
+		if(!xfolder){
+			return;
+		}
+
+		if(xfile.parent==xfolder){
+			return;
+		}
+
+		let dst = xfolder.path + "/" + xfile.name;
+		console.log(dst);
+		if(this.get_tfile(dst,true)){
+			new Notice('文件已存在');
+		}else{
+			await this.app.fileManager.renameFile(xfile as TFile, dst);
+		}	
+	}
+}
+
+/** 路径要整段对上（或作为目录后缀），不能只因为文件名相同。 */
+function filePathCoversLink(filePath: string, requested: string): boolean {
+	const path = filePath.replace(/\\/g, '/');
+	const link = requested.replace(/\\/g, '/');
+	if (path === link || path === link + '.md') {
+		return true;
+	}
+	const slash = path.lastIndexOf('/');
+	const dot = path.lastIndexOf('.');
+	const noExt = dot > slash ? path.slice(0, dot) : path;
+	if (noExt === link) {
+		return true;
+	}
+	return path.endsWith('/' + link) || noExt.endsWith('/' + link);
+}
+
+function filesNamedLike(app: App, link: string): TFile[] | undefined {
+	const lookup = uniqueFileLookup(app);
+	const base = link.includes('/') ? link.slice(link.lastIndexOf('/') + 1) : link;
+	return lookup?.get(base.toLowerCase()) ?? lookup?.get(base.toLowerCase() + '.md');
 }

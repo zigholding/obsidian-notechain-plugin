@@ -52,6 +52,66 @@ export class WebViewerLLMChatCommands {
 		return '';
 	}
 
+	/**
+	 * 从提示词来源走到发给 LLM 之前的最终 prompt。
+	 * 含来源选择、get_prompt、占位符、交互变量、target、Templater、参考笔记、预处理。
+	 * 用户取消时返回 null。
+	 */
+	async get_final_prompt(
+		this: WebViewerLLMModule,
+		tfile: TFile | null = null,
+		target: unknown = null
+	): Promise<{ prompt: string; noteFile: TFile | null; currentFile: TFile | null } | null> {
+		const ea = this.easyapi;
+		const cfile = ea.file.get_last_activate_file();
+		const selection = await ea.editor.get_selection();
+
+		let source: TFile | string | null = tfile;
+		let xrefiles: Array<TFile> = [];
+		if (!source) {
+			const selected = await this.select_chat_source(cfile ?? null, selection);
+			if (!selected) return null;
+			source = selected.source;
+			xrefiles = selected.xrefiles;
+		}
+		if (!source) return null;
+
+		const promptFile: TFile | null = source instanceof TFile ? source : null;
+
+		let prompt = '';
+		if (source instanceof TFile) {
+			prompt = await this.get_prompt(source);
+			tfile = source;
+		} else {
+			prompt = source;
+			tfile = cfile ?? null;
+		}
+		prompt = prompt.replace(/^\s*%%[\s\S]*?%%/, '').trim();
+
+		const allowTemplater =
+			this.is_templater_parse_enabled(promptFile) &&
+			this.is_templater_parse_enabled(cfile);
+
+		const expanded = await this.expand_prompt_placeholders(prompt, cfile ?? null, allowTemplater);
+		if (expanded == null) return null;
+		prompt = expanded;
+
+		const filled = await this.fill_interactive_prompt_vars(prompt, selection);
+		if (filled == null) return null;
+		prompt = filled;
+
+		prompt = this.apply_target_replacements(prompt, target);
+
+		const noteFile = tfile ?? null;
+		const currentFile = cfile ?? null;
+
+		prompt = await this.run_prompt_templater(prompt, noteFile, currentFile, allowTemplater);
+		prompt = await this.append_selected_references(prompt, noteFile, currentFile, xrefiles);
+		prompt = await this.run_webviewllm_preprocess(prompt, noteFile, currentFile);
+
+		return { prompt, noteFile, currentFile };
+	}
+
 	async cmd_chat_every_llms(this: WebViewerLLMModule, prompt = '') {
 		await this.cmd_refresh_llms();
 		if (prompt == '') {

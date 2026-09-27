@@ -30,9 +30,7 @@ export class NoteChainMisc {
 				), folders
 			);
 			if (!(folder instanceof TFolder)) { return; }
-			// 移动笔记
-			let dst = folder.path + "/" + tfile.basename + "." + tfile.extension;
-			await this.app.fileManager.renameFile(tfile, dst);
+			await this.plugin.easyapi.file.move(tfile, folder);
 		} catch {
 			// user cancelled folder picker or rename failed
 		}

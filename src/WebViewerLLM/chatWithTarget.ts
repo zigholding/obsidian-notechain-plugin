@@ -12,74 +12,16 @@ export class WebViewerLLMChatWithTarget {
 	plugin!: NoteChainPlugin;
 
 	async cmd_chat_with_target_tfile(this: WebViewerLLMModule, tfile: TFile | null = null, target: unknown = null) {
-		const ea = this.easyapi;
-		const cfile = ea.file.get_last_activate_file();
-		const selection = await ea.editor.get_selection();
+		const built = await this.get_final_prompt(tfile, target);
+		if (!built) return;
 
-		// 1. 选择提示词来源（笔记 / 选区 / 剪贴板 / 手动输入）
-		let source: TFile | string | null = tfile;
-		let xrefiles: Array<TFile> = [];
-		if (!source) {
-			const selected = await this.select_chat_source(cfile ?? null, selection);
-			if (!selected) return;
-			source = selected.source;
-			xrefiles = selected.xrefiles;
-		}
-		if (!source) return;
-
-		// 提示词笔记（卡片选中的模板）；与 cfile（${tfile.*} 所指）区分
-		let promptFile: TFile | null = source instanceof TFile ? source : null;
-
-		// 2. 解析出原始 prompt（笔记取模板段，字符串则直接用，并把 tfile 回退为当前激活文件）
-		let prompt = '';
-		if (source instanceof TFile) {
-			prompt = await this.get_prompt(source);
-			tfile = source;
-		} else {
-			prompt = source;
-			tfile = cfile ?? null;
-		}
-		prompt = prompt.replace(/^\s*%%[\s\S]*?%%/, '').trim();
-
-		// 任一方 frontmatter `parse_templater: false` 则整段不再二次 Templater
-		const allowTemplater =
-			this.is_templater_parse_enabled(promptFile) &&
-			this.is_templater_parse_enabled(cfile);
-
-		// 3. 展开内置占位符：${selection}、${tfile.*}、${[[wiki]]} 等
-		const expanded = await this.expand_prompt_placeholders(prompt, cfile ?? null, allowTemplater);
-		if (expanded == null) return;
-		prompt = expanded;
-
-		// 4. 交互式 ${prompt.xxx} 占位符
-		const filled = await this.fill_interactive_prompt_vars(prompt, selection);
-		if (filled == null) return;
-		prompt = filled;
-
-		// 5. 应用调用方传入的 target 替换
-		prompt = this.apply_target_replacements(prompt, target);
-
-		const noteFile = tfile ?? null;
-		const currentFile = cfile ?? null;
-
-		// 6. Templater 解析（可由 parse_templater: false 关闭）
-		prompt = await this.run_prompt_templater(prompt, noteFile, currentFile, allowTemplater);
-
-		// 7. 选择并追加参考笔记
-		prompt = await this.append_selected_references(prompt, noteFile, currentFile, xrefiles);
-
-		// 8. 全局预处理脚本
-		prompt = await this.run_webviewllm_preprocess(prompt, noteFile, currentFile);
-
-		// 9. 按设置复制剪贴板 / 发送给 LLM
-		const dispatched = await this.dispatch_chat_prompt(prompt, noteFile, currentFile);
+		const dispatched = await this.dispatch_chat_prompt(built.prompt, built.noteFile, built.currentFile);
 		if (!dispatched) return;
 
-		// 10. 全局后处理脚本
 		await this.run_webviewllm_postprocess(
-			prompt,
-			noteFile,
-			currentFile,
+			built.prompt,
+			built.noteFile,
+			built.currentFile,
 			dispatched.response,
 			dispatched.llm
 		);
@@ -89,7 +31,7 @@ export class WebViewerLLMChatWithTarget {
 	 * frontmatter `parse_templater`：默认 true；显式 false / "false" / 0 时关闭二次解析。
 	 * 可写在提示词笔记或当前激活笔记（${tfile.*} 来源）上。
 	 */
-	private is_templater_parse_enabled(this: WebViewerLLMModule, file: TFile | null | undefined): boolean {
+	is_templater_parse_enabled(this: WebViewerLLMModule, file: TFile | null | undefined): boolean {
 		if (!(file instanceof TFile)) return true;
 		const v = this.easyapi.editor.get_frontmatter(file, 'parse_templater', true);
 		if (v === false || v === 0) return false;
@@ -111,7 +53,7 @@ export class WebViewerLLMChatWithTarget {
 	 * 弹出卡片选择器，让用户选择提示词来源。
 	 * @returns source 为 TFile 或纯文本；xrefiles 为源文本中提到的相关笔记
 	 */
-	private async select_chat_source(this: WebViewerLLMModule, 
+	async select_chat_source(this: WebViewerLLMModule, 
 		cfile: TFile | null,
 		selection: string
 	): Promise<{ source: TFile | string; xrefiles: TFile[] } | null> {
@@ -193,7 +135,7 @@ export class WebViewerLLMChatWithTarget {
 	 * @param allowTemplater false 时 `${[[wiki]]}` 只摘录正文，不跑 Templater
 	 * @returns 展开后的 prompt；缺 selection / 取消选文件时返回 null
 	 */
-	private async expand_prompt_placeholders(this: WebViewerLLMModule, 
+	async expand_prompt_placeholders(this: WebViewerLLMModule, 
 		prompt: string,
 		cfile: TFile | null,
 		allowTemplater = true
@@ -355,7 +297,7 @@ export class WebViewerLLMChatWithTarget {
 	 * 弹出对话框填充 `${prompt.xxx}` 占位符。
 	 * @returns 填充后的 prompt；用户取消时返回 null
 	 */
-	private async fill_interactive_prompt_vars(this: WebViewerLLMModule, 
+	async fill_interactive_prompt_vars(this: WebViewerLLMModule, 
 		prompt: string,
 		selection: string
 	): Promise<string | null> {
@@ -384,7 +326,7 @@ export class WebViewerLLMChatWithTarget {
 	}
 
 	/** 按 target 类型替换剩余 `${...}` 占位符 */
-	private apply_target_replacements(this: WebViewerLLMModule, prompt: string, target: unknown): string {
+	apply_target_replacements(this: WebViewerLLMModule, prompt: string, target: unknown): string {
 		if (typeof target === 'string' && target.trim() !== '') {
 			return prompt.replace(/\$\{.*?\}/g, target.trim());
 		}
@@ -407,7 +349,7 @@ export class WebViewerLLMChatWithTarget {
 	 * 提示词笔记或当前激活笔记 frontmatter `parse_templater: false` 时跳过，
 	 * 避免 `${tfile.content}` 展开后正文里的 tpl 代码块被二次执行（默认 true）。
 	 */
-	private async run_prompt_templater(this: WebViewerLLMModule, 
+	async run_prompt_templater(this: WebViewerLLMModule, 
 		prompt: string,
 		tfile: TFile | null,
 		cfile: TFile | null,
@@ -433,13 +375,14 @@ export class WebViewerLLMChatWithTarget {
 	 * 按 frontmatter `reference` 收集候选笔记，供用户多选后追加到 prompt。
 	 * reference=false 时跳过；默认含当前笔记、选区相关笔记、激活文件链接与附件。
 	 */
-	private async append_selected_references(this: WebViewerLLMModule, 
+	async append_selected_references(this: WebViewerLLMModule, 
 		prompt: string,
 		tfile: TFile | null,
 		cfile: TFile | null,
 		xrefiles: TFile[]
 	): Promise<string> {
 		const ea = this.easyapi;
+		console.log('append_selected_references', tfile, cfile, xrefiles);
 		if (!(tfile instanceof TFile) || ea.editor.get_frontmatter(tfile, 'reference', 'link') == false) {
 			return prompt;
 		}
@@ -497,7 +440,7 @@ export class WebViewerLLMChatWithTarget {
 	}
 
 	/** 执行设置中的 preprocess 笔记脚本，依次改写 prompt */
-	private async run_webviewllm_preprocess(this: WebViewerLLMModule, 
+	async run_webviewllm_preprocess(this: WebViewerLLMModule, 
 		prompt: string,
 		tfile: TFile | null,
 		cfile: TFile | null

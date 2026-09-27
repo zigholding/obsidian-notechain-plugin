@@ -1,5 +1,5 @@
 import {
-	Notice, TFile
+	Notice, TFile, TFolder
 } from 'obsidian';
 
 import type NoteChainPlugin from '../../plugin';
@@ -29,8 +29,37 @@ export const move_file_to_another_folder = (plugin:NoteChainPlugin) => ({
 	id: 'move_file_to_another_folder',
 	name: plugin.strings.move_file_to_another_folder,
 	icon:'folder-tree',
-	callback: () => {
-		void plugin.chain.cmd_move_file_to_another_folder();
+	callback: async () => {
+        let tfiles = await plugin.easyapi.file.get_selected_files(true,false);
+		if (tfiles.length == 0) { return; }
+
+		let folders = plugin.easyapi.file.get_all_folders();
+		folders = plugin.chain.sort_folders_by_mtime(
+			folders
+		).filter((f:TFolder) => f != tfiles[0].parent);
+
+		let folder: TFolder | null = null;
+		if (tfiles[0].extension === 'md') {
+			folders = folders.filter((f: TFolder) => plugin.chain.filter_user_ignore(f));
+		}
+		try {
+			folder = await plugin.easyapi.dialog_suggest(
+				plugin.utils.array_prefix_id(
+					folders.map((f: TFolder) => f.path)
+				), folders
+			);
+			if (!(folder instanceof TFolder)) { return; }
+		} catch {
+			// user cancelled folder picker or rename failed
+		}
+
+		if(!folder){
+			return;
+		}
+		for(let tfile of tfiles){
+			await plugin.easyapi.file.move(tfile, folder);
+		}
+		
 	}
 });
 
