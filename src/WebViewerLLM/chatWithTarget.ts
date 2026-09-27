@@ -382,7 +382,6 @@ export class WebViewerLLMChatWithTarget {
 		xrefiles: TFile[]
 	): Promise<string> {
 		const ea = this.easyapi;
-		console.log('append_selected_references', tfile, cfile, xrefiles);
 		if (!(tfile instanceof TFile) || ea.editor.get_frontmatter(tfile, 'reference', 'link') == false) {
 			return prompt;
 		}
