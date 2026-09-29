@@ -112,6 +112,9 @@ export class WebViewerLLMChatCommands {
 		// 删除字符串 prompt 开头的第一个 Obsidian 注释块（%%...%%），然后去掉剩余内容首尾的空白字符。
 		prompt = prompt.replace(/^\s*%%[\s\S]*?%%/, '').trim();
 
+		// 只认模板原文里的 ${prompt.xxx}；${tfile.content} 展开后带进来的不算
+		const interactiveNames = this.collect_interactive_prompt_names(prompt, !selection);
+
 		// 检查是否启用模板解析
 		const allowTemplater =
 			this.is_templater_parse_enabled(promptFile) &&
@@ -121,18 +124,16 @@ export class WebViewerLLMChatCommands {
 		if (expanded == null) return null;
 		prompt = expanded;
 
-		const filled = await this.fill_interactive_prompt_vars(prompt, selection);
+		const filled = await this.fill_interactive_prompt_vars(prompt, selection, interactiveNames);
 		if (filled == null) return null;
 		prompt = filled;
 
+		// 按 target 类型替换剩余 `${...}` 占位符
 		prompt = this.apply_target_replacements(prompt, target);
 
 		const currentFile = cfile ?? null;
-		console.log('run_prompt_templater', prompt, noteFile, currentFile, allowTemplater);
 		prompt = await this.run_prompt_templater(prompt, noteFile, currentFile, allowTemplater);
-		console.log('append_selected_references', prompt, noteFile, currentFile, xrefiles);
 		prompt = await this.append_selected_references(prompt, noteFile, currentFile, xrefiles);
-		console.log('run_webviewllm_preprocess', prompt, noteFile, currentFile);
 		prompt = await this.run_webviewllm_preprocess(prompt, noteFile, currentFile);
 
 		return { prompt, noteFile, currentFile };

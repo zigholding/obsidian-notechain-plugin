@@ -294,20 +294,42 @@ export class WebViewerLLMChatWithTarget {
 	}
 
 	/**
-	 * 弹出对话框填充 `${prompt.xxx}` 占位符。
+	 * 模板原文里的交互占位符：`${prompt.name}`，以及无选区时会落到它的 `${selection?prompt.name}`。
+	 */
+	collect_interactive_prompt_names(this: WebViewerLLMModule, prompt: string, includeSelectionFallback: boolean): Set<string> {
+		const names = new Set<string>();
+		const direct = /\$\{prompt\.([a-zA-Z0-9_]+)\}/g;
+		let match: RegExpExecArray | null;
+		while ((match = direct.exec(prompt)) !== null) {
+			names.add(match[1]);
+		}
+		if (includeSelectionFallback) {
+			const conditional = /\$\{selection\?prompt\.([a-zA-Z0-9_]+)\}/g;
+			while ((match = conditional.exec(prompt)) !== null) {
+				names.add(match[1]);
+			}
+		}
+		return names;
+	}
+
+	/**
+	 * 弹出对话框填充模板里预先声明的 `${prompt.xxx}`。
+	 * `allowed` 之外的同名占位符（通常来自展开后的笔记正文）保持原样。
 	 * @returns 填充后的 prompt；用户取消时返回 null
 	 */
 	async fill_interactive_prompt_vars(this: WebViewerLLMModule, 
 		prompt: string,
-		selection: string
+		selection: string,
+		allowed: Set<string>
 	): Promise<string | null> {
+		if (allowed.size === 0) return prompt;
 		const ea = this.easyapi;
 		const promptRegex = /\$\{prompt\.([a-zA-Z0-9_]+)\}/g;
 		const promptMatches: Set<string> = new Set();
 		let pMatch;
 		promptRegex.lastIndex = 0;
 		while ((pMatch = promptRegex.exec(prompt)) !== null) {
-			promptMatches.add(pMatch[1]);
+			if (allowed.has(pMatch[1])) promptMatches.add(pMatch[1]);
 		}
 
 		for (const placeholder of promptMatches) {
