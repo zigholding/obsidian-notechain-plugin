@@ -149,7 +149,7 @@ export class EasyEditorSections {
 
         if(sections.length==1){
             selected = sections[0];
-        }else if (idx >= 2 && sections[idx]) {
+        }else if (idx >= 0 && sections[idx]) {
             selected = sections[idx];
         } else {
             let sel = await this.ea.dialog_suggest(

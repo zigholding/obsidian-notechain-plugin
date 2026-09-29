@@ -8,6 +8,7 @@ export class WebViewerLLMChatCommands {
 	plugin!: NoteChainPlugin;
 
 	async get_prompt(this: WebViewerLLMModule, tfile: TFile | null, idx = -1, selection = false): Promise<string> {
+		tfile = this.easyapi.file.get_tfile(tfile) ?? null;
 		if (!tfile) {
 			return '';
 		}
@@ -26,7 +27,7 @@ export class WebViewerLLMChatCommands {
 		const allItems = Array.from(allItemsSet);
 
 		for (const item of allItems) {
-			const code = await this.easyapi.editor.get_code_section(tfile, item, -1);
+			const code = await this.easyapi.editor.get_code_section(tfile, item, idx);
 			if (typeof code === 'string' && code) {
 				return code;
 			}
@@ -61,10 +62,15 @@ export class WebViewerLLMChatCommands {
 	async get_final_prompt(
 		this: WebViewerLLMModule,
 		file: TFile | string | null = null,
-		target: unknown = null
+		target: unknown = null,
+		cfile: TFile | null = null,
+		idx = -1
 	): Promise<{ prompt: string; noteFile: TFile | null; currentFile: TFile | null } | null> {
 		const ea = this.easyapi;
-		const cfile = ea.file.get_last_activate_file();
+		cfile = ea.file.get_tfile(cfile) ?? null;
+		if(!cfile) {
+			cfile = ea.file.get_last_activate_file() ?? null;
+		}
 		const selection = await ea.editor.get_selection();
 
 		let promptFile: TFile | null = null;
@@ -94,7 +100,7 @@ export class WebViewerLLMChatCommands {
 		let prompt = '';
 		let noteFile: TFile | null;
 		if (source instanceof TFile) {
-			prompt = await this.get_prompt(source);
+			prompt = await this.get_prompt(source, idx);
 			noteFile = source;
 			promptFile = source;
 		} else {
@@ -102,8 +108,11 @@ export class WebViewerLLMChatCommands {
 			noteFile = cfile ?? null;
 			promptFile = null;
 		}
+
+		// 删除字符串 prompt 开头的第一个 Obsidian 注释块（%%...%%），然后去掉剩余内容首尾的空白字符。
 		prompt = prompt.replace(/^\s*%%[\s\S]*?%%/, '').trim();
 
+		// 检查是否启用模板解析
 		const allowTemplater =
 			this.is_templater_parse_enabled(promptFile) &&
 			this.is_templater_parse_enabled(cfile);
@@ -119,9 +128,11 @@ export class WebViewerLLMChatCommands {
 		prompt = this.apply_target_replacements(prompt, target);
 
 		const currentFile = cfile ?? null;
-
+		console.log('run_prompt_templater', prompt, noteFile, currentFile, allowTemplater);
 		prompt = await this.run_prompt_templater(prompt, noteFile, currentFile, allowTemplater);
+		console.log('append_selected_references', prompt, noteFile, currentFile, xrefiles);
 		prompt = await this.append_selected_references(prompt, noteFile, currentFile, xrefiles);
+		console.log('run_webviewllm_preprocess', prompt, noteFile, currentFile);
 		prompt = await this.run_webviewllm_preprocess(prompt, noteFile, currentFile);
 
 		return { prompt, noteFile, currentFile };
