@@ -217,6 +217,24 @@ export class File {
         return this.ea.editor.expand_wiki_embeds_in_string(raw, maxDepth, new Set());
     }
 
+	async write_tfile(file: TFile|string, content: string) {
+		let tfile = this.get_tfile(file);
+
+		if(!tfile && typeof file === 'string'){
+			tfile = await this.app.vault.create(file,content);
+			return tfile;
+		}
+
+		if(!tfile){
+			return null;
+		}
+
+		if(tfile instanceof TFile){
+			await this.app.vault.modify(tfile, content);
+			return tfile;
+		}
+	}
+
 	get_tfiles(path:string|TFile|null):Array<TFile>{
 		let tfiles = this.get_tfile(path,false);
 		if(tfiles instanceof TFile){

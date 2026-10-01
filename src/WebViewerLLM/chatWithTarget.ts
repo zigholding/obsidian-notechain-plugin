@@ -179,7 +179,7 @@ export class WebViewerLLMChatWithTarget {
 			}
 
 			if (prompt.includes('${tfile}')) {
-				let ctx = await ea.ccontent;
+				let ctx = await ea.file.read_tfile(cfile);
 				ctx = `Name: ${cfile.basename}\n\nPath: ${cfile.path}\n\n${ctx}`;
 				replacements.set('${tfile}', ctx);
 			}
@@ -241,7 +241,7 @@ export class WebViewerLLMChatWithTarget {
 				keys.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'),
 				'g'
 			);
-			prompt = prompt.replace(placeholderRegex, (m: string) => replacements.get(m) || m);
+			prompt = prompt.replace(placeholderRegex, (m: string) => replacements.get(m) || "");
 		}
 
 		return prompt;
