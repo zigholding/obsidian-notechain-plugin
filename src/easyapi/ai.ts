@@ -5,22 +5,22 @@ import { errorMessage, isRecord } from '../ts-helpers';
 /**
  * Templater:
  * ```js
- * tR = await ea.ai.request({ question: '你好', config_tfile: '模型笔记' })
+ * const rsp = await ea.ai.request({ question: '你好', config_tfile: '模型笔记' })
+ * tR = rsp.text
  * ```
- * 成功时请求体和响应在 `ea.ai.last_reqeust`。
+ * 同一次结果也在 `ea.ai.last_reqeust`。
  */
 
-/** 不写入请求 JSON 的选项。`body` 按内容合并，`header` 只作 HTTP 头。 */
-const REQUEST_SKIP = new Set(['body', 'header', 'config_tfile']);
+/** 不写入请求 JSON 的选项。`header` 只作 HTTP 头。 */
+const REQUEST_SKIP = new Set(['header', 'config_tfile']);
 
 interface AiSourceConfig {
 	baseUrl?: string;
 	apiKey?: string;
 	name?: string;
 	systemPrompt?: string;
-	body?: Record<string, unknown>;
 	header?: Record<string, string>;
-	/** `model` 里除 `body` / `header` 外的字段，原样进入请求 JSON。 */
+	/** `model` 里除 `header` 外的字段，原样进入请求 JSON。 */
 	fields: Record<string, unknown>;
 }
 
@@ -29,11 +29,18 @@ export interface AiChatMessage {
 	content: string;
 }
 
+export interface AiRequestResult {
+	headers: Record<string, string>;
+	request: Record<string, unknown> | null;
+	response: unknown;
+	text: string;
+}
+
 export class Ai {
 	app: App;
 	ea: EasyAPI;
-	/** 最近一次成功的 chat/completions JSON。 */
-	last_reqeust: unknown = null;
+	/** 最近一次调用的返回值。 */
+	last_reqeust: AiRequestResult | null = null;
 
 	constructor(app: App, ea: EasyAPI) {
 		this.app = app;
@@ -42,20 +49,25 @@ export class Ai {
 
 	/**
 	 * 调用 OpenAI 兼容接口。
-	 * `options` 与配置笔记 frontmatter `model` 里，除 `body`、`header`、`config_tfile` 外的字段都写入请求 JSON。
-	 * 同名字段 `options` 优先。`body` 再合并进去（`options.body` 优先于 `model.body`）。
+	 * `options` 与配置笔记 frontmatter `model` 里，除 `header`、`config_tfile` 外的字段都写入请求 JSON。
+	 * 同名字段 `options` 优先。
 	 * `header` 只作为 HTTP 头。`config_tfile` 为 `TFile` 或笔记路径。
 	 * `name` 在请求还没有 `model` 时填到 `model`。`action` 为 `chat`（默认）或 `list_models`。
-	 * 返回助手文本或模型 id 列表；失败时返回以 ❌ 开头的说明。
+	 * 返回 `{ headers, request, response, text }`。`text` 为助手文本或模型 id；失败时 `text` 以 ❌ 开头。
 	 */
-	async request(options: unknown = {}): Promise<string> {
+	async request(options: unknown = {}): Promise<AiRequestResult> {
 		const opts = isRecord(options) ? options : {};
 		this.last_reqeust = null;
 
 		const fileConfig = this.readConfigFile(opts.config_tfile);
 		const baseUrl = (textOpt(opts.baseUrl) || fileConfig.baseUrl || '').replace(/\/$/, '');
 		if (!baseUrl) {
-			return '❌ 缺少 baseUrl';
+			return this.finish({
+				headers: {},
+				request: null,
+				response: null,
+				text: '❌ 缺少 baseUrl',
+			});
 		}
 		const apiKey = textOpt(opts.apiKey) || fileConfig.apiKey;
 		const modelName = textOpt(opts.name) || fileConfig.name;
@@ -67,29 +79,35 @@ export class Ai {
 			...(asHeaderMap(opts.header) ?? {}),
 		};
 
+		let requestBody: Record<string, unknown> | null = null;
 		try {
 			if (action === 'list_models') {
 				const modelsResp = await this.apiFetch(baseUrl, apiKey, '/models', { headers });
+				const data = parseJson(modelsResp.text);
 				if (!isOk(modelsResp.status)) {
-					return `❌ 获取模型失败 (${modelsResp.status}): ${modelsResp.text}`;
+					return this.finish({
+						headers,
+						request: null,
+						response: data,
+						text: `❌ 获取模型失败 (${modelsResp.status}): ${modelsResp.text}`,
+					});
 				}
-				return formatModelIds(parseJson(modelsResp.text));
+				return this.finish({
+					headers,
+					request: null,
+					response: data,
+					text: formatModelIds(data),
+				});
 			}
 
 			const messages = buildMessages(opts, systemPrompt, question);
-			const requestBody: Record<string, unknown> = {
+			requestBody = {
 				...fileConfig.fields,
 				...requestFields(opts),
 				messages,
 			};
 			if (modelName && requestBody.model == null) {
 				requestBody.model = modelName;
-			}
-			if (isRecord(fileConfig.body)) {
-				Object.assign(requestBody, fileConfig.body);
-			}
-			if (isRecord(opts.body)) {
-				Object.assign(requestBody, opts.body);
 			}
 
 			const response = await this.apiFetch(baseUrl, apiKey, '/chat/completions', {
@@ -100,8 +118,12 @@ export class Ai {
 
 			if (isOk(response.status)) {
 				const data = parseJson(response.text);
-				this.last_reqeust = [requestBody,data];
-				return chatText(data);
+				return this.finish({
+					headers,
+					request: requestBody,
+					response: data,
+					text: chatText(data),
+				});
 			}
 
 			const errorText = response.text;
@@ -115,10 +137,25 @@ export class Ai {
 					errorDetail = String(errorJson.message);
 				}
 			}
-			return `❌ API 请求失败 (${response.status}): ${errorDetail}`;
+			return this.finish({
+				headers,
+				request: requestBody,
+				response: errorJson,
+				text: `❌ API 请求失败 (${response.status}): ${errorDetail}`,
+			});
 		} catch (error) {
-			return `❌ 请求异常: ${errorMessage(error)}`;
+			return this.finish({
+				headers,
+				request: requestBody,
+				response: null,
+				text: `❌ 请求异常: ${errorMessage(error)}`,
+			});
 		}
+	}
+
+	private finish(result: AiRequestResult): AiRequestResult {
+		this.last_reqeust = result;
+		return result;
 	}
 
 	private readConfigFile(file: unknown): AiSourceConfig {
@@ -178,7 +215,6 @@ function readModelObject(value: unknown): AiSourceConfig {
 	if (typeof value.apiKey === 'string') config.apiKey = value.apiKey;
 	if (typeof value.name === 'string') config.name = value.name;
 	if (typeof value.systemPrompt === 'string') config.systemPrompt = value.systemPrompt;
-	if (isRecord(value.body)) config.body = value.body;
 	const header = asHeaderMap(value.header);
 	if (header) config.header = header;
 	return config;
