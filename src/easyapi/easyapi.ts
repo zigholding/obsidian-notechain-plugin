@@ -18,6 +18,7 @@ import { Waiter } from './waiter';
 import { Templater } from './templater';
 import {Time} from './time'
 import { Web } from './web';
+import { Ai } from './ai';
 import { FsEditor } from './fseditor';
 import { Destop } from './destop';
 import { activeFileView, isMobileApp, noteChainPlugin, obsidianApp } from '../obsidian-app';
@@ -42,6 +43,7 @@ export class EasyAPI {
     tpl: Templater
     time: Time
     web: Web
+    ai: Ai
     fs: FsEditor
     destop: Destop
 
@@ -64,6 +66,7 @@ export class EasyAPI {
         this.tpl = new Templater(app,this);
         this.time = new Time(app,this);
         this.web = new Web(app);
+        this.ai = new Ai(app, this);
         this.fs = new FsEditor(app,this);
         this.destop = new Destop(app);
         window.ea = this;
