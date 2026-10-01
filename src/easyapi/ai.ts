@@ -15,6 +15,7 @@ export interface AiModelConfig {
 	apiKey?: string;
 	name?: string;
 	systemPrompt?: string;
+	body?: Record<string, unknown>;
 }
 
 export interface AiChatMessage {
@@ -38,7 +39,7 @@ export class Ai {
 	 * `options`：`baseUrl`、`apiKey`、`name`、`systemPrompt`、`question`、`action`（`chat` | `list_models`）、
 	 * `config_tfile`（`TFile` 或笔记路径；缺省字段读该笔记 frontmatter `model`）、
 	 * `messages`、`history` / `chatHistory` / `previousMessages`、`temperature`、`maxTokens`、`body`、`metadata`。
-	 * `options` 里的 `baseUrl` / `apiKey` / `name` / `systemPrompt` 优先于 `config_tfile`。
+	 * `options` 里的 `baseUrl` / `apiKey` / `name` / `systemPrompt` / `body` 优先于 `config_tfile`。
 	 * 返回助手文本或模型 id 列表；失败时返回以 ❌ 开头的说明。
 	 */
 	async request(options: unknown = {}): Promise<string> {
@@ -72,6 +73,9 @@ export class Ai {
 				max_tokens: typeof opts.maxTokens === 'number' ? opts.maxTokens : 2000,
 				stream: false,
 			};
+			if (isRecord(fileConfig.body)) {
+				Object.assign(requestBody, fileConfig.body);
+			}
 			if (isRecord(opts.body)) {
 				Object.assign(requestBody, opts.body);
 			}
@@ -112,7 +116,8 @@ export class Ai {
 
 	private readConfigFile(file: unknown): AiModelConfig {
 		if (!(file instanceof TFile) && typeof file !== 'string') return {};
-		return asModelConfig(this.ea.editor.get_frontmatter(file, 'model', {}));
+		const config = asModelConfig(this.ea.editor.get_frontmatter(file, 'model', {}));
+		return config;
 	}
 
 	private apiFetch(
