@@ -1,13 +1,13 @@
-import { App, requestUrl } from 'obsidian';
+import { App, TFile, requestUrl } from 'obsidian';
 import type { EasyAPI } from './easyapi';
 import { errorMessage, isRecord } from '../ts-helpers';
 
 /**
  * Templater:
  * ```js
- * tR = await ea.ai.request({ question: '你好', model: '模型笔记' })
+ * tR = await ea.ai.request({ question: '你好', config_tfile: '模型笔记' })
  * ```
- * 完整 JSON 在 `ea.ai.data`。
+ * 成功时请求体和响应在 `ea.ai.last_reqeust`。
  */
 
 export interface AiModelConfig {
@@ -26,7 +26,7 @@ export class Ai {
 	app: App;
 	ea: EasyAPI;
 	/** 最近一次成功的 chat/completions JSON。 */
-	data: unknown = null;
+	last_reqeust: unknown = null;
 
 	constructor(app: App, ea: EasyAPI) {
 		this.app = app;
@@ -35,27 +35,30 @@ export class Ai {
 
 	/**
 	 * 调用 OpenAI 兼容接口。
-	 * `options`：`question`、`action`（`chat` | `list_models`）、
-	 * `model`（配置对象，或笔记路径/链接，读该笔记 frontmatter `model`）、
+	 * `options`：`baseUrl`、`apiKey`、`name`、`systemPrompt`、`question`、`action`（`chat` | `list_models`）、
+	 * `config_tfile`（`TFile` 或笔记路径；缺省字段读该笔记 frontmatter `model`）、
 	 * `messages`、`history` / `chatHistory` / `previousMessages`、`temperature`、`maxTokens`、`body`、`metadata`。
+	 * `options` 里的 `baseUrl` / `apiKey` / `name` / `systemPrompt` 优先于 `config_tfile`。
 	 * 返回助手文本或模型 id 列表；失败时返回以 ❌ 开头的说明。
 	 */
 	async request(options: unknown = {}): Promise<string> {
 		const opts = isRecord(options) ? options : {};
-		this.data = null;
+		this.last_reqeust = null;
 
-		const model = opts.model != null ? this.resolveModel(opts.model) : {};
-		const baseUrl = model.baseUrl?.replace(/\/$/, '') ?? '';
+		const fileConfig = this.readConfigFile(opts.config_tfile);
+		const baseUrl = (textOpt(opts.baseUrl) || fileConfig.baseUrl || '').replace(/\/$/, '');
 		if (!baseUrl) {
-			return '❌ 缺少 model.baseUrl';
+			return '❌ 缺少 baseUrl';
 		}
-		const systemPrompt = model.systemPrompt || undefined;
+		const apiKey = textOpt(opts.apiKey) || fileConfig.apiKey;
+		const modelName = textOpt(opts.name) || fileConfig.name;
+		const systemPrompt = textOpt(opts.systemPrompt) || fileConfig.systemPrompt;
 		const question = typeof opts.question === 'string' ? opts.question : undefined;
 		const action = typeof opts.action === 'string' ? opts.action : 'chat';
 
 		try {
 			if (action === 'list_models') {
-				const modelsResp = await this.apiFetch(baseUrl, model.apiKey, '/models');
+				const modelsResp = await this.apiFetch(baseUrl, apiKey, '/models');
 				if (!isOk(modelsResp.status)) {
 					return `❌ 获取模型失败 (${modelsResp.status}): ${modelsResp.text}`;
 				}
@@ -69,24 +72,24 @@ export class Ai {
 				max_tokens: typeof opts.maxTokens === 'number' ? opts.maxTokens : 2000,
 				stream: false,
 			};
-			if (model.name) {
-				requestBody.model = model.name;
-			}
 			if (isRecord(opts.body)) {
 				Object.assign(requestBody, opts.body);
 			}
 			if (opts.metadata) {
 				requestBody.metadata = opts.metadata;
 			}
+			if (modelName) {
+				requestBody.model = modelName;
+			}
 
-			const response = await this.apiFetch(baseUrl, model.apiKey, '/chat/completions', {
+			const response = await this.apiFetch(baseUrl, apiKey, '/chat/completions', {
 				method: 'POST',
 				body: JSON.stringify(requestBody),
 			});
 
 			if (isOk(response.status)) {
 				const data = parseJson(response.text);
-				this.data = data;
+				this.last_reqeust = [requestBody,data];
 				return chatText(data);
 			}
 
@@ -107,13 +110,9 @@ export class Ai {
 		}
 	}
 
-	private resolveModel(model: unknown): AiModelConfig {
-		if (typeof model === 'string') {
-			const file = this.ea.file.get_tfile(model);
-			if (!file) return {};
-			return asModelConfig(this.ea.editor.get_frontmatter(file, 'model', {}));
-		}
-		return asModelConfig(model);
+	private readConfigFile(file: unknown): AiModelConfig {
+		if (!(file instanceof TFile) && typeof file !== 'string') return {};
+		return asModelConfig(this.ea.editor.get_frontmatter(file, 'model', {}));
 	}
 
 	private apiFetch(
@@ -135,6 +134,10 @@ export class Ai {
 			throw: false,
 		});
 	}
+}
+
+function textOpt(value: unknown): string | undefined {
+	return typeof value === 'string' && value ? value : undefined;
 }
 
 function asModelConfig(value: unknown): AiModelConfig {
