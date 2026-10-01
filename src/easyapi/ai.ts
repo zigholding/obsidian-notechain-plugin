@@ -10,12 +10,18 @@ import { errorMessage, isRecord } from '../ts-helpers';
  * 成功时请求体和响应在 `ea.ai.last_reqeust`。
  */
 
-export interface AiModelConfig {
+/** 不写入请求 JSON 的选项。`body` 按内容合并，`header` 只作 HTTP 头。 */
+const REQUEST_SKIP = new Set(['body', 'header', 'config_tfile']);
+
+interface AiSourceConfig {
 	baseUrl?: string;
 	apiKey?: string;
 	name?: string;
 	systemPrompt?: string;
 	body?: Record<string, unknown>;
+	header?: Record<string, string>;
+	/** `model` 里除 `body` / `header` 外的字段，原样进入请求 JSON。 */
+	fields: Record<string, unknown>;
 }
 
 export interface AiChatMessage {
@@ -36,10 +42,10 @@ export class Ai {
 
 	/**
 	 * 调用 OpenAI 兼容接口。
-	 * `options`：`baseUrl`、`apiKey`、`name`、`systemPrompt`、`question`、`action`（`chat` | `list_models`）、
-	 * `config_tfile`（`TFile` 或笔记路径；缺省字段读该笔记 frontmatter `model`）、
-	 * `messages`、`history` / `chatHistory` / `previousMessages`、`temperature`、`maxTokens`、`body`、`metadata`。
-	 * `options` 里的 `baseUrl` / `apiKey` / `name` / `systemPrompt` / `body` 优先于 `config_tfile`。
+	 * `options` 与配置笔记 frontmatter `model` 里，除 `body`、`header`、`config_tfile` 外的字段都写入请求 JSON。
+	 * 同名字段 `options` 优先。`body` 再合并进去（`options.body` 优先于 `model.body`）。
+	 * `header` 只作为 HTTP 头。`config_tfile` 为 `TFile` 或笔记路径。
+	 * `name` 在请求还没有 `model` 时填到 `model`。`action` 为 `chat`（默认）或 `list_models`。
 	 * 返回助手文本或模型 id 列表；失败时返回以 ❌ 开头的说明。
 	 */
 	async request(options: unknown = {}): Promise<string> {
@@ -56,10 +62,14 @@ export class Ai {
 		const systemPrompt = textOpt(opts.systemPrompt) || fileConfig.systemPrompt;
 		const question = typeof opts.question === 'string' ? opts.question : undefined;
 		const action = typeof opts.action === 'string' ? opts.action : 'chat';
+		const headers = {
+			...(fileConfig.header ?? {}),
+			...(asHeaderMap(opts.header) ?? {}),
+		};
 
 		try {
 			if (action === 'list_models') {
-				const modelsResp = await this.apiFetch(baseUrl, apiKey, '/models');
+				const modelsResp = await this.apiFetch(baseUrl, apiKey, '/models', { headers });
 				if (!isOk(modelsResp.status)) {
 					return `❌ 获取模型失败 (${modelsResp.status}): ${modelsResp.text}`;
 				}
@@ -68,25 +78,22 @@ export class Ai {
 
 			const messages = buildMessages(opts, systemPrompt, question);
 			const requestBody: Record<string, unknown> = {
+				...fileConfig.fields,
+				...requestFields(opts),
 				messages,
-				temperature: typeof opts.temperature === 'number' ? opts.temperature : 0.7,
-				max_tokens: typeof opts.maxTokens === 'number' ? opts.maxTokens : 2000,
-				stream: false,
 			};
+			if (modelName && requestBody.model == null) {
+				requestBody.model = modelName;
+			}
 			if (isRecord(fileConfig.body)) {
 				Object.assign(requestBody, fileConfig.body);
 			}
 			if (isRecord(opts.body)) {
 				Object.assign(requestBody, opts.body);
 			}
-			if (opts.metadata) {
-				requestBody.metadata = opts.metadata;
-			}
-			if (modelName) {
-				requestBody.model = modelName;
-			}
 
 			const response = await this.apiFetch(baseUrl, apiKey, '/chat/completions', {
+				headers,
 				method: 'POST',
 				body: JSON.stringify(requestBody),
 			});
@@ -114,10 +121,9 @@ export class Ai {
 		}
 	}
 
-	private readConfigFile(file: unknown): AiModelConfig {
-		if (!(file instanceof TFile) && typeof file !== 'string') return {};
-		const config = asModelConfig(this.ea.editor.get_frontmatter(file, 'model', {}));
-		return config;
+	private readConfigFile(file: unknown): AiSourceConfig {
+		if (!(file instanceof TFile) && typeof file !== 'string') return { fields: {} };
+		return readModelObject(this.ea.editor.get_frontmatter(file, 'model', {}));
 	}
 
 	private apiFetch(
@@ -145,13 +151,36 @@ function textOpt(value: unknown): string | undefined {
 	return typeof value === 'string' && value ? value : undefined;
 }
 
-function asModelConfig(value: unknown): AiModelConfig {
-	if (!isRecord(value)) return {};
-	const config: AiModelConfig = {};
+function requestFields(record: Record<string, unknown>): Record<string, unknown> {
+	const fields: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(record)) {
+		if (REQUEST_SKIP.has(key)) continue;
+		fields[key] = value;
+	}
+	return fields;
+}
+
+function asHeaderMap(value: unknown): Record<string, string> | undefined {
+	if (!isRecord(value)) return undefined;
+	const headers: Record<string, string> = {};
+	for (const [key, val] of Object.entries(value)) {
+		if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
+			headers[key] = String(val);
+		}
+	}
+	return headers;
+}
+
+function readModelObject(value: unknown): AiSourceConfig {
+	if (!isRecord(value)) return { fields: {} };
+	const config: AiSourceConfig = { fields: requestFields(value) };
 	if (typeof value.baseUrl === 'string') config.baseUrl = value.baseUrl;
 	if (typeof value.apiKey === 'string') config.apiKey = value.apiKey;
 	if (typeof value.name === 'string') config.name = value.name;
 	if (typeof value.systemPrompt === 'string') config.systemPrompt = value.systemPrompt;
+	if (isRecord(value.body)) config.body = value.body;
+	const header = asHeaderMap(value.header);
+	if (header) config.header = header;
 	return config;
 }
 
