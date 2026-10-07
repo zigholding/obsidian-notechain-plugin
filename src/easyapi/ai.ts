@@ -5,14 +5,14 @@ import { errorMessage, isRecord } from '../ts-helpers';
 /**
  * Templater:
  * ```js
- * const rsp = await ea.ai.request({ question: '你好', config_tfile: '模型笔记' })
+ * const rsp = await ea.ai.request({ question: '你好' }, '模型笔记')
  * tR = rsp.text
  * ```
  * 同一次结果也在 `ea.ai.last_reqeust`。
  */
 
-/** 不写入请求 JSON 的选项。`header` 只作 HTTP 头。 */
-const REQUEST_SKIP = new Set(['header', 'config_tfile']);
+/** `header` 只作 HTTP 头，不写入请求 JSON。 */
+const REQUEST_SKIP = new Set(['header']);
 
 interface AiSourceConfig {
 	baseUrl?: string;
@@ -49,17 +49,21 @@ export class Ai {
 
 	/**
 	 * 调用 OpenAI 兼容接口。
-	 * `options` 与配置笔记 frontmatter `model` 里，除 `header`、`config_tfile` 外的字段都写入请求 JSON。
+	 * `options` 与配置笔记 frontmatter `model` 里，除 `header` 外的字段都写入请求 JSON。
 	 * 同名字段 `options` 优先。
-	 * `header` 只作为 HTTP 头。`config_tfile` 为 `TFile` 或笔记路径。
+	 * `config_tfile` 为 `TFile` 或笔记路径，可省略。`header` 为 HTTP 头，可省略，优先于 `model.header`。
 	 * `name` 在请求还没有 `model` 时填到 `model`。`action` 为 `chat`（默认）或 `list_models`。
 	 * 返回 `{ headers, request, response, text }`。`text` 为助手文本或模型 id；失败时 `text` 以 ❌ 开头。
 	 */
-	async request(options: unknown = {}): Promise<AiRequestResult> {
+	async request(
+		options: unknown = {},
+		config_tfile?: TFile | string,
+		header?: unknown,
+	): Promise<AiRequestResult> {
 		const opts = isRecord(options) ? options : {};
 		this.last_reqeust = null;
 
-		const fileConfig = this.readConfigFile(opts.config_tfile);
+		const fileConfig = this.readConfigFile(config_tfile);
 		const baseUrl = (textOpt(opts.baseUrl) || fileConfig.baseUrl || '').replace(/\/$/, '');
 		if (!baseUrl) {
 			return this.finish({
@@ -76,7 +80,7 @@ export class Ai {
 		const action = typeof opts.action === 'string' ? opts.action : 'chat';
 		const headers = {
 			...(fileConfig.header ?? {}),
-			...(asHeaderMap(opts.header) ?? {}),
+			...(asHeaderMap(header) ?? {}),
 		};
 
 		let requestBody: Record<string, unknown> | null = null;

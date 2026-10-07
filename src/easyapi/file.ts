@@ -85,13 +85,22 @@ export class File {
 			if (pipe >= 0) {
 				link = link.slice(0, pipe);
 			}
-			const hash = link.indexOf('#');
-			if (hash >= 0) {
-				link = link.slice(0, hash);
-			}
 			link = link.trim();
 			if (!link) {
 				return null;
+			}
+
+			const namedWithHash = lookupFileNameContainingHash(this.app, link, only_first);
+			if (namedWithHash) {
+				return namedWithHash;
+			}
+
+			const hash = link.indexOf('#');
+			if (hash >= 0) {
+				link = link.slice(0, hash).trim();
+				if (!link) {
+					return null;
+				}
 			}
 
 			const normalized = link.replace(/\\/g, '/');
@@ -732,6 +741,38 @@ export class File {
 			await this.app.fileManager.renameFile(xfile as TFile, dst);
 		}	
 	}
+}
+
+/** 文件名本身含 `#` 时按完整名字找。找不到则返回 null，由调用方再按 `笔记#标题` 截断。 */
+function lookupFileNameContainingHash(app: App, link: string, only_first: boolean): TFile | TFile[] | null {
+	if (!link.includes('#')) {
+		return null;
+	}
+	const normalized = link.replace(/\\/g, '/');
+	const byExactPath = app.vault.getFileByPath(normalized);
+	if (byExactPath) {
+		return byExactPath;
+	}
+	if (!/\.[A-Za-z0-9]+$/.test(normalized)) {
+		const withMd = app.vault.getFileByPath(normalized + '.md');
+		if (withMd) {
+			return withMd;
+		}
+	}
+
+	const hasDir = normalized.includes('/');
+	const base = hasDir ? normalized.slice(normalized.lastIndexOf('/') + 1) : normalized;
+	const matches = (filesNamedLike(app, normalized) ?? []).filter((x) => {
+		const nameHit = x.name == base || x.name == base + '.md' || x.basename == base;
+		if (!nameHit) {
+			return false;
+		}
+		return hasDir ? filePathCoversLink(x.path, normalized) : true;
+	});
+	if (matches.length === 0) {
+		return null;
+	}
+	return only_first ? matches[0] : matches;
 }
 
 /** 路径要整段对上（或作为目录后缀），不能只因为文件名相同。 */
