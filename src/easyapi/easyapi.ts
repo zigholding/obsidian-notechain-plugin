@@ -21,6 +21,7 @@ import { Web } from './web';
 import { Ai } from './ai';
 import { FsEditor } from './fseditor';
 import { Destop } from './destop';
+import { Cron } from './cron';
 import { activeFileView, isMobileApp, noteChainPlugin, obsidianApp } from '../obsidian-app';
 import type NoteChainPlugin from '../plugin';
 
@@ -46,6 +47,7 @@ export class EasyAPI {
     ai: Ai
     fs: FsEditor
     destop: Destop
+    cron: Cron
 
     constructor(app: App) {
         this.app = app;
@@ -69,6 +71,7 @@ export class EasyAPI {
         this.ai = new Ai(app, this);
         this.fs = new FsEditor(app,this);
         this.destop = new Destop(app);
+        this.cron = new Cron();
         window.ea = this;
     }
 

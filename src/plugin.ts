@@ -205,6 +205,7 @@ export default class NoteChainPlugin extends Plugin {
 
 
 	onunload() {
+		this.easyapi?.cron.clear();
 		if (this._autoNotechainTimers) {
 			for (const timer of this._autoNotechainTimers.values()) {
 				window.clearTimeout(timer);

@@ -7,8 +7,34 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     <style>
         :root { color-scheme: light dark; }
         body { font-family: system-ui, -apple-system, sans-serif; max-width: 960px; margin: 0 auto; padding: 1rem 1.25rem 2rem; line-height: 1.45; }
-        h1 { font-size: 1.35rem; margin: 0 0 1rem; font-weight: 600; }
         .row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
+        .finder.collapsed #finderBody { display: none; }
+        .finder.collapsed ~ .panel #viewer.obsidian-online-render { max-height: 82vh; }
+        button.finder-split {
+            position: relative; display: block; width: 100%; height: 1.35rem;
+            margin: 0 0 0.65rem; padding: 0; border: none; border-radius: 0;
+            background: transparent; color: inherit; cursor: pointer;
+        }
+        button.finder-split::before {
+            content: ""; position: absolute; left: 0; right: 0; top: 50%;
+            border-top: 1px solid #8886;
+        }
+        button.finder-split:hover::before,
+        button.finder-split:focus-visible::before { border-top-color: #888c; }
+        .finder-split-mark {
+            position: absolute; left: 50%; top: 50%;
+            width: 1.6rem; height: 1rem; transform: translate(-50%, -50%);
+            background: Canvas; pointer-events: none;
+        }
+        .finder-split-mark::before {
+            content: ""; position: absolute; left: 50%; top: 50%;
+            width: 0.45rem; height: 0.45rem; box-sizing: border-box;
+            border-right: 2px solid #888a; border-bottom: 2px solid #888a;
+        }
+        .finder:not(.collapsed) .finder-split-mark::before { transform: translate(-50%, -15%) rotate(225deg); }
+        .finder.collapsed .finder-split-mark::before { transform: translate(-50%, -85%) rotate(45deg); }
+        button.finder-split:hover .finder-split-mark::before,
+        button.finder-split:focus-visible .finder-split-mark::before { border-color: #888; }
         input[type="search"], input[type="text"] { flex: 1; min-width: 200px; padding: 0.5rem 0.65rem; border-radius: 6px; border: 1px solid #8884; box-sizing: border-box; }
         button { padding: 0.45rem 0.85rem; border-radius: 6px; border: none; cursor: pointer; font-size: 0.95rem; }
         button.primary { background: #2d7d46; color: #fff; }
@@ -23,6 +49,7 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
         .path { font-size: 0.8rem; opacity: 0.75; }
         .panel { border: 1px solid #8883; border-radius: 8px; padding: 0.75rem 1rem; min-height: 200px; }
         .toolbar { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; }
+        .toolbar:not(:has(:not(.hidden))) { display: none; }
         .current { font-size: 0.85rem; opacity: 0.85; word-break: break-all; flex: 1; }
         /* 在线预览：结构由 MarkdownRenderer 生成，样式接近 Obsidian 阅读视图 */
         #viewer.obsidian-online-render {
@@ -72,18 +99,24 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     </style>
 </head>
 <body>
-    <h1>Obsidian Online</h1>
-    <div class="row">
-        <input type="search" id="q" placeholder="按路径或标题搜索…" autocomplete="off">
-        <button type="button" class="primary" id="btnSearch">搜索</button>
-        <button type="button" class="secondary hidden" id="btnHome" title="返回 URL 指定的入口笔记">🏠</button>
+    <div id="finder" class="finder">
+        <div id="finderBody">
+            <div class="row">
+                <input type="search" id="q" placeholder="按路径或标题搜索…" autocomplete="off">
+                <button type="button" class="primary" id="btnSearch">搜索</button>
+                <button type="button" class="secondary hidden" id="btnHome" title="返回 URL 指定的入口笔记">🏠</button>
+            </div>
+            <ul id="results"></ul>
+            <div class="toolbar">
+                <span class="current" id="currentLabel">未选择笔记</span>
+                <button type="button" class="secondary hidden" id="btnEdit">编辑</button>
+            </div>
+        </div>
+        <button type="button" class="finder-split" id="btnToggleFinder" aria-expanded="true" aria-controls="finderBody" title="收起搜索、路径和编辑，只看笔记"><span class="finder-split-mark"></span></button>
     </div>
-    <ul id="results"></ul>
     <div class="panel">
         <div class="toolbar">
-            <span class="current" id="currentLabel">未选择笔记</span>
             <button type="button" class="secondary hidden" id="btnView">查看</button>
-            <button type="button" class="secondary hidden" id="btnEdit">编辑</button>
             <button type="button" class="primary hidden" id="btnSave">保存</button>
         </div>
         <div id="viewer" class="markdown-preview-view obsidian-online-render hidden" role="document"></div>
@@ -92,6 +125,8 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     <p class="msg" id="msg"></p>
     <script>
 (function () {
+    var finder = document.getElementById('finder');
+    var btnToggleFinder = document.getElementById('btnToggleFinder');
     var q = document.getElementById('q');
     var btnSearch = document.getElementById('btnSearch');
     var btnHome = document.getElementById('btnHome');
@@ -111,6 +146,19 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     var homeEntryPath = '';
     /** 与 resolve-note 请求一致的名字（解码后），首次解析失败时点击 🏠 可重试 */
     var homeEntryQuery = '';
+
+    function setFinderCollapsed(collapsed) {
+        if (!finder || !btnToggleFinder) return;
+        finder.classList.toggle('collapsed', !!collapsed);
+        btnToggleFinder.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        btnToggleFinder.title = collapsed ? '展开搜索、路径和编辑' : '收起搜索、路径和编辑，只看笔记';
+    }
+
+    if (btnToggleFinder) {
+        btnToggleFinder.onclick = function () {
+            setFinderCollapsed(!(finder && finder.classList.contains('collapsed')));
+        };
+    }
 
     function setMsg(text, kind) {
         msg.textContent = text || '';
@@ -563,7 +611,11 @@ export const ONLINE_PAGE_HTML = `<!DOCTYPE html>
     }
 
     var bootParams = new URLSearchParams(window.location.search);
-    var bootPath = bootParams.get('filename') || bootParams.get('path');
+    var bootFilename = bootParams.get('filename');
+    var bootPath = bootFilename || bootParams.get('path');
+    if (bootFilename && String(bootFilename).trim()) {
+        setFinderCollapsed(true);
+    }
     if (bootPath) {
         bootPath = bootPath.trim();
         if (bootPath) {
