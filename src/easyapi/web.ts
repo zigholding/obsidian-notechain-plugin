@@ -236,26 +236,38 @@ export class Web {
      * 向啾啾协议好友推送 App 协议 JSON，不做卡片字段解析。
      * 字符串会包成 `{ type: 'message', content }`。仅一条连接时可省略 friendName。
      * `senderName` 显示在手机气泡上。
+     * 好友未连接（`friend not connected`）时按 `retry` 重试：默认 0 不重试；
+     * 大于 0 时每次失败减 1，减到 0 后停止；小于 0 时一直重试直到成功。
+     * `interval` 为重试间隔秒数，默认 30。其它错误立即抛出。
      */
     async push_message_jiujiu(
         friendName: string,
         data: string | Record<string, unknown>,
         senderName?: string,
+        retry = 0,
+        interval = 30,
     ): Promise<JiujiuPushResult> {
-        return this.dispatchJiujiuPush(asJiujiuPushData(friendName, data, senderName));
+        return this.dispatchJiujiuPushRetry(
+            asJiujiuPushData(friendName, data, senderName),
+            retry,
+            interval,
+        );
     }
 
     /**
      * 推送协议 JSON 并等到 `interactive_result`（按 msgId）。网站卡请用 `push_message_jiujiu`。
-     * `timeout` 为秒，默认 120。
+     * `timeout` 为等待点选的秒数，默认 120。
+     * `retry` / `interval` 只作用于投递：好友未连接时的重试次数与间隔（秒），语义同 `push_message_jiujiu`。
      */
     async ask_message_jiujiu(
         friendName: string,
         data: string | Record<string, unknown>,
         timeout = 120,
+        retry = 0,
+        interval = 30,
     ): Promise<Record<string, unknown>> {
         const packet = asJiujiuPushData(friendName, data);
-        const pushed = await this.dispatchJiujiuPush(packet);
+        const pushed = await this.dispatchJiujiuPushRetry(packet, retry, interval);
         if (isWebsitePushData(packet)) {
             return { ...pushed, type: String(packet.type || 'website') };
         }
@@ -273,8 +285,25 @@ export class Web {
         throw new Error(`等待卡片结果超时：${msgId}`);
     }
 
-    private dispatchJiujiuPush(packet: Record<string, unknown>): Promise<JiujiuPushResult> {
-        return this.chatServer().pushJiujiu(packet);
+    private async dispatchJiujiuPushRetry(
+        packet: Record<string, unknown>,
+        retry: number,
+        intervalSec: number,
+    ): Promise<JiujiuPushResult> {
+        let left = Math.trunc(Number(retry));
+        if (!Number.isFinite(left)) left = 0;
+        const waitMs = retryIntervalMs(intervalSec);
+        for (;;) {
+            try {
+                return await this.chatServer().pushJiujiu(packet);
+            } catch (err) {
+                if (!isFriendNotConnected(err) || left === 0) {
+                    throw err;
+                }
+                if (left > 0) left -= 1;
+                await sleepMs(waitMs);
+            }
+        }
     }
 
     private chatServer(): {
@@ -367,6 +396,16 @@ function findCardAnswer(results: Record<string, unknown>[], msgId: string): Reco
         if (replyTo === want) return row;
     }
     return null;
+}
+
+function isFriendNotConnected(err: unknown): boolean {
+    return err instanceof Error && err.message === 'friend not connected';
+}
+
+function retryIntervalMs(intervalSec: number): number {
+    const sec = Number(intervalSec);
+    if (!Number.isFinite(sec) || sec < 0) return 30_000;
+    return sec * 1000;
 }
 
 function sleepMs(ms: number): Promise<void> {
