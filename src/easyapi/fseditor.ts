@@ -44,6 +44,37 @@ export class FsEditor{
 		);
 	}
 
+	/** `${NAME}` from the environment. Unknown names are left unchanged. `${HOME}` falls back to the user home directory. */
+	private expandEnvVars(s: string): string {
+		return s.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, name: string) => {
+			const value = name.toUpperCase() === "HOME" ? this.homeDir() : this.readEnv(name);
+			return value ?? match;
+		});
+	}
+
+	private readEnv(name: string): string | null {
+		if (typeof process === "undefined") return null;
+		const value = process.env[name];
+		if (typeof value === "string" && value.length > 0) return value;
+		return null;
+	}
+
+	private homeDir(): string | null {
+		const fromEnv = this.readEnv("HOME") ?? this.readEnv("USERPROFILE");
+		if (fromEnv) return fromEnv;
+		const drive = this.readEnv("HOMEDRIVE");
+		const homePath = this.readEnv("HOMEPATH");
+		if (drive && homePath) return drive + homePath;
+		const os = desktopNode<{ homedir?: () => string }>("os");
+		try {
+			const home = os?.homedir?.();
+			if (typeof home === "string" && home.length > 0) return home;
+		} catch {
+			return null;
+		}
+		return null;
+	}
+
 	private frontmatterValueToPathString(v: unknown): string {
 		if (v == null) return "";
 		if (typeof v === "string") return v;
@@ -76,6 +107,7 @@ export class FsEditor{
             tfile = tfile.replace(/\$\{ROOT\}/g,this.root);
             tfile = tfile.replace(/\$\{VAULT\}/g,this.app.vault.getName());
             tfile = this.expandPropertyAtLinkPath(tfile);
+            tfile = this.expandEnvVars(tfile);
 
             // 系统绝对路径（非 vault）：优先直接判定，避免 get_tfile 同名误匹配到库内文件
             if (this.is_system_abs_path(tfile)) {
