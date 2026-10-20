@@ -170,4 +170,27 @@ export class Destop {
 			cp.exec(cmd, EXEC_OPTS, finish);
 		});
 	}
+
+	/** 脱离 Obsidian 启动进程：不等待退出，输出丢弃。 */
+	spawnAsync(cmd: string): Promise<void> {
+		return new Promise((resolve, reject) => {
+			if (isMobileApp(this.app)) {
+				reject(new Error('spawnAsync is desktop only'));
+				return;
+			}
+			const cp = desktopNode<NodeChildProcessModule>('child_process');
+			if (typeof cp?.spawn !== 'function') {
+				reject(new Error('Node module "child_process" is not available'));
+				return;
+			}
+			const child = cp.spawn(cmd, [], {
+				detached: true,
+				stdio: 'ignore',
+				windowsHide: true,
+			});
+			child.on?.('error', () => { /* 已脱离，调用方不等待 */ });
+			child.unref?.();
+			resolve();
+		});
+	}
 }

@@ -223,6 +223,20 @@ export interface NodeChildProcessModule {
 		options: NodeChildProcessExecOptions,
 		callback: NodeChildProcessExecCallback,
 	): unknown;
+	spawn(
+		command: string,
+		args: readonly string[],
+		options?: {
+			detached?: boolean;
+			stdio?: 'ignore';
+			windowsHide?: boolean;
+		},
+	): NodeSpawnedChild;
+}
+
+export interface NodeSpawnedChild {
+	unref?: () => void;
+	on?: (event: 'error', listener: (err: Error) => void) => void;
 }
 
 export interface NodeChildProcessExecOptions {
