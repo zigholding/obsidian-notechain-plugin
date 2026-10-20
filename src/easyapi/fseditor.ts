@@ -458,6 +458,9 @@ export class FsEditor{
         if(!fs.existsSync(src)){
             return false;
         }
+        if(!fs.existsSync(dst)){
+            this.mkdir_recursive(this.path.dirname(dst));
+        }
         if(fs.existsSync(dst)){
             if(mode==='overwrite'){
                 fs.unlinkSync(dst);
@@ -580,8 +583,8 @@ export class FsEditor{
         if(!this.isdir(src) || !this.isdir(dst)){return}
         let items = this.list_dir(dst,false)
         for(let item of items){
-            let adst = dst+'/'+item
-            let asrc = src+'/'+item
+            let adst = item
+            let asrc = this.path.join(src, this.path.basename(item))
             if(this.isfile(adst)){
                 if(!this.isfile(asrc)){
                     this.fs.unlinkSync(adst)
@@ -603,8 +606,8 @@ export class FsEditor{
 
         let items = this.list_dir(src,false)
         for(let item of items){
-            let asrc = this.path.join(src,item)
-            let adst = this.path.join(dst,item)
+            let asrc = item
+            let adst = this.path.join(dst, this.path.basename(item))
             if(this.isfile(asrc)){
                 this.copy_file(asrc,adst,mode)
             }else if(this.isdir(asrc)){
