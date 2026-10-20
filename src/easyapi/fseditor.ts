@@ -1,7 +1,7 @@
 
 import { App, TFile, TFolder } from 'obsidian';
 import {EasyAPI} from 'src/easyapi/easyapi'
-import { desktopRequire, isMobileApp, vaultAdapter, vaultBasePath, type NodeFsModule, type NodePathModule } from '../obsidian-app'
+import { desktopNode, desktopRequire, isMobileApp, vaultAdapter, vaultBasePath, type NodeFsModule, type NodePathModule } from '../obsidian-app'
 
 interface ElectronShellApi {
     showItemInFolder?: (p: string) => void;
@@ -128,8 +128,6 @@ export class FsEditor{
             if(xfolder){
                 return this.abspath(xfolder);
             }
-            
-            
 
             if(this.isPath(tfile)){
                 return tfile;
