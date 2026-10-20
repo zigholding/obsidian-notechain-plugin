@@ -27,6 +27,7 @@ import { moveSelectedNotesAsNext } from './NoteChain/chainInsert';
 import { noteChainPlugin, obsidianApp, vaultBasePath, desktopNode, type NodePathModule } from './obsidian-app';
 import * as ncUtils from './utils';
 import * as obsidianApi from 'obsidian';
+import { errorMessage } from './ts-helpers';
 
 export interface NoteChainPluginData {
 	notechain: NCSettings;
@@ -56,6 +57,7 @@ export default class NoteChainPlugin extends Plugin {
 	_autoNotechainBusy: Set<string> | null = null;
 	_chainSortQuietUntil: Map<string, number> | null = null;
 	_chainSortQuietTimers: Map<string, number> | null = null;
+	_startupToken = 0;
 
 	/** Skip chain re-walk (rename link rewrite would scramble explorer order). */
 	quiet_chain_sort(folderPath: string, ms = 1500) {
@@ -103,6 +105,7 @@ export default class NoteChainPlugin extends Plugin {
 				void (async () => {
 					await this._onload_();
 					void this._after_loading_();
+					await this.run_startup_notes();
 				})();
 			}
 		)
@@ -203,8 +206,28 @@ export default class NoteChainPlugin extends Plugin {
 		this.status = 'loaded'
 	}
 
+	/** Notes with frontmatter `notechain.startup: true` run as Templater scripts. */
+	async run_startup_notes() {
+		const token = ++this._startupToken;
+		const files = this.app.vault.getMarkdownFiles()
+			.filter((file) => this.editor.get_frontmatter(file, 'notechain.startup') === true)
+			.sort((a, b) => a.path.localeCompare(b.path));
+		for (const file of files) {
+			if (token !== this._startupToken) { return; }
+			try {
+				await this.easyapi.tpl.parse_templater(file);
+			} catch (error) {
+				console.error(
+					`Note Chain: startup note failed (${file.path}): ${errorMessage(error)}`,
+					error
+				);
+			}
+		}
+	}
+
 
 	onunload() {
+		this._startupToken++;
 		this.easyapi?.cron.clear();
 		if (this._autoNotechainTimers) {
 			for (const timer of this._autoNotechainTimers.values()) {
