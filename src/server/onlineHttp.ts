@@ -1,7 +1,7 @@
 import { App, TFile } from 'obsidian';
 import { readHttpBody } from './httpUtil';
 import { ONLINE_PAGE_HTML } from './onlinePageHtml';
-import { OnlineVaultMediaService } from './onlineVaultMedia';
+import { injectHtmlBase, OnlineVaultMediaService, queryString } from './onlineVaultMedia';
 import { OnlineMarkdownRenderService } from './onlineMarkdownRender';
 import type { HttpReq, HttpRes, ParsedReqUrl } from '../http-types';
 import { parseJsonRecord } from '../http-types';
@@ -41,9 +41,31 @@ export class OnlineHttpHandlers {
         this.render = new OnlineMarkdownRenderService(app, this.vault);
     }
 
-    async handleOnlinePage(req: HttpReq, res: HttpRes) {
+    async handleOnlinePage(req: HttpReq, res: HttpRes, parsedUrl: ParsedReqUrl) {
+        const filename = queryString(parsedUrl, 'filename');
+        const htmlFile = filename ? this.vault.resolveOnlineHtmlFile(filename) : null;
+        if (htmlFile) {
+            try {
+                const raw = await this.app.vault.read(htmlFile);
+                const html = injectHtmlBase(raw, this.vault.onlineVaultBaseHref(htmlFile.path));
+                res.writeHead(200, {
+                    'Content-Type': 'text/html; charset=utf-8',
+                    'Cache-Control': 'no-cache',
+                });
+                res.end(html);
+            } catch (error: unknown) {
+                res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+                res.end(errorMessage(error) || 'read failed');
+            }
+            return;
+        }
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(ONLINE_PAGE_HTML);
+    }
+
+    /** `/online/vault/<库内路径>`：给静态 HTML 的相对 css/js/图片用 */
+    async handleOnlineVaultStatic(res: HttpRes, parsedUrl: ParsedReqUrl) {
+        return this.vault.handleOnlineVaultStatic(res, parsedUrl);
     }
 
     /** 与 easyapi.file.get_tfile 一致：标题、basename、部分路径、[[链接]] 等均可解析为 vault 路径 */

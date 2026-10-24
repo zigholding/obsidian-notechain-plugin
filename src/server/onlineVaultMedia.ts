@@ -1,6 +1,6 @@
 import { App, TFile, normalizePath } from 'obsidian';
 import type { HttpReq, HttpRes, ParsedReqUrl } from '../http-types';
-import { vaultAdapter } from '../obsidian-app';
+import { noteChainPlugin, vaultAdapter } from '../obsidian-app';
 import { errorMessage } from '../ts-helpers';
 
 export class OnlineVaultMediaService {
@@ -215,6 +215,78 @@ export class OnlineVaultMediaService {
         return wrap.innerHTML;
     }
 
+    /** `filename=数独.html` 或 `[[folder/数独.html]]`：只认 .html / .htm，并解析到库内文件 */
+    resolveOnlineHtmlFile(rawName: string): TFile | null {
+        const name = htmlLookupName(rawName);
+        if (!name) {
+            return null;
+        }
+        const via = noteChainPlugin(this.app)?.easyapi?.file?.get_tfile(name, true);
+        if (via instanceof TFile && isHtmlExtension(via.extension)) {
+            return via;
+        }
+        const normalized = name.replace(/\\/g, '/');
+        const byPath = this.normalizeOnlineVaultPath(normalized);
+        if (byPath) {
+            const abs = this.app.vault.getAbstractFileByPath(byPath);
+            if (abs instanceof TFile && isHtmlExtension(abs.extension)) {
+                return abs;
+            }
+        }
+        const base = normalized.includes('/')
+            ? normalized.slice(normalized.lastIndexOf('/') + 1)
+            : normalized;
+        const baseLower = base.toLowerCase();
+        const hits = this.app.vault
+            .getFiles()
+            .filter((f) => f.name.toLowerCase() === baseLower && isHtmlExtension(f.extension));
+        if (normalized.includes('/')) {
+            const pathLower = normalized.toLowerCase();
+            return (
+                hits.find(
+                    (f) =>
+                        f.path.toLowerCase() === pathLower ||
+                        f.path.toLowerCase().endsWith('/' + pathLower),
+                ) ?? null
+            );
+        }
+        return hits[0] ?? null;
+    }
+
+    /** 静态页的目录 URL，供 `<base href>` 解析同目录资源 */
+    onlineVaultBaseHref(filePath: string): string {
+        const slash = filePath.lastIndexOf('/');
+        const dir = slash >= 0 ? filePath.slice(0, slash) : '';
+        const encoded = dir
+            ? dir
+                  .split('/')
+                  .map((seg) => encodeURIComponent(seg))
+                  .join('/') + '/'
+            : '';
+        return '/online/vault/' + encoded;
+    }
+
+    async handleOnlineVaultStatic(res: HttpRes, parsedUrl: ParsedReqUrl) {
+        try {
+            const rel = vaultPathFromOnlineStatic(parsedUrl.pathname);
+            if (!rel) {
+                res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+                res.end('Not found');
+                return;
+            }
+            const abs = this.app.vault.getAbstractFileByPath(rel);
+            if (!(abs instanceof TFile)) {
+                res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+                res.end('Not found');
+                return;
+            }
+            await this.sendVaultFile(res, abs, 'no-cache');
+        } catch (error: unknown) {
+            res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end(errorMessage(error) || 'read failed');
+        }
+    }
+
     private onlineMediaMime(extension: string): string {
         let ext = (extension || '').toLowerCase().replace(/^\./, '');
         let map: Record<string, string> = {
@@ -236,8 +308,38 @@ export class OnlineVaultMediaService {
             pdf: 'application/pdf',
             woff: 'font/woff',
             woff2: 'font/woff2',
+            ttf: 'font/ttf',
+            otf: 'font/otf',
+            html: 'text/html; charset=utf-8',
+            htm: 'text/html; charset=utf-8',
+            css: 'text/css; charset=utf-8',
+            js: 'text/javascript; charset=utf-8',
+            mjs: 'text/javascript; charset=utf-8',
+            json: 'application/json; charset=utf-8',
+            map: 'application/json; charset=utf-8',
+            txt: 'text/plain; charset=utf-8',
+            xml: 'application/xml; charset=utf-8',
+            wasm: 'application/wasm',
+            webmanifest: 'application/manifest+json',
         };
         return map[ext] || 'application/octet-stream';
+    }
+
+    private async sendVaultFile(res: HttpRes, file: TFile, cacheControl: string) {
+        let raw = await this.app.vault.readBinary(file);
+        let body =
+            raw instanceof ArrayBuffer
+                ? Buffer.from(raw)
+                : Buffer.isBuffer(raw)
+                  ? raw
+                  : Buffer.from(raw as Uint8Array);
+        res.writeHead(200, {
+            'Content-Type': this.onlineMediaMime(file.extension),
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': cacheControl,
+            'X-Content-Type-Options': 'nosniff',
+        });
+        res.end(body);
     }
 
     async handleOnlineMedia(req: HttpReq, res: HttpRes, parsedUrl: ParsedReqUrl) {
@@ -273,4 +375,88 @@ export class OnlineVaultMediaService {
             res.end(errorMessage(error) || 'read failed');
         }
     }
+}
+
+export function queryString(parsed: ParsedReqUrl, key: string): string {
+    const value = parsed.query ? parsed.query[key] : undefined;
+    if (typeof value === 'string') {
+        return value;
+    }
+    if (Array.isArray(value) && typeof value[0] === 'string') {
+        return value[0];
+    }
+    return '';
+}
+
+/** 页面里没有 `<base>` 时插入，让相对路径落到该 HTML 所在目录。 */
+export function injectHtmlBase(html: string, baseHref: string): string {
+    if (/<base\b/i.test(html)) {
+        return html;
+    }
+    const tag = '<base href="' + baseHref.replace(/"/g, '%22') + '">';
+    if (/<head\b[^>]*>/i.test(html)) {
+        return html.replace(/<head\b[^>]*>/i, (open) => open + tag);
+    }
+    if (/<html\b[^>]*>/i.test(html)) {
+        return html.replace(/<html\b[^>]*>/i, (open) => open + '<head>' + tag + '</head>');
+    }
+    return '<head>' + tag + '</head>' + html;
+}
+
+function isHtmlExtension(ext: string): boolean {
+    const e = ext.toLowerCase();
+    return e === 'html' || e === 'htm';
+}
+
+function htmlLookupName(raw: string): string | null {
+    let name = raw.trim();
+    if (!name) {
+        return null;
+    }
+    name = name.replace(/^!?\[\[/, '').replace(/\]\]\s*$/, '').trim();
+    const pipe = name.indexOf('|');
+    if (pipe >= 0) {
+        name = name.slice(0, pipe).trim();
+    }
+    const withFragment = /^(.*\.html?)(#[^#]*)?$/i.exec(name);
+    if (!withFragment) {
+        return null;
+    }
+    const fileName = withFragment[1].trim();
+    return fileName || null;
+}
+
+function vaultPathFromOnlineStatic(pathname: string | null): string | null {
+    const prefix = '/online/vault/';
+    if (!pathname || !pathname.startsWith(prefix)) {
+        return null;
+    }
+    const rest = pathname.slice(prefix.length);
+    if (!rest || rest.endsWith('/')) {
+        return null;
+    }
+    const parts: string[] = [];
+    for (const seg of rest.split('/')) {
+        if (!seg || seg === '.' || seg === '..') {
+            return null;
+        }
+        let decoded: string;
+        try {
+            decoded = decodeURIComponent(seg);
+        } catch {
+            return null;
+        }
+        if (
+            !decoded ||
+            decoded === '.' ||
+            decoded === '..' ||
+            decoded.includes('/') ||
+            decoded.includes('\\') ||
+            decoded.includes('\0')
+        ) {
+            return null;
+        }
+        parts.push(decoded);
+    }
+    return parts.join('/');
 }

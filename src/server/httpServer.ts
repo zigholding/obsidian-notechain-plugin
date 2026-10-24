@@ -191,7 +191,12 @@ export class HTTPServer {
                     (parsedUrl.pathname === '/online' || parsedUrl.pathname === '/online/') &&
                     req.method === 'GET'
                 ) {
-                    await this.online.handleOnlinePage(req, res);
+                    await this.online.handleOnlinePage(req, res, parsedUrl);
+                } else if (
+                    parsedUrl.pathname?.startsWith('/online/vault/') &&
+                    req.method === 'GET'
+                ) {
+                    await this.online.handleOnlineVaultStatic(res, parsedUrl);
                 } else if (parsedUrl.pathname === '/online/api/resolve-note' && req.method === 'GET') {
                     await this.online.handleOnlineResolveNote(req, res, parsedUrl);
                 } else if (parsedUrl.pathname === '/online/api/search' && req.method === 'GET') {
