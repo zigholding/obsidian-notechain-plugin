@@ -311,3 +311,4 @@ function tryParseJson(text: string): unknown {
 function isOk(status: number): boolean {
 	return status >= 200 && status < 300;
 }
+

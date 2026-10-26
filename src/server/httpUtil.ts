@@ -22,9 +22,10 @@ export function readHttpBody(req: HttpReq): Promise<string> {
 /** 读取 HTTP 请求体为 Buffer */
 export function readHttpBodyBuffer(req: HttpReq): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-        const chunks: Buffer[] = [];
+        const chunks: Uint8Array<ArrayBufferLike>[] = [];
         req.on('data', (chunk: Buffer | string) => {
-            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            chunks.push(new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength));
         });
         req.on('end', () => resolve(Buffer.concat(chunks)));
         req.on('error', reject);

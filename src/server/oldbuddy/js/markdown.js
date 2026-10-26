@@ -1,6 +1,6 @@
 // static/js/markdown.js
 // 聊天气泡用 Markdown 子集渲染（先转义再解析，降低 XSS 风险）
-// 支持：标题 # / ## / ###、引用 >、分隔线 ---、粗斜体、行内代码、围栏代码块、链接、列表、删除线 ~~
+// 支持：标题 # / ## / ###、引用 >、分隔线 ---、粗斜体、行内代码、围栏代码块、链接、列表、删除线 ~~、GFM 表格
 
 (function () {
   function escapeHtml(str) {
@@ -88,6 +88,90 @@
     return s;
   }
 
+  /** 按未转义的 `|` 分列。行内代码里的 `|` 与 `\|` 不当作分隔。 */
+  function splitTableRow(line) {
+    let text = line.trim();
+    if (text.startsWith("|")) text = text.slice(1);
+    if (text.endsWith("|")) text = text.slice(0, -1);
+    const cells = [];
+    let cur = "";
+    let inCode = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === "`") {
+        inCode = !inCode;
+        cur += ch;
+        continue;
+      }
+      if (!inCode && ch === "\\" && text[i + 1] === "|") {
+        cur += "|";
+        i++;
+        continue;
+      }
+      if (!inCode && ch === "|") {
+        cells.push(cur.trim());
+        cur = "";
+        continue;
+      }
+      cur += ch;
+    }
+    cells.push(cur.trim());
+    return cells;
+  }
+
+  function isSeparatorLine(line) {
+    if (!line.includes("|")) return false;
+    const cells = splitTableRow(line);
+    if (!cells.length) return false;
+    return cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+  }
+
+  function tableAlignClass(cell) {
+    const text = String(cell || "").trim();
+    const left = text.startsWith(":");
+    const right = text.endsWith(":");
+    if (left && right) return "md-align-center";
+    if (right) return "md-align-right";
+    return "";
+  }
+
+  function isTableStart(headerLine, sepLine) {
+    if (!headerLine || !sepLine) return false;
+    if (!headerLine.includes("|") || isSeparatorLine(headerLine)) return false;
+    return isSeparatorLine(sepLine);
+  }
+
+  function renderTable(lines, start) {
+    const header = splitTableRow(lines[start]);
+    const sep = splitTableRow(lines[start + 1]);
+    const cols = Math.max(header.length, sep.length);
+    const aligns = [];
+    for (let c = 0; c < cols; c++) aligns.push(tableAlignClass(sep[c] || ""));
+    let html = '<div class="md-table-wrap"><table class="md-table"><thead><tr>';
+    for (let c = 0; c < cols; c++) {
+      const cls = aligns[c] ? ` class="${aligns[c]}"` : "";
+      html += `<th${cls}>${renderInline(header[c] || "")}</th>`;
+    }
+    html += "</tr></thead><tbody>";
+    let row = start + 2;
+    for (; row < lines.length; row++) {
+      const rowLine = lines[row];
+      if (rowLine.trim() === "" || !rowLine.includes("|")) break;
+      if (/^\s*(#{1,3})\s+/.test(rowLine)) break;
+      if (/^\s*(?:---+|\*\*\*+)\s*$/.test(rowLine)) break;
+      if (/^@@CODEBLOCK_\d+@@$/.test(rowLine.trim())) break;
+      const cells = splitTableRow(rowLine);
+      html += "<tr>";
+      for (let c = 0; c < cols; c++) {
+        const cls = aligns[c] ? ` class="${aligns[c]}"` : "";
+        html += `<td${cls}>${renderInline(cells[c] || "")}</td>`;
+      }
+      html += "</tr>";
+    }
+    html += "</tbody></table></div>";
+    return { html, next: row };
+  }
+
   function renderMarkdown(md) {
     const raw = md == null ? "" : String(md);
     const src = raw.replace(/\r\n/g, "\n");
@@ -123,7 +207,16 @@
       closeBlockquote();
     }
 
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (isTableStart(line, lines[i + 1])) {
+        closeAllBlocks();
+        const table = renderTable(lines, i);
+        out += table.html;
+        i = table.next - 1;
+        continue;
+      }
+
       if (/^@@CODEBLOCK_\d+@@$/.test(line.trim())) {
         closeAllBlocks();
         out += line.trim();

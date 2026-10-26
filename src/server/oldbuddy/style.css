@@ -809,6 +809,40 @@ body.ob-settings-open #quick-cmd-menu {
     border-radius: 3px;
 }
 
+.markdown .md-table-wrap {
+    overflow-x: auto;
+    max-width: 100%;
+    margin: 0.45em 0;
+}
+
+.markdown .md-table {
+    border-collapse: collapse;
+    width: max-content;
+    min-width: 100%;
+    font-size: 0.92em;
+}
+
+.markdown .md-table th,
+.markdown .md-table td {
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    padding: 4px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.markdown .md-table th {
+    background: rgba(0, 0, 0, 0.04);
+    font-weight: 600;
+}
+
+.markdown .md-table .md-align-center {
+    text-align: center;
+}
+
+.markdown .md-table .md-align-right {
+    text-align: right;
+}
+
 .message-image {
     max-width: min(72vw, 320px);
     border-radius: 6px;
