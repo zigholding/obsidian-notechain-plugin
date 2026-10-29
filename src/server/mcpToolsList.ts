@@ -4,6 +4,23 @@ import { noteChainPlugin } from '../obsidian-app';
 import type { HttpReq, HttpRes } from '../http-types';
 import { errorMessage, errorStack, isRecord } from '../ts-helpers';
 
+/** DSH 要求每条工具的 inputSchema.type 为 object，缺了整份 tools/list 会被拒绝。 */
+function normalizeMcpTools(tools: unknown[]): unknown[] {
+    const seen = new Set<string>();
+    const out: unknown[] = [];
+    for (const tool of tools) {
+        if (!isRecord(tool) || typeof tool.name !== 'string' || tool.name.length === 0) continue;
+        if (seen.has(tool.name)) continue;
+        seen.add(tool.name);
+        const schema: Record<string, unknown> = isRecord(tool.inputSchema) ? { ...tool.inputSchema } : {};
+        if (schema.type !== 'object') schema.type = 'object';
+        if (!isRecord(schema.properties)) schema.properties = {};
+        const description = typeof tool.description === 'string' ? tool.description : '';
+        out.push({ ...tool, description, inputSchema: schema });
+    }
+    return out;
+}
+
 export class MCPToolsListService {
     constructor(
         private app: App,
@@ -25,9 +42,9 @@ export class MCPToolsListService {
                 );
                 try {
                     let parsed = typeof result === 'string' ? JSON.parse(result.trim()) : result;
-                    if (Array.isArray(parsed)) return parsed;
-                    if (parsed && Array.isArray(parsed.tools)) return parsed.tools;
-                    if (typeof parsed === 'object') return [parsed];
+                    if (Array.isArray(parsed)) return normalizeMcpTools(parsed);
+                    if (isRecord(parsed) && Array.isArray(parsed.tools)) return normalizeMcpTools(parsed.tools);
+                    if (isRecord(parsed)) return normalizeMcpTools([parsed]);
                 } catch (e) {
                     console.warn('list_tools script returned invalid JSON', e);
                 }
@@ -59,7 +76,7 @@ export class MCPToolsListService {
             }
         }
 
-        return tools;
+        return normalizeMcpTools(tools);
     }
 
     async handleMCPListTools(req: HttpReq, res: HttpRes) {
