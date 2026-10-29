@@ -15,6 +15,12 @@ function normalizeMcpTools(tools: unknown[]): unknown[] {
         const schema: Record<string, unknown> = isRecord(tool.inputSchema) ? { ...tool.inputSchema } : {};
         if (schema.type !== 'object') schema.type = 'object';
         if (!isRecord(schema.properties)) schema.properties = {};
+        const properties = schema.properties;
+        if (Array.isArray(schema.required) && isRecord(properties)) {
+            schema.required = schema.required.filter(
+                (key) => typeof key === 'string' && Object.prototype.hasOwnProperty.call(properties, key),
+            );
+        }
         const description = typeof tool.description === 'string' ? tool.description : '';
         out.push({ ...tool, description, inputSchema: schema });
     }
