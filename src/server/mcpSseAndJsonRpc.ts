@@ -108,8 +108,8 @@ export class MCPSseAndJsonRpc {
             console.error('✗ Request error:', error.message);
             cleanup();
         });
-        res.on('error', (error: Error) => {
-            console.error('✗ Response error:', error.message);
+        res.on('error', (error: unknown) => {
+            console.error('✗ Response error:', errorMessage(error));
             cleanup();
         });
 

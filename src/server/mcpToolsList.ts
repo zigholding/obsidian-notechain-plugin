@@ -20,20 +20,16 @@ export class MCPToolsListService {
                 let result = await this.templater.parse_templater(
                     listToolsFileName,
                     true,
-                    null,
-                    null,
-                    ''
+                    {},
+                    0
                 );
-                if (Array.isArray(result) && result.length > 0) {
-                    let resultStr = result.map(String).join('\n').trim();
-                    try {
-                        let parsed = JSON.parse(resultStr);
-                        if (Array.isArray(parsed)) return parsed;
-                        if (parsed && Array.isArray(parsed.tools)) return parsed.tools;
-                        if (typeof parsed === 'object') return [parsed];
-                    } catch {
-                        console.warn('list_tools script returned invalid JSON');
-                    }
+                try {
+                    let parsed = typeof result === 'string' ? JSON.parse(result.trim()) : result;
+                    if (Array.isArray(parsed)) return parsed;
+                    if (parsed && Array.isArray(parsed.tools)) return parsed.tools;
+                    if (typeof parsed === 'object') return [parsed];
+                } catch (e) {
+                    console.warn('list_tools script returned invalid JSON', e);
                 }
             } catch (e) {
                 console.warn('obsidian_mcp_list_tools.md parse failed, using fallback', e);
@@ -60,14 +56,6 @@ export class MCPToolsListService {
                     toolName = cache.frontmatter.mcp_tool.name;
                 }
                 tools.push({ name: toolName, description, inputSchema });
-            }
-
-            if (file.basename.startsWith('mcp_') && !file.basename.includes('list_tools')) {
-                tools.push({
-                    name: file.basename,
-                    description: `工具: ${file.basename}`,
-                    inputSchema: { type: 'object', properties: {}, required: [] }
-                });
             }
         }
 

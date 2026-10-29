@@ -4,17 +4,18 @@ export function mcpToolScriptName(toolName: string): string {
     return toolName.endsWith('.md') ? toolName : `${toolName}.md`;
 }
 
-export function mcpContentFromResult(result: unknown): unknown[] {
-    const items = Array.isArray(result) ? result : [result];
-    return items.map((item: unknown) => {
-        if (typeof item === 'object' && item !== null) {
-            return item;
-        }
-        return {
-            type: 'text',
-            text: primitiveText(item),
-        };
-    });
+export function mcpContentFromResult(result: unknown): unknown {
+    return result;
+    // const items = Array.isArray(result) ? result : [result];
+    // return items.map((item: unknown) => {
+    //     if (typeof item === 'object' && item !== null) {
+    //         return item;
+    //     }
+    //     return {
+    //         type: 'text',
+    //         text: primitiveText(item),
+    //     };
+    // });
 }
 
 function primitiveText(item: unknown): string {
@@ -29,12 +30,12 @@ export async function invokeMcpTool(
     templater: Templater,
     toolName: string,
     toolArguments: Record<string, unknown>,
-): Promise<unknown[]> {
+): Promise<unknown> {
     const result = await templater.parse_templater(
         mcpToolScriptName(toolName),
         true,
         toolArguments,
-        null,
+        0,
         '',
     );
     return mcpContentFromResult(result);

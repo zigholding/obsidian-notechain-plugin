@@ -12,7 +12,7 @@ import {
 
 export interface McpToolHost {
     listTools(): Promise<unknown[]>;
-    callTool(name: string, args: Record<string, unknown>): Promise<unknown[]>;
+    callTool(name: string, args: Record<string, unknown>): Promise<unknown>;
 }
 
 type JsonRpcResponse = {
