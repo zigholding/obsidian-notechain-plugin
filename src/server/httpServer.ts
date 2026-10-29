@@ -158,11 +158,12 @@ export class HTTPServer {
                 return;
             }
             res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
             res.setHeader(
                 'Access-Control-Allow-Headers',
-                'Content-Type, Authorization, X-Api-Key, X-Sender-Id, X-Site-Id',
+                'Content-Type, Accept, Authorization, X-Api-Key, X-Sender-Id, X-Site-Id, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID',
             );
+            res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id');
 
             if (req.method === 'OPTIONS') {
                 res.writeHead(200);
@@ -175,6 +176,8 @@ export class HTTPServer {
 
                 if (parsedUrl.pathname === '/templater' && (req.method === 'GET' || req.method === 'POST')) {
                     await this.handleTemplaterRequest(req, res, parsedUrl);
+                } else if (parsedUrl.pathname === '/mcp') {
+                    await this.mcp.handleStreamable(req, res);
                 } else if (parsedUrl.pathname === '/mcp/list_tools' && (req.method === 'GET' || req.method === 'POST')) {
                     await this.mcp.handleMCPListTools(req, res);
                 } else if (parsedUrl.pathname === '/mcp/call_tool' && req.method === 'POST') {
@@ -423,6 +426,7 @@ export class HTTPServer {
                 }
             };
 
+            this.mcp.close();
             for (let [, conn] of this.sseConnections.entries()) {
                 try {
                     if (conn.heartbeatInterval) {

@@ -85,6 +85,16 @@ const data = await res.json();
 console.log(data.tools);
 \`\`\`
 
+## Streamable HTTP
+
+DSH and other clients that only speak streamable-http use one endpoint:
+
+\`\`\`json
+{"transport":"streamable-http","url":"${base}/mcp"}
+\`\`\`
+
+\`POST /mcp\` carries JSON-RPC (\`initialize\`, \`notifications/initialized\`, \`tools/list\`, \`tools/call\`). The initialize response sets \`Mcp-Session-Id\`; send that header on later requests. \`GET /mcp\` does not open a server stream (405). \`DELETE /mcp\` ends the session. Legacy \`/sse\` + \`/messages\` remains.
+
 ## Call a tool
 
 **POST** \`${base}/mcp/call_tool\`

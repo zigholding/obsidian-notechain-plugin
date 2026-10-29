@@ -240,30 +240,35 @@ export class OldBuddyWebSocketHub {
     }
 
     private encodeFrame(opcode: number, payload: Buffer, mask: boolean): Buffer {
+        let header: number[] = [0x80 | opcode];
         const len = payload.length;
-        let header: Buffer;
         if (len < 126) {
-            header = Buffer.alloc(2);
-            header[1] = len;
+            header.push(len | (mask ? 0x80 : 0));
         } else if (len < 65536) {
-            header = Buffer.alloc(4);
-            header[1] = 126;
-            header.writeUInt16BE(len, 2);
+            header.push(126 | (mask ? 0x80 : 0), (len >> 8) & 0xff, len & 0xff);
         } else {
-            header = Buffer.alloc(10);
-            header[1] = 127;
-            header.writeBigUInt64BE(BigInt(len), 2);
+            header.push(127 | (mask ? 0x80 : 0));
+            const hi = Math.floor(len / 0x100000000);
+            const lo = len >>> 0;
+            header.push(
+                (hi >> 24) & 0xff,
+                (hi >> 16) & 0xff,
+                (hi >> 8) & 0xff,
+                hi & 0xff,
+                (lo >> 24) & 0xff,
+                (lo >> 8) & 0xff,
+                lo & 0xff,
+            );
         }
-        header[0] = 0x80 | opcode;
         if (mask) {
-            header[1] |= 0x80;
             const maskKey = nodeCrypto().randomBytes(4);
+            header.push(...maskKey);
             const masked = Buffer.alloc(payload.length);
             for (let i = 0; i < payload.length; i++) {
                 masked[i] = payload[i] ^ maskKey[i % 4];
             }
-            return Buffer.concat([header, maskKey, masked]);
+            return Buffer.concat([Buffer.from(header), masked]);
         }
-        return Buffer.concat([header, payload]);
+        return Buffer.concat([Buffer.from(header), payload]);
     }
 }

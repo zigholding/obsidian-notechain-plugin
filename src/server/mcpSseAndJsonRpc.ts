@@ -4,6 +4,7 @@ import { readHttpBody } from './httpUtil';
 import type { HttpReq, HttpRes, SseConnection } from '../http-types';
 import { parseJsonRecord, parseRequestUrl } from '../http-types';
 import type { MCPToolsListService } from './mcpToolsList';
+import { invokeMcpTool } from './mcpToolInvoke';
 import { errorMessage, errorStack, isRecord } from '../ts-helpers';
 
 export class MCPSseAndJsonRpc {
@@ -33,33 +34,8 @@ export class MCPSseAndJsonRpc {
                 return;
             }
 
-            let scriptFile = toolName;
-            if (!scriptFile.endsWith('.md')) {
-                scriptFile = scriptFile + '.md';
-            }
-
-            let result = await this.templater.parse_templater(
-                scriptFile,
-                true,
-                toolArguments,
-                null,
-                ''
-            );
-
-            const items = Array.isArray(result) ? result : [result];
-            let content = items.map((item: unknown) => {
-                if (typeof item === 'object' && item !== null) {
-                    return item;
-                }
-                return {
-                    type: 'text',
-                    text: String(item || '')
-                };
-            });
-
-            let response = {
-                content: content
-            };
+            const content = await invokeMcpTool(this.templater, toolName, toolArguments);
+            const response = { content };
 
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify(response, null, 2));
@@ -243,31 +219,8 @@ export class MCPSseAndJsonRpc {
                     };
                 } else {
                     try {
-                        let scriptFile = toolName;
-                        if (!scriptFile.endsWith('.md')) {
-                            scriptFile = scriptFile + '.md';
-                        }
-
-                        let result = await this.templater.parse_templater(
-                            scriptFile,
-                            true,
-                            toolArguments,
-                            null,
-                            ''
-                        );
-
-                        const items = Array.isArray(result) ? result : [result];
-                        let content = items.map((item: unknown) => {
-                            if (typeof item === 'object' && item !== null) {
-                                return item;
-                            }
-                            return {
-                                type: 'text',
-                                text: String(item || '')
-                            };
-                        });
-
-                        response.result = { content: content };
+                        const content = await invokeMcpTool(this.templater, toolName, toolArguments);
+                        response.result = { content };
                         
                     } catch (error: unknown) {
                         console.error('✗ Error calling tool:', error);

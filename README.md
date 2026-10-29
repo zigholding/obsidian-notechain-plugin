@@ -247,7 +247,8 @@ Tools are defined in the vault (Templater scripts): prefer `obsidian_mcp_list_to
 |----------|---------|
 | `/mcp/list_tools` | List tools |
 | `/mcp/call_tool` | Call a tool `{ name, arguments }` |
-| `/sse` + `/messages` | MCP SSE / JSON-RPC |
+| `/mcp` | Streamable HTTP (`POST` / `GET` / `DELETE`). DSH: `{"transport":"streamable-http","url":"http://127.0.0.1:<http-port>/mcp"}` |
+| `/sse` + `/messages` | Legacy MCP SSE / JSON-RPC |
 | `/mcp/test` | Browser test page |
 | `/mcp/skill` | Generated Agent `SKILL.md` |
 | `/templater` | Run a Templater script remotely |
