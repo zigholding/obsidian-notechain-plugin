@@ -1,5 +1,6 @@
 import { App, Platform } from 'obsidian';
 import { desktopNode, noteChainPlugin } from '../obsidian-app';
+import { readNoteChainCertPem } from '../server/httpsCert';
 
 export interface WebRequestOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -39,6 +40,7 @@ interface NodeHttpClient {
             method?: string;
             headers?: Record<string, string>;
             timeout?: number;
+            ca?: string;
         },
         callback: (res: NodeHttpIncomingMessage) => void,
     ): NodeClientRequest;
@@ -87,13 +89,16 @@ export class Web {
             }
         }
 
+        const port = parsed.port ? Number(parsed.port) : (isHttps ? 443 : 80);
+        const ca = isHttps ? this.localNoteChainCa(parsed.hostname, port) : undefined;
         const requestOptions = {
             hostname: parsed.hostname,
-            port: parsed.port ? Number(parsed.port) : (isHttps ? 443 : 80),
+            port,
             path: requestPath,
             method: method,
             headers: headers,
-            timeout: timeout
+            timeout: timeout,
+            ...(ca ? { ca } : {}),
         };
 
         return new Promise((resolve, reject) => {
@@ -148,6 +153,18 @@ export class Web {
 
             req.end();
         });
+    }
+
+    /** 本机 NoteChain HTTPS 用插件自己的自签证书。只把这张证书当作该请求的信任锚。 */
+    private localNoteChainCa(hostname: string, port: number): string | undefined {
+        const host = hostname.toLowerCase();
+        if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') return undefined;
+        const plugin = noteChainPlugin(this.app);
+        const httpsPort = plugin?.settings?.notechain?.httpServerPort;
+        if (typeof httpsPort !== 'number' || port !== httpsPort) return undefined;
+        const tlsDir = plugin?.httpServer?.getTlsDir();
+        if (!tlsDir) return undefined;
+        return readNoteChainCertPem(tlsDir) ?? undefined;
     }
 
     /**

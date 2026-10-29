@@ -32,6 +32,18 @@ function normalizeCertFingerprint(fp: string): string {
     return String(fp || '').replace(/:/g, '').toUpperCase();
 }
 
+/** 读取 Note-Chain 自签证书 PEM，供本机 HTTPS 客户端当作信任锚。 */
+export function readNoteChainCertPem(tlsDir: string): string | null {
+    const certPath = nodePath().join(tlsDir, 'cert.pem');
+    if (!nodeFs().existsSync(certPath)) return null;
+    try {
+        const pem = nodeFs().readFileSync(certPath, 'utf8');
+        return pem.includes('BEGIN CERTIFICATE') ? pem : null;
+    } catch {
+        return null;
+    }
+}
+
 /** 读取 Note-Chain 自签证书 SHA-256 指纹（供 WebView 校验） */
 export function readNoteChainCertFingerprint(tlsDir: string): string | null {
     const certPath = nodePath().join(tlsDir, 'cert.pem');
