@@ -67,17 +67,14 @@ export class MCPToolsListService {
             let cache = this.app.metadataCache.getFileCache(file);
             if (!cache) continue;
 
-            if (cache.frontmatter && cache.frontmatter.mcp_tool) {
-                let toolName = file.basename;
-                let description = cache.frontmatter.description || '';
-                let inputSchema = cache.frontmatter.inputSchema || {
+            if (cache.frontmatter?.mcp_tool?.enabled) {
+                let toolName = cache.frontmatter.mcp_tool?.name || file.basename;
+                let description = cache.frontmatter.mcp_tool?.description || '';
+                let inputSchema = cache.frontmatter.mcp_tool?.inputSchema || {
                     type: 'object',
                     properties: {},
                     required: []
                 };
-                if (isRecord(cache.frontmatter.mcp_tool) && typeof cache.frontmatter.mcp_tool.name === 'string') {
-                    toolName = cache.frontmatter.mcp_tool.name;
-                }
                 tools.push({ name: toolName, description, inputSchema });
             }
         }

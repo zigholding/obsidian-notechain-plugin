@@ -3,6 +3,7 @@
 .cursor
 .cursorrules
 
+scripts
 context
 # Intellij
 *.iml
