@@ -2,6 +2,16 @@ import { Templater } from '../easyapi/templater';
 import { isRecord } from '../ts-helpers';
 
 export function mcpToolScriptName(toolName: string): string {
+    let tfile = window.ea?.file.get_tfile(toolName);
+    if (tfile) {
+        return tfile.path;
+    }
+    tfile = window.ea?.file.query_tfiles_by_datacore(
+        `mcp_tool.contains("name") and mcp_tool.name="${toolName}"`
+    )[0];
+    if (tfile) {
+        return tfile.path;
+    }
     return toolName.endsWith('.md') ? toolName : `${toolName}.md`;
 }
 

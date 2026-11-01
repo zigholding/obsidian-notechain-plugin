@@ -703,6 +703,10 @@ export class File {
 	}
 
 	query_tfiles_by_datacore(query: string) {
+		if(!this.ea.dc){
+			new Notice('Datacore not found');
+			return [];
+		}
 		query = query.trim();
 		if(query==''){
 			return this.get_all_tfiles();
